@@ -38,7 +38,9 @@ func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 func merged(cfgPath string) (*config.Config, *store.DB) {
 	cfg, db, err := cfgfile.LoadMerged(cfgPath)
 	if err != nil {
-		_ = db.Close()
+		if db != nil {
+			db.Close()
+		}
 		log.Fatalf("config: %v", err)
 	}
 	return cfg, db

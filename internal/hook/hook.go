@@ -182,10 +182,15 @@ func setupInstall(w http.ResponseWriter, r *http.Request, d SetupDeps) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Fprint(w, `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>rkt sin verificar</title></head>
-<body style="font-family:system-ui;padding:48px"><h1>No pude verificar la instalación</h1>
-<p>Falta completar la creación de la App (canje del código) para tener la clave.</p>
-<p>Pasos: <code>rkt-proxy github init --name ... --domain ...</code> y pulsa Create;
-luego instala. Si el código venció, repite el init (borra la App duplicada si choca el nombre).</p></body></html>`)
+<body style="font-family:system-ui;padding:48px"><h1>No pude verificar la instalación</h1>`)
+		if strings.Contains(err.Error(), "sin github app") {
+			fmt.Fprint(w, `<p>Este servidor aún no tiene la clave de la App.</p>
+<p>Completa primero la creación (<code>github init</code> → Create → recarga la
+pestaña del código) y <b>reinicia el servicio</b> para cargarla.</p>`)
+		} else {
+			fmt.Fprint(w, `<p>GitHub rechazó la verificación. Revisa que la App e instalación existan.</p>`)
+		}
+		fmt.Fprint(w, `</body></html>`)
 		return
 	}
 	if err := d.OnSetup(id, account); err != nil {
@@ -223,7 +228,9 @@ func setupManifest(w http.ResponseWriter, r *http.Request, d SetupDeps) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>rkt app creada</title></head>
 <body style="font-family:system-ui;padding:48px"><h1>App creada ✓</h1>
-<p>Ya puedes instalarla en tus repos:</p>
+<p>Clave guardada en el servidor. Ahora <b>reinicia el servicio</b> para cargarla:</p>
+<p><code>sc.exe stop RktProxy; sc.exe start RktProxy</code></p>
+<p>Luego instala en tus repos:</p>
 <p><a href="%s"><button>Instalar en GitHub</button></a></p></body></html>`, templateEscape(installURL))
 }
 

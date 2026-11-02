@@ -107,8 +107,13 @@ func Open(path string) (*DB, error) {
 	return db, nil
 }
 
-// Close cierra.
-func (d *DB) Close() error { return d.sql.Close() }
+// Close cierra (nil-safe: no-op).
+func (d *DB) Close() error {
+	if d == nil || d.sql == nil {
+		return nil
+	}
+	return d.sql.Close()
+}
 
 func (d *DB) migrate() error {
 	var v int
