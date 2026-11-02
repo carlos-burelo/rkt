@@ -24,6 +24,10 @@ const (
 	KeyPortPool   = "port_pool"
 )
 
+// KeyDashboardToken auth de api/v1 + dashboard. Fuera de KnownSettings
+// a propósito: nunca se exporta (no sale en `config export`).
+const KeyDashboardToken = "dashboard_token"
+
 // KnownSettings lista para `settings list` y export.
 func KnownSettings() []string {
 	return []string{KeyNodeBin, KeyPythonBin, KeyBaseDomain, KeyPortPool}
