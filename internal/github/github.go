@@ -19,21 +19,24 @@ import (
 	"time"
 )
 
-// Manager miente tokens de instalación (1h) con cache y refresh.
+// Manager miente tokens de instalación (1h) con cache por instalación.
 type Manager struct {
-	appID          int64
-	installationID int64
-	key            *rsa.PrivateKey
-	apiBase        string
+	appID   int64
+	key     *rsa.PrivateKey
+	apiBase string
 
 	mu     sync.Mutex
-	token  string
-	expiry time.Time
+	tokens map[int64]cachedToken
 	client *http.Client
 }
 
+type cachedToken struct {
+	token  string
+	expiry time.Time
+}
+
 // New lee la clave PEM (PKCS1 o PKCS8). apiBase para tests.
-func New(appID, installationID int64, keyFile, apiBase string) (*Manager, error) {
+func New(appID int64, keyFile, apiBase string) (*Manager, error) {
 	data, err := os.ReadFile(keyFile)
 	if err != nil {
 		return nil, fmt.Errorf("leer key_file: %w", err)
@@ -46,8 +49,9 @@ func New(appID, installationID int64, keyFile, apiBase string) (*Manager, error)
 		apiBase = "https://api.github.com"
 	}
 	return &Manager{
-		appID: appID, installationID: installationID, key: key,
+		appID: appID, key: key,
 		apiBase: strings.TrimRight(apiBase, "/"),
+		tokens:  map[int64]cachedToken{},
 		client:  &http.Client{Timeout: 15 * time.Second},
 	}, nil
 }
@@ -71,19 +75,19 @@ func parseKey(data []byte) (*rsa.PrivateKey, error) {
 	return rsaKey, nil
 }
 
-// Token devuelve installation token válido (cacheado hasta 5min antes).
-func (m *Manager) Token() (string, error) {
+// TokenFor devuelve installation token válido (cacheado hasta 5min antes).
+func (m *Manager) TokenFor(installationID int64) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.token != "" && time.Now().Add(5*time.Minute).Before(m.expiry) {
-		return m.token, nil
+	if c, ok := m.tokens[installationID]; ok && time.Now().Add(5*time.Minute).Before(c.expiry) {
+		return c.token, nil
 	}
 	jwt, err := m.mintJWT()
 	if err != nil {
 		return "", err
 	}
 	req, _ := http.NewRequest(http.MethodPost,
-		fmt.Sprintf("%s/app/installations/%d/access_tokens", m.apiBase, m.installationID), nil)
+		fmt.Sprintf("%s/app/installations/%d/access_tokens", m.apiBase, installationID), nil)
 	req.Header.Set("Authorization", "Bearer "+jwt)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	resp, err := m.client.Do(req)
@@ -105,8 +109,59 @@ func (m *Manager) Token() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("expires_at: %w", err)
 	}
-	m.token, m.expiry = out.Token, exp
+	m.tokens[installationID] = cachedToken{token: out.Token, expiry: exp}
 	return out.Token, nil
+}
+
+// installationResp forma común: id + cuenta.
+type installationResp struct {
+	ID      int64 `json:"id"`
+	Account struct {
+		Login string `json:"login"`
+	} `json:"account"`
+}
+
+func (m *Manager) getJSON(url, bearer string, out any) error {
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	resp, err := m.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s: %s", url, resp.Status)
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// InstallationForRepo resuelve instalación (id+cuenta) de un repo vía JWT.
+func (m *Manager) InstallationForRepo(owner, repo string) (int64, string, error) {
+	jwt, err := m.mintJWT()
+	if err != nil {
+		return 0, "", err
+	}
+	var out installationResp
+	if err := m.getJSON(fmt.Sprintf("%s/repos/%s/%s/installation", m.apiBase, owner, repo), jwt, &out); err != nil {
+		return 0, "", err
+	}
+	return out.ID, out.Account.Login, nil
+}
+
+// Installation verifica una instalación y devuelve su cuenta (setup).
+func (m *Manager) Installation(id int64) (string, error) {
+	jwt, err := m.mintJWT()
+	if err != nil {
+		return "", err
+	}
+	var out installationResp
+	if err := m.getJSON(fmt.Sprintf("%s/app/installations/%d", m.apiBase, id), jwt, &out); err != nil {
+		return "", err
+	}
+	return out.Account.Login, nil
 }
 
 func (m *Manager) mintJWT() (string, error) {
@@ -170,6 +225,40 @@ func (m *Manager) CommitSHA(owner, repo, ref, token string) (string, error) {
 		return "", fmt.Errorf("sin sha en respuesta")
 	}
 	return out.SHA, nil
+}
+
+// ManifestCredentials lo que devuelve canjear un code de manifest.
+type ManifestCredentials struct {
+	ID            int64  `json:"id"`
+	Slug          string `json:"slug"`
+	WebhookSecret string `json:"webhook_secret"`
+	PEM           string `json:"pem"`
+}
+
+// ExchangeManifestCode canjea code (callback del browser) por credenciales.
+// Sin auth: el code es un secreto de un solo uso y corta vida.
+func ExchangeManifestCode(apiBase, code string) (*ManifestCredentials, error) {
+	if apiBase == "" {
+		apiBase = "https://api.github.com"
+	}
+	resp, err := http.Post(
+		strings.TrimRight(apiBase, "/")+"/app-manifests/"+code+"/conversions",
+		"application/json", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("conversions: %s", resp.Status)
+	}
+	var out ManifestCredentials
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	if out.ID <= 0 || out.PEM == "" {
+		return nil, fmt.Errorf("respuesta incompleta")
+	}
+	return &out, nil
 }
 
 // InstallationRepo repo visible a la instalación.

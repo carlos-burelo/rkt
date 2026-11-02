@@ -34,31 +34,41 @@ type Deps struct {
 	DirBase string
 }
 
-// Run registra repos no conocidos y los despliega. Idempotente.
+// Run registra repos no conocidos de TODAS las instalaciones y los
+// despliega. Idempotente.
 func Run(d Deps) error {
-	tok, err := d.GH.Token()
+	ids, err := d.DB.ListInstallations()
 	if err != nil {
-		return fmt.Errorf("token: %w", err)
+		return fmt.Errorf("instalaciones: %w", err)
 	}
-	repos, err := d.GH.Repositories(tok)
-	if err != nil {
-		return fmt.Errorf("repositories: %w", err)
-	}
-	known, err := knownRepos(d.DB)
-	if err != nil {
-		return err
-	}
-	for _, r := range repos {
-		owner, name, ok := splitFull(r.FullName)
-		if !ok {
+	for _, id := range ids {
+		tok, err := d.GH.TokenFor(id)
+		if err != nil {
+			d.Log.Warn("discovery: sin token", "installation", id, "err", err)
 			continue
 		}
-		if known[strings.ToLower(r.FullName)] {
+		repos, err := d.GH.Repositories(tok)
+		if err != nil {
+			d.Log.Warn("discovery: sin repos", "installation", id, "err", err)
 			continue
 		}
-		if err := register(d, owner, name, r.DefaultBranch, tok); err != nil {
-			d.Log.Warn("auto-registro fallido", "repo", r.FullName, "err", err)
-			continue
+		known, err := knownRepos(d.DB)
+		if err != nil {
+			return err
+		}
+		for _, r := range repos {
+			owner, name, ok := splitFull(r.FullName)
+			if !ok {
+				continue
+			}
+			if known[strings.ToLower(r.FullName)] {
+				continue
+			}
+			if err := register(d, owner, name, r.DefaultBranch, tok); err != nil {
+				d.Log.Warn("auto-registro fallido", "repo", r.FullName, "err", err)
+				continue
+			}
+			known[strings.ToLower(r.FullName)] = true
 		}
 	}
 	return nil

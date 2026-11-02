@@ -21,6 +21,26 @@ func Load(path string) (*config.Config, error) {
 	return config.Load(path)
 }
 
+// OverlayGithub aplica settings (origen setup browser) sobre el bloque
+// github del YAML. La DB manda si tiene app_id; si no, queda el YAML.
+func OverlayGithub(cfg *config.Config, db *store.DB) error {
+	if v := db.GetSetting("github_app_id"); v != "" {
+		var id int64
+		fmt.Sscanf(v, "%d", &id)
+		if id > 0 {
+			if cfg.Github == nil {
+				cfg.Github = &config.Github{}
+			}
+			cfg.Github.AppID = id
+			cfg.Github.AppSlug = db.GetSetting("github_app_slug")
+			cfg.Github.KeyFile = db.GetSetting("github_key_file")
+			cfg.Github.WebhookSecret = db.GetSetting("github_webhook_secret")
+			return cfg.Github.EnsureParsed()
+		}
+	}
+	return nil
+}
+
 // LoadMerged abre DB, importa el YAML si la flota está fresca y fusiona
 // infra YAML + flota DB. Devuelve config lista y DB abierta (cerrar).
 func LoadMerged(cfgPath string) (*config.Config, *store.DB, error) {
@@ -38,13 +58,40 @@ func LoadMerged(cfgPath string) (*config.Config, *store.DB, error) {
 			db.Close()
 			return nil, nil, err
 		}
+		if base.Github != nil {
+			seedGithubSettings(db, base.Github)
+		}
 	}
 	merged, err := Snapshot(db, base)
 	if err != nil {
 		db.Close()
 		return nil, nil, err
 	}
+	if err := OverlayGithub(merged, db); err != nil {
+		db.Close()
+		return nil, nil, err
+	}
 	return merged, db, nil
+}
+
+// seedGithubSettings vuelca el bloque YAML a settings (una vez).
+func seedGithubSettings(db *store.DB, gh *config.Github) {
+	set := func(k, v string) {
+		if v != "" {
+			_ = db.SetSetting(k, v)
+		}
+	}
+	set("github_app_id", itoa(gh.AppID))
+	set("github_app_slug", gh.AppSlug)
+	set("github_key_file", gh.KeyFile)
+	set("github_webhook_secret", gh.WebhookSecret)
+}
+
+func itoa(n int64) string {
+	if n <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d", n)
 }
 
 // Snapshot fusiona infra del YAML base + flota de DB.

@@ -95,6 +95,9 @@ func Run(cfgPath string) {
 		case "deployments":
 			cmdDeployments(flag.Args()[1:], cfgPath)
 			return
+		case "github":
+			cmdGithub(flag.Args()[1:], cfgPath)
+			return
 		case "settings":
 			cmdSettings(flag.Args()[1:], cfgPath)
 			return

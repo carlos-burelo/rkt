@@ -76,15 +76,15 @@ func TestTokenCached(t *testing.T) {
 	srv := fakeAPI(t, &key.PublicKey, &hits)
 	defer srv.Close()
 
-	m, err := New(123, 456, path, srv.URL)
+	m, err := New(123, path, srv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tok, err := m.Token()
+	tok, err := m.TokenFor(456)
 	if err != nil || tok != "tok-secreto" {
 		t.Fatalf("token: %q %v", tok, err)
 	}
-	if _, err := m.Token(); err != nil {
+	if _, err := m.TokenFor(456); err != nil {
 		t.Fatal(err)
 	}
 	if hits != 1 {
@@ -95,10 +95,10 @@ func TestTokenCached(t *testing.T) {
 func TestTokenBadKey(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "mala.pem")
 	os.WriteFile(p, []byte("no-pem"), 0o600)
-	if _, err := New(1, 2, p, ""); err == nil {
+	if _, err := New(1, p, ""); err == nil {
 		t.Fatal("clave mala debe fallar")
 	}
-	if _, err := New(1, 2, filepath.Join(t.TempDir(), "falta.pem"), ""); err == nil {
+	if _, err := New(1, filepath.Join(t.TempDir(), "falta.pem"), ""); err == nil {
 		t.Fatal("clave faltante debe fallar")
 	}
 }
@@ -109,7 +109,7 @@ func TestCommitSHA(t *testing.T) {
 	srv := fakeAPI(t, &key.PublicKey, &hits)
 	defer srv.Close()
 
-	m, _ := New(123, 456, path, srv.URL)
+	m, _ := New(123, path, srv.URL)
 	sha, err := m.CommitSHA("o", "r", "main", "tok-secreto")
 	if err != nil || sha != "abc123def456" {
 		t.Fatalf("sha: %q %v", sha, err)

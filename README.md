@@ -213,15 +213,23 @@ reinicia). Log del build en `logs/deploys/<app>-<ts>.log`. Sin red en tests:
 ```yaml
 github:
   app_id: 123456
-  installation_id: 7890123
+  app_slug: "mi-app-rkt"
   key_file: "C:\\ProgramData\\rkt-proxy\\github-app.pem"
   poll_interval: 60s   # mín 10s
   # webhook_secret: "..."  # push instantáneo (ver abajo)
 ```
 
-Setup único: crea la App (permiso `Contents: read`), instálala en los repos,
-copia el `.pem` al VPS con ACL solo SYSTEM+Admins. Desde ahí, cero config por
-repo nuevo: instálale la App y marca `auto: true` en su `deploy:`. Cada poll
+**Vincular en el browser** (cero PAT, cero YAML a mano):
+
+```powershell
+rkt-proxy github init --name rkt-deployer --domain tu-dominio.coatl.in --org dacyti-gsi
+```
+
+Abre la URL que imprime (form con manifest oficial ya rellenado: permisos
+mínimos + webhook + setup). Pulsa Create en GitHub; al aprobar, GitHub vuelve
+a `/_rkt/setup`, rkt canjea el code, guarda PEM + settings y te da el link de
+instalación. Instala en orgs/repos y listo: repo nuevo = app + deploy solos.
+(Sin `--org` = App personal. Alternativa manual: App a mano + `github login`.) Cada poll
 compara `HEAD` local vs remoto y despliega solo si cambió (tokens de 1h
 cacheados; repos http usan App, resto `token_env`). Sin inbound: puro
 outbound a `api.github.com`.

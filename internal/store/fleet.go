@@ -308,6 +308,38 @@ func msToDur(ms int64) string {
 	return "0s"
 }
 
+// UpsertInstallation registra instalación (del setup browser o webhook).
+func (d *DB) UpsertInstallation(id int64, account string) error {
+	_, err := d.sql.Exec(`INSERT INTO installations(id, account, added_at) VALUES(?,?,?)
+		ON CONFLICT(id) DO UPDATE SET account=excluded.account`,
+		id, account, time.Now().UTC().Format(time.RFC3339))
+	return err
+}
+
+// RemoveInstallation borra instalación (uninstall en GitHub).
+func (d *DB) RemoveInstallation(id int64) error {
+	_, err := d.sql.Exec(`DELETE FROM installations WHERE id=?`, id)
+	return err
+}
+
+// ListInstallations ids registrados.
+func (d *DB) ListInstallations() ([]int64, error) {
+	rows, err := d.sql.Query(`SELECT id FROM installations ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 // ImportFleet vuelca apps/routes de un YAML (bootstrap o import).
 // Reemplaza flota. No toca deployments/events.
 func (d *DB) ImportFleet(cfg *config.Config) error {

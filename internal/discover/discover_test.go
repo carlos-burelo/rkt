@@ -68,7 +68,7 @@ func fakeAPI(t *testing.T, reposJSON string, files map[string]string) *httptest.
 
 func testDeps(t *testing.T, srv *httptest.Server, pem string) (Deps, *store.DB, *[]string) {
 	t.Helper()
-	gh, err := github.New(1, 2, pem, srv.URL)
+	gh, err := github.New(1, pem, srv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,6 +77,9 @@ func testDeps(t *testing.T, srv *httptest.Server, pem string) (Deps, *store.DB, 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
+	if err := db.UpsertInstallation(999, "o"); err != nil {
+		t.Fatal(err)
+	}
 	db.SetSetting("base_domain", "coatl.in")
 	db.SetSetting("node_bin", os.Args[0]) // binario existente cualquiera
 	var deployed []string

@@ -39,22 +39,23 @@ const pollInterval = 10 * time.Second
 
 // Program es el servicio: guarda servidores para Stop limpio.
 type Program struct {
-	cfgPath   string
-	log       *slog.Logger
-	live      *config.Live
-	ghm       *github.Manager
-	db        *store.DB
-	srvHTTP   *http.Server
-	srvTLS    *http.Server
-	srvHealth *http.Server
-	alog      *accesslog.Logger
-	sup       *supervisor.Manager
-	mgr       *autocert.Manager
+	cfgPath      string
+	log          *slog.Logger
+	live         *config.Live
+	ghm          *github.Manager
+	db           *store.DB
+	discoverKick chan struct{}
+	srvHTTP      *http.Server
+	srvTLS       *http.Server
+	srvHealth    *http.Server
+	alog         *accesslog.Logger
+	sup          *supervisor.Manager
+	mgr          *autocert.Manager
 }
 
 // New crea el programa sin arrancarlo.
 func New(cfgPath string, log *slog.Logger) *Program {
-	return &Program{cfgPath: cfgPath, log: log}
+	return &Program{cfgPath: cfgPath, log: log, discoverKick: make(chan struct{}, 1)}
 }
 
 // Start lanza Run en goroutine (contrato kardianos/service).
@@ -90,6 +91,13 @@ func (p *Program) Stop(_ service.Service) error {
 
 // Run carga config (YAML bootstrap + flota DB) y sirve. Bloquea en TLS.
 func (p *Program) Run() {
+	defer func() {
+		if v := recover(); v != nil {
+			// En servicio no hay stderr visible: deja constancia y muere.
+			p.log.Error("panic fatal", "v", v)
+			os.Exit(1)
+		}
+	}()
 	cfg, db, err := cfgfile.LoadMerged(p.cfgPath)
 	if err != nil {
 		p.log.Error("config inválida", "err", err)
@@ -121,17 +129,35 @@ func (p *Program) Run() {
 	challenge := p.mgr.HTTPHandler(nil) // eager: activa http-01 como fallback
 	errLog := slog.NewLogLogger(p.log.Handler(), slog.LevelError)
 	var control http.Handler
-	if cfg.Github != nil && cfg.Github.WebhookSecret != "" {
-		secret := cfg.Github.WebhookSecret
-		control = hook.NewHandler(live, secret, func(name string) {
-			go func() {
-				if rev, err := p.deployApp(name); err != nil {
-					p.log.Error("deploy por hook fallido", "app", name, "err", err)
-				} else {
-					p.log.Info("deploy por hook ok", "app", name, "rev", rev)
-				}
-			}()
-		}, p.log)
+	{
+		mux := http.NewServeMux()
+		mux.Handle("/_rkt/new-app", hook.NewAppFormHandler())
+		if cfg.Github != nil && cfg.Github.WebhookSecret != "" {
+			secret := cfg.Github.WebhookSecret
+			mux.Handle("/_rkt/hook/github", hook.NewHandler(hook.Deps{
+				Live: live, Secret: secret, Log: p.log,
+				DeployFn: func(name string) {
+					go func() {
+						if rev, err := p.deployApp(name); err != nil {
+							p.log.Error("deploy por hook fallido", "app", name, "err", err)
+						} else {
+							p.log.Info("deploy por hook ok", "app", name, "rev", rev)
+						}
+					}()
+				},
+				OnInstall: p.onInstallEvent,
+			}))
+		}
+		mux.Handle("/_rkt/setup", hook.SetupHandler(hook.SetupDeps{
+			Log:     p.log,
+			Verify:  p.verifyInstallation,
+			OnSetup: p.onSetup,
+			Exchange: func(code string) (*github.ManifestCredentials, error) {
+				return github.ExchangeManifestCode("", code)
+			},
+			OnManifest: p.onManifest,
+		}))
+		control = mux
 	}
 	p.srvHTTP = server.NewHTTP(cfg, live, challenge, handler, control, errLog)
 	p.srvTLS = server.NewHTTPS(cfg, p.mgr, handler, control, errLog)
@@ -165,7 +191,7 @@ func (p *Program) Run() {
 	p.log.Info("hot-reload activo", "poll", pollInterval.String())
 	go p.watchMerged(live, db)
 	if cfg.Github != nil {
-		gh, err := github.New(cfg.Github.AppID, cfg.Github.InstallationID, cfg.Github.KeyFile, "")
+		gh, err := github.New(cfg.Github.AppID, cfg.Github.KeyFile, "")
 		if err != nil {
 			p.log.Error("github app inválida, sin auto-deploy", "err", err)
 		} else {
@@ -179,6 +205,79 @@ func (p *Program) Run() {
 		os.Exit(1)
 	}
 }
+
+// verifyInstallation confirma una instalación contra la API (setup browser).
+func (p *Program) verifyInstallation(id int64) (string, error) {
+	if p.ghm == nil {
+		return "", fmt.Errorf("sin github app")
+	}
+	return p.ghm.Installation(id)
+}
+
+// onSetup registra instalación del browser y dispara discovery.
+func (p *Program) onSetup(id int64, account string) error {
+	if p.db == nil {
+		return fmt.Errorf("sin DB")
+	}
+	if err := p.db.UpsertInstallation(id, account); err != nil {
+		return err
+	}
+	p.kickDiscovery()
+	return nil
+}
+
+// onInstallEvent atiende webhooks installation* (alta/baja + refresh).
+func (p *Program) onInstallEvent(id int64, account, action string) {
+	if p.db == nil {
+		return
+	}
+	switch action {
+	case "deleted", "suspend":
+		_ = p.db.RemoveInstallation(id)
+		p.log.Info("instalación eliminada", "account", account)
+	default:
+		_ = p.db.UpsertInstallation(id, account)
+		p.kickDiscovery()
+	}
+}
+
+// kickDiscovery pide pasada inmediata (no bloquea).
+func (p *Program) kickDiscovery() {
+	select {
+	case p.discoverKick <- struct{}{}:
+	default:
+	}
+}
+
+// onManifest guarda credenciales del manifest (PEM + settings) y devuelve
+// la URL de instalación para el browser.
+func (p *Program) onManifest(c *github.ManifestCredentials) (string, error) {
+	if p.db == nil {
+		return "", fmt.Errorf("sin DB")
+	}
+	keyPath := logx.AppKeyPath(p.cfgPath)
+	if err := os.WriteFile(keyPath, []byte(c.PEM), 0o600); err != nil {
+		return "", fmt.Errorf("guardar key: %w", err)
+	}
+	for k, v := range map[string]string{
+		"github_app_id":         itoa64(c.ID),
+		"github_key_file":       keyPath,
+		"github_webhook_secret": c.WebhookSecret,
+	} {
+		if err := p.db.SetSetting(k, v); err != nil {
+			return "", err
+		}
+	}
+	slug := c.Slug
+	if slug == "" {
+		slug = "rkt-deployer"
+	}
+	_ = p.db.SetSetting("github_app_slug", slug)
+	p.log.Info("app github creada, instala en browser", "slug", slug)
+	return "https://github.com/apps/" + slug + "/installations/new", nil
+}
+
+func itoa64(n int64) string { return fmt.Sprintf("%d", n) }
 
 // appStatuses adapta supervisor a health (nil si no hay manager).
 func (p *Program) appStatuses() []health.AppStatus {
@@ -225,17 +324,9 @@ func (p *Program) deployApp(name string) (string, error) {
 	if app.Deploy == nil {
 		return "", fmt.Errorf("app %q sin bloque deploy", name)
 	}
-	token := os.Getenv(app.Deploy.TokenEnv)
-	if deploy.NeedsAuth(app.Deploy.Repo) {
-		if p.ghm != nil {
-			var err error
-			token, err = p.ghm.Token()
-			if err != nil {
-				return "", fmt.Errorf("token github app: %w", err)
-			}
-		} else if token == "" {
-			return "", fmt.Errorf("falta token en env %s (variable de máquina para el servicio)", app.Deploy.TokenEnv)
-		}
+	token, err := p.appToken(app)
+	if err != nil {
+		return "", err
 	}
 	dir := logx.DirFor(p.cfgPath)
 	if err := os.MkdirAll(filepath.Join(dir, "deploys"), 0o755); err != nil {
@@ -269,6 +360,33 @@ func (p *Program) deployApp(name string) (string, error) {
 	return rev, nil
 }
 
+// appToken resuelve token para el repo: GitHub App (instalación que cubre
+// el repo) si hay manager y es github.com; si no, PAT de token_env.
+func (p *Program) appToken(app *config.App) (string, error) {
+	if !deploy.NeedsAuth(app.Deploy.Repo) {
+		return "", nil
+	}
+	if p.ghm != nil {
+		owner, repo, ok := github.ParseRepo(app.Deploy.Repo)
+		if !ok {
+			return "", fmt.Errorf("repo no parseable %q", app.Deploy.Repo)
+		}
+		id, _, err := p.ghm.InstallationForRepo(owner, repo)
+		if err != nil {
+			return "", fmt.Errorf("instalación para %s/%s: %w", owner, repo, err)
+		}
+		tok, err := p.ghm.TokenFor(id)
+		if err != nil {
+			return "", fmt.Errorf("token github app: %w", err)
+		}
+		return tok, nil
+	}
+	if token := os.Getenv(app.Deploy.TokenEnv); token != "" {
+		return token, nil
+	}
+	return "", fmt.Errorf("falta token en env %s (variable de máquina para el servicio)", app.Deploy.TokenEnv)
+}
+
 // rollbackApp devuelve live.prev a live (rollback manual).
 func (p *Program) rollbackApp(name string) error {
 	cfg := p.live.Get()
@@ -284,16 +402,35 @@ func (p *Program) rollbackApp(name string) error {
 	return deploy.Rollback(*app, &supCtl{sup: p.sup, log: p.log}, p.log)
 }
 
+// runDiscovery registra repos nuevos de todas las instalaciones.
+func (p *Program) runDiscovery() {
+	if p.db == nil || p.ghm == nil {
+		return
+	}
+	if err := discover.Run(discover.Deps{
+		GH: p.ghm, DB: p.db, Log: p.log,
+		DeployFn: func(name string) (string, error) { return p.deployApp(name) },
+	}); err != nil {
+		p.log.Warn("discovery fallida", "err", err)
+	}
+}
+
 // autoDeploy sondea GitHub por cambios y despliega (push-to-deploy con
 // delay de poll). El git local es el estado: si HEAD != remoto, deploy.
 func (p *Program) autoDeploy(live *config.Live) {
 	t := time.NewTicker(live.Get().Github.Poll())
 	defer t.Stop()
-	for range t.C {
+	for {
+		select {
+		case <-t.C:
+		case <-p.discoverKick:
+		}
 		cfg := live.Get()
 		if cfg.Github == nil || p.ghm == nil {
 			return
 		}
+		p.runDiscovery()
+		cfg = live.Get()
 		if err := discover.Run(discover.Deps{
 			GH: p.ghm, DB: p.db, Log: p.log,
 			DeployFn: func(name string) (string, error) { return p.deployApp(name) },
@@ -310,9 +447,9 @@ func (p *Program) autoDeploy(live *config.Live) {
 				p.log.Warn("auto-deploy: repo no parseable", "app", a.Name)
 				continue
 			}
-			tok, err := p.ghm.Token()
+			tok, err := p.appToken(a)
 			if err != nil {
-				p.log.Warn("auto-deploy: sin token", "err", err)
+				p.log.Warn("auto-deploy: sin token", "app", a.Name, "err", err)
 				continue
 			}
 			remote, err := p.ghm.CommitSHA(owner, repo, a.Deploy.Ref, tok)

@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 	"time"
@@ -540,6 +542,67 @@ func cmdRollback(args []string, cfgPath string) {
 		log.Fatalf("rollback: %s", out.Error)
 	}
 	fmt.Printf("rollback ok: %s (versión previa sirviendo)\n", out.Rolledback)
+}
+
+func cmdGithub(args []string, cfgPath string) {
+	if len(args) == 0 {
+		log.Fatal("uso: github <login|init>")
+	}
+	switch args[0] {
+	case "login":
+		cmdGithubLogin(cfgPath)
+	case "init":
+		cmdGithubInit(args[1:])
+	default:
+		log.Fatalf("github: subcomando %q (login|init)", args[0])
+	}
+}
+
+func cmdGithubLogin(cfgPath string) {
+	cfg, err := cfgfile.Load(cfgPath)
+	if err != nil {
+		log.Fatalf("github: %v", err)
+	}
+	if cfg.Github == nil || cfg.Github.AppSlug == "" {
+		log.Fatal("github: configura github.app_slug en el YAML")
+	}
+	url := "https://github.com/apps/" + cfg.Github.AppSlug + "/installations/new"
+	fmt.Println("Abre en el browser para vincular (instala en tus orgs/repos):")
+	fmt.Println("  " + url)
+	fmt.Println("Al aprobar, GitHub vuelve a /_rkt/setup y rkt registra solo.")
+	fmt.Println("La App necesita Setup URL: https://TU-DOMINIO/_rkt/setup")
+	if runtime.GOOS == "windows" {
+		_ = exec.Command("cmd.exe", "/C", "start", url).Start()
+	}
+}
+
+// cmdGithubInit guía crear la App vía manifest oficial:
+//
+//	rkt-proxy github init --name rkt-deployer --domain tu-dominio.coatl.in [--org dacyti-gsi]
+//
+// Imprime (y abre) la URL del form que crea la App en GitHub; al aprobar,
+// GitHub vuelve a /_rkt/setup y rkt se autoconfigura (PEM + settings).
+func cmdGithubInit(args []string) {
+	fs := flag.NewFlagSet("github init", flag.ContinueOnError)
+	name := fs.String("name", "rkt-deployer", "nombre de la App")
+	domain := fs.String("domain", "", "dominio público del VPS")
+	org := fs.String("org", "", "org GitHub (vacío = personal)")
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	if *name == "" || *domain == "" {
+		log.Fatal("github init requiere --name y --domain")
+	}
+	link := "https://" + *domain + "/_rkt/new-app?name=" + url.QueryEscape(*name) + "&domain=" + url.QueryEscape(*domain)
+	if *org != "" {
+		link += "&org=" + url.QueryEscape(*org)
+	}
+	fmt.Println("Crea la GitHub App (permisos mínimos ya rellenados):")
+	fmt.Println("  " + link)
+	fmt.Println("Pulsa Create en GitHub; rkt se configura solo y te da el link de instalación.")
+	if runtime.GOOS == "windows" {
+		_ = exec.Command("cmd.exe", "/C", "start", link).Start()
+	}
 }
 
 func cmdDeployments(args []string, cfgPath string) {

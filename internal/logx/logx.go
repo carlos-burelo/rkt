@@ -46,6 +46,11 @@ func DBPath(configPath string) string {
 	return filepath.Join(DirFor(configPath), "rkt.db")
 }
 
+// AppKeyPath ruta del PEM de la GitHub App (lo escribe el setup).
+func AppKeyPath(configPath string) string {
+	return filepath.Join(DirFor(configPath), "github-app.pem")
+}
+
 // Setup abre (creando dir) el log y devuelve logger multi
 // consola+archivo más closer.
 func Setup(configPath string) (*slog.Logger, func(), error) {

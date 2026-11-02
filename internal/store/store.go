@@ -64,6 +64,12 @@ var migrations = []string{
 		key TEXT PRIMARY KEY,
 		value TEXT NOT NULL DEFAULT ''
 	);`,
+	// v4: instalaciones GitHub App (browser linking, multi-org).
+	`CREATE TABLE IF NOT EXISTS installations (
+		id INTEGER PRIMARY KEY,
+		account TEXT NOT NULL DEFAULT '',
+		added_at TEXT NOT NULL DEFAULT ''
+	);`,
 }
 
 // DB wrapper.

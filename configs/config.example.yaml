@@ -9,6 +9,14 @@ acme_cache_dir: "C:\\ProgramData\\rkt-proxy\\certs"
 
 redirect_http_to_https: true
 
+# GitHub App para deploy/auto-discovery (opcional, ver README).
+#github:
+#  app_id: 123456
+#  app_slug: "mi-app-rkt"
+#  key_file: "C:\\ProgramData\\rkt-proxy\\github-app.pem"
+#  poll_interval: 60s
+#  webhook_secret: "..."   # mín 16 chars, para push instantáneo
+
 # WAF-lite: paths siempre 403 (globs, hot-reload). Defaults anti-scan.
 deny_paths: ["/.env", "/.git/*", "/.DS_Store", "/php-cgi*", "/php-cgi/*", "/cgi-bin/*", "/info.php", "/wp-*"]
 

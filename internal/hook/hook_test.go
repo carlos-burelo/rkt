@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/github"
 )
 
 func sign(t *testing.T, body, secret string) string {
@@ -44,11 +46,12 @@ func TestPushMatchDeploys(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	var mu sync.Mutex
 	var deployed []string
-	h := NewHandler(liveEmpty(t), "s3cr3t", func(name string) {
-		mu.Lock()
-		deployed = append(deployed, name)
-		mu.Unlock()
-	}, log)
+	h := NewHandler(Deps{Live: liveEmpty(t), Secret: "s3cr3t", Log: log,
+		DeployFn: func(name string) {
+			mu.Lock()
+			deployed = append(deployed, name)
+			mu.Unlock()
+		}})
 
 	body := `{"ref":"refs/heads/main","deleted":false,"repository":{"full_name":"o/r"}}`
 	req := httptest.NewRequest(http.MethodPost, "/_rkt/hook/github", strings.NewReader(body))
@@ -80,7 +83,8 @@ func TestPushMatchDeploys(t *testing.T) {
 func TestPushIgnored(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	calls := 0
-	h := NewHandler(liveEmpty(t), "s3cr3t", func(string) { calls++ }, log)
+	h := NewHandler(Deps{Live: liveEmpty(t), Secret: "s3cr3t", Log: log,
+		DeployFn: func(string) { calls++ }})
 	signed := func(body string) *http.Request {
 		req := httptest.NewRequest(http.MethodPost, "/_rkt/hook/github", strings.NewReader(body))
 		req.Header.Set("X-Hub-Signature-256", sign(t, body, "s3cr3t"))
@@ -113,7 +117,7 @@ func TestPushIgnored(t *testing.T) {
 
 func TestAuth(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewHandler(liveEmpty(t), "s3cr3t", func(string) {}, log)
+	h := NewHandler(Deps{Live: liveEmpty(t), Secret: "s3cr3t", Log: log, DeployFn: func(string) {}})
 	body := `{"ref":"refs/heads/main","deleted":false,"repository":{"full_name":"o/r"}}`
 
 	rec := httptest.NewRecorder()
@@ -143,5 +147,133 @@ func TestAuth(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/otra", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("otra ruta: code=%d", rec.Code)
+	}
+}
+
+func TestSetup(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	var gotID int64
+	var gotAccount string
+	h := SetupHandler(SetupDeps{Log: log,
+		Verify: func(id int64) (string, error) {
+			if id != 42 {
+				return "", fmt.Errorf("no")
+			}
+			return "miorg", nil
+		},
+		OnSetup: func(id int64, account string) error {
+			gotID, gotAccount = id, account
+			return nil
+		}})
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?installation_id=42&setup_action=install", nil))
+	if rec.Code != http.StatusOK || gotID != 42 || gotAccount != "miorg" {
+		t.Fatalf("setup ok: code=%d id=%d account=%q", rec.Code, gotID, gotAccount)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Fatalf("content-type: %q", ct)
+	}
+
+	for url, code := range map[string]int{
+		"/_rkt/setup?installation_id=0&setup_action=install": http.StatusBadRequest,
+		"/_rkt/setup?installation_id=42&setup_action=update": http.StatusBadRequest,
+		"/_rkt/setup?setup_action=install":                   http.StatusBadRequest,
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, url, nil))
+		if rec.Code != code {
+			t.Fatalf("%s: code=%d", url, rec.Code)
+		}
+	}
+}
+
+func TestSetupVerifyFail(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	called := false
+	h := SetupHandler(SetupDeps{Log: log,
+		Verify:  func(int64) (string, error) { return "", fmt.Errorf("no") },
+		OnSetup: func(int64, string) error { called = true; return nil }})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?installation_id=7&setup_action=install", nil))
+	if rec.Code != http.StatusUnauthorized || called {
+		t.Fatalf("code=%d called=%v", rec.Code, called)
+	}
+}
+
+func TestInstallationEventFlow(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	var gotID int64
+	var gotAction string
+	h := NewHandler(Deps{Live: liveEmpty(t), Secret: "s3cr3t", Log: log,
+		DeployFn: func(string) {},
+		OnInstall: func(id int64, account, action string) {
+			gotID, gotAction = id, action
+		}})
+	body := `{"action":"created","installation":{"id":77,"account":{"login":"miorg"}}}`
+	req := httptest.NewRequest(http.MethodPost, "/_rkt/hook/github", strings.NewReader(body))
+	req.Header.Set("X-Hub-Signature-256", sign(t, body, "s3cr3t"))
+	req.Header.Set("X-GitHub-Event", "installation")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted || gotID != 77 || gotAction != "created" {
+		t.Fatalf("code=%d id=%d action=%q", rec.Code, gotID, gotAction)
+	}
+}
+
+func TestSetupManifest(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	var savedSlug string
+	h := SetupHandler(SetupDeps{Log: log,
+		Exchange: func(code string) (*github.ManifestCredentials, error) {
+			if code != "buen-code" {
+				return nil, fmt.Errorf("mal code")
+			}
+			return &github.ManifestCredentials{ID: 5, Slug: "mi-app", WebhookSecret: "s", PEM: "k"}, nil
+		},
+		OnManifest: func(c *github.ManifestCredentials) (string, error) {
+			savedSlug = c.Slug
+			return "https://github.com/apps/" + c.Slug + "/installations/new", nil
+		}})
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?setup_action=manifest&code=buen-code", nil))
+	if rec.Code != http.StatusOK || savedSlug != "mi-app" {
+		t.Fatalf("code=%d slug=%q", rec.Code, savedSlug)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "/installations/new") {
+		t.Fatal("falta link de instalación")
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?setup_action=manifest&code=mal-code", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("code malo: code=%d", rec.Code)
+	}
+}
+
+func TestNewAppForm(t *testing.T) {
+	h := NewAppFormHandler()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/new-app?name=mi-app&domain=vps.test&org=miorg", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"https://github.com/organizations/miorg/settings/apps/new",
+		"contents", "installation_repositories",
+		"https://vps.test/_rkt/hook/github",
+		"https://vps.test/_rkt/setup",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("form sin %q", want)
+		}
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/new-app?name=&domain=", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("sin params: code=%d", rec.Code)
 	}
 }

@@ -49,18 +49,33 @@ type Deploy struct {
 }
 
 // Github auth vía GitHub App para repos privados (tokens 1h, cacheados).
+// Multi-instalación (org + personal): se registran solas vía setup
+// del browser o eventos de instalación. Sin installation_id fijo.
 type Github struct {
-	AppID          int64  `yaml:"app_id"`
-	InstallationID int64  `yaml:"installation_id"`
-	KeyFile        string `yaml:"key_file"`
-	PollInterval   string `yaml:"poll_interval"`
-	WebhookSecret  string `yaml:"webhook_secret"`
+	AppID         int64  `yaml:"app_id"`
+	AppSlug       string `yaml:"app_slug"`
+	KeyFile       string `yaml:"key_file"`
+	PollInterval  string `yaml:"poll_interval"`
+	WebhookSecret string `yaml:"webhook_secret"`
 
 	poll time.Duration `yaml:"-"`
 }
 
 // Poll intervalo de auto-deploy (parseado en Load).
 func (g *Github) Poll() time.Duration { return g.poll }
+
+// EnsureParsed aplica defaults y parsea poll (para overlay de settings).
+func (g *Github) EnsureParsed() error {
+	if g.PollInterval == "" {
+		g.PollInterval = "60s"
+	}
+	p, err := time.ParseDuration(g.PollInterval)
+	if err != nil || p < 10*time.Second {
+		return fmt.Errorf("github poll_interval inválido %q (mín 10s)", g.PollInterval)
+	}
+	g.poll = p
+	return nil
+}
 
 type App struct {
 	Name         string            `yaml:"name"`
@@ -275,8 +290,8 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.Github != nil {
 		gh := cfg.Github
-		if gh.AppID <= 0 || gh.InstallationID <= 0 {
-			return fmt.Errorf("github sin app_id/installation_id")
+		if gh.AppID <= 0 {
+			return fmt.Errorf("github sin app_id")
 		}
 		p, err := time.ParseDuration(gh.PollInterval)
 		if err != nil || p < 10*time.Second {
@@ -286,7 +301,7 @@ func (cfg *Config) Validate() error {
 		if _, err := os.Stat(gh.KeyFile); err != nil {
 			return fmt.Errorf("github key_file inaccesible %q", gh.KeyFile)
 		}
-		if _, err := github.New(gh.AppID, gh.InstallationID, gh.KeyFile, ""); err != nil {
+		if _, err := github.New(gh.AppID, gh.KeyFile, ""); err != nil {
 			return fmt.Errorf("github: %w", err)
 		}
 		if gh.WebhookSecret != "" && len(gh.WebhookSecret) < 16 {
@@ -425,8 +440,9 @@ func githubEqual(a, b *Github) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}
-	return a.AppID == b.AppID && a.InstallationID == b.InstallationID &&
-		a.KeyFile == b.KeyFile && a.PollInterval == b.PollInterval
+	return a.AppID == b.AppID && a.AppSlug == b.AppSlug &&
+		a.KeyFile == b.KeyFile && a.PollInterval == b.PollInterval &&
+		a.WebhookSecret == b.WebhookSecret
 }
 
 // validAppName [a-z0-9-] para nombres de archivo de log seguros.

@@ -9,6 +9,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
@@ -18,8 +20,19 @@ import (
 	"rkt-proxy/internal/github"
 )
 
+// Deps cablea el webhook.
+type Deps struct {
+	Live     *config.Live
+	Secret   string
+	Log      *slog.Logger
+	DeployFn func(name string)
+	// OnInstall recibe eventos installation* (id, cuenta, acción).
+	OnInstall func(id int64, account, action string)
+}
+
 // Handler sirve el webhook. deployFn(name) hace el deploy en fondo.
-func NewHandler(live *config.Live, secret string, deployFn func(name string), log *slog.Logger) http.Handler {
+func NewHandler(d Deps) http.Handler {
+	live, secret, deployFn, log := d.Live, d.Secret, d.DeployFn, d.Log
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if v := recover(); v != nil {
@@ -46,6 +59,12 @@ func NewHandler(live *config.Live, secret string, deployFn func(name string), lo
 			return
 		}
 		if r.Header.Get("X-GitHub-Event") != "push" {
+			if id, account, action, ok := InstallationEvent(r, body); ok {
+				if d.OnInstall != nil {
+					d.OnInstall(id, account, action)
+				}
+				log.Info("hook: evento instalación", "action", action, "account", account)
+			}
 			w.WriteHeader(http.StatusAccepted)
 			return
 		}
@@ -109,4 +128,169 @@ func validSignature(header string, body []byte, secret string) bool {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(body)
 	return hmac.Equal(got, mac.Sum(nil))
+}
+
+// SetupDeps cablea GET /_rkt/setup: flujo install (browser) y manifest.
+type SetupDeps struct {
+	Log *slog.Logger
+	// Install: verifica instalación y la registra.
+	Verify  func(id int64) (string, error)
+	OnSetup func(id int64, account string) error
+	// Manifest: canjea code y guarda credenciales. Devuelve install URL.
+	Exchange   func(code string) (*github.ManifestCredentials, error)
+	OnManifest func(c *github.ManifestCredentials) (string, error)
+}
+
+// SetupHandler atiende GET /_rkt/setup del flujo browser:
+//   - setup_action=install: GitHub vuelve tras instalar (verifica+registra).
+//   - setup_action=manifest&code=..: canjea credenciales de App recién creada.
+func SetupHandler(d SetupDeps) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if v := recover(); v != nil {
+				d.Log.Error("setup: panic recuperado", "v", v)
+				http.Error(w, "error interno", http.StatusInternalServerError)
+			}
+		}()
+		q := r.URL.Query()
+		switch q.Get("setup_action") {
+		case "install":
+			setupInstall(w, r, d)
+		case "manifest":
+			setupManifest(w, r, d)
+		default:
+			http.Error(w, "solo install|manifest", http.StatusBadRequest)
+		}
+	})
+}
+
+func setupInstall(w http.ResponseWriter, r *http.Request, d SetupDeps) {
+	q := r.URL.Query()
+	var id int64
+	if _, err := fmt.Sscanf(q.Get("installation_id"), "%d", &id); err != nil || id <= 0 {
+		http.Error(w, "installation_id inválido", http.StatusBadRequest)
+		return
+	}
+	account, err := d.Verify(id)
+	if err != nil {
+		d.Log.Warn("setup: instalación no verificada", "id", id, "err", err)
+		http.Error(w, "instalación no verificada", http.StatusUnauthorized)
+		return
+	}
+	if err := d.OnSetup(id, account); err != nil {
+		d.Log.Error("setup: registro fallido", "err", err)
+		http.Error(w, "registro fallido", http.StatusInternalServerError)
+		return
+	}
+	d.Log.Info("setup: app vinculada", "account", account, "installation", id)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>rkt vinculado</title></head>
+<body style="font-family:system-ui;padding:48px"><h1>GitHub conectado ✓</h1>
+<p>Cuenta <b>%s</b> vinculada. Los repos con despliegue se registran solos.</p>
+<p>Puedes cerrar esta ventana.</p></body></html>`, templateEscape(account))
+}
+
+func setupManifest(w http.ResponseWriter, r *http.Request, d SetupDeps) {
+	code := r.URL.Query().Get("code")
+	if code == "" || d.Exchange == nil || d.OnManifest == nil {
+		http.Error(w, "code requerido", http.StatusBadRequest)
+		return
+	}
+	creds, err := d.Exchange(code)
+	if err != nil {
+		d.Log.Warn("setup: canje manifest fallido", "err", err)
+		http.Error(w, "código inválido o vencido", http.StatusUnauthorized)
+		return
+	}
+	installURL, err := d.OnManifest(creds)
+	if err != nil {
+		d.Log.Error("setup: guardar credenciales fallido", "err", err)
+		http.Error(w, "registro fallido", http.StatusInternalServerError)
+		return
+	}
+	d.Log.Info("setup: app creada", "slug", creds.Slug, "id", creds.ID)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>rkt app creada</title></head>
+<body style="font-family:system-ui;padding:48px"><h1>App creada ✓</h1>
+<p>Ya puedes instalarla en tus repos:</p>
+<p><a href="%s"><button>Instalar en GitHub</button></a></p></body></html>`, templateEscape(installURL))
+}
+
+func templateEscape(s string) string {
+	r := strings.ReplaceAll(s, "&", "&amp;")
+	r = strings.ReplaceAll(r, "<", "&lt;")
+	r = strings.ReplaceAll(r, ">", "&gt;")
+	r = strings.ReplaceAll(r, `"`, "&quot;")
+	return r
+}
+
+// InstallationEvent procesa eventos installation/installation_repositories:
+// devuelve (installationID, account, acción) para refrescar discovery.
+func InstallationEvent(r *http.Request, body []byte) (int64, string, string, bool) {
+	ev := r.Header.Get("X-GitHub-Event")
+	if ev != "installation" && ev != "installation_repositories" {
+		return 0, "", "", false
+	}
+	var p struct {
+		Action       string `json:"action"`
+		Installation struct {
+			ID      int64 `json:"id"`
+			Account struct {
+				Login string `json:"login"`
+			} `json:"account"`
+		} `json:"installation"`
+	}
+	if err := json.Unmarshal(body, &p); err != nil || p.Installation.ID <= 0 {
+		return 0, "", "", false
+	}
+	return p.Installation.ID, p.Installation.Account.Login, p.Action, true
+}
+
+// manifestTemplate form que POSTea el manifest a GitHub (auto-submit).
+var manifestTemplate = template.Must(template.New("manifest").Parse(`<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><title>rkt: crear GitHub App</title></head>
+<body style="font-family:system-ui;padding:48px">
+<h1>Crear GitHub App {{.Name}}</h1>
+<p>Revisa y pulsa <b>Create GitHub App</b> en GitHub (ya viene rellenado).</p>
+<form action="{{.Target}}" method="post">
+<input type="hidden" name="manifest" value="{{.Manifest}}">
+<input type="submit" value="Continuar a GitHub">
+</form>
+<script>document.forms[0].submit()</script>
+</body></html>`))
+
+// NewAppFormHandler sirve GET /_rkt/new-app?name=&domain=[&org=]: formulario
+// que crea la App vía manifest oficial (permisos mínimos + webhook + setup).
+func NewAppFormHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		name, domain, org := q.Get("name"), q.Get("domain"), q.Get("org")
+		if name == "" || domain == "" {
+			http.Error(w, "requiere ?name=&domain=[&org=]", http.StatusBadRequest)
+			return
+		}
+		target := "https://github.com/settings/apps/new"
+		if org != "" {
+			target = "https://github.com/organizations/" + org + "/settings/apps/new"
+		}
+		manifest, _ := json.Marshal(map[string]any{
+			"name":         name,
+			"description":  "Deploy PaaS rkt (auto TLS + supervisor)",
+			"url":          "https://" + domain,
+			"redirect_url": "https://" + domain + "/_rkt/setup",
+			"setup_url":    "https://" + domain + "/_rkt/setup",
+			"public":       false,
+			"default_permissions": map[string]string{
+				"contents": "read", "metadata": "read",
+			},
+			"default_events": []string{"push", "installation", "installation_repositories"},
+			"hook_attributes": map[string]any{
+				"url": "https://" + domain + "/_rkt/hook/github", "active": true,
+			},
+		})
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = manifestTemplate.Execute(w, map[string]string{
+			"Name": name, "Target": target, "Manifest": string(manifest),
+		})
+	})
 }
