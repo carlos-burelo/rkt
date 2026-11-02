@@ -253,6 +253,28 @@ func TestSetupManifest(t *testing.T) {
 	}
 }
 
+func TestSetupManifestBareCode(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	called := false
+	h := SetupHandler(SetupDeps{Log: log,
+		Exchange: func(code string) (*github.ManifestCredentials, error) {
+			if code != "abc123" {
+				return nil, fmt.Errorf("mal code")
+			}
+			return &github.ManifestCredentials{ID: 1, Slug: "x", WebhookSecret: "s", PEM: "k"}, nil
+		},
+		OnManifest: func(c *github.ManifestCredentials) (string, error) {
+			called = true
+			return "https://github.com/apps/x/installations/new", nil
+		}})
+	// redirect real de GitHub: ?code= sin setup_action
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?code=abc123", nil))
+	if rec.Code != http.StatusOK || !called {
+		t.Fatalf("code pelado: code=%d called=%v", rec.Code, called)
+	}
+}
+
 func TestNewAppForm(t *testing.T) {
 	h := NewAppFormHandler()
 	rec := httptest.NewRecorder()

@@ -159,6 +159,11 @@ func SetupHandler(d SetupDeps) http.Handler {
 		case "manifest":
 			setupManifest(w, r, d)
 		default:
+			// redirect de manifest: solo ?code= (sin setup_action)
+			if q.Get("code") != "" {
+				setupManifest(w, r, d)
+				return
+			}
 			http.Error(w, "solo install|manifest", http.StatusBadRequest)
 		}
 	})
