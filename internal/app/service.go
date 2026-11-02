@@ -5,6 +5,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"rkt-proxy/internal/build"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/dashboard"
 	"rkt-proxy/internal/deploy"
 	"rkt-proxy/internal/discover"
 	"rkt-proxy/internal/github"
@@ -32,6 +34,7 @@ import (
 	"rkt-proxy/internal/server"
 	"rkt-proxy/internal/store"
 	"rkt-proxy/internal/supervisor"
+	"rkt-proxy/web"
 )
 
 // Version vive en internal/build (inyectada por CI). Ver build.Version.
@@ -188,9 +191,19 @@ func (p *Program) Run() {
 	if cfg.Healthz.Enabled {
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp})
 		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses})
+		sub, err := fs.Sub(web.Dist, "dist")
+		if err != nil {
+			p.log.Error("dashboard sin dist", "err", err)
+			sub = nilFS{}
+		}
+		dashH := dashboard.NewHandler(db, sub)
 		p.srvHealth = &http.Server{
 			Addr: cfg.Healthz.Listen,
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasPrefix(r.URL.Path, "/dashboard/") {
+					dashH.ServeHTTP(w, r)
+					return
+				}
 				if strings.HasPrefix(r.URL.Path, "/api/") {
 					apiH.ServeHTTP(w, r)
 					return
@@ -313,6 +326,11 @@ func (c *supCtl) SwapAndRestart(name string, swap func() error) error {
 func (c *supCtl) Snapshot() []supervisor.Status {
 	return c.sup.Snapshot()
 }
+
+// nilFS FS vacío (dist ausente): todo Stat falla -> dashboard 503.
+type nilFS struct{}
+
+func (nilFS) Open(name string) (fs.File, error) { return nil, fs.ErrNotExist }
 
 // deployApp ejecuta un deploy en el servicio: token del entorno del
 // SERVICIO (variable de máquina para SYSTEM), log a archivo.

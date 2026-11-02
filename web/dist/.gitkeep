@@ -1,0 +1,2 @@
+Sin build pnpm: este archivo mantiene `//go:embed dist` compilable.
+Lo genera CI (`pnpm --dir web build`); dashboard responde 503 con pista.
