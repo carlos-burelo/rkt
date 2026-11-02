@@ -35,11 +35,24 @@ type Deps struct {
 }
 
 // Run registra repos no conocidos de TODAS las instalaciones y los
-// despliega. Idempotente.
+// despliega. Idempotente. Avisa (sin borrar) instalaciones desaparecidas.
 func Run(d Deps) error {
 	ids, err := d.DB.ListInstallations()
 	if err != nil {
 		return fmt.Errorf("instalaciones: %w", err)
+	}
+	if live, err := d.GH.Installations(); err == nil {
+		seen := map[int64]bool{}
+		for _, inst := range live {
+			seen[inst.ID] = true
+		}
+		for _, id := range ids {
+			if !seen[id] {
+				d.Log.Warn("instalación desaparecida (¿desinstalada en GitHub?)", "installation", id)
+			}
+		}
+	} else {
+		d.Log.Warn("discovery: sin lista de instalaciones", "err", err)
 	}
 	for _, id := range ids {
 		tok, err := d.GH.TokenFor(id)

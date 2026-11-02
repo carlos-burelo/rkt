@@ -273,24 +273,31 @@ func NewAppFormHandler() http.Handler {
 		if org != "" {
 			target = "https://github.com/organizations/" + org + "/settings/apps/new"
 		}
-		manifest, _ := json.Marshal(map[string]any{
-			"name":         name,
-			"description":  "Deploy PaaS rkt (auto TLS + supervisor)",
-			"url":          "https://" + domain,
-			"redirect_url": "https://" + domain + "/_rkt/setup",
-			"setup_url":    "https://" + domain + "/_rkt/setup",
-			"public":       false,
-			"default_permissions": map[string]string{
-				"contents": "read", "metadata": "read",
-			},
-			"default_events": []string{"push", "installation", "installation_repositories"},
-			"hook_attributes": map[string]any{
-				"url": "https://" + domain + "/_rkt/hook/github", "active": true,
-			},
-		})
+		manifest := manifestJSON(name, domain)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = manifestTemplate.Execute(w, map[string]string{
 			"Name": name, "Target": target, "Manifest": string(manifest),
 		})
 	})
+}
+
+// manifestJSON construye el manifest oficial. Solo eventos válidos en
+// manifest (doc GitHub): installation* se rechazan al crear la App.
+func manifestJSON(name, domain string) []byte {
+	manifest, _ := json.Marshal(map[string]any{
+		"name":         name,
+		"description":  "Deploy PaaS rkt (auto TLS + supervisor)",
+		"url":          "https://" + domain,
+		"redirect_url": "https://" + domain + "/_rkt/setup",
+		"setup_url":    "https://" + domain + "/_rkt/setup",
+		"public":       false,
+		"default_permissions": map[string]string{
+			"contents": "read", "metadata": "read",
+		},
+		"default_events": []string{"push"},
+		"hook_attributes": map[string]any{
+			"url": "https://" + domain + "/_rkt/hook/github", "active": true,
+		},
+	})
+	return manifest
 }

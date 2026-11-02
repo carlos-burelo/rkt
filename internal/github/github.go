@@ -344,3 +344,32 @@ func (m *Manager) FileContent(owner, repo, path, ref, token string) (content str
 	}
 	return string(raw), true, nil
 }
+
+// Installations lista instalaciones de la App (JWT, con paginación).
+func (m *Manager) Installations() ([]installationResp, error) {
+	jwt, err := m.mintJWT()
+	if err != nil {
+		return nil, err
+	}
+	out := []installationResp{}
+	url := m.apiBase + "/app/installations?per_page=100"
+	for url != "" {
+		req, _ := http.NewRequest(http.MethodGet, url, nil)
+		req.Header.Set("Accept", "application/vnd.github+json")
+		req.Header.Set("Authorization", "Bearer "+jwt)
+		resp, err := m.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		var page []installationResp
+		if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+			resp.Body.Close()
+			return nil, err
+		}
+		link := resp.Header.Get("Link")
+		resp.Body.Close()
+		out = append(out, page...)
+		url = nextLink(link)
+	}
+	return out, nil
+}

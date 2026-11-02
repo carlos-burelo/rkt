@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -262,7 +263,7 @@ func TestNewAppForm(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		"https://github.com/organizations/miorg/settings/apps/new",
-		"contents", "installation_repositories",
+		"push",
 		"https://vps.test/_rkt/hook/github",
 		"https://vps.test/_rkt/setup",
 	} {
@@ -270,10 +271,44 @@ func TestNewAppForm(t *testing.T) {
 			t.Fatalf("form sin %q", want)
 		}
 	}
+	for _, nope := range []string{"installation_repositories", "installation"} {
+		if strings.Contains(body, nope) {
+			t.Fatalf("form con evento inválido en manifest: %q", nope)
+		}
+	}
 
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/new-app?name=&domain=", nil))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("sin params: code=%d", rec.Code)
+	}
+}
+
+func TestManifestJSON(t *testing.T) {
+	var m struct {
+		Name               string            `json:"name"`
+		URL                string            `json:"url"`
+		RedirectURL        string            `json:"redirect_url"`
+		SetupURL           string            `json:"setup_url"`
+		Public             bool              `json:"public"`
+		DefaultPermissions map[string]string `json:"default_permissions"`
+		DefaultEvents      []string          `json:"default_events"`
+		HookAttributes     map[string]any    `json:"hook_attributes"`
+	}
+	if err := json.Unmarshal(manifestJSON("mi-app", "vps.test"), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Name != "mi-app" || m.Public || m.DefaultPermissions["contents"] != "read" {
+		t.Fatalf("manifest mal: %+v", m)
+	}
+	// candado de regresión: GitHub rechaza installation* en manifest
+	if len(m.DefaultEvents) != 1 || m.DefaultEvents[0] != "push" {
+		t.Fatalf("eventos manifest mal: %v", m.DefaultEvents)
+	}
+	if m.RedirectURL != "https://vps.test/_rkt/setup" || m.SetupURL != m.RedirectURL {
+		t.Fatalf("urls mal: %+v", m)
+	}
+	if m.HookAttributes["url"] != "https://vps.test/_rkt/hook/github" {
+		t.Fatalf("hook mal: %+v", m.HookAttributes)
 	}
 }

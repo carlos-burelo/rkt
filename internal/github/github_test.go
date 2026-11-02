@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -134,5 +135,31 @@ func TestParseRepo(t *testing.T) {
 		if _, _, ok := ParseRepo(bad); ok {
 			t.Fatalf("%q debió fallar", bad)
 		}
+	}
+}
+
+func TestInstallations(t *testing.T) {
+	_, path := testKey(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/app/installations" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[{"id":7,"account":{"login":"miorg"}},{"id":9,"account":{"login":"yo"}}]`)
+	}))
+	defer srv.Close()
+
+	m, err := New(123, path, srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := m.Installations()
+	if err != nil || len(list) != 2 || list[0].ID != 7 || list[1].Account.Login != "yo" {
+		t.Fatalf("lista mal: %+v %v", list, err)
 	}
 }

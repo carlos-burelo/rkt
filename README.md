@@ -251,9 +251,11 @@ github:
 ```
 
 En la App: webhook URL `https://tu-dominio/_rkt/hook/github`, secret igual,
-evento `push`. Solo despliega ramas trackeadas con `auto: true` (SHA pineado
-nunca); responde `202` y despliega en fondo (log en servicio +
-`logs/deploys/`). Sin secreto el endpoint da 404.
+evento `push`. El manifest solo admite eventos estándar (doc GitHub):
+`installation*` se rechazan ahí. Para altas/bajas instantáneas, suscríbelos
+manual en App settings (si no, el poll las detecta igual). Solo despliega
+ramas trackeadas con `auto: true` (SHA pineado nunca); responde `202` y
+despliega en fondo (log en servicio + `logs/deploys/`). Sin secreto da 404.
 
 ## Auto-discovery (repo nuevo = app viva sola)
 
