@@ -41,7 +41,7 @@ routes:
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewHandler(cfg, "test")
+	h := NewHandler(Deps{Live: config.NewLive(cfg), Version: "test"})
 
 	req := httptest.NewRequest("GET", "/healthz", nil)
 	rec := httptest.NewRecorder()
@@ -68,12 +68,62 @@ routes:
 	}
 }
 
-func TestNotFound(t *testing.T) {
+func TestRestartEndpoint(t *testing.T) {
+	var restarted string
+	h := NewHandler(Deps{
+		Live:    liveWithRoutes(t),
+		Version: "x",
+		Restart: func(name string) bool {
+			if name != "web" {
+				return false
+			}
+			restarted = name
+			return true
+		},
+	})
+
+	// POST ok
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/restart/web", nil)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || restarted != "web" {
+		t.Fatalf("POST web: code=%d restarted=%q", rec.Code, restarted)
+	}
+
+	// app inexistente -> 404
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/restart/otra", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("POST otra: code=%d", rec.Code)
+	}
+
+	// GET -> 405, traversal -> 404
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/restart/web", nil))
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET: code=%d", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/restart/a/b", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("traversal: code=%d", rec.Code)
+	}
+}
+
+func liveWithRoutes(t *testing.T) *config.Live {
+	t.Helper()
 	path := writeTemp(t, "routes:\n  - hosts: [a.test]\n    target: http://127.0.0.1:9\n")
 	defer os.Remove(path)
-	cfg, _ := config.Load(path)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return config.NewLive(cfg)
+}
+
+func TestNotFound(t *testing.T) {
 	rec := httptest.NewRecorder()
-	NewHandler(cfg, "x").ServeHTTP(rec, httptest.NewRequest("GET", "/otra", nil))
+	NewHandler(Deps{Live: liveWithRoutes(t), Version: "x"}).ServeHTTP(rec, httptest.NewRequest("GET", "/otra", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("code %d", rec.Code)
 	}

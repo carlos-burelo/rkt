@@ -34,7 +34,7 @@ routes:
 	if err != nil {
 		t.Fatal(err)
 	}
-	policy := HostPolicy(cfg)
+	policy := HostPolicy(config.NewLive(cfg))
 	ctx := context.Background()
 
 	for _, h := range []string{"app.ejemplo.com", "otro.ejemplo.com", "APP.EJEMPLO.COM"} {

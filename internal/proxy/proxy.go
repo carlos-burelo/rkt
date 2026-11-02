@@ -10,11 +10,13 @@ import (
 
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/ratelimit"
+	"rkt-proxy/internal/waf"
 )
 
 // NewHandler devuelve handler único: match por Host -> ReverseProxy,
 // con rate-limit por IP delante si la config lo activa.
-func NewHandler(cfg *config.Config, log *slog.Logger) http.Handler {
+// Lee la config viva por request (hot-reload de rutas).
+func NewHandler(live *config.Live, log *slog.Logger) http.Handler {
 	transport := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
@@ -26,6 +28,7 @@ func NewHandler(cfg *config.Config, log *slog.Logger) http.Handler {
 	}
 
 	backend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfg := live.Get()
 		target := cfg.Match(r.Host)
 		if target == nil {
 			log.Warn("sin ruta", "host", r.Host, "remote", r.RemoteAddr, "path", r.URL.Path)
@@ -60,6 +63,20 @@ func NewHandler(cfg *config.Config, log *slog.Logger) http.Handler {
 			},
 		}
 		start := time.Now()
+		// Hueco de restart: si el backend no acepta TCP, espera hasta
+		// restart_grace en vez de 502 inmediato (cero fallos en deploys).
+		waited := false
+		deadline := start.Add(cfg.Grace())
+		for !dialOpen(target.Host) {
+			if time.Now().After(deadline) {
+				break
+			}
+			if !waited {
+				log.Info("backend aún no, esperando hueco", "host", r.Host, "target", target.Host)
+				waited = true
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
 		proxy.ServeHTTP(w, r)
 		log.Info("proxy",
 			"host", r.Host,
@@ -70,8 +87,20 @@ func NewHandler(cfg *config.Config, log *slog.Logger) http.Handler {
 		)
 	})
 
-	if !cfg.RateLimit.Enabled {
-		return backend
+	if !live.Get().RateLimit.Enabled {
+		return waf.Middleware(live, backend, log)
 	}
-	return ratelimit.New(cfg.RateLimit.RPS, cfg.RateLimit.Burst).Middleware(backend, log)
+	rl := live.Get().RateLimit
+	// waf fuera: lo denegado no gasta tokens ni toca backend.
+	return waf.Middleware(live, ratelimit.New(rl.RPS, rl.Burst).Middleware(backend, log), log)
+}
+
+// dialOpen true si el backend acepta TCP (sondeo barato loopback).
+func dialOpen(hostport string) bool {
+	c, err := net.DialTimeout("tcp", hostport, 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
 }

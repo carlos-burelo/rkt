@@ -22,7 +22,9 @@ Internet --:443/80--> rkt-proxy --http--> 127.0.0.1:3000 (app1)
 - Redirect `80 → 443` configurable; WebSocket soportado.
 - Corre como **servicio Windows** (auto-arranque) o en foreground.
 - **Rate-limit por IP** (token bucket) delante del backend: exceso → `429`.
+- **WAF-lite**: `deny_paths` con globs (hot-reload) → `403` sin gastar tokens.
 - **`/healthz` en loopback dedicado** con alcance real de backends (`ok/degraded`).
+- **Access log** combinado en archivo, separado del operativo.
 - Instalador prod de una línea (`irm … | iex`): binario, config, firewall,
   PATH y servicio. Updates versionados con backup y rollback automático.
 - Logs a archivo + subcomando `logs -n/-f` (el stdout se pierde en servicios).
@@ -85,6 +87,9 @@ Reglas de routing:
 
 ## Salud y límites
 
+Hot-reload: editar `routes` o `redirect_http_to_https` aplica en ≤10s sin
+restart (`config recargada` en log). YAML inválido = se conserva la anterior.
+Cambios de listeners, ACME, healthz o rate-limit avisan `requieren restart`.
 ```powershell
 curl.exe http://127.0.0.1:8090/healthz
 # {"status":"ok","version":"v0.2.0","routes":2,"backends":[{"target":"http://127.0.0.1:3000","ok":true}]}
@@ -93,6 +98,85 @@ curl.exe http://127.0.0.1:8090/healthz
 `status` es `degraded` si algún backend no acepta TCP. El rate-limit
 (`requests_per_second` + `burst` por IP) responde `429` sin tocar el backend
 y loguea `rate limit` con la IP. Defaults: `20 rps / burst 40`.
+
+## WAF-lite y access log
+
+`deny_paths` niega con `403` (globs estilo `path.Match`, hot-reload) antes
+de rate-limit y backend. Defaults contra escaneos ubicuos:
+
+```yaml
+deny_paths: ["/.env", "/.git/*", "/.DS_Store", "/php-cgi*", "/php-cgi/*", "/cgi-bin/*", "/info.php", "/wp-*"]
+```
+
+Cada respuesta (incluidos 403/429/502) queda en `<dir-config>/logs/access.log`
+en formato combinado + `host/target/dur`.
+
+## Mini-PaaS: apps supervisadas
+
+```yaml
+apps:
+  - name: app1
+    command: "C:\\nodejs\\node.exe"
+    args: ["server.js"]
+    dir: "C:\\apps\\app1"
+    env: { PORT: "3000" }
+    restart_delay: 5s
+    min_uptime: 10s
+    memory_mb: 512
+```
+
+rkt levanta cada app al arrancar, guarda su salida en
+`<dir-config>/logs/apps/<name>.log` y la reinicia si muere. Backoff
+exponencial por crash rápido (base → tope 5m); vivir `min_uptime` resetea
+backoff y no cuenta crash. `memory_mb` (Job Object, Windows) niega commits
+sobre el tope: el runtime muere con OOM y rkt reinicia (0 = sin límite).
+(tope: 5 muertes/minuto → `failed` hasta el próximo restart). Quitar una app
+de la config + restart la detiene. `sc stop` / `Ctrl+C` matan las apps
+(limpio, sin huérfanos). Cambios en `apps` exigen restart
+(hot-reload solo cubre `routes` y `redirect`).
+
+```powershell
+rkt-proxy -config ... logs -app app1 -n 30
+curl.exe http://127.0.0.1:8090/healthz  # incluye "apps": running/pid/restarts
+```
+
+## Restart sin cortes
+
+```powershell
+rkt-proxy -config ... restart app1
+```
+
+Reinicio supervisado: resetea contadores crash, mata la actual y arranca
+al instante (salta el delay). Durante el hueco (proceso booteando) el proxy
+**espera hasta `restart_grace`** reintentando TCP en vez de dar 502: cero
+requests fallidos, solo latencia. Funciona con cualquier runtime sin
+cooperación (sin cluster no hay handoff perfecto: un request justo en el
+instante del kill puede caer; haz tus handlers idempotentes).
+
+Nota Windows: el servicio corre como SYSTEM — usa rutas absolutas en
+`command` (no ve tu PATH de usuario) y valida `dir` al cargar.
+
+## Env vars sin fragilidad
+
+```yaml
+apps:
+  - name: app1
+    env_file: "C:\\apps\\app1\\.env"   # KEY=valor, # comentarios, export opcional
+    env:
+      PORT: "3000"
+      DATABASE_URL: "postgres://${DB_USER}:${DB_PASS}@db:5432/app"
+```
+
+Capas en orden: **OS → `env_file` → `env:`** (cada una gana a la anterior).
+`${VAR}`/`$VAR` expanden contra OS+file+inline-anteriores (ordenado,
+determinista); indefinida = `""`. Archivo inexistente o línea malformada =
+error al cargar (fail fast, no typo silencioso). Secretos: `config.yaml` y
+`.env` en disco con ACL solo SYSTEM+Admins:
+
+```powershell
+icacls "C:\Program Files\rkt-proxy\config.yaml" /inheritance:r /grant:r "SYSTEM:(F)" "Administradores:(F)"
+icacls "C:\apps\app1\.env" /inheritance:r /grant:r "SYSTEM:(F)" "Administradores:(F)"
+```
 
 Ejemplo listo en [`configs/config.example.yaml`](configs/config.example.yaml).
 
@@ -162,6 +246,8 @@ internal/acme/              Manager autocert + HostPolicy + cache staging/prod
 internal/server/            HTTP (challenge+redirect) y HTTPS (TLS+ALPN)
 internal/logx/              logger consola+archivo y resolución de rutas
 internal/ratelimit/         token bucket por IP + middleware 429
+internal/waf/               deny_paths globs + middleware 403
+internal/accesslog/         access log combinado a archivo
 internal/health/            /healthz con chequeo TCP de backends
 configs/config.example.yaml ejemplo canónico
 scripts/install.ps1         instalador prod (irm|iex) y updater

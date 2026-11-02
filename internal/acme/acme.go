@@ -19,30 +19,23 @@ import (
 // StagingDirectory evita rate-limit de prod en pruebas.
 const StagingDirectory = "https://acme-staging-v02.api.letsencrypt.org/directory"
 
-// HostPolicy acepta hosts exactos de la config y
+// HostPolicy acepta hosts exactos de la config viva y
 // subdominios de bases wildcard (*.dominio). La base sola
 // pasa solo si está listada explícita (igual que Match).
-func HostPolicy(cfg *config.Config) autocert.HostPolicy {
-	exact := map[string]bool{}
-	bases := []string{}
-	for _, r := range cfg.Routes {
-		for _, h := range r.Hosts {
-			h = strings.ToLower(strings.TrimSpace(h))
-			if strings.HasPrefix(h, "*.") {
-				bases = append(bases, strings.TrimPrefix(h, "*."))
-			} else if h != "" {
-				exact[h] = true
-			}
-		}
-	}
+func HostPolicy(live *config.Live) autocert.HostPolicy {
 	return func(_ context.Context, host string) error {
 		host = strings.ToLower(strings.TrimSpace(host))
-		if exact[host] {
-			return nil
-		}
-		for _, base := range bases {
-			if strings.HasSuffix(host, "."+base) {
-				return nil
+		cfg := live.Get()
+		for i := range cfg.Routes {
+			for _, h := range cfg.Routes[i].Hosts {
+				h = strings.ToLower(strings.TrimSpace(h))
+				if strings.HasPrefix(h, "*.") {
+					if strings.HasSuffix(host, "."+strings.TrimPrefix(h, "*.")) {
+						return nil
+					}
+				} else if h == host {
+					return nil
+				}
 			}
 		}
 		return fmt.Errorf("host %q no permitido", host)
@@ -52,7 +45,8 @@ func HostPolicy(cfg *config.Config) autocert.HostPolicy {
 // NewManager crea el Manager con cache en disco y TOS aceptado.
 // Staging y prod usan subdirs distintos: el cert staging cacheado
 // jamás debe servirse como prod (ni viceversa).
-func NewManager(cfg *config.Config, log *slog.Logger) *autocert.Manager {
+func NewManager(live *config.Live, log *slog.Logger) *autocert.Manager {
+	cfg := live.Get()
 	dir := filepath.Join(cfg.ACMECacheDir, "prod")
 	if cfg.ACMEStaging {
 		dir = filepath.Join(cfg.ACMECacheDir, "staging")
@@ -64,7 +58,7 @@ func NewManager(cfg *config.Config, log *slog.Logger) *autocert.Manager {
 		Cache:      autocert.DirCache(dir),
 		Prompt:     autocert.AcceptTOS,
 		Email:      cfg.ACMEEmail,
-		HostPolicy: HostPolicy(cfg),
+		HostPolicy: HostPolicy(live),
 	}
 	if cfg.ACMEStaging {
 		m.Client = &leacme.Client{DirectoryURL: StagingDirectory}

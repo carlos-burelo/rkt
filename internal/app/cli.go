@@ -1,16 +1,21 @@
 package app
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/kardianos/service"
 
+	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/logx"
 )
 
@@ -64,11 +69,21 @@ func Run(cfgPath string) {
 			fmt.Println("servicio detenido")
 			return
 		case "run":
-			// foreground, sin instalar (debug / dev)
+			// foreground: Ctrl+C apaga servidores + apps (sin huérfanos).
+			ctx, sigstop := signal.NotifyContext(context.Background(), os.Interrupt)
+			defer sigstop()
+			go func() {
+				<-ctx.Done()
+				_ = prg.Stop(nil)
+				os.Exit(0)
+			}()
 			prg.Run()
 			return
 		case "version":
 			fmt.Println(Version)
+			return
+		case "restart":
+			cmdRestart(flag.Args()[1:], cfgPath)
 			return
 		case "logs":
 			cmdLogs(flag.Args()[1:], cfgPath)
@@ -87,10 +102,40 @@ func Run(cfgPath string) {
 	}
 }
 
+// cmdRestart pide al servicio (vía healthz loopback) reinicio sin cortes:
+// rkt-proxy restart <app>
+func cmdRestart(args []string, cfgPath string) {
+	if len(args) != 1 || args[0] == "" {
+		log.Fatal("uso: restart <app>")
+	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		log.Fatalf("restart: %v", err)
+	}
+	if !cfg.Healthz.Enabled {
+		log.Fatal("restart: healthz desactivado en config")
+	}
+	resp, err := http.Post("http://"+cfg.Healthz.Listen+"/restart/"+args[0], "application/json", nil)
+	if err != nil {
+		log.Fatalf("restart: sin contacto con el servicio: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		log.Fatalf("restart: app %q inexistente", args[0])
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Fatalf("restart: %s %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+	fmt.Printf("app %s reiniciando (sin cortes hasta restart_grace)\n", args[0])
+}
+
 // cmdLogs imprime últimas N líneas del log y opcionalmente sigue (-f).
+// Con -app NOMBRE lee logs/apps/NOMBRE.log (sin follow).
 func cmdLogs(args []string, cfgPath string) {
 	n := 50
 	follow := false
+	appName := ""
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-f", "--follow":
@@ -103,11 +148,21 @@ func cmdLogs(args []string, cfgPath string) {
 			if _, err := fmt.Sscanf(args[i], "%d", &n); err != nil || n < 1 {
 				log.Fatalf("logs: -n inválido %q", args[i])
 			}
+		case "-app":
+			i++
+			if i >= len(args) {
+				log.Fatal("logs: -app requiere nombre")
+			}
+			appName = args[i]
 		default:
-			log.Fatalf("logs: flag desconocido %q (uso: logs [-n 50] [-f])", args[i])
+			log.Fatalf("logs: flag desconocido %q (uso: logs [-n 50] [-f] [-app nombre])", args[i])
 		}
 	}
 	path := logx.Path(cfgPath)
+	if appName != "" {
+		path = filepath.Join(logx.DirFor(cfgPath), "apps", appName+".log")
+		follow = false
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		log.Fatalf("logs: %v", err)

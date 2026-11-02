@@ -9,6 +9,24 @@ acme_cache_dir: "C:\\ProgramData\\rkt-proxy\\certs"
 
 redirect_http_to_https: true
 
+# WAF-lite: paths siempre 403 (globs, hot-reload). Defaults anti-scan.
+deny_paths: ["/.env", "/.git/*", "/.DS_Store", "/php-cgi*", "/php-cgi/*", "/cgi-bin/*", "/info.php", "/wp-*"]
+
+# Apps supervisadas (mini-PaaS): rkt las levanta, captura logs y
+# las reinicia con delay si mueren (tope anti-crashloop: 5/min).
+# Cambios aquí requieren restart del servicio.
+apps:
+  - name: app1
+    command: "C:\\nodejs\\node.exe"   # absoluto: SYSTEM no ve tu PATH de usuario
+    args: ["server.js"]
+    dir: "C:\\apps\\app1"
+    env:
+      PORT: "3000"
+    env_file: "C:\\apps\\app1\\.env"   # base; env: gana; ${VAR} expande
+    restart_delay: 5s     # base; se duplica por crash rápido (tope 5m)
+    min_uptime: 10s       # vivir esto resetea backoff y no cuenta crash
+    memory_mb: 512        # 0 = sin límite; el job niega commits (OOM -> restart)
+
 # Salud en loopback dedicado (monitoreo sin exponer nada).
 healthz:
   enabled: true
@@ -19,6 +37,10 @@ rate_limit:
   enabled: true
   requests_per_second: 20
   burst: 40
+
+# Gracia ante backend caído: espera hasta 10s reintentando TCP en vez
+# de 502 inmediato. Cubre el hueco de un restart (cero fallos).
+restart_grace: 10s
 
 routes:
   - hosts: ["app1.tu-dominio.com"]

@@ -36,6 +36,11 @@ func Path(configPath string) string {
 	return filepath.Join(DirFor(configPath), "rkt-proxy.log")
 }
 
+// AccessPath ruta del access log.
+func AccessPath(configPath string) string {
+	return filepath.Join(DirFor(configPath), "access.log")
+}
+
 // Setup abre (creando dir) el log y devuelve logger multi
 // consola+archivo más closer.
 func Setup(configPath string) (*slog.Logger, func(), error) {

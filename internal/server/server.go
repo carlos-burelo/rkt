@@ -19,14 +19,15 @@ import (
 // HTTPS (o proxea directo si redirect desactivado).
 // challenge debe construirse una vez con mgr.HTTPHandler(nil): eso
 // además activa http-01 como fallback en el Manager.
-func NewHTTP(cfg *config.Config, challenge http.Handler, backend http.Handler, errLog *log.Logger) *http.Server {
+// El flag redirect se lee de la config viva (hot-reload).
+func NewHTTP(cfg *config.Config, live *config.Live, challenge http.Handler, backend http.Handler, errLog *log.Logger) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
 			challenge.ServeHTTP(w, r)
 			return
 		}
-		if cfg.RedirectHTTPToHTTPS {
+		if live.Get().RedirectHTTPToHTTPS {
 			http.Redirect(w, r, "https://"+r.Host+r.URL.RequestURI(), http.StatusMovedPermanently)
 			return
 		}
