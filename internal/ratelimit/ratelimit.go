@@ -1,0 +1,98 @@
+// Package ratelimit: freno por IP con token bucket (golpe de bots
+// no llega al backend). Seguro para uso concurrente.
+package ratelimit
+
+import (
+	"log/slog"
+	"net"
+	"net/http"
+	"sync"
+	"time"
+
+	"golang.org/x/time/rate"
+)
+
+// idleTTL echa buckets sin uso; sweep cada minuto.
+const idleTTL = 3 * time.Minute
+
+type client struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
+
+// Limiter un bucket por IP.
+type Limiter struct {
+	mu      sync.Mutex
+	clients map[string]*client
+	rps     rate.Limit
+	burst   int
+	done    chan struct{}
+}
+
+// New arranca limpieza de fondo. Stop la detiene (tests/apagado).
+func New(rps float64, burst int) *Limiter {
+	l := &Limiter{
+		clients: map[string]*client{},
+		rps:     rate.Limit(rps),
+		burst:   burst,
+		done:    make(chan struct{}),
+	}
+	go func() {
+		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				now := time.Now()
+				l.mu.Lock()
+				for ip, c := range l.clients {
+					if now.Sub(c.lastSeen) > idleTTL {
+						delete(l.clients, ip)
+					}
+				}
+				l.mu.Unlock()
+			case <-l.done:
+				return
+			}
+		}
+	}()
+	return l
+}
+
+// Stop detiene la limpieza.
+func (l *Limiter) Stop() {
+	select {
+	case <-l.done:
+	default:
+		close(l.done)
+	}
+}
+
+// Allow true si la IP tiene token.
+func (l *Limiter) Allow(ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	c, ok := l.clients[ip]
+	if !ok {
+		c = &client{limiter: rate.NewLimiter(l.rps, l.burst)}
+		l.clients[ip] = c
+	}
+	c.lastSeen = time.Now()
+	return c.limiter.Allow()
+}
+
+// Middleware responde 429 sin tocar el backend.
+func (l *Limiter) Middleware(next http.Handler, log *slog.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := r.RemoteAddr
+		if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			ip = h
+		}
+		if !l.Allow(ip) {
+			log.Warn("rate limit", "ip", ip, "host", r.Host, "path", r.URL.Path)
+			http.Error(w, "demasiadas peticiones", http.StatusTooManyRequests)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}

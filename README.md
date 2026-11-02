@@ -21,6 +21,8 @@ Internet --:443/80--> rkt-proxy --http--> 127.0.0.1:3000 (app1)
   con fallback), cache separada staging/prod, renovación automática.
 - Redirect `80 → 443` configurable; WebSocket soportado.
 - Corre como **servicio Windows** (auto-arranque) o en foreground.
+- **Rate-limit por IP** (token bucket) delante del backend: exceso → `429`.
+- **`/healthz` en loopback dedicado** con alcance real de backends (`ok/degraded`).
 - Instalador prod de una línea (`irm … | iex`): binario, config, firewall,
   PATH y servicio. Updates versionados con backup y rollback automático.
 - Logs a archivo + subcomando `logs -n/-f` (el stdout se pierde en servicios).
@@ -80,6 +82,17 @@ Reglas de routing:
 - Comparación case-insensitive; host duplicado = error al arrancar.
 - El primer request a cada dominio emite su cert (tarda segundos); quedan en
   `acme_cache_dir` (`prod/` y `staging/` separados) y renuevan solos.
+
+## Salud y límites
+
+```powershell
+curl.exe http://127.0.0.1:8090/healthz
+# {"status":"ok","version":"v0.2.0","routes":2,"backends":[{"target":"http://127.0.0.1:3000","ok":true}]}
+```
+
+`status` es `degraded` si algún backend no acepta TCP. El rate-limit
+(`requests_per_second` + `burst` por IP) responde `429` sin tocar el backend
+y loguea `rate limit` con la IP. Defaults: `20 rps / burst 40`.
 
 Ejemplo listo en [`configs/config.example.yaml`](configs/config.example.yaml).
 
@@ -148,6 +161,8 @@ internal/proxy/             ReverseProxy (headers, 404/502)
 internal/acme/              Manager autocert + HostPolicy + cache staging/prod
 internal/server/            HTTP (challenge+redirect) y HTTPS (TLS+ALPN)
 internal/logx/              logger consola+archivo y resolución de rutas
+internal/ratelimit/         token bucket por IP + middleware 429
+internal/health/            /healthz con chequeo TCP de backends
 configs/config.example.yaml ejemplo canónico
 scripts/install.ps1         instalador prod (irm|iex) y updater
 .github/workflows/release.yml CI: vet+test+build+release en cada tag v*

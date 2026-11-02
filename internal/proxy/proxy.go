@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/ratelimit"
 )
 
-// NewHandler devuelve handler único: match por Host -> ReverseProxy.
+// NewHandler devuelve handler único: match por Host -> ReverseProxy,
+// con rate-limit por IP delante si la config lo activa.
 func NewHandler(cfg *config.Config, log *slog.Logger) http.Handler {
 	transport := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
@@ -23,7 +25,7 @@ func NewHandler(cfg *config.Config, log *slog.Logger) http.Handler {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	backend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		target := cfg.Match(r.Host)
 		if target == nil {
 			log.Warn("sin ruta", "host", r.Host, "remote", r.RemoteAddr, "path", r.URL.Path)
@@ -67,4 +69,9 @@ func NewHandler(cfg *config.Config, log *slog.Logger) http.Handler {
 			"dur", time.Since(start).String(),
 		)
 	})
+
+	if !cfg.RateLimit.Enabled {
+		return backend
+	}
+	return ratelimit.New(cfg.RateLimit.RPS, cfg.RateLimit.Burst).Middleware(backend, log)
 }

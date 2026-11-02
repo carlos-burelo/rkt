@@ -14,6 +14,7 @@ import (
 
 	"rkt-proxy/internal/acme"
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/proxy"
 	"rkt-proxy/internal/server"
 )
@@ -23,11 +24,12 @@ var Version = "dev"
 
 // Program es el servicio: guarda servidores para Stop limpio.
 type Program struct {
-	cfgPath string
-	log     *slog.Logger
-	srvHTTP *http.Server
-	srvTLS  *http.Server
-	mgr     *autocert.Manager
+	cfgPath   string
+	log       *slog.Logger
+	srvHTTP   *http.Server
+	srvTLS    *http.Server
+	srvHealth *http.Server
+	mgr       *autocert.Manager
 }
 
 // New crea el programa sin arrancarlo.
@@ -41,7 +43,7 @@ func (p *Program) Start(_ service.Service) error {
 	return nil
 }
 
-// Stop apaga ambos servidores con timeout.
+// Stop apaga todos los servidores con timeout.
 func (p *Program) Stop(_ service.Service) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -50,6 +52,9 @@ func (p *Program) Stop(_ service.Service) error {
 	}
 	if p.srvHTTP != nil {
 		_ = p.srvHTTP.Shutdown(ctx)
+	}
+	if p.srvHealth != nil {
+		_ = p.srvHealth.Shutdown(ctx)
 	}
 	return nil
 }
@@ -72,6 +77,7 @@ func (p *Program) Run() {
 	p.log.Info("arrancando",
 		"http", cfg.ListenHTTP,
 		"https", cfg.ListenHTTPS,
+		"healthz", cfg.Healthz.Listen,
 		"routes", len(cfg.Routes),
 		"email", cfg.ACMEEmail,
 	)
@@ -81,6 +87,19 @@ func (p *Program) Run() {
 			p.log.Error("http muerto", "err", err)
 		}
 	}()
+	if cfg.Healthz.Enabled {
+		p.srvHealth = &http.Server{
+			Addr:         cfg.Healthz.Listen,
+			Handler:      health.NewHandler(cfg, Version),
+			ReadTimeout:  5 * time.Second,
+			WriteTimeout: 5 * time.Second,
+		}
+		go func() {
+			if err := p.srvHealth.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				p.log.Error("healthz muerto", "err", err)
+			}
+		}()
+	}
 	if err := p.srvTLS.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 		p.log.Error("https muerto", "err", err)
 		os.Exit(1)

@@ -9,6 +9,17 @@ acme_cache_dir: "C:\\ProgramData\\rkt-proxy\\certs"
 
 redirect_http_to_https: true
 
+# Salud en loopback dedicado (monitoreo sin exponer nada).
+healthz:
+  enabled: true
+  listen: "127.0.0.1:8090"
+
+# Freno por IP antes del backend (bots). Exceso -> 429.
+rate_limit:
+  enabled: true
+  requests_per_second: 20
+  burst: 40
+
 routes:
   - hosts: ["app1.tu-dominio.com"]
     target: "http://127.0.0.1:3000"

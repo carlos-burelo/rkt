@@ -21,15 +21,31 @@ type Route struct {
 // TargetURL backend ya parseado.
 func (r *Route) TargetURL() *url.URL { return r.targetURL }
 
+// HealthzConfig expone salud en listener loopback dedicado
+// (no compite con paths de backends ni se expone a internet).
+type HealthzConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Listen  string `yaml:"listen"`
+}
+
+// RateLimitConfig frena abuso por IP (bots) antes del backend.
+type RateLimitConfig struct {
+	Enabled bool    `yaml:"enabled"`
+	RPS     float64 `yaml:"requests_per_second"`
+	Burst   int     `yaml:"burst"`
+}
+
 // Config canónica. Un solo camino, nada legacy.
 type Config struct {
-	ListenHTTP          string  `yaml:"listen_http"`
-	ListenHTTPS         string  `yaml:"listen_https"`
-	ACMEEmail           string  `yaml:"acme_email"`
-	ACMEStaging         bool    `yaml:"acme_staging"`
-	ACMECacheDir        string  `yaml:"acme_cache_dir"`
-	RedirectHTTPToHTTPS bool    `yaml:"redirect_http_to_https"`
-	Routes              []Route `yaml:"routes"`
+	ListenHTTP          string          `yaml:"listen_http"`
+	ListenHTTPS         string          `yaml:"listen_https"`
+	ACMEEmail           string          `yaml:"acme_email"`
+	ACMEStaging         bool            `yaml:"acme_staging"`
+	ACMECacheDir        string          `yaml:"acme_cache_dir"`
+	RedirectHTTPToHTTPS bool            `yaml:"redirect_http_to_https"`
+	Healthz             HealthzConfig   `yaml:"healthz"`
+	RateLimit           RateLimitConfig `yaml:"rate_limit"`
+	Routes              []Route         `yaml:"routes"`
 }
 
 func defaultConfig() Config {
@@ -38,6 +54,8 @@ func defaultConfig() Config {
 		ListenHTTPS:         ":443",
 		ACMECacheDir:        `C:\ProgramData\rkt-proxy\certs`,
 		RedirectHTTPToHTTPS: true,
+		Healthz:             HealthzConfig{Enabled: true, Listen: "127.0.0.1:8090"},
+		RateLimit:           RateLimitConfig{Enabled: true, RPS: 20, Burst: 40},
 	}
 }
 
@@ -62,6 +80,12 @@ func Load(path string) (*Config, error) {
 	}
 	if len(cfg.Routes) == 0 {
 		return nil, fmt.Errorf("config sin routes")
+	}
+	if cfg.Healthz.Enabled && cfg.Healthz.Listen == "" {
+		return nil, fmt.Errorf("healthz sin listen")
+	}
+	if cfg.RateLimit.Enabled && (cfg.RateLimit.RPS <= 0 || cfg.RateLimit.Burst < 1) {
+		return nil, fmt.Errorf("rate_limit inválido: rps>0 y burst>=1")
 	}
 	seen := map[string]string{}
 	for i := range cfg.Routes {
