@@ -79,3 +79,32 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("count vacío: %d", n)
 	}
 }
+
+func TestListEvents(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "rkt.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	db.InsertEvent("died", "a", "x1")
+	db.InsertEvent("failed", "a", "x2")
+	db.InsertEvent("died", "b", "x3")
+
+	all, err := db.ListEvents(10, "", "")
+	if err != nil || len(all) != 3 || all[0].Kind != "died" || all[0].App != "b" {
+		t.Fatalf("orden/filtro mal: %+v %v", all, err)
+	}
+	died, _ := db.ListEvents(10, "died", "")
+	if len(died) != 2 {
+		t.Fatalf("filtro kind: %d", len(died))
+	}
+	one, _ := db.ListEvents(10, "", "a")
+	if len(one) != 2 {
+		t.Fatalf("filtro app: %d", len(one))
+	}
+	none, _ := db.ListEvents(1, "died", "")
+	if len(none) != 1 {
+		t.Fatalf("límite: %d", len(none))
+	}
+}

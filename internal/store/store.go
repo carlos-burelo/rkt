@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -200,4 +201,47 @@ func (d *DB) CountEvents(kind string) (int, error) {
 	var n int
 	err := d.sql.QueryRow(`SELECT COUNT(*) FROM events WHERE kind=?`, kind).Scan(&n)
 	return n, err
+}
+
+// Event suceso auditable.
+type Event struct {
+	ID   int64  `json:"id"`
+	Ts   string `json:"ts"`
+	Kind string `json:"kind"`
+	App  string `json:"app"`
+	Msg  string `json:"msg"`
+}
+
+// ListEvents últimos N (kind/app "" = todos).
+func (d *DB) ListEvents(n int, kind, app string) ([]Event, error) {
+	q := `SELECT id, ts, kind, app, msg FROM events`
+	var conds []string
+	var args []any
+	if kind != "" {
+		conds = append(conds, "kind=?")
+		args = append(args, kind)
+	}
+	if app != "" {
+		conds = append(conds, "app=?")
+		args = append(args, app)
+	}
+	if len(conds) > 0 {
+		q += " WHERE " + strings.Join(conds, " AND ")
+	}
+	q += ` ORDER BY id DESC LIMIT ?`
+	args = append(args, n)
+	rows, err := d.sql.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Event{}
+	for rows.Next() {
+		var e Event
+		if err := rows.Scan(&e.ID, &e.Ts, &e.Kind, &e.App, &e.Msg); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }

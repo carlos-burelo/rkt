@@ -35,7 +35,7 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
   ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) { throw "Ejecuta como Administrador." }
 
-$exe = Join-Path $InstallDir "rkt-proxy.exe"
+$exe = Join-Path $InstallDir "rkt.exe"
 $cfg = Join-Path $InstallDir "config.yaml"
 $bak = "$exe.bak"
 $verFile = Join-Path $InstallDir "VERSION.txt"
@@ -50,9 +50,9 @@ if ($GithubToken -ne "") {
 # 0. rollback a versión anterior
 if ($Rollback) {
   if (-not (Test-Path $bak)) { throw "Sin backup en $bak" }
-  Stop-Service RktProxy -Force -ErrorAction SilentlyContinue
+  Stop-Service Rkt -Force -ErrorAction SilentlyContinue
   Copy-Item $bak $exe -Force
-  sc.exe start RktProxy
+  sc.exe start Rkt
   Write-Host "Rollback OK."
   return
 }
@@ -70,7 +70,7 @@ if ($LocalExe -ne "") {
     $Version = $rel.tag_name
   }
   Write-Host "Descargando $Repo $Version..."
-  $asset = "rkt-proxy-windows-amd64.exe"
+  $asset = "rkt-windows-amd64.exe"
 
   # 2b. idempotencia: si ya corre esa versión, nada que hacer (salvo -Force)
   $current = ""
@@ -79,7 +79,7 @@ if ($LocalExe -ne "") {
     Write-Host "Ya instalado $Version en $InstallDir. Nada que hacer."
     return
   }
-  $tmp = Join-Path $env:TEMP "rkt-proxy-install.exe"
+  $tmp = Join-Path $env:TEMP "rkt-install.exe"
   Invoke-WebRequest -Uri "https://github.com/$Repo/releases/download/$Version/$asset" `
     -OutFile $tmp -UseBasicParsing
 
@@ -99,11 +99,20 @@ if ($LocalExe -ne "") {
   }
 }
 
+# 3b. migración legacy: servicio RktProxy (nombre anterior) fuera
+if (Get-Service RktProxy -ErrorAction SilentlyContinue) {
+  Write-Host "Migrando servicio legacy RktProxy -> Rkt..."
+  Stop-Service RktProxy -Force -ErrorAction SilentlyContinue
+  sc.exe delete RktProxy | Out-Null
+  Remove-Item (Join-Path $InstallDir "rkt-proxy.exe") -Force -ErrorAction SilentlyContinue
+}
+Remove-NetFirewallRule -DisplayName "RKT Proxy HTTP/HTTPS" -ErrorAction SilentlyContinue | Out-Null
+
 # 4. parar servicio previo para liberar el .exe + backup para rollback
-$svc = Get-Service RktProxy -ErrorAction SilentlyContinue
+$svc = Get-Service Rkt -ErrorAction SilentlyContinue
 if ($svc -and $svc.Status -eq "Running") {
   Write-Host "Parando servicio previo..."
-  Stop-Service RktProxy -Force
+  Stop-Service Rkt -Force
 }
 if (Test-Path $exe) {
   Copy-Item $exe $bak -Force
@@ -135,8 +144,8 @@ if (Test-Path $cfg) {
 
 # 6. firewall 80/443
 if (-not $SkipFirewall) {
-  if (-not (Get-NetFirewallRule -DisplayName "RKT Proxy HTTP/HTTPS" -ErrorAction SilentlyContinue)) {
-    New-NetFirewallRule -DisplayName "RKT Proxy HTTP/HTTPS" -Direction Inbound `
+  if (-not (Get-NetFirewallRule -DisplayName "RKT HTTP/HTTPS" -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -DisplayName "RKT HTTP/HTTPS" -Direction Inbound `
       -LocalPort 80, 443 -Protocol TCP -Action Allow | Out-Null
     Write-Host "Firewall: 80/443 abiertos."
   }
@@ -163,25 +172,25 @@ foreach ($p in 80, 443) {
 }
 
 # 7. servicio: instala solo si falta (misma ruta, sin churn), luego arranca
-if (-not (Get-Service RktProxy -ErrorAction SilentlyContinue)) {
+if (-not (Get-Service Rkt -ErrorAction SilentlyContinue)) {
   & $exe -config $cfg install
 }
-sc.exe start RktProxy
+sc.exe start Rkt
 Start-Sleep 3
 
 # 8. health check: servicio arriba o rollback automático
-$st = (Get-Service RktProxy).Status
+$st = (Get-Service Rkt).Status
 if ($st -ne "Running") {
   Write-Warning "Servicio no arrancó tras update. Rollback..."
   if (Test-Path $bak) {
     Copy-Item $bak $exe -Force
-    sc.exe start RktProxy
+    sc.exe start Rkt
   }
   throw "Update fallido, rollback aplicado. Revisa config y logs."
 }
 $Version | Out-File $verFile -Encoding ascii -NoNewline
-sc.exe query RktProxy
+sc.exe query Rkt
 
 Write-Host ""
-Write-Host "OK. Siguiente: edita $cfg y luego: sc.exe stop RktProxy; sc.exe start RktProxy"
+Write-Host "OK. Siguiente: edita $cfg y luego: sc.exe stop Rkt; sc.exe start Rkt"
 Write-Host "Requiere: DNS A de tus dominios -> IP del VPS, puertos 80/443 públicos."

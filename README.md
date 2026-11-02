@@ -1,16 +1,16 @@
-# rkt-proxy
+# rkt
 
 [![release](https://img.shields.io/github/v/release/carlos-burelo/rkt-proxy)](https://github.com/carlos-burelo/rkt-proxy/releases/latest)
 [![go](https://img.shields.io/badge/go-1.26-blue)](https://go.dev)
 [![platform](https://img.shields.io/badge/platform-windows--amd64-blue)](https://github.com/carlos-burelo/rkt-proxy)
 [![license](https://img.shields.io/github/license/carlos-burelo/rkt-proxy)](LICENSE)
 
-Reverse proxy para **Windows Server** escrito en Go. Asigna dominios y
-subdominios a puertos locales, con **TLS automático vía Let's Encrypt**
-(emisión + renovación sin intervención).
+PaaS para **Windows Server** en un binario Go (`rkt.exe`): dominios con TLS
+automático, apps supervisadas y deploys desde Git. Repo: `carlos-burelo/rkt-proxy`
+(el módulo Go conserva ese path por estabilidad).
 
 ```text
-Internet --:443/80--> rkt-proxy --http--> 127.0.0.1:3000 (app1)
+Internet --:443/80--> rkt --http--> 127.0.0.1:3000 (app1)
                                     \---> 127.0.0.1:8080 (app2)
 ```
 
@@ -52,7 +52,7 @@ instala/arranca el servicio. Después edita la config y reinicia:
 
 ```powershell
 notepad "C:\Program Files\rkt-proxy\config.yaml"
-sc.exe stop RktProxy; sc.exe start RktProxy
+sc.exe stop Rkt; sc.exe start Rkt
 ```
 
 ## Configuración
@@ -136,14 +136,14 @@ de la config + restart la detiene. `sc stop` / `Ctrl+C` matan las apps
 (hot-reload solo cubre `routes` y `redirect`).
 
 ```powershell
-rkt-proxy -config ... logs -app app1 -n 30
+rkt -config ... logs -app app1 -n 30
 curl.exe http://127.0.0.1:8090/healthz  # incluye "apps": running/pid/restarts
 ```
 
 ## Restart sin cortes
 
 ```powershell
-rkt-proxy -config ... restart app1
+rkt -config ... restart app1
 ```
 
 Reinicio supervisado: resetea contadores crash, mata la actual y arranca
@@ -198,7 +198,7 @@ apps:
 # una vez (persiste en máquina):
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1))) -GithubToken "ghp_..."
 
-rkt-proxy -config ... deploy app1
+rkt -config ... deploy app1
 ```
 
 Flujo (todo en el servicio): preflight (git, token, `dir`) → clone
@@ -222,7 +222,7 @@ github:
 **Vincular en el browser** (cero PAT, cero YAML a mano):
 
 ```powershell
-rkt-proxy github init --name rkt-deployer --domain tu-dominio.coatl.in --org dacyti-gsi
+rkt github init --name rkt-deployer --domain tu-dominio.coatl.in --org dacyti-gsi
 ```
 
 Abre la URL que imprime (form con manifest oficial ya rellenado: permisos
@@ -265,8 +265,8 @@ conocido (`package.json` con/sin next, `requirements.txt`) = app creada
 binario de settings) + route + deploy inmediato:
 
 ```powershell
-rkt-proxy settings set base_domain=coatl.in
-rkt-proxy settings set node_bin="C:\Program Files\nodejs\node.exe"
+rkt settings set base_domain=coatl.in
+rkt settings set node_bin="C:\Program Files\nodejs\node.exe"
 # port_pool default 3000-3999; ajústalo con settings set port_pool=...
 ```
 
@@ -276,19 +276,22 @@ Ejemplo listo en [`configs/config.example.yaml`](configs/config.example.yaml).
 
 ## CLI de gestión (adiós YAML a mano)
 
+`rkt help` lista todo. Códigos: `0` ok, `1` error runtime, `2` mal uso.
+`--json` global para `status`, `deployments`, `apps list`, `routes list`.
+
 ```powershell
-rkt-proxy apps add --name app2 --repo https://github.com/o/app2.git --domain app2.coatl.in --port 3002 --command C:\nodejs\node.exe --preset next --auto
-rkt-proxy apps list
-rkt-proxy routes list
-rkt-proxy routes add --host x.coatl.in --host y.coatl.in --target http://127.0.0.1:4000
-rkt-proxy env set app2 CLAVE=valor
-rkt-proxy settings set base_domain=coatl.in
-rkt-proxy config export respaldo.yaml
-rkt-proxy config import respaldo.yaml
-rkt-proxy status
-rkt-proxy deploy app2
-rkt-proxy rollback app2
-rkt-proxy deployments list --app app2
+rkt apps add --name app2 --repo https://github.com/o/app2.git --domain app2.coatl.in --port 3002 --command C:\nodejs\node.exe --preset next --auto
+rkt apps list
+rkt routes list
+rkt routes add --host x.coatl.in --host y.coatl.in --target http://127.0.0.1:4000
+rkt env set app2 CLAVE=valor
+rkt settings set base_domain=coatl.in
+rkt config export respaldo.yaml
+rkt config import respaldo.yaml
+rkt status
+rkt deploy app2
+rkt rollback app2
+rkt deployments list --app app2
 ```
 
 La flota (apps/routes/settings) vive en SQLite (`<dir-config>/logs/rkt.db`);
@@ -333,24 +336,43 @@ Fronteras de confianza (léeme):
 - **healthz es loopback** por default; si lo expones, `/restart` y `/deploy`
   quedan sin auth — no lo hagas.
 
+## MCP para agentes (`rkt mcp`)
+
+Servidor MCP por stdio: `status`, `logs`, `deployments_list`, `restart`,
+`rollback`, `deploy`. Lee local, actúa vía servicio. Límite: opera, no
+configura (eso es del operador por CLI).
+
+```jsonc
+// opencode.json
+{"mcp": {"rkt": {"type": "local",
+  "command": ["C:\\Program Files\\rkt-proxy\\rkt.exe", "-config",
+              "C:\\Program Files\\rkt-proxy\\config.yaml", "mcp"],
+  "enabled": true}}}
+```
+
+```powershell
+# Claude Code
+claude mcp add rkt -- C:\Program` Files\rkt-proxy\rkt.exe -config "C:\Program Files\rkt-proxy\config.yaml" mcp
+```
+
 ## Logs
 
-El servicio escribe en `<dir-config>/logs/rkt-proxy.log` (rota a `.1` a los
+El servicio escribe en `<dir-config>/logs/rkt.log` (rota a `.1` a los
 10 MB). Desde cualquier terminal (el instalador agrega el dir al `PATH`):
 
 ```powershell
-rkt-proxy -config "C:\Program Files\rkt-proxy\config.yaml" logs -n 50
-rkt-proxy -config "C:\Program Files\rkt-proxy\config.yaml" logs -f
+rkt -config "C:\Program Files\rkt-proxy\config.yaml" logs -n 50
+rkt -config "C:\Program Files\rkt-proxy\config.yaml" logs -f
 ```
 
 ## Servicio Windows (manual)
 
 ```powershell
-.\bin\rkt-proxy.exe -config C:\ruta\config.yaml install
-sc.exe start RktProxy
-sc.exe query RktProxy
-sc.exe stop RktProxy
-.\bin\rkt-proxy.exe uninstall
+.\bin\rkt.exe -config C:\ruta\config.yaml install
+sc.exe start Rkt
+sc.exe query Rkt
+sc.exe stop Rkt
+.\bin\rkt.exe uninstall
 ```
 
 ## Troubleshooting
@@ -358,19 +380,33 @@ sc.exe stop RktProxy
 | Síntoma | Causa probable | Fix |
 |---|---|---|
 | `bind: ... forbidden` en `:80` | IIS (`W3SVC`) u otro servicio ocupa el puerto | `sc.exe stop W3SVC; Set-Service W3SVC -StartupType Disabled` |
-| `ERR_SSL_PROTOCOL_ERROR` | Emisión fallida: sin `:80` público no hay challenge | DNS + firewall/SG + `rkt-proxy logs` para el error ACME |
+| `ERR_SSL_PROTOCOL_ERROR` | Emisión fallida: sin `:80` público no hay challenge | DNS + firewall/SG + `rkt logs` para el error ACME |
 | Navegador no confía pero `curl` sí | Cert staging en uso o caché TLS vieja | `acme_staging: false` + restart (+ ventana privada) |
-| `STOP_PENDING` tras `sc stop` | Conexiones colgadas | `taskkill /F /IM rkt-proxy.exe` y `sc start` |
+| `STOP_PENDING` tras `sc stop` | Conexiones colgadas | `taskkill /F /IM rkt.exe` y `sc start` |
 | Escaneos (`/.env`, `/php-cgi`…) en logs | Bots de internet, normal en IP pública | Nada urgente; roadmap: rate-limit |
 
-## Desarrollo
+## Desarrollo local (sin VPS)
+
+```powershell
+rkt dev --port 8080
+```
+
+Genera `rkt.dev.yaml` (HTTP alto, **sin TLS**, rate-limit off) y corre en
+foreground. Sin admin, sin puertos 80/443, sin DNS público: agrega
+`127.0.0.1 app1.test` a `C:\Windows\System32\drivers\etc\hosts` (una vez,
+como admin) y abre `http://app1.test:8080`. Todo lo demás funciona igual
+(supervisor, hot-reload, healthz, polling GitHub, `deploy` con repos
+locales); webhooks no (sin inbound). `listen_https` vacío en cualquier
+config desactiva TLS.
+
+## Desarrollo del proyecto
 
 ```powershell
 go mod tidy
 go vet ./...
 go test ./...
-go build -o bin/rkt-proxy.exe ./cmd/rkt-proxy
-.\bin\rkt-proxy.exe -config config.yaml run
+go build -o bin/rkt.exe ./cmd/rkt-proxy
+.\bin\rkt.exe -config config.yaml run
 ```
 
 ```text

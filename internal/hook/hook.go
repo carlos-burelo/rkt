@@ -229,7 +229,7 @@ func setupManifest(w http.ResponseWriter, r *http.Request, d SetupDeps) {
 	fmt.Fprintf(w, `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>rkt app creada</title></head>
 <body style="font-family:system-ui;padding:48px"><h1>App creada ✓</h1>
 <p>Clave guardada en el servidor. Ahora <b>reinicia el servicio</b> para cargarla:</p>
-<p><code>sc.exe stop RktProxy; sc.exe start RktProxy</code></p>
+<p><code>sc.exe stop Rkt; sc.exe start Rkt</code></p>
 <p>Luego instala en tus repos:</p>
 <p><a href="%s"><button>Instalar en GitHub</button></a></p></body></html>`, templateEscape(installURL))
 }

@@ -24,16 +24,16 @@ jobs:
         shell: pwsh
 
       - name: Build windows/amd64
-        run: go build -trimpath -ldflags "-s -w -X rkt-proxy/internal/app.Version=${{ github.ref_name }}" -o rkt-proxy-windows-amd64.exe ./cmd/rkt-proxy
+        run: go build -trimpath -ldflags "-s -w -X rkt-proxy/internal/build.Version=${{ github.ref_name }}" -o rkt-windows-amd64.exe ./cmd/rkt-proxy
         shell: pwsh
 
       - name: Checksum
-        run: ((Get-FileHash rkt-proxy-windows-amd64.exe -Algorithm SHA256).Hash + "  rkt-proxy-windows-amd64.exe") | Out-File checksums.txt -Encoding ascii
+        run: ((Get-FileHash rkt-windows-amd64.exe -Algorithm SHA256).Hash + "  rkt-windows-amd64.exe") | Out-File checksums.txt -Encoding ascii
         shell: pwsh
 
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            rkt-proxy-windows-amd64.exe
+            rkt-windows-amd64.exe
             checksums.txt
           generate_release_notes: true
