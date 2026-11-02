@@ -27,6 +27,16 @@ type Route struct {
 // TargetURL backend ya parseado.
 func (r *Route) TargetURL() *url.URL { return r.targetURL }
 
+// Resolve parsea el target (sin chequeo de duplicados global).
+func (r *Route) Resolve() error {
+	u, err := url.Parse(r.Target)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("target inválido %q: debe ser http(s)://127.0.0.1:puerto", r.Target)
+	}
+	r.targetURL = u
+	return nil
+}
+
 // App es un proceso supervisado (mini-PaaS). El proxy enruta
 // a sus puertos; rkt los levanta y reinicia si mueren.
 // Deploy publica la app desde git: pull+build+swap+restart+rollback.
@@ -73,6 +83,13 @@ func (a *App) Delay() time.Duration { return a.delay }
 
 // MinUp vida mínima para no contar como crash (parseado en Load).
 func (a *App) MinUp() time.Duration { return a.minUp }
+
+// SetDelays fija duraciones (strings canónicos + parseado). Para snapshot DB.
+func (a *App) SetDelays(delay, minUp time.Duration) {
+	a.RestartDelay = delay.String()
+	a.MinUptime = minUp.String()
+	a.delay, a.minUp = delay, minUp
+}
 
 // HealthzConfig expone salud en listener loopback dedicado
 // (no compite con paths de backends ni se expone a internet).
@@ -152,6 +169,18 @@ func Load(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse yaml: %w", err)
 	}
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	if err := cfg.ResolveEnvAll(); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+// ApplyDefaults rellena valores omitidos. Idempotente.
+func (cfg *Config) ApplyDefaults() {
 	if cfg.ListenHTTP == "" {
 		cfg.ListenHTTP = ":80"
 	}
@@ -161,157 +190,181 @@ func Load(path string) (*Config, error) {
 	if cfg.ACMECacheDir == "" {
 		cfg.ACMECacheDir = `C:\ProgramData\rkt-proxy\certs`
 	}
-	if len(cfg.Routes) == 0 {
-		return nil, fmt.Errorf("config sin routes")
-	}
-	if cfg.Healthz.Enabled && cfg.Healthz.Listen == "" {
-		return nil, fmt.Errorf("healthz sin listen")
-	}
-	if cfg.RateLimit.Enabled && (cfg.RateLimit.RPS <= 0 || cfg.RateLimit.Burst < 1) {
-		return nil, fmt.Errorf("rate_limit inválido: rps>0 y burst>=1")
-	}
 	if cfg.RestartGrace == "" {
 		cfg.RestartGrace = restartGraceDefault
 	}
+	if cfg.Github != nil && cfg.Github.PollInterval == "" {
+		cfg.Github.PollInterval = "60s"
+	}
+	for i := range cfg.Apps {
+		a := &cfg.Apps[i]
+		if a.RestartDelay == "" {
+			a.RestartDelay = "5s"
+		}
+		if a.MinUptime == "" {
+			a.MinUptime = "10s"
+		}
+		if a.Deploy != nil {
+			if a.Deploy.Ref == "" {
+				a.Deploy.Ref = "main"
+			}
+			if a.Deploy.TokenEnv == "" {
+				a.Deploy.TokenEnv = "GITHUB_TOKEN"
+			}
+		}
+	}
+}
+
+// ResolveEnv fusiona env_file + inline con expansión. Una sola vez por
+// valor: Load la corre tras Validate; el snapshot DB no (DB guarda
+// ya expandido). Soporta $$ como $ literal.
+func (a *App) ResolveEnv() error {
+	fileVars := map[string]string{}
+	if a.EnvFile != "" {
+		raw, err := dotenv.ParseFile(a.EnvFile)
+		if err != nil {
+			return fmt.Errorf("apps[%s]: %w", a.Name, err)
+		}
+		fileVars = dotenv.Expand(raw, dotenv.EnvironMap())
+	}
+	scope := dotenv.EnvironMap()
+	for k, v := range fileVars {
+		scope[k] = v
+	}
+	merged := make(map[string]string, len(fileVars)+len(a.Env))
+	for k, v := range fileVars {
+		merged[k] = v
+	}
+	for k, v := range dotenv.Expand(a.Env, scope) {
+		merged[k] = v
+	}
+	a.Env = merged
+	return nil
+}
+
+// ResolveEnvAll fusiona env_file+inline de todas las apps (una sola vez;
+// el snapshot DB no re-fusiona: DB guarda ya expandido).
+func (cfg *Config) ResolveEnvAll() error {
+	for i := range cfg.Apps {
+		if err := cfg.Apps[i].ResolveEnv(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Validate verifica todo y parsea (grace, github, apps, routes).
+// No toca env (ver ResolveEnvAll).
+func (cfg *Config) Validate() error {
+	if len(cfg.Routes) == 0 {
+		return fmt.Errorf("config sin routes")
+	}
+	if cfg.Healthz.Enabled && cfg.Healthz.Listen == "" {
+		return fmt.Errorf("healthz sin listen")
+	}
+	if cfg.RateLimit.Enabled && (cfg.RateLimit.RPS <= 0 || cfg.RateLimit.Burst < 1) {
+		return fmt.Errorf("rate_limit inválido: rps>0 y burst>=1")
+	}
 	g, err := time.ParseDuration(cfg.RestartGrace)
 	if err != nil || g < 0 {
-		return nil, fmt.Errorf("restart_grace inválido %q (ej 10s, 0 = directo a 502)", cfg.RestartGrace)
+		return fmt.Errorf("restart_grace inválido %q (ej 10s, 0 = directo a 502)", cfg.RestartGrace)
 	}
 	cfg.grace = g
 	if cfg.MaxBodyMB < 0 {
-		return nil, fmt.Errorf("max_body_mb inválido %d (>=0, 0 = sin tope)", cfg.MaxBodyMB)
+		return fmt.Errorf("max_body_mb inválido %d (>=0, 0 = sin tope)", cfg.MaxBodyMB)
 	}
 	if cfg.Github != nil {
 		gh := cfg.Github
 		if gh.AppID <= 0 || gh.InstallationID <= 0 {
-			return nil, fmt.Errorf("github sin app_id/installation_id")
-		}
-		if gh.PollInterval == "" {
-			gh.PollInterval = "60s"
+			return fmt.Errorf("github sin app_id/installation_id")
 		}
 		p, err := time.ParseDuration(gh.PollInterval)
 		if err != nil || p < 10*time.Second {
-			return nil, fmt.Errorf("github poll_interval inválido %q (mín 10s)", gh.PollInterval)
+			return fmt.Errorf("github poll_interval inválido %q (mín 10s)", gh.PollInterval)
 		}
 		gh.poll = p
 		if _, err := os.Stat(gh.KeyFile); err != nil {
-			return nil, fmt.Errorf("github key_file inaccesible %q", gh.KeyFile)
+			return fmt.Errorf("github key_file inaccesible %q", gh.KeyFile)
 		}
 		if _, err := github.New(gh.AppID, gh.InstallationID, gh.KeyFile, ""); err != nil {
-			return nil, fmt.Errorf("github: %w", err)
+			return fmt.Errorf("github: %w", err)
 		}
 		if gh.WebhookSecret != "" && len(gh.WebhookSecret) < 16 {
-			return nil, fmt.Errorf("github webhook_secret muy corto (mín 16 caracteres)")
+			return fmt.Errorf("github webhook_secret muy corto (mín 16 caracteres)")
 		}
 	}
 	for _, p := range cfg.DenyPaths {
 		if _, err := pathpkg.Match(p, ""); err != nil {
-			return nil, fmt.Errorf("deny_paths patrón inválido %q", p)
+			return fmt.Errorf("deny_paths patrón inválido %q", p)
 		}
 	}
 	seenApps := map[string]bool{}
 	for i := range cfg.Apps {
 		a := &cfg.Apps[i]
 		if !validAppName(a.Name) {
-			return nil, fmt.Errorf("apps[%d] name inválido %q: [a-z0-9-]", i, a.Name)
+			return fmt.Errorf("apps[%d] name inválido %q: [a-z0-9-]", i, a.Name)
 		}
 		if seenApps[a.Name] {
-			return nil, fmt.Errorf("apps name duplicado %q", a.Name)
+			return fmt.Errorf("apps name duplicado %q", a.Name)
 		}
 		seenApps[a.Name] = true
 		if strings.TrimSpace(a.Command) == "" {
-			return nil, fmt.Errorf("apps[%s] sin command", a.Name)
+			return fmt.Errorf("apps[%s] sin command", a.Name)
 		}
 		if a.Deploy != nil && a.Dir == "" {
-			return nil, fmt.Errorf("apps[%s] deploy requiere dir", a.Name)
+			return fmt.Errorf("apps[%s] deploy requiere dir", a.Name)
 		}
 		if a.Dir != "" && a.Deploy == nil {
 			if st, err := os.Stat(a.Dir); err != nil || !st.IsDir() {
-				return nil, fmt.Errorf("apps[%s] dir inexistente %q", a.Name, a.Dir)
+				return fmt.Errorf("apps[%s] dir inexistente %q", a.Name, a.Dir)
 			}
-		}
-		if a.RestartDelay == "" {
-			a.RestartDelay = "5s"
 		}
 		d, err := time.ParseDuration(a.RestartDelay)
 		if err != nil || d <= 0 {
-			return nil, fmt.Errorf("apps[%s] restart_delay inválido %q (ej 5s)", a.Name, a.RestartDelay)
+			return fmt.Errorf("apps[%s] restart_delay inválido %q (ej 5s)", a.Name, a.RestartDelay)
 		}
 		a.delay = d
-		if a.MinUptime == "" {
-			a.MinUptime = "10s"
-		}
 		mu, err := time.ParseDuration(a.MinUptime)
 		if err != nil || mu <= 0 {
-			return nil, fmt.Errorf("apps[%s] min_uptime inválido %q (ej 10s)", a.Name, a.MinUptime)
+			return fmt.Errorf("apps[%s] min_uptime inválido %q (ej 10s)", a.Name, a.MinUptime)
 		}
 		a.minUp = mu
 		if a.Deploy != nil {
 			d := a.Deploy
 			if strings.TrimSpace(d.Repo) == "" {
-				return nil, fmt.Errorf("apps[%s] deploy sin repo", a.Name)
-			}
-			if d.Ref == "" {
-				d.Ref = "main"
-			}
-			if d.TokenEnv == "" {
-				d.TokenEnv = "GITHUB_TOKEN"
+				return fmt.Errorf("apps[%s] deploy sin repo", a.Name)
 			}
 			for _, s := range d.Build {
 				if strings.TrimSpace(s) == "" {
-					return nil, fmt.Errorf("apps[%s] deploy con build vacío", a.Name)
+					return fmt.Errorf("apps[%s] deploy con build vacío", a.Name)
 				}
 			}
 		}
-		// env: archivo base + inline encima, todo expandido.
-		// file ve OS; inline ve OS+file+inline-anteriores (ordenado).
-		fileVars := map[string]string{}
-		if a.EnvFile != "" {
-			raw, err := dotenv.ParseFile(a.EnvFile)
-			if err != nil {
-				return nil, fmt.Errorf("apps[%s]: %w", a.Name, err)
-			}
-			fileVars = dotenv.Expand(raw, dotenv.EnvironMap())
-		}
-		scope := dotenv.EnvironMap()
-		for k, v := range fileVars {
-			scope[k] = v
-		}
-		merged := make(map[string]string, len(fileVars)+len(a.Env))
-		for k, v := range fileVars {
-			merged[k] = v
-		}
-		for k, v := range dotenv.Expand(a.Env, scope) {
-			merged[k] = v
-		}
-		a.Env = merged
 	}
 	seen := map[string]string{}
 	for i := range cfg.Routes {
 		r := &cfg.Routes[i]
 		if len(r.Hosts) == 0 {
-			return nil, fmt.Errorf("route %d sin hosts", i)
+			return fmt.Errorf("route %d sin hosts", i)
 		}
 		if r.Target == "" {
-			return nil, fmt.Errorf("route %d sin target", i)
+			return fmt.Errorf("route %d sin target", i)
 		}
-		u, err := url.Parse(r.Target)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return nil, fmt.Errorf("route %d target inválido %q: debe ser http(s)://127.0.0.1:puerto", i, r.Target)
+		if err := r.Resolve(); err != nil {
+			return fmt.Errorf("route %d %w", i, err)
 		}
-		r.targetURL = u
 		for _, h := range r.Hosts {
 			h = strings.ToLower(strings.TrimSpace(h))
 			if h == "" {
-				return nil, fmt.Errorf("route %d con host vacío", i)
+				return fmt.Errorf("route %d con host vacío", i)
 			}
 			if prev, ok := seen[h]; ok {
-				return nil, fmt.Errorf("host %q duplicado (en %q y %q)", h, prev, r.Target)
+				return fmt.Errorf("host %q duplicado (en %q y %q)", h, prev, r.Target)
 			}
 			seen[h] = r.Target
 		}
 	}
-	return &cfg, nil
+	return nil
 }
 
 // Live es la config activa con swap atómico para hot-reload.

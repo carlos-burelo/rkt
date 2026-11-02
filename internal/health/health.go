@@ -37,16 +37,17 @@ type AppStatus struct {
 // Deps cablea healthz: config viva, versión, estado apps y restart.
 // Apps/Restart nil = sin supervisor (proxy puro).
 type Deps struct {
-	Live    *config.Live
-	Version string
-	Apps    func() []AppStatus
-	Restart func(name string) bool
-	Deploy  func(name string) (string, error)
+	Live     *config.Live
+	Version  string
+	Apps     func() []AppStatus
+	Restart  func(name string) bool
+	Deploy   func(name string) (string, error)
+	Rollback func(name string) error
 }
 
-// NewHandler responde GET /healthz, POST /restart/<name> y
-// POST /deploy/<name>; resto 404/405. Solo para listener loopback:
-// restart/deploy no llevan auth.
+// NewHandler responde GET /healthz, POST /restart/<name>,
+// POST /deploy/<name> y POST /rollback/<name>; resto 404/405.
+// Solo para listener loopback: sin auth.
 func NewHandler(d Deps) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/restart/") {
@@ -55,6 +56,10 @@ func NewHandler(d Deps) http.Handler {
 		}
 		if strings.HasPrefix(r.URL.Path, "/deploy/") {
 			deployHandler(w, r, d.Deploy)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/rollback/") {
+			rollbackHandler(w, r, d.Rollback)
 			return
 		}
 		if r.URL.Path != "/healthz" {
@@ -132,4 +137,24 @@ func deployHandler(w http.ResponseWriter, r *http.Request, fn func(name string) 
 		return
 	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"deployed": name, "rev": rev})
+}
+
+// rollbackHandler ejecuta POST /rollback/<name> (versión previa).
+func rollbackHandler(w http.ResponseWriter, r *http.Request, fn func(name string) error) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodPost {
+		http.Error(w, "solo POST", http.StatusMethodNotAllowed)
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, "/rollback/")
+	if name == "" || strings.Contains(name, "/") || fn == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := fn(name); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"rolledback": name})
 }

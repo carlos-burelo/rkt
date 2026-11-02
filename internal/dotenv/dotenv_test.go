@@ -72,4 +72,7 @@ func TestExpand(t *testing.T) {
 	if out["E"] != "osval-x!osval" {
 		t.Fatalf("ordenado mal (E ve A inline): %q", out["E"])
 	}
+	if got := Expand(map[string]string{"P": "pa$$word"}, nil)["P"]; got != "pa$word" {
+		t.Fatalf("escape $$ mal: %q", got)
+	}
 }

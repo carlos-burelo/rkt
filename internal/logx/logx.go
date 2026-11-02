@@ -41,6 +41,11 @@ func AccessPath(configPath string) string {
 	return filepath.Join(DirFor(configPath), "access.log")
 }
 
+// DBPath ruta de rkt.db (historial SQLite).
+func DBPath(configPath string) string {
+	return filepath.Join(DirFor(configPath), "rkt.db")
+}
+
 // Setup abre (creando dir) el log y devuelve logger multi
 // consola+archivo más closer.
 func Setup(configPath string) (*slog.Logger, func(), error) {

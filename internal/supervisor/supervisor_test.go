@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -320,4 +321,28 @@ func TestSwapAndRestart(t *testing.T) {
 	if err := m.SwapAndRestart("nadie", func() error { return nil }); err == nil {
 		t.Fatal("app inexistente debe fallar")
 	}
+}
+
+func TestOnEventDied(t *testing.T) {
+	cmd, args := shell(t, "exit 3")
+	var argYaml string
+	for _, a := range args {
+		argYaml += "\"" + a + "\", "
+	}
+	apps := loadApps(t, "apps:\n  - name: muere\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 5s\n    min_uptime: 1ms\n")
+	m := New(apps, t.TempDir(), testLog(t))
+	var mu sync.Mutex
+	var kinds []string
+	m.OnEvent = func(kind, app, msg string) {
+		mu.Lock()
+		kinds = append(kinds, kind+":"+app)
+		mu.Unlock()
+	}
+	m.Start()
+	defer m.Stop()
+	waitFor(t, 10*time.Second, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(kinds) >= 1 && kinds[0] == "died:muere"
+	}, "evento died")
 }

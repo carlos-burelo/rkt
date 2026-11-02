@@ -122,6 +122,11 @@ func expandOne(s string, scope map[string]string) string {
 			i++
 			continue
 		}
+		if s[i+1] == '$' {
+			b.WriteByte('$') // $$ = $ literal
+			i += 2
+			continue
+		}
 		if s[i+1] == '{' {
 			end := strings.IndexByte(s[i+2:], '}')
 			if end < 0 {

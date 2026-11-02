@@ -120,6 +120,28 @@ func WaitAppHealthy(snap func() []supervisor.Status, name string, timeout time.D
 	}
 }
 
+// Rollback devuelve live.prev a live con la app parada y reinicia.
+// Para `rollback <app>` manual (el automático vive en Run).
+func Rollback(app config.App, ctl Controller, log *slog.Logger) error {
+	live := app.Dir
+	prev := live + ".prev"
+	if !dirExists(prev) {
+		return fmt.Errorf("sin backup %s", prev)
+	}
+	back := func() error {
+		_ = os.RemoveAll(live)
+		return renameRetry(prev, live)
+	}
+	if err := ctl.SwapAndRestart(app.Name, back); err != nil {
+		return fmt.Errorf("rollback swap: %w", err)
+	}
+	if err := WaitAppHealthy(ctl.Snapshot, app.Name, healthWait); err != nil {
+		return fmt.Errorf("rollback sin salud: %w", err)
+	}
+	log.Info("rollback ok", "app", app.Name)
+	return nil
+}
+
 // renameRetry reintenta (Windows: AV/indexadores retienen handles).
 func renameRetry(old, new string) error {
 	var err error

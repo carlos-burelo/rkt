@@ -5,5 +5,8 @@ bin/
 # config real (con email/dominios); solo ejemplo en repo
 config.yaml
 
+# backups de config por CLI manage
+*.bak-*
+
 # cache certs local
 certs/

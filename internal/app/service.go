@@ -16,14 +16,17 @@ import (
 
 	"rkt-proxy/internal/accesslog"
 	"rkt-proxy/internal/acme"
+	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/deploy"
+	"rkt-proxy/internal/discover"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/hook"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/proxy"
 	"rkt-proxy/internal/server"
+	"rkt-proxy/internal/store"
 	"rkt-proxy/internal/supervisor"
 )
 
@@ -40,6 +43,7 @@ type Program struct {
 	log       *slog.Logger
 	live      *config.Live
 	ghm       *github.Manager
+	db        *store.DB
 	srvHTTP   *http.Server
 	srvTLS    *http.Server
 	srvHealth *http.Server
@@ -78,20 +82,32 @@ func (p *Program) Stop(_ service.Service) error {
 	if p.alog != nil {
 		_ = p.alog.Close()
 	}
+	if p.db != nil {
+		_ = p.db.Close()
+	}
 	return nil
 }
 
-// Run carga config y sirve HTTP+HTTPS. Bloquea en el servidor TLS.
+// Run carga config (YAML bootstrap + flota DB) y sirve. Bloquea en TLS.
 func (p *Program) Run() {
-	cfg, err := config.Load(p.cfgPath)
+	cfg, db, err := cfgfile.LoadMerged(p.cfgPath)
 	if err != nil {
 		p.log.Error("config inválida", "err", err)
 		os.Exit(1)
 	}
+	p.db = db
 	live := config.NewLive(cfg)
 	p.live = live
 
 	p.sup = supervisor.New(cfg.Apps, filepath.Join(logx.DirFor(p.cfgPath), "apps"), p.log)
+	if p.db != nil {
+		db := p.db
+		p.sup.OnEvent = func(kind, app, msg string) {
+			if err := db.InsertEvent(kind, app, msg); err != nil {
+				p.log.Warn("evento no guardado", "err", err)
+			}
+		}
+	}
 	p.sup.Start()
 	backend := proxy.NewHandler(live, p.log)
 	handler := http.Handler(backend)
@@ -136,7 +152,7 @@ func (p *Program) Run() {
 	if cfg.Healthz.Enabled {
 		p.srvHealth = &http.Server{
 			Addr:    cfg.Healthz.Listen,
-			Handler: health.NewHandler(health.Deps{Live: live, Version: Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp}),
+			Handler: health.NewHandler(health.Deps{Live: live, Version: Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp}),
 			// Sin WriteTimeout: POST /deploy/* tarda minutos (solo loopback).
 			ReadTimeout: 10 * time.Second,
 		}
@@ -147,7 +163,7 @@ func (p *Program) Run() {
 		}()
 	}
 	p.log.Info("hot-reload activo", "poll", pollInterval.String())
-	go p.watchConfig(live)
+	go p.watchMerged(live, db)
 	if cfg.Github != nil {
 		gh, err := github.New(cfg.Github.AppID, cfg.Github.InstallationID, cfg.Github.KeyFile, "")
 		if err != nil {
@@ -232,11 +248,40 @@ func (p *Program) deployApp(name string) (string, error) {
 		return "", err
 	}
 	defer out.Close()
+	var depID int64
+	prevRev := deploy.HeadRev(app.Dir)
+	if p.db != nil {
+		depID, _ = p.db.InsertDeployment(app.Name, "", out.Name())
+	}
 	rev, err := deploy.Run(*app, token, &supCtl{sup: p.sup, log: p.log}, out, p.log)
+	if p.db != nil && depID > 0 {
+		status := "ok"
+		if err != nil {
+			status = "failed"
+		}
+		if ferr := p.db.FinishDeployment(depID, status, prevRev, rev); ferr != nil {
+			p.log.Warn("historial no actualizado", "err", ferr)
+		}
+	}
 	if err != nil {
 		return "", err
 	}
 	return rev, nil
+}
+
+// rollbackApp devuelve live.prev a live (rollback manual).
+func (p *Program) rollbackApp(name string) error {
+	cfg := p.live.Get()
+	var app *config.App
+	for i := range cfg.Apps {
+		if cfg.Apps[i].Name == name {
+			app = &cfg.Apps[i]
+		}
+	}
+	if app == nil {
+		return fmt.Errorf("app %q inexistente", name)
+	}
+	return deploy.Rollback(*app, &supCtl{sup: p.sup, log: p.log}, p.log)
 }
 
 // autoDeploy sondea GitHub por cambios y despliega (push-to-deploy con
@@ -248,6 +293,12 @@ func (p *Program) autoDeploy(live *config.Live) {
 		cfg := live.Get()
 		if cfg.Github == nil || p.ghm == nil {
 			return
+		}
+		if err := discover.Run(discover.Deps{
+			GH: p.ghm, DB: p.db, Log: p.log,
+			DeployFn: func(name string) (string, error) { return p.deployApp(name) },
+		}); err != nil {
+			p.log.Warn("discovery fallida", "err", err)
 		}
 		for i := range cfg.Apps {
 			a := &cfg.Apps[i]
@@ -289,35 +340,51 @@ func shortSHA(s string) string {
 	return s
 }
 
-// watchConfig recarga rutas + redirect sin downtime ante cambios del
-// archivo. Config inválida = se conserva la anterior. Campos que exigen
-// reinicio (listeners, ACME, healthz, rate-limit) solo se avisan.
-func (p *Program) watchConfig(live *config.Live) {
+// watchMerged recarga sin downtime ante cambios del YAML (infra) o de
+// la DB (flota vía CLI). Fuente inválida = se conserva la anterior.
+// Campos que exigen reinicio solo se avisan.
+func (p *Program) watchMerged(live *config.Live, db *store.DB) {
 	t := time.NewTicker(pollInterval)
 	defer t.Stop()
-	var lastTime int64
-	var lastSize int64
+	var lastTime, lastSize int64
 	if st, err := os.Stat(p.cfgPath); err == nil {
 		lastTime, lastSize = st.ModTime().UnixNano(), st.Size()
 	}
+	lastVer := db.ConfigVersion()
+	base, err := config.Load(p.cfgPath)
+	if err != nil {
+		p.log.Warn("yaml ilegible para watcher, solo DB", "err", err)
+	}
 	for range t.C {
-		st, err := os.Stat(p.cfgPath)
-		if err != nil {
+		changed := false
+		if st, err := os.Stat(p.cfgPath); err == nil {
+			if st.ModTime().UnixNano() != lastTime || st.Size() != lastSize {
+				lastTime, lastSize = st.ModTime().UnixNano(), st.Size()
+				if b, err := config.Load(p.cfgPath); err != nil {
+					p.log.Warn("yaml nuevo inválido, conservo anterior", "err", err)
+				} else {
+					base = b
+					changed = true
+				}
+			}
+		}
+		if v := db.ConfigVersion(); v != lastVer {
+			lastVer = v
+			changed = true
+		}
+		if !changed {
 			continue
 		}
-		if st.ModTime().UnixNano() == lastTime && st.Size() == lastSize {
-			continue
-		}
-		lastTime, lastSize = st.ModTime().UnixNano(), st.Size()
-		next, err := config.Load(p.cfgPath)
+		next, err := cfgfile.Snapshot(db, base)
 		if err != nil {
-			p.log.Warn("config nueva inválida, conservo anterior", "err", err)
+			p.log.Warn("snapshot inválido, conservo anterior", "err", err)
 			continue
 		}
 		old := live.Get()
 		live.Swap(next)
 		p.log.Info("config recargada",
 			"routes", len(next.Routes),
+			"apps", len(next.Apps),
 			"redirect", next.RedirectHTTPToHTTPS,
 		)
 		if need := config.NeedRestart(old, next); len(need) > 0 {

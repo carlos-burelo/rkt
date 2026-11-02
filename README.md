@@ -247,9 +247,45 @@ evento `push`. Solo despliega ramas trackeadas con `auto: true` (SHA pineado
 nunca); responde `202` y despliega en fondo (log en servicio +
 `logs/deploys/`). Sin secreto el endpoint da 404.
 
+## Auto-discovery (repo nuevo = app viva sola)
+
+Cada poll revisa repos instalados de la App. Repo no registrado + preset
+conocido (`package.json` con/sin next, `requirements.txt`) = app creada
+(nombre slug, dominio `<repo>.<base_domain>`, puerto libre del pool,
+binario de settings) + route + deploy inmediato:
+
+```powershell
+rkt-proxy settings set base_domain=coatl.in
+rkt-proxy settings set node_bin="C:\Program Files\nodejs\node.exe"
+# port_pool default 3000-3999; ajústalo con settings set port_pool=...
+```
+
+Stack raro = warn con el `apps add` manual (nada a medias).
+
 Ejemplo listo en [`configs/config.example.yaml`](configs/config.example.yaml).
 
-## Actualizar y rollback
+## CLI de gestión (adiós YAML a mano)
+
+```powershell
+rkt-proxy apps add --name app2 --repo https://github.com/o/app2.git --domain app2.coatl.in --port 3002 --command C:\nodejs\node.exe --preset next --auto
+rkt-proxy apps list
+rkt-proxy routes list
+rkt-proxy routes add --host x.coatl.in --host y.coatl.in --target http://127.0.0.1:4000
+rkt-proxy env set app2 CLAVE=valor
+rkt-proxy settings set base_domain=coatl.in
+rkt-proxy config export respaldo.yaml
+rkt-proxy config import respaldo.yaml
+rkt-proxy status
+rkt-proxy deploy app2
+rkt-proxy rollback app2
+rkt-proxy deployments list --app app2
+```
+
+La flota (apps/routes/settings) vive en SQLite (`<dir-config>/logs/rkt.db`);
+el YAML conserva solo infra estable. Toda mutación valida + sube versión
+(hot-reload la aplica); `apps`/`env` avisan restart. `config export` vuelca
+todo (incluye settings) para respaldo en git; `import` lo restaura.
+`deployments list [-n 20] [--app x]` lee el historial (deployments + crashes).
 
 Sin auto-update silencioso: cada deploy es explícito y versionado. Sacar una
 versión = `git tag vX.Y.Z && git push origin vX.Y.Z` (CI testea, compila y
@@ -339,6 +375,13 @@ internal/ratelimit/         token bucket por IP + middleware 429
 internal/waf/               deny_paths globs + middleware 403
 internal/accesslog/         access log combinado a archivo
 internal/health/            /healthz con chequeo TCP de backends
+internal/hook/              webhook GitHub (HMAC) -> deploy
+internal/deploy/            pull+build+swap+restart+rollback
+internal/discover/          auto-registro desde repos instalados
+internal/github/            GitHub App: JWT + tokens + API
+internal/dotenv/            parser .env + expansión
+internal/cfgfile/           bootstrap YAML + snapshot + export/import
+internal/store/             SQLite: historial + flota (apps/routes/settings)
 configs/config.example.yaml ejemplo canónico
 scripts/install.ps1         instalador prod (irm|iex) y updater
 .github/workflows/release.yml CI: vet+test+build+release en cada tag v*

@@ -38,6 +38,7 @@ type Status struct {
 type app struct {
 	cfg      config.App
 	log      *slog.Logger
+	onEvent  func(kind, app, msg string)
 	logPath  string
 	mu       sync.Mutex
 	cmd      *exec.Cmd
@@ -65,9 +66,11 @@ func (a *app) startedAt() time.Time {
 
 // Manager supervisa N apps.
 type Manager struct {
-	mu        sync.Mutex
-	apps      []*app
-	stopping  bool
+	mu       sync.Mutex
+	apps     []*app
+	stopping bool
+	// OnEvent, si no nil, recibe died/restarted/failed (auditoría).
+	OnEvent   func(kind, app, msg string)
 	deploying map[string]bool
 }
 
@@ -90,7 +93,14 @@ func New(apps []config.App, logsDir string, log *slog.Logger) *Manager {
 // Start lanza todas en goroutines. No bloquea.
 func (m *Manager) Start() {
 	for _, a := range m.apps {
+		a.onEvent = m.OnEvent
 		go a.loop()
+	}
+}
+
+func (m *Manager) emit(kind, app, msg string) {
+	if m.OnEvent != nil {
+		m.OnEvent(kind, app, msg)
 	}
 }
 
@@ -307,6 +317,9 @@ func (a *app) loop() {
 			return
 		default:
 		}
+		if a.onEvent != nil {
+			a.onEvent("died", a.cfg.Name, "exit="+a.lastExit+" uptime="+uptime.String())
+		}
 
 		a.mu.Lock()
 		held := a.held
@@ -325,6 +338,9 @@ func (a *app) loop() {
 			a.failed = true
 			a.mu.Unlock()
 			a.log.Error("crashloop, ya no reintento", "muertes", crashes)
+			if a.onEvent != nil {
+				a.onEvent("failed", a.cfg.Name, fmt.Sprintf("crashloop %d muertes", crashes))
+			}
 			return
 		}
 		delay := backoffFor(a.cfg.Delay(), prev)

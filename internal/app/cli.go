@@ -89,6 +89,30 @@ func Run(cfgPath string) {
 		case "deploy":
 			cmdDeploy(flag.Args()[1:], cfgPath)
 			return
+		case "rollback":
+			cmdRollback(flag.Args()[1:], cfgPath)
+			return
+		case "deployments":
+			cmdDeployments(flag.Args()[1:], cfgPath)
+			return
+		case "settings":
+			cmdSettings(flag.Args()[1:], cfgPath)
+			return
+		case "config":
+			cmdConfig(flag.Args()[1:], cfgPath)
+			return
+		case "apps":
+			cmdApps(flag.Args()[1:], cfgPath)
+			return
+		case "routes":
+			cmdRoutes(flag.Args()[1:], cfgPath)
+			return
+		case "env":
+			cmdEnv(flag.Args()[1:], cfgPath)
+			return
+		case "status":
+			cmdStatus(cfgPath)
+			return
 		case "logs":
 			cmdLogs(flag.Args()[1:], cfgPath)
 			return

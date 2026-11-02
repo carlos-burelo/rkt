@@ -1,7 +1,7 @@
 // Command rkt-proxy: dominios/subdominios -> puertos locales,
 // TLS Let's Encrypt auto, servicio Windows.
 //
-// Uso: rkt-proxy [-config path] [install|uninstall|start|stop|run|version|logs]
+// Uso: rkt-proxy [-config path] [install|uninstall|start|stop|run|version|logs|restart|deploy|rollback|deployments|apps|routes|env|status]
 package main
 
 import (

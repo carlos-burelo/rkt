@@ -171,3 +171,87 @@ func (m *Manager) CommitSHA(owner, repo, ref, token string) (string, error) {
 	}
 	return out.SHA, nil
 }
+
+// InstallationRepo repo visible a la instalación.
+type InstallationRepo struct {
+	FullName      string `json:"full_name"`
+	DefaultBranch string `json:"default_branch"`
+}
+
+// Repositories lista repos instalados (sigue paginación Link).
+func (m *Manager) Repositories(token string) ([]InstallationRepo, error) {
+	out := []InstallationRepo{}
+	url := m.apiBase + "/installation/repositories?per_page=100"
+	for url != "" {
+		req, _ := http.NewRequest(http.MethodGet, url, nil)
+		req.Header.Set("Accept", "application/vnd.github+json")
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		resp, err := m.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		var page struct {
+			Repos []InstallationRepo `json:"repositories"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+			resp.Body.Close()
+			return nil, err
+		}
+		resp.Body.Close()
+		out = append(out, page.Repos...)
+		url = nextLink(resp.Header.Get("Link"))
+	}
+	return out, nil
+}
+
+func nextLink(header string) string {
+	for _, part := range strings.Split(header, ",") {
+		seg := strings.Split(strings.TrimSpace(part), ";")
+		if len(seg) == 2 && strings.TrimSpace(seg[1]) == `rel="next"` {
+			u := strings.Trim(strings.TrimSpace(seg[0]), "<>")
+			if u != "" {
+				return u
+			}
+		}
+	}
+	return ""
+}
+
+// FileContent devuelve contenido (base64) de un path del repo.
+// ok=false si no existe (404).
+func (m *Manager) FileContent(owner, repo, path, ref, token string) (content string, ok bool, err error) {
+	req, _ := http.NewRequest(http.MethodGet,
+		fmt.Sprintf("%s/repos/%s/%s/contents/%s?ref=%s", m.apiBase, owner, repo, path, ref), nil)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := m.client.Do(req)
+	if err != nil {
+		return "", false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return "", false, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", false, fmt.Errorf("contents: %s", resp.Status)
+	}
+	var out struct {
+		Encoding string `json:"encoding"`
+		Content  string `json:"content"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", false, err
+	}
+	if out.Encoding != "base64" {
+		return "", false, fmt.Errorf("encoding %q no soportado", out.Encoding)
+	}
+	raw, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(out.Content, "\n", ""))
+	if err != nil {
+		return "", false, err
+	}
+	return string(raw), true, nil
+}
