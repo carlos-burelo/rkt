@@ -4,6 +4,7 @@
 package app
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,14 +14,14 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
-	"time"
 
 	"gopkg.in/yaml.v3"
 
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/dotenv"
+	"rkt-proxy/internal/discover"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/store"
 )
@@ -33,6 +34,23 @@ type multiFlag []string
 
 func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
 func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
+
+// wantJSON separa --json global de los args (para scripting).
+func wantJSON(args []string) ([]string, bool) {
+	rest := []string{}
+	json := false
+	for _, a := range args {
+		if a == "--json" {
+			json = true
+			continue
+		}
+		rest = append(rest, a)
+	}
+	if *JSON {
+		json = true
+	}
+	return rest, json
+}
 
 // merged abre DB + fusiona infra YAML + flota DB. Cerrar con db.Close().
 func merged(cfgPath string) (*config.Config, *store.DB) {
@@ -56,19 +74,50 @@ func persist(cfgPath string, db *store.DB, cfg *config.Config) {
 	}
 }
 
+// prompt pregunta en terminal (Enter = default). Sin stdin, default.
+func prompt(label, def string) string {
+	fmt.Printf("%s [%s]: ", label, def)
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		fmt.Println()
+		return def
+	}
+	if v := strings.TrimSpace(line); v != "" {
+		return v
+	}
+	return def
+}
+
 func cmdApps(args []string, cfgPath string) {
 	if len(args) == 0 {
 		log.Fatal("uso: apps <list|add|rm>")
 	}
 	switch args[0] {
 	case "list":
+		_, asJSON := wantJSON(args[1:])
 		cfg, db := merged(cfgPath)
 		defer db.Close()
-		if len(cfg.Apps) == 0 {
+		type appOut struct {
+			Name    string `json:"name"`
+			Command string `json:"command"`
+			Dir     string `json:"dir"`
+		}
+		out := []appOut{}
+		for _, a := range cfg.Apps {
+			out = append(out, appOut{a.Name, a.Command, a.Dir})
+		}
+		if asJSON {
+			if out == nil {
+				out = []appOut{}
+			}
+			json.NewEncoder(os.Stdout).Encode(out)
+			return
+		}
+		if len(out) == 0 {
 			fmt.Println("(sin apps)")
 			return
 		}
-		for _, a := range cfg.Apps {
+		for _, a := range out {
 			fmt.Printf("%-15s cmd=%s dir=%s\n", a.Name, a.Command, a.Dir)
 		}
 	case "add":
@@ -99,20 +148,21 @@ func cmdApps(args []string, cfgPath string) {
 	}
 }
 
-// appsAdd cablea app+repo+dominio+puerto de una vez:
+// appsAdd cablea app+repo+dominio+puerto. Flags dados valen; lo que falte
+// se pregunta con defaults inferidos (Enter acepta):
 //
-//	rkt-proxy apps add --name app2 --repo https://github.com/o/app2.git \
-//	  --domain app2.coatl.in --port 3002 --command C:\nodejs\node.exe \
-//	  --preset next --auto
+//	rkt apps add https://github.com/o/app2.git
+//	rkt apps add --name app2 --repo ... --domain app2.coatl.in --port 3002 \
+//	  --command C:\nodejs\node.exe --preset next --auto
 func appsAdd(args []string, cfgPath string) {
 	fs := flag.NewFlagSet("apps add", flag.ContinueOnError)
 	name := fs.String("name", "", "nombre [a-z0-9-]")
-	repo := fs.String("repo", "", "repo git https (sin él, sin deploy)")
+	repo := fs.String("repo", "", "repo git o dir local (o primer posicional)")
 	ref := fs.String("ref", "main", "rama/tag/SHA")
 	var domains multiFlag
 	fs.Var(&domains, "domain", "dominio (repetible)")
 	port := fs.String("port", "", "puerto local (con --domain)")
-	dir := fs.String("dir", "", "dir app (default C:\\apps\\<name>)")
+	dir := fs.String("dir", "", "dir app")
 	command := fs.String("command", "", "binario absoluto")
 	preset := fs.String("preset", "", "next|node|python")
 	auto := fs.Bool("auto", false, "auto-deploy")
@@ -121,81 +171,144 @@ func appsAdd(args []string, cfgPath string) {
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
-	if *name == "" || *command == "" {
-		log.Fatal("apps add requiere --name y --command (ruta absoluta)")
+	if *repo == "" && fs.NArg() > 0 {
+		*repo = fs.Arg(0)
 	}
-	if len(domains) > 0 && *port == "" {
-		log.Fatal("apps add: --domain requiere --port")
-	}
-	if *dir == "" {
-		if runtime.GOOS == "windows" {
-			*dir = `C:\apps\` + *name
-		} else {
-			*dir = "/srv/" + *name
+
+	cfg, db := merged(cfgPath)
+	defer db.Close()
+	var sug *discover.Suggestion
+	if *repo != "" {
+		if s, err := discover.Suggest(db, nil, *repo); err == nil {
+			sug = s
 		}
 	}
-	if err := os.MkdirAll(*dir, 0o755); err != nil {
+
+	nm := *name
+	if nm == "" {
+		d := ""
+		if sug != nil {
+			d = sug.Name
+		}
+		nm = prompt("nombre", d)
+		if nm == "" {
+			log.Fatal("apps add requiere --name (o repo del que inferirlo)")
+		}
+	}
+	for _, a := range cfg.Apps {
+		if a.Name == nm {
+			log.Fatalf("apps: %q ya existe", nm)
+		}
+	}
+	cmd := *command
+	if cmd == "" {
+		d := ""
+		if sug != nil {
+			d = sug.Command
+		}
+		cmd = prompt("binario absoluto", d)
+		if cmd == "" {
+			log.Fatal("apps add requiere --command")
+		}
+	}
+	dd := *dir
+	if dd == "" {
+		if sug != nil && sug.Dir != "" {
+			dd = sug.Dir
+		} else if runtime.GOOS == "windows" {
+			dd = `C:\apps\` + nm
+		} else {
+			dd = "/srv/" + nm
+		}
+		dd = prompt("dir app", dd)
+	}
+	if err := os.MkdirAll(dd, 0o755); err != nil {
 		log.Fatalf("apps add: crear dir: %v", err)
+	}
+	pt := *port
+	if pt == "" && sug != nil && sug.Port > 0 {
+		pt = prompt("puerto local", strconv.Itoa(sug.Port))
+	}
+	if len(domains) == 0 {
+		d := ""
+		if sug != nil {
+			d = sug.Domain
+		}
+		if ans := prompt("dominios (coma, vacío = sin route)", d); ans != "" {
+			for _, h := range strings.Split(ans, ",") {
+				if h = strings.TrimSpace(h); h != "" {
+					domains = append(domains, h)
+				}
+			}
+		}
+	}
+	if len(domains) > 0 && pt == "" {
+		pt = prompt("puerto local", "3000")
+	}
+	pr := *preset
+	if pr == "" {
+		d := "none"
+		if sug != nil && sug.Preset != "" {
+			d = sug.Preset
+		}
+		pr = prompt("preset [next|node|python|none]", d)
+	}
+	rp := *repo
+	if rp == "" {
+		rp = prompt("repo git (vacío = sin deploy)", "")
+	}
+	rf, au := *ref, *auto
+	if rp != "" && *ref == "main" && !*auto {
+		// solo pregunta si no vino explícito... simplifica: defaults
+		rf = prompt("ref rama/tag/SHA", *ref)
+		au = promptBool("auto-deploy", *auto)
 	}
 
 	build := []string(builds)
 	env := map[string]string{}
 	appArgs := []string{}
-	switch *preset {
+	switch pr {
 	case "", "none":
-	case "next":
-		appArgs = []string{`.next\standalone\server.js`}
+	case "next", "node", "python":
+		defBuild, defArgs, defEnv := discover.PresetBuild(pr, pt)
+		appArgs = defArgs
 		if len(build) == 0 {
-			build = []string{"npm ci --omit=dev", "npm run build"}
+			build = defBuild
 		}
-		if *port != "" {
-			env["PORT"] = *port
-		}
-	case "node":
-		appArgs = []string{"server.js"}
-		if len(build) == 0 {
-			build = []string{"npm ci --omit=dev"}
-		}
-		if *port != "" {
-			env["PORT"] = *port
-		}
-	case "python":
-		appArgs = []string{"-u", "app.py"}
-		if *port != "" {
-			env["PORT"] = *port
+		for k, v := range defEnv {
+			env[k] = v
 		}
 	default:
-		log.Fatalf("preset %q (next|node|python)", *preset)
+		log.Fatalf("preset %q (next|node|python|none)", pr)
 	}
 
-	cfg, db := merged(cfgPath)
-	defer db.Close()
-	for _, a := range cfg.Apps {
-		if a.Name == *name {
-			log.Fatalf("apps: %q ya existe", *name)
-		}
-	}
 	app := config.App{
-		Name: *name, Command: *command, Args: appArgs,
-		Dir: *dir, Env: env, RestartDelay: "5s",
+		Name: nm, Command: cmd, Args: appArgs,
+		Dir: dd, Env: env, RestartDelay: "5s",
 	}
-	if *repo != "" {
+	if rp != "" {
 		app.Deploy = &config.Deploy{
-			Repo: *repo, Ref: *ref, Build: build, Auto: *auto,
+			Repo: rp, Ref: rf, Build: build, Auto: au,
 		}
 	}
-	cfg.Apps = append(cfg.Apps, app)
-	for _, h := range domains {
-		cfg.Routes = append(cfg.Routes, config.Route{
-			Hosts: []string{h}, Target: "http://127.0.0.1:" + *port,
-		})
+	if err := cfgfile.AddApp(db, app, domains, pt); err != nil {
+		log.Fatalf("apps add: %v", err)
 	}
-	persist(cfgPath, db, cfg)
-	fmt.Printf("app %s en DB.", *name)
+	fmt.Printf("app %s en DB.", nm)
 	if len(domains) > 0 {
-		fmt.Printf(" route %s -> :%s (hot-reload).", domains, *port)
+		fmt.Printf(" route %s -> :%s (hot-reload).", domains, pt)
 	}
-	fmt.Print("\nPasos: sc.exe stop RktProxy; sc.exe start RktProxy; deploy " + *name + "\n")
+	fmt.Print("\nPasos: sc.exe stop Rkt; sc.exe start Rkt; deploy " + nm + "\n")
+}
+
+// promptBool pregunta s/n.
+func promptBool(label string, def bool) bool {
+	d := "n"
+	if def {
+		d = "s"
+	}
+	ans := strings.ToLower(prompt(label+" s/n", d))
+	return ans == "s" || ans == "sí" || ans == "si" || ans == "y" || ans == "yes" || ans == "1"
 }
 
 func cmdRoutes(args []string, cfgPath string) {
@@ -204,13 +317,29 @@ func cmdRoutes(args []string, cfgPath string) {
 	}
 	switch args[0] {
 	case "list":
+		_, asJSON := wantJSON(args[1:])
 		cfg, db := merged(cfgPath)
 		defer db.Close()
-		if len(cfg.Routes) == 0 {
+		type routeOut struct {
+			Hosts  []string `json:"hosts"`
+			Target string   `json:"target"`
+		}
+		out := []routeOut{}
+		for _, r := range cfg.Routes {
+			out = append(out, routeOut{r.Hosts, r.Target})
+		}
+		if asJSON {
+			if out == nil {
+				out = []routeOut{}
+			}
+			json.NewEncoder(os.Stdout).Encode(out)
+			return
+		}
+		if len(out) == 0 {
 			fmt.Println("(sin routes)")
 			return
 		}
-		for _, r := range cfg.Routes {
+		for _, r := range out {
 			fmt.Printf("%-40s -> %s\n", strings.Join(r.Hosts, ","), r.Target)
 		}
 	case "add":
@@ -291,32 +420,12 @@ func cmdEnv(args []string, cfgPath string) {
 		if !ok || strings.TrimSpace(k) == "" {
 			log.Fatalf("env set: %q no es CLAVE=valor", args[2])
 		}
-		k = strings.TrimSpace(k)
 		cfg, db := merged(cfgPath)
 		defer db.Close()
-		a := findAppPtr(cfg, args[1])
-		if a.Env == nil {
-			a.Env = map[string]string{}
+		if err := cfgfile.SetEnv(db, cfg, args[1], strings.TrimSpace(k), v); err != nil {
+			log.Fatalf("env set: %v", err)
 		}
-		// expande solo el valor nuevo (el resto ya está expandido en DB)
-		scope := dotenv.EnvironMap()
-		for ek, ev := range a.Env {
-			if ek != k {
-				scope[ek] = ev
-			}
-		}
-		if a.EnvFile != "" {
-			if raw, err := dotenv.ParseFile(a.EnvFile); err == nil {
-				for fk, fv := range dotenv.Expand(raw, dotenv.EnvironMap()) {
-					if _, exists := scope[fk]; !exists {
-						scope[fk] = fv
-					}
-				}
-			}
-		}
-		a.Env[k] = dotenv.Expand(map[string]string{k: v}, scope)[k]
-		persist(cfgPath, db, cfg)
-		fmt.Printf("%s=%s (restart requerido)\n", k, v)
+		fmt.Printf("%s=%s (restart requerido)\n", strings.TrimSpace(k), v)
 	case "unset":
 		if len(args) != 3 {
 			log.Fatal("uso: env unset <app> CLAVE")
@@ -333,20 +442,16 @@ func cmdEnv(args []string, cfgPath string) {
 }
 
 func findApp(cfg *config.Config, name string) config.App {
-	for _, a := range cfg.Apps {
-		if a.Name == name {
-			return a
-		}
+	if a := cfgfile.FindApp(cfg, name); a != nil {
+		return *a
 	}
 	log.Fatalf("app %q inexistente", name)
 	return config.App{}
 }
 
 func findAppPtr(cfg *config.Config, name string) *config.App {
-	for i := range cfg.Apps {
-		if cfg.Apps[i].Name == name {
-			return &cfg.Apps[i]
-		}
+	if a := cfgfile.FindApp(cfg, name); a != nil {
+		return a
 	}
 	log.Fatalf("app %q inexistente", name)
 	return nil
@@ -360,7 +465,7 @@ func cmdSettings(args []string, cfgPath string) {
 	defer db.Close()
 	switch args[0] {
 	case "list":
-		for _, k := range []string{"node_bin", "python_bin", "base_domain", "port_pool"} {
+		for _, k := range store.KnownSettings() {
 			fmt.Printf("%s=%s\n", k, db.GetSetting(k))
 		}
 	case "set":
@@ -414,7 +519,7 @@ func cmdExport(args []string, cfgPath string) {
 		log.Fatalf("export: %v", err)
 	}
 	settings := map[string]string{}
-	for _, k := range []string{"node_bin", "python_bin", "base_domain", "port_pool"} {
+	for _, k := range store.KnownSettings() {
 		if v := db.GetSetting(k); v != "" {
 			settings[k] = v
 		}
@@ -477,7 +582,8 @@ func cmdImport(args []string, cfgPath string) {
 	fmt.Println("flota importada (restart requerido para apps)")
 }
 
-func cmdStatus(cfgPath string) {
+func cmdStatus(args []string, cfgPath string) {
+	_, asJSON := wantJSON(args)
 	cfg, err := cfgfile.Load(cfgPath)
 	if err != nil {
 		log.Fatalf("status: %v", err)
@@ -508,6 +614,10 @@ func cmdStatus(cfgPath string) {
 	if err := jsonDecode(resp, &st); err != nil {
 		log.Fatalf("status: %v", err)
 	}
+	if asJSON {
+		json.NewEncoder(os.Stdout).Encode(st)
+		return
+	}
 	fmt.Printf("rkt %s status=%s\n", st.Version, st.Status)
 	for _, b := range st.Backends {
 		fmt.Printf("  backend %-25s ok=%v\n", b.Target, b.OK)
@@ -529,7 +639,7 @@ func cmdRollback(args []string, cfgPath string) {
 	if !cfg.Healthz.Enabled {
 		log.Fatal("rollback: requiere healthz activado")
 	}
-	client := &http.Client{Timeout: 10 * time.Minute}
+	client := &http.Client{Timeout: deployTimeout}
 	resp, err := client.Post("http://"+cfg.Healthz.Listen+"/rollback/"+args[0], "application/json", nil)
 	if err != nil {
 		log.Fatalf("rollback: sin contacto: %v", err)
@@ -625,6 +735,7 @@ func cmdDeployments(args []string, cfgPath string) {
 	if len(args) > 0 && args[0] == "list" {
 		args = args[1:]
 	}
+	args, asJSON := wantJSON(args)
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-n", "--lines":
@@ -654,8 +765,15 @@ func cmdDeployments(args []string, cfgPath string) {
 	if err != nil {
 		log.Fatalf("deployments: %v", err)
 	}
-	if len(deps) == 0 {
+	if len(deps) == 0 && !asJSON {
 		fmt.Println("(sin historial)")
+		return
+	}
+	if asJSON {
+		if deps == nil {
+			deps = []store.Deployment{}
+		}
+		json.NewEncoder(os.Stdout).Encode(deps)
 		return
 	}
 	for _, d := range deps {

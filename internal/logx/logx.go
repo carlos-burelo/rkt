@@ -8,9 +8,10 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-// maxBytes rota rkt-proxy.log a .1 al arrancar si se supera.
+// maxBytes rota rkt.log a .1 al arrancar si se supera.
 const maxBytes = 10 << 20 // 10MB
 
 // Abs resuelve un path relativo junto al .exe (el servicio
@@ -33,7 +34,7 @@ func DirFor(configPath string) string {
 
 // Path ruta del log para el subcomando `logs`.
 func Path(configPath string) string {
-	return filepath.Join(DirFor(configPath), "rkt-proxy.log")
+	return filepath.Join(DirFor(configPath), "rkt.log")
 }
 
 // AccessPath ruta del access log.
@@ -49,6 +50,23 @@ func DBPath(configPath string) string {
 // AppKeyPath ruta del PEM de la GitHub App (lo escribe el setup).
 func AppKeyPath(configPath string) string {
 	return filepath.Join(DirFor(configPath), "github-app.pem")
+}
+
+// Tail últimas n líneas de un archivo. n<1 = 50. Canónica; CLI y MCP
+// la usan (antes 3 copias del Split/TrimRight).
+func Tail(path string, n int) (string, error) {
+	if n < 1 {
+		n = 50
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n"), nil
 }
 
 // Setup abre (creando dir) el log y devuelve logger multi

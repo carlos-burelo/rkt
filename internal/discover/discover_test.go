@@ -53,9 +53,6 @@ func fakeAPI(t *testing.T, reposJSON string, files map[string]string) *httptest.
 		case strings.HasSuffix(r.URL.Path, "/app/installations"):
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `[{"id":999,"account":{"login":"o"}}]`)
-		case strings.HasSuffix(r.URL.Path, "/app/installations"):
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `[{"id":999,"account":{"login":"o"}}]`)
 		case strings.Contains(r.URL.Path, "/contents/"):
 			name := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
 			if body, ok := files[name]; ok {
@@ -104,7 +101,7 @@ func TestDiscoverNext(t *testing.T) {
 	defer srv.Close()
 	d, db, deployed := testDeps(t, srv, pem)
 
-	if err := Run(d); err != nil {
+	if _, err := Run(d); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	fleet, _ := db.LoadFleet()
@@ -123,7 +120,7 @@ func TestDiscoverNext(t *testing.T) {
 	}
 
 	// idempotente: segunda vuelta no duplica ni redespliega
-	if err := Run(d); err != nil {
+	if _, err := Run(d); err != nil {
 		t.Fatalf("run2: %v", err)
 	}
 	fleet, _ = db.LoadFleet()
@@ -141,7 +138,7 @@ func TestDiscoverUnknownStack(t *testing.T) {
 	defer srv.Close()
 	d, db, deployed := testDeps(t, srv, pem)
 
-	if err := Run(d); err != nil {
+	if _, err := Run(d); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	fleet, _ := db.LoadFleet()

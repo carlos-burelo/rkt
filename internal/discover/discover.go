@@ -21,7 +21,53 @@ import (
 
 // presetBinKey qué setting de binario usa cada preset.
 var presetBinKey = map[string]string{
-	"next": "node_bin", "node": "node_bin", "python": "python_bin",
+	"next": store.KeyNodeBin, "node": store.KeyNodeBin, "python": store.KeyPythonBin,
+}
+
+// PresetBuild tabla canónica next|node|python -> build/args/env.
+// Unico lugar con estos literales; CLI/MCP/discover la usan.
+func PresetBuild(preset, port string) (build, args []string, env map[string]string) {
+	env = map[string]string{}
+	switch preset {
+	case "next":
+		args = []string{`.next\standalone\server.js`}
+		build = []string{"npm ci --omit=dev", "npm run build"}
+	case "node":
+		args = []string{"server.js"}
+		build = []string{"npm ci --omit=dev"}
+	case "python":
+		args = []string{"-u", "app.py"}
+	default:
+		return nil, nil, env
+	}
+	if port != "" {
+		env["PORT"] = port
+	}
+	return build, args, env
+}
+
+// Classify preset desde contenido package.json + presencia requirements.
+// Canónica; detectPreset/detectPresetRemote/sniffLocal delegan aquí.
+func Classify(pkgJSON []byte, hasRequirements bool) string {
+	if len(pkgJSON) > 0 {
+		var pj struct {
+			Dependencies    map[string]string `json:"dependencies"`
+			DevDependencies map[string]string `json:"devDependencies"`
+		}
+		if err := json.Unmarshal(pkgJSON, &pj); err == nil {
+			if _, ok := pj.Dependencies["next"]; ok {
+				return "next"
+			}
+			if _, ok := pj.DevDependencies["next"]; ok {
+				return "next"
+			}
+			return "node"
+		}
+	}
+	if hasRequirements {
+		return "python"
+	}
+	return ""
 }
 
 // Deps dependencias inyectables (tests usan fakes).
@@ -35,12 +81,13 @@ type Deps struct {
 }
 
 // Run registra repos no conocidos de TODAS las instalaciones (vía API,
-// fuente de verdad) y los despliega. Idempotente.
-func Run(d Deps) error {
+// fuente de verdad) y los despliega. Idempotente. Devuelve registrados.
+func Run(d Deps) ([]string, error) {
 	installs, err := d.GH.Installations()
 	if err != nil {
-		return fmt.Errorf("instalaciones: %w", err)
+		return nil, fmt.Errorf("instalaciones: %w", err)
 	}
+	registered := []string{}
 	for _, inst := range installs {
 		tok, err := d.GH.TokenFor(inst.ID)
 		if err != nil {
@@ -54,7 +101,7 @@ func Run(d Deps) error {
 		}
 		known, err := knownRepos(d.DB)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, r := range repos {
 			owner, name, ok := splitFull(r.FullName)
@@ -69,9 +116,10 @@ func Run(d Deps) error {
 				continue
 			}
 			known[strings.ToLower(r.FullName)] = true
+			registered = append(registered, name)
 		}
 	}
-	return nil
+	return registered, nil
 }
 
 func knownRepos(db *store.DB) (map[string]bool, error) {
@@ -108,7 +156,7 @@ func register(d Deps, owner, repo, branch, tok string) error {
 			"repo", owner+"/"+repo, "ayuda", "apps add")
 		return nil
 	}
-	base := d.DB.GetSetting("base_domain")
+	base := d.DB.GetSetting(store.KeyBaseDomain)
 	if base == "" {
 		return fmt.Errorf("sin base_domain (settings set base_domain=...)")
 	}
@@ -143,7 +191,6 @@ func register(d Deps, owner, repo, branch, tok string) error {
 		},
 	}
 	app.SetDelays(5*time.Second, 10*time.Second)
-	app.SetDelays(5*time.Second, 10*time.Second)
 	dir := d.DirBase
 	if dir == "" {
 		dir = `C:\apps`
@@ -153,16 +200,9 @@ func register(d Deps, owner, repo, branch, tok string) error {
 		return fmt.Errorf("crear dir: %w", err)
 	}
 	app.Dir = dir
-	switch preset {
-	case "next":
-		app.Args = []string{`.next\standalone\server.js`}
-		app.Deploy.Build = []string{"npm ci --omit=dev", "npm run build"}
-	case "node":
-		app.Args = []string{"server.js"}
-		app.Deploy.Build = []string{"npm ci --omit=dev"}
-	case "python":
-		app.Args = []string{"-u", "app.py"}
-	}
+	defBuild, defArgs, _ := PresetBuild(preset, strconv.Itoa(port))
+	app.Args = defArgs
+	app.Deploy.Build = defBuild
 	if err := d.DB.UpsertApp(&app); err != nil {
 		return err
 	}
@@ -185,19 +225,10 @@ func detectPreset(gh *github.Manager, owner, repo, branch, tok string) (string, 
 	if content, ok, err := gh.FileContent(owner, repo, "package.json", branch, tok); err != nil {
 		return "", err
 	} else if ok {
-		var pj struct {
-			Dependencies    map[string]string `json:"dependencies"`
-			DevDependencies map[string]string `json:"devDependencies"`
+		if p := Classify([]byte(content), false); p != "" {
+			return p, nil
 		}
-		if err := json.Unmarshal([]byte(content), &pj); err == nil {
-			if _, ok := pj.Dependencies["next"]; ok {
-				return "next", nil
-			}
-			if _, ok := pj.DevDependencies["next"]; ok {
-				return "next", nil
-			}
-			return "node", nil
-		}
+		// package.json ilegible: cae a requirements
 	}
 	if _, ok, err := gh.FileContent(owner, repo, "requirements.txt", branch, tok); err != nil {
 		return "", err
@@ -253,7 +284,7 @@ func uniqueDomain(db *store.DB, name, owner, base string) string {
 
 // freePort primer puerto libre del pool fuera de routes + bind real.
 func freePort(db *store.DB) (int, error) {
-	from, to := parsePool(db.GetSetting("port_pool"))
+	from, to := parsePool(db.GetSetting(store.KeyPortPool))
 	used := usedPorts(db)
 	for p := from; p <= to; p++ {
 		if used[p] {
@@ -301,4 +332,73 @@ func usedPorts(db *store.DB) map[int]bool {
 		}
 	}
 	return out
+}
+
+// Suggestion valores inferidos para `apps add` (wizard los propone).
+type Suggestion struct {
+	Name    string
+	Domain  string
+	Port    int
+	Preset  string
+	Command string
+	Dir     string
+}
+
+// Suggest infiere desde repo local (disco) o URL https (API pública).
+// Nunca falla por red: sin acceso, preset vacío (el wizard pregunta).
+func Suggest(db *store.DB, gh *github.Manager, repoURL string) (*Suggestion, error) {
+	s := &Suggestion{}
+	if st, err := os.Stat(repoURL); err == nil && st.IsDir() {
+		abs, _ := filepath.Abs(repoURL)
+		s.Dir = abs
+		s.Name = slug(filepath.Base(abs))
+		s.Preset = sniffLocal(abs)
+	} else {
+		owner, repo, ok := github.ParseRepo(repoURL)
+		if !ok {
+			return nil, fmt.Errorf("repo no es dir local ni URL https válida")
+		}
+		s.Name = slug(repo)
+		if gh != nil {
+			// público sin token; privado sin App -> preset vacío
+			if p, err := detectPresetRemote(gh, owner, repo); err == nil {
+				s.Preset = p
+			}
+		}
+	}
+	if binKey, ok := presetBinKey[s.Preset]; ok {
+		s.Command = db.GetSetting(binKey)
+	}
+	if base := db.GetSetting(store.KeyBaseDomain); base != "" && s.Name != "" {
+		s.Domain = uniqueDomain(db, s.Name, "", base)
+	}
+	if port, err := freePort(db); err == nil {
+		s.Port = port
+	}
+	return s, nil
+}
+
+// detectPresetRemote package.json público (sin token).
+func detectPresetRemote(gh *github.Manager, owner, repo string) (string, error) {
+	branch := "main"
+	if content, ok, err := gh.FileContent(owner, repo, "package.json", branch, ""); err != nil {
+		return "", err
+	} else if ok {
+		if p := Classify([]byte(content), false); p != "" {
+			return p, nil
+		}
+	}
+	if _, ok, err := gh.FileContent(owner, repo, "requirements.txt", branch, ""); err != nil {
+		return "", err
+	} else if ok {
+		return "python", nil
+	}
+	return "", nil
+}
+
+// sniffLocal preset por archivos en disco.
+func sniffLocal(dir string) string {
+	data, _ := os.ReadFile(filepath.Join(dir, "package.json"))
+	_, reqErr := os.Stat(filepath.Join(dir, "requirements.txt"))
+	return Classify(data, reqErr == nil)
 }

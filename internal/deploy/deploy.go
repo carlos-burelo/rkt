@@ -185,17 +185,17 @@ func gitClone(d *config.Deploy, token, staging string, log *slog.Logger) error {
 	log.Info("clonando", "repo", d.Repo, "ref", d.Ref)
 	if isSHA(d.Ref) {
 		if out, err := exec.Command("git", gitArgs(token, "clone", d.Repo, staging)...).CombinedOutput(); err != nil {
-			return fmt.Errorf("clone: %v: %s", err, oneLine(out))
+			return fmt.Errorf("clone: %v: %s", err, OneLine(out))
 		}
 		if out, err := exec.Command("git", gitArgs(token, "-C", staging, "checkout", d.Ref)...).CombinedOutput(); err != nil {
 			_ = os.RemoveAll(staging)
-			return fmt.Errorf("checkout %s: %v: %s", d.Ref, err, oneLine(out))
+			return fmt.Errorf("checkout %s: %v: %s", d.Ref, err, OneLine(out))
 		}
 		return nil
 	}
 	args := gitArgs(token, "clone", "--depth", "1", "--branch", d.Ref, d.Repo, staging)
 	if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
-		return fmt.Errorf("clone: %v: %s", err, oneLine(out))
+		return fmt.Errorf("clone: %v: %s", err, OneLine(out))
 	}
 	return nil
 }
@@ -237,13 +237,15 @@ func dirExists(p string) bool {
 	return err == nil && st.IsDir()
 }
 
-func oneLine(b []byte) string {
+// OneLine primera línea, máx 300, para errores de deploy/servicio.
+// Canónica; MCP la reutiliza (antes duplicada con límite 200).
+func OneLine(b []byte) string {
 	s := strings.TrimSpace(string(b))
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		s = s[:i]
 	}
-	if len(s) > 200 {
-		s = s[:200] + "…"
+	if len(s) > 300 {
+		s = s[:300] + "…"
 	}
 	return s
 }

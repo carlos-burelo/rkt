@@ -164,7 +164,7 @@ func (c *Config) Grace() time.Duration { return c.grace }
 func defaultConfig() Config {
 	return Config{
 		ListenHTTP:          ":80",
-		ListenHTTPS:         ":443",
+		ListenHTTPS:         "",
 		ACMECacheDir:        `C:\ProgramData\rkt-proxy\certs`,
 		RedirectHTTPToHTTPS: true,
 		Healthz:             HealthzConfig{Enabled: true, Listen: "127.0.0.1:8090"},
@@ -199,9 +199,7 @@ func (cfg *Config) ApplyDefaults() {
 	if cfg.ListenHTTP == "" {
 		cfg.ListenHTTP = ":80"
 	}
-	if cfg.ListenHTTPS == "" {
-		cfg.ListenHTTPS = ":443"
-	}
+	// listen_https vacío = TLS desactivado (modo local). A propósito sin default.
 	if cfg.ACMECacheDir == "" {
 		cfg.ACMECacheDir = `C:\ProgramData\rkt-proxy\certs`
 	}
@@ -316,49 +314,23 @@ func (cfg *Config) Validate() error {
 	seenApps := map[string]bool{}
 	for i := range cfg.Apps {
 		a := &cfg.Apps[i]
-		if !validAppName(a.Name) {
-			return fmt.Errorf("apps[%d] name inválido %q: [a-z0-9-]", i, a.Name)
-		}
 		if seenApps[a.Name] {
 			return fmt.Errorf("apps name duplicado %q", a.Name)
 		}
 		seenApps[a.Name] = true
-		if strings.TrimSpace(a.Command) == "" {
-			return fmt.Errorf("apps[%s] sin command", a.Name)
-		}
-		if a.Deploy != nil && a.Dir == "" {
-			return fmt.Errorf("apps[%s] deploy requiere dir", a.Name)
-		}
-		if a.Dir != "" && a.Deploy == nil {
-			if st, err := os.Stat(a.Dir); err != nil || !st.IsDir() {
-				return fmt.Errorf("apps[%s] dir inexistente %q", a.Name, a.Dir)
-			}
-		}
-		d, err := time.ParseDuration(a.RestartDelay)
-		if err != nil || d <= 0 {
-			return fmt.Errorf("apps[%s] restart_delay inválido %q (ej 5s)", a.Name, a.RestartDelay)
-		}
-		a.delay = d
-		mu, err := time.ParseDuration(a.MinUptime)
-		if err != nil || mu <= 0 {
-			return fmt.Errorf("apps[%s] min_uptime inválido %q (ej 10s)", a.Name, a.MinUptime)
-		}
-		a.minUp = mu
-		if a.Deploy != nil {
-			d := a.Deploy
-			if strings.TrimSpace(d.Repo) == "" {
-				return fmt.Errorf("apps[%s] deploy sin repo", a.Name)
-			}
-			for _, s := range d.Build {
-				if strings.TrimSpace(s) == "" {
-					return fmt.Errorf("apps[%s] deploy con build vacío", a.Name)
-				}
-			}
+		if err := a.ValidateApp(i); err != nil {
+			return err
 		}
 	}
+	return ValidateRoutes(cfg.Routes)
+}
+
+// ValidateRoutes hosts duplicados, targets resolvibles. Canónica;
+// Validate y cfgfile.Snapshot la usan (antes 2 copias).
+func ValidateRoutes(routes []Route) error {
 	seen := map[string]string{}
-	for i := range cfg.Routes {
-		r := &cfg.Routes[i]
+	for i := range routes {
+		r := &routes[i]
 		if len(r.Hosts) == 0 {
 			return fmt.Errorf("route %d sin hosts", i)
 		}
@@ -443,6 +415,46 @@ func githubEqual(a, b *Github) bool {
 	return a.AppID == b.AppID && a.AppSlug == b.AppSlug &&
 		a.KeyFile == b.KeyFile && a.PollInterval == b.PollInterval &&
 		a.WebhookSecret == b.WebhookSecret
+}
+
+// ValidateApp verifica una app aislada (para escritura en DB).
+func (a *App) ValidateApp(idx int) error {
+	if !validAppName(a.Name) {
+		return fmt.Errorf("apps[%d] name inválido %q: [a-z0-9-]", idx, a.Name)
+	}
+	if strings.TrimSpace(a.Command) == "" {
+		return fmt.Errorf("apps[%s] sin command", a.Name)
+	}
+	if a.Deploy != nil && a.Dir == "" {
+		return fmt.Errorf("apps[%s] deploy requiere dir", a.Name)
+	}
+	if a.Dir != "" && a.Deploy == nil {
+		if st, err := os.Stat(a.Dir); err != nil || !st.IsDir() {
+			return fmt.Errorf("apps[%s] dir inexistente %q", a.Name, a.Dir)
+		}
+	}
+	d, err := time.ParseDuration(a.RestartDelay)
+	if err != nil || d <= 0 {
+		return fmt.Errorf("apps[%s] restart_delay inválido %q (ej 5s)", a.Name, a.RestartDelay)
+	}
+	a.delay = d
+	mu, err := time.ParseDuration(a.MinUptime)
+	if err != nil || mu <= 0 {
+		return fmt.Errorf("apps[%s] min_uptime inválido %q (ej 10s)", a.Name, a.MinUptime)
+	}
+	a.minUp = mu
+	if a.Deploy != nil {
+		d := a.Deploy
+		if strings.TrimSpace(d.Repo) == "" {
+			return fmt.Errorf("apps[%s] deploy sin repo", a.Name)
+		}
+		for _, s := range d.Build {
+			if strings.TrimSpace(s) == "" {
+				return fmt.Errorf("apps[%s] deploy con build vacío", a.Name)
+			}
+		}
+	}
+	return nil
 }
 
 // validAppName [a-z0-9-] para nombres de archivo de log seguros.
@@ -535,20 +547,4 @@ func (c *Config) Match(host string) *url.URL {
 		}
 	}
 	return nil
-}
-
-// AllowedHosts lista para autocert HostPolicy (sin *., con base).
-func (c *Config) AllowedHosts() []string {
-	out := []string{}
-	for _, r := range c.Routes {
-		for _, h := range r.Hosts {
-			h = strings.ToLower(strings.TrimSpace(h))
-			if strings.HasPrefix(h, "*.") {
-				out = append(out, strings.TrimPrefix(h, "*."))
-			} else {
-				out = append(out, h)
-			}
-		}
-	}
-	return out
 }

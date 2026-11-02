@@ -16,6 +16,19 @@ type execer interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
 
+// Settings conocidos de flota (únicos literales canónicos).
+const (
+	KeyNodeBin    = "node_bin"
+	KeyPythonBin  = "python_bin"
+	KeyBaseDomain = "base_domain"
+	KeyPortPool   = "port_pool"
+)
+
+// KnownSettings lista para `settings list` y export.
+func KnownSettings() []string {
+	return []string{KeyNodeBin, KeyPythonBin, KeyBaseDomain, KeyPortPool}
+}
+
 // GetSetting lee un setting ("").
 func (d *DB) GetSetting(key string) string {
 	var v string
@@ -54,19 +67,6 @@ func (d *DB) UpsertApp(a *config.App) error {
 	return d.bumpVersion()
 }
 
-// DeleteApp borra por nombre + bump. True si existía.
-func (d *DB) DeleteApp(name string) (bool, error) {
-	res, err := d.sql.Exec(`DELETE FROM apps WHERE name=?`, name)
-	if err != nil {
-		return false, err
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return false, nil
-	}
-	return true, d.bumpVersion()
-}
-
 // AddRoute agrega ruta + bump. Devuelve id.
 func (d *DB) AddRoute(hosts []string, target string) (int64, error) {
 	h, _ := json.Marshal(hosts)
@@ -79,132 +79,6 @@ func (d *DB) AddRoute(hosts []string, target string) (int64, error) {
 		return 0, err
 	}
 	return id, nil
-}
-
-// RemoveHost quita un host de sus rutas (borra rutas vacías) + bump.
-// Devuelve true si cambió algo.
-func (d *DB) RemoveHost(host string) (bool, error) {
-	rows, err := d.sql.Query(`SELECT id, hosts FROM routes`)
-	if err != nil {
-		return false, err
-	}
-	defer rows.Close()
-	type row struct {
-		id    int64
-		hosts []string
-	}
-	var all []row
-	for rows.Next() {
-		var r row
-		var h string
-		if err := rows.Scan(&r.id, &h); err != nil {
-			return false, err
-		}
-		if err := json.Unmarshal([]byte(h), &r.hosts); err != nil {
-			return false, err
-		}
-		all = append(all, r)
-	}
-	if err := rows.Err(); err != nil {
-		return false, err
-	}
-	changed := false
-	tx, err := d.sql.Begin()
-	if err != nil {
-		return false, err
-	}
-	defer tx.Rollback()
-	for _, r := range all {
-		kept := []string{}
-		for _, h := range r.hosts {
-			if equalFold(h, host) {
-				changed = true
-				continue
-			}
-			kept = append(kept, h)
-		}
-		if len(kept) == len(r.hosts) {
-			continue
-		}
-		if len(kept) == 0 {
-			if _, err := tx.Exec(`DELETE FROM routes WHERE id=?`, r.id); err != nil {
-				return false, err
-			}
-			continue
-		}
-		h, _ := json.Marshal(kept)
-		if _, err := tx.Exec(`UPDATE routes SET hosts=? WHERE id=?`, string(h), r.id); err != nil {
-			return false, err
-		}
-	}
-	if !changed {
-		return false, nil
-	}
-	if err := tx.Commit(); err != nil {
-		return false, err
-	}
-	return true, d.bumpVersion()
-}
-
-func equalFold(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		ca, cb := a[i], b[i]
-		if 'A' <= ca && ca <= 'Z' {
-			ca += 'a' - 'A'
-		}
-		if 'A' <= cb && cb <= 'Z' {
-			cb += 'a' - 'A'
-		}
-		if ca != cb {
-			return false
-		}
-	}
-	return true
-}
-
-// SetAppEnv escribe una env var de una app + bump.
-func (d *DB) SetAppEnv(name, key, value string) error {
-	a, err := d.getApp(name)
-	if err != nil {
-		return err
-	}
-	if a.Env == nil {
-		a.Env = map[string]string{}
-	}
-	a.Env[key] = value
-	if err := insertApp(d.sql, a); err != nil {
-		return err
-	}
-	return d.bumpVersion()
-}
-
-// UnsetAppEnv borra una env var + bump.
-func (d *DB) UnsetAppEnv(name, key string) error {
-	a, err := d.getApp(name)
-	if err != nil {
-		return err
-	}
-	delete(a.Env, key)
-	if err := insertApp(d.sql, a); err != nil {
-		return err
-	}
-	return d.bumpVersion()
-}
-
-func (d *DB) getApp(name string) (*config.App, error) {
-	fleet, err := d.LoadFleet()
-	if err != nil {
-		return nil, err
-	}
-	for i := range fleet.Apps {
-		if fleet.Apps[i].Name == name {
-			return &fleet.Apps[i], nil
-		}
-	}
-	return nil, fmt.Errorf("app %q inexistente", name)
 }
 
 func insertApp(ex execer, a *config.App) error {
@@ -296,16 +170,6 @@ func (d *DB) LoadFleet() (*FleetData, error) {
 		out.Routes = append(out.Routes, r)
 	}
 	return out, rrows.Err()
-}
-
-func msToDur(ms int64) string {
-	if ms <= 0 {
-		return "0s"
-	}
-	if ms%1000 == 0 {
-		return string(rune(0)) // placeholder jamás usado
-	}
-	return "0s"
 }
 
 // ImportFleet vuelca apps/routes de un YAML (bootstrap o import).

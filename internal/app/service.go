@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/kardianos/service"
@@ -16,6 +17,7 @@ import (
 
 	"rkt-proxy/internal/accesslog"
 	"rkt-proxy/internal/acme"
+	"rkt-proxy/internal/build"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/deploy"
@@ -30,8 +32,7 @@ import (
 	"rkt-proxy/internal/supervisor"
 )
 
-// Version la inyecta CI con -X en cada tag. Local: "dev".
-var Version = "dev"
+// Version vive en internal/build (inyectada por CI). Ver build.Version.
 
 // pollInterval revisa el archivo de config (mtime+tamaño).
 // Poll y no fsnotify: portable, sin deps, suficiente a 10s.
@@ -160,7 +161,11 @@ func (p *Program) Run() {
 		control = mux
 	}
 	p.srvHTTP = server.NewHTTP(cfg, live, challenge, handler, control, errLog)
-	p.srvTLS = server.NewHTTPS(cfg, p.mgr, handler, control, errLog)
+	if cfg.ListenHTTPS != "" {
+		p.srvTLS = server.NewHTTPS(cfg, p.mgr, handler, control, errLog)
+	} else {
+		p.log.Warn("TLS desactivado (listen_https vacío): solo HTTP")
+	}
 
 	p.log.Info("arrancando",
 		"http", cfg.ListenHTTP,
@@ -173,12 +178,15 @@ func (p *Program) Run() {
 	go func() {
 		if err := p.srvHTTP.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			p.log.Error("http muerto", "err", err)
+			if p.srvTLS == nil {
+				os.Exit(1)
+			}
 		}
 	}()
 	if cfg.Healthz.Enabled {
 		p.srvHealth = &http.Server{
 			Addr:    cfg.Healthz.Listen,
-			Handler: health.NewHandler(health.Deps{Live: live, Version: Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp}),
+			Handler: health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp}),
 			// Sin WriteTimeout: POST /deploy/* tarda minutos (solo loopback).
 			ReadTimeout: 10 * time.Second,
 		}
@@ -199,6 +207,9 @@ func (p *Program) Run() {
 			p.log.Info("auto-deploy activo", "poll", cfg.Github.Poll().String())
 			go p.autoDeploy(live)
 		}
+	}
+	if p.srvTLS == nil {
+		select {} // sin TLS el HTTP manda; bloquea aquí
 	}
 	if err := p.srvTLS.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 		p.log.Error("https muerto", "err", err)
@@ -248,7 +259,7 @@ func (p *Program) onManifest(c *github.ManifestCredentials) (string, error) {
 		return "", fmt.Errorf("guardar key: %w", err)
 	}
 	for k, v := range map[string]string{
-		"github_app_id":         itoa64(c.ID),
+		"github_app_id":         strconv.FormatInt(c.ID, 10),
 		"github_key_file":       keyPath,
 		"github_webhook_secret": c.WebhookSecret,
 	} {
@@ -264,8 +275,6 @@ func (p *Program) onManifest(c *github.ManifestCredentials) (string, error) {
 	p.log.Info("app github creada, instala en browser", "slug", slug)
 	return "https://github.com/apps/" + slug + "/installations/new", nil
 }
-
-func itoa64(n int64) string { return fmt.Sprintf("%d", n) }
 
 // appStatuses adapta supervisor a health (nil si no hay manager).
 func (p *Program) appStatuses() []health.AppStatus {
@@ -285,7 +294,6 @@ func (p *Program) appStatuses() []health.AppStatus {
 // supCtl adapta Manager a deploy.Controller.
 type supCtl struct {
 	sup *supervisor.Manager
-	log *slog.Logger
 }
 
 func (c *supCtl) SwapAndRestart(name string, swap func() error) error {
@@ -332,7 +340,7 @@ func (p *Program) deployApp(name string) (string, error) {
 	if p.db != nil {
 		depID, _ = p.db.InsertDeployment(app.Name, "", out.Name())
 	}
-	rev, err := deploy.Run(*app, token, &supCtl{sup: p.sup, log: p.log}, out, p.log)
+	rev, err := deploy.Run(*app, token, &supCtl{sup: p.sup}, out, p.log)
 	if p.db != nil && depID > 0 {
 		status := "ok"
 		if err != nil {
@@ -387,7 +395,7 @@ func (p *Program) rollbackApp(name string) error {
 	if app == nil {
 		return fmt.Errorf("app %q inexistente", name)
 	}
-	return deploy.Rollback(*app, &supCtl{sup: p.sup, log: p.log}, p.log)
+	return deploy.Rollback(*app, &supCtl{sup: p.sup}, p.log)
 }
 
 // runDiscovery registra repos nuevos de todas las instalaciones.
@@ -395,7 +403,7 @@ func (p *Program) runDiscovery() {
 	if p.db == nil || p.ghm == nil {
 		return
 	}
-	if err := discover.Run(discover.Deps{
+	if _, err := discover.Run(discover.Deps{
 		GH: p.ghm, DB: p.db, Log: p.log,
 		DeployFn: func(name string) (string, error) { return p.deployApp(name) },
 	}); err != nil {
@@ -419,12 +427,6 @@ func (p *Program) autoDeploy(live *config.Live) {
 		}
 		p.runDiscovery()
 		cfg = live.Get()
-		if err := discover.Run(discover.Deps{
-			GH: p.ghm, DB: p.db, Log: p.log,
-			DeployFn: func(name string) (string, error) { return p.deployApp(name) },
-		}); err != nil {
-			p.log.Warn("discovery fallida", "err", err)
-		}
 		for i := range cfg.Apps {
 			a := &cfg.Apps[i]
 			if a.Deploy == nil || !a.Deploy.Auto {
