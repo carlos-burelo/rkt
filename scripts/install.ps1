@@ -6,10 +6,10 @@
   Pensado para: irm <url> | iex. Descarga el .exe del último GitHub release,
   deja config.yaml si no existe, abre 80/443 y registra/arranca el servicio.
 .EXAMPLE
-  irm https://raw.githubusercontent.com/TU_ORG/rkt-proxy/main/scripts/install.ps1 | iex
+  irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1 | iex
 .EXAMPLE
   # Con parámetros (repo, versión, ruta):
-  $s = irm https://raw.githubusercontent.com/TU_ORG/rkt-proxy/main/scripts/install.ps1
+  $s = irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1
   & ([scriptblock]::Create($s)) -Repo miorg/rkt-proxy -Version v0.1.0
 #>
 [CmdletBinding()]
@@ -22,10 +22,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
-if ([string]::IsNullOrWhiteSpace($Repo)) { $Repo = "TU_ORG/rkt-proxy" }
-if ($Repo -eq "TU_ORG/rkt-proxy") {
-  throw "Repo sin configurar. Usa: & ([scriptblock]::Create((irm <url>))) -Repo tuorg/rkt-proxy  o  `$env:RKT_REPO='tuorg/rkt-proxy'"
-}
+if ([string]::IsNullOrWhiteSpace($Repo)) { $Repo = "carlos-burelo/rkt-proxy" }
 
 # 1. admin obligatorio (bindear 80/443 + servicio)
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()

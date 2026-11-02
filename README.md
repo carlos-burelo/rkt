@@ -58,7 +58,6 @@ Reglas: `hosts` canónico (sin dual `host`/`hosts`). Exacto gana a wildcard. `*.
 Requiere push + tag (el workflow publica el `.exe` en Releases):
 
 ```powershell
-git remote add origin git@github.com:TU_ORG/rkt-proxy.git
 git push -u origin main
 git tag v0.1.0; git push origin v0.1.0
 ```
@@ -66,13 +65,13 @@ git tag v0.1.0; git push origin v0.1.0
 En el VPS (PowerShell admin):
 
 ```powershell
-irm https://raw.githubusercontent.com/TU_ORG/rkt-proxy/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1 | iex
 ```
 
 Con repo/versión explícitos:
 
 ```powershell
-$s = irm https://raw.githubusercontent.com/TU_ORG/rkt-proxy/main/scripts/install.ps1
+$s = irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1
 & ([scriptblock]::Create($s)) -Repo miorg/rkt-proxy -Version v0.1.0
 ```
 
