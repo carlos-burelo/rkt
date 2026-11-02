@@ -55,7 +55,6 @@ type app struct {
 	stopCh   chan struct{}
 	restartC chan struct{}
 	resumeC  chan struct{}
-	stopped  bool
 }
 
 func (a *app) startedAt() time.Time {
@@ -95,12 +94,6 @@ func (m *Manager) Start() {
 	for _, a := range m.apps {
 		a.onEvent = m.OnEvent
 		go a.loop()
-	}
-}
-
-func (m *Manager) emit(kind, app, msg string) {
-	if m.OnEvent != nil {
-		m.OnEvent(kind, app, msg)
 	}
 }
 
@@ -251,16 +244,6 @@ func (m *Manager) Snapshot() []Status {
 		a.mu.Unlock()
 	}
 	return out
-}
-
-// LogPath ruta del log de una app (para `logs -app`).
-func (m *Manager) LogPath(name string) (string, bool) {
-	for _, a := range m.apps {
-		if a.cfg.Name == name {
-			return a.logPath, true
-		}
-	}
-	return "", false
 }
 
 func (a *app) loop() {
