@@ -113,6 +113,16 @@ sc.exe stop RktProxy
 
 O usa `scripts/install-service.ps1`. El servicio auto-arranca con el servidor.
 
+## Logs
+
+El servicio escribe a `<dir-config>/logs/rkt-proxy.log` (stdout perdido
+en servicios Windows). En el VPS:
+
+```powershell
+& "C:\Program Files\rkt-proxy\rkt-proxy.exe" -config "C:\Program Files\rkt-proxy\config.yaml" logs -n 50
+& "C:\Program Files\rkt-proxy\rkt-proxy.exe" -config "C:\Program Files\rkt-proxy\config.yaml" logs -f
+```
+
 ## Tests
 
 ```powershell

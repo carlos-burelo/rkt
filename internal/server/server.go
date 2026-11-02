@@ -4,6 +4,7 @@ package server
 
 import (
 	"crypto/tls"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -15,7 +16,7 @@ import (
 
 // NewHTTP sirve el challenge ACME en HTTP y redirige el resto a
 // HTTPS (o proxea directo si redirect desactivado).
-func NewHTTP(cfg *config.Config, mgr *autocert.Manager, backend http.Handler) *http.Server {
+func NewHTTP(cfg *config.Config, mgr *autocert.Manager, backend http.Handler, errLog *log.Logger) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
@@ -31,6 +32,7 @@ func NewHTTP(cfg *config.Config, mgr *autocert.Manager, backend http.Handler) *h
 	return &http.Server{
 		Addr:         cfg.ListenHTTP,
 		Handler:      mux,
+		ErrorLog:     errLog,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  120 * time.Second,
@@ -38,10 +40,11 @@ func NewHTTP(cfg *config.Config, mgr *autocert.Manager, backend http.Handler) *h
 }
 
 // NewHTTPS sirve el backend con TLS y certs del Manager.
-func NewHTTPS(cfg *config.Config, mgr *autocert.Manager, backend http.Handler) *http.Server {
+func NewHTTPS(cfg *config.Config, mgr *autocert.Manager, backend http.Handler, errLog *log.Logger) *http.Server {
 	return &http.Server{
 		Addr:         cfg.ListenHTTPS,
 		Handler:      backend,
+		ErrorLog:     errLog,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  120 * time.Second,

@@ -3,25 +3,32 @@ package app
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
-	"log/slog"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/kardianos/service"
+
+	"rkt-proxy/internal/logx"
 )
 
-// Version la inyecta CI con -X en cada tag. Local: "dev".
-var Version = "dev"
+// Run cablea logger (consola+archivo), servicio Windows y despacha:
+// install | uninstall | start | stop | run | version | logs [-n N] [-f].
+// Sin args detecta servicio vs interactivo.
+func Run(cfgPath string) {
+	logger, closeLog, err := logx.Setup(cfgPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer closeLog()
 
-// Run cablea el servicio Windows y despacha subcomandos:
-// install | uninstall | start | stop | run. Sin args detecta
-// servicio vs interactivo.
-func Run(cfgPath string, logger *slog.Logger) {
 	svcConfig := &service.Config{
 		Name:        "RktProxy",
 		DisplayName: "RKT Reverse Proxy",
 		Description: "Reverse proxy Go: dominios -> puertos locales, TLS Let's Encrypt auto.",
-		Arguments:   []string{"-config", absolutePath(cfgPath)},
+		Arguments:   []string{"-config", logx.Abs(cfgPath)},
 	}
 	prg := New(cfgPath, logger)
 	s, err := service.New(prg, svcConfig)
@@ -63,6 +70,9 @@ func Run(cfgPath string, logger *slog.Logger) {
 		case "version":
 			fmt.Println(Version)
 			return
+		case "logs":
+			cmdLogs(flag.Args()[1:], cfgPath)
+			return
 		}
 	}
 
@@ -77,20 +87,73 @@ func Run(cfgPath string, logger *slog.Logger) {
 	}
 }
 
-// absolutePath resuelve la config junto al .exe: el servicio
-// Windows arranca en System32 y la ruta relativa rompería.
-func absolutePath(p string) string {
-	if len(p) > 1 && (p[1] == ':' || p[0] == '/' || p[0] == '\\') {
-		return p
-	}
-	exe, err := os.Executable()
-	if err != nil {
-		return p
-	}
-	for i := len(exe) - 1; i >= 0; i-- {
-		if exe[i] == '\\' || exe[i] == '/' {
-			return exe[:i+1] + p
+// cmdLogs imprime últimas N líneas del log y opcionalmente sigue (-f).
+func cmdLogs(args []string, cfgPath string) {
+	n := 50
+	follow := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-f", "--follow":
+			follow = true
+		case "-n", "--lines":
+			i++
+			if i >= len(args) {
+				log.Fatal("logs: -n requiere número")
+			}
+			if _, err := fmt.Sscanf(args[i], "%d", &n); err != nil || n < 1 {
+				log.Fatalf("logs: -n inválido %q", args[i])
+			}
+		default:
+			log.Fatalf("logs: flag desconocido %q (uso: logs [-n 50] [-f])", args[i])
 		}
 	}
-	return p
+	path := logx.Path(cfgPath)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatalf("logs: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	for _, l := range lines {
+		fmt.Println(l)
+	}
+	if !follow {
+		return
+	}
+	off := fileSize(path)
+	for {
+		time.Sleep(500 * time.Millisecond)
+		f, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+		st, err := f.Stat()
+		if err != nil {
+			f.Close()
+			continue
+		}
+		if st.Size() < off {
+			off = 0 // rotó
+		}
+		if _, err := f.Seek(off, io.SeekStart); err != nil {
+			f.Close()
+			continue
+		}
+		buf, _ := io.ReadAll(f)
+		off += int64(len(buf))
+		f.Close()
+		if len(buf) > 0 {
+			fmt.Print(string(buf))
+		}
+	}
+}
+
+func fileSize(path string) int64 {
+	st, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return st.Size()
 }

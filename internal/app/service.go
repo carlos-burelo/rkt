@@ -18,6 +18,9 @@ import (
 	"rkt-proxy/internal/server"
 )
 
+// Version la inyecta CI con -X en cada tag. Local: "dev".
+var Version = "dev"
+
 // Program es el servicio: guarda servidores para Stop limpio.
 type Program struct {
 	cfgPath string
@@ -61,8 +64,9 @@ func (p *Program) Run() {
 
 	backend := proxy.NewHandler(cfg, p.log)
 	p.mgr = acme.NewManager(cfg, p.log)
-	p.srvHTTP = server.NewHTTP(cfg, p.mgr, backend)
-	p.srvTLS = server.NewHTTPS(cfg, p.mgr, backend)
+	errLog := slog.NewLogLogger(p.log.Handler(), slog.LevelError)
+	p.srvHTTP = server.NewHTTP(cfg, p.mgr, backend, errLog)
+	p.srvTLS = server.NewHTTPS(cfg, p.mgr, backend, errLog)
 
 	p.log.Info("arrancando",
 		"http", cfg.ListenHTTP,
