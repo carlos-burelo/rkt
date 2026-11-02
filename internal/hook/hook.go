@@ -179,7 +179,13 @@ func setupInstall(w http.ResponseWriter, r *http.Request, d SetupDeps) {
 	account, err := d.Verify(id)
 	if err != nil {
 		d.Log.Warn("setup: instalación no verificada", "id", id, "err", err)
-		http.Error(w, "instalación no verificada", http.StatusUnauthorized)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>rkt sin verificar</title></head>
+<body style="font-family:system-ui;padding:48px"><h1>No pude verificar la instalación</h1>
+<p>Falta completar la creación de la App (canje del código) para tener la clave.</p>
+<p>Pasos: <code>rkt-proxy github init --name ... --domain ...</code> y pulsa Create;
+luego instala. Si el código venció, repite el init (borra la App duplicada si choca el nombre).</p></body></html>`)
 		return
 	}
 	if err := d.OnSetup(id, account); err != nil {

@@ -79,36 +79,3 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("count vacío: %d", n)
 	}
 }
-
-func TestInstallations(t *testing.T) {
-	db, err := Open(filepath.Join(t.TempDir(), "rkt.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	ids, err := db.ListInstallations()
-	if err != nil || len(ids) != 0 {
-		t.Fatalf("vacío: %+v %v", ids, err)
-	}
-	if err := db.UpsertInstallation(7, "miorg"); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.UpsertInstallation(9, "yo"); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.UpsertInstallation(7, "miorg-nueva"); err != nil {
-		t.Fatal(err)
-	}
-	ids, _ = db.ListInstallations()
-	if len(ids) != 2 || ids[0] != 7 || ids[1] != 9 {
-		t.Fatalf("lista mal: %v", ids)
-	}
-	if err := db.RemoveInstallation(7); err != nil {
-		t.Fatal(err)
-	}
-	ids, _ = db.ListInstallations()
-	if len(ids) != 1 || ids[0] != 9 {
-		t.Fatalf("tras borrar: %v", ids)
-	}
-}

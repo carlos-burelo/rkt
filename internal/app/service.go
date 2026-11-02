@@ -214,31 +214,19 @@ func (p *Program) verifyInstallation(id int64) (string, error) {
 	return p.ghm.Installation(id)
 }
 
-// onSetup registra instalación del browser y dispara discovery.
+// onSetup atiende el setup del browser tras instalar: verifica y dispara
+// discovery (la API es la fuente; nada que persistir).
 func (p *Program) onSetup(id int64, account string) error {
-	if p.db == nil {
-		return fmt.Errorf("sin DB")
-	}
-	if err := p.db.UpsertInstallation(id, account); err != nil {
-		return err
-	}
+	p.log.Info("setup: instalación confirmada", "account", account, "installation", id)
 	p.kickDiscovery()
 	return nil
 }
 
-// onInstallEvent atiende webhooks installation* (alta/baja + refresh).
+// onInstallEvent atiende webhooks installation* (alta/baja): la API es la
+// fuente de verdad, aquí solo se dispara discovery inmediato.
 func (p *Program) onInstallEvent(id int64, account, action string) {
-	if p.db == nil {
-		return
-	}
-	switch action {
-	case "deleted", "suspend":
-		_ = p.db.RemoveInstallation(id)
-		p.log.Info("instalación eliminada", "account", account)
-	default:
-		_ = p.db.UpsertInstallation(id, account)
-		p.kickDiscovery()
-	}
+	p.log.Info("hook: evento instalación", "action", action, "account", account)
+	p.kickDiscovery()
 }
 
 // kickDiscovery pide pasada inmediata (no bloquea).

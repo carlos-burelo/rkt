@@ -70,6 +70,8 @@ var migrations = []string{
 		account TEXT NOT NULL DEFAULT '',
 		added_at TEXT NOT NULL DEFAULT ''
 	);`,
+	// v5: instalaciones las manda la API (ya no se cachean en DB).
+	`DROP TABLE IF EXISTS installations;`,
 }
 
 // DB wrapper.

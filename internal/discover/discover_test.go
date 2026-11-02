@@ -53,6 +53,9 @@ func fakeAPI(t *testing.T, reposJSON string, files map[string]string) *httptest.
 		case strings.HasSuffix(r.URL.Path, "/app/installations"):
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `[{"id":999,"account":{"login":"o"}}]`)
+		case strings.HasSuffix(r.URL.Path, "/app/installations"):
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `[{"id":999,"account":{"login":"o"}}]`)
 		case strings.Contains(r.URL.Path, "/contents/"):
 			name := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
 			if body, ok := files[name]; ok {
@@ -80,9 +83,6 @@ func testDeps(t *testing.T, srv *httptest.Server, pem string) (Deps, *store.DB, 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if err := db.UpsertInstallation(999, "o"); err != nil {
-		t.Fatal(err)
-	}
 	db.SetSetting("base_domain", "coatl.in")
 	db.SetSetting("node_bin", os.Args[0]) // binario existente cualquiera
 	var deployed []string
