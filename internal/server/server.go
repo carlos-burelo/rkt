@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 
 	"rkt-proxy/internal/config"
@@ -16,11 +17,13 @@ import (
 
 // NewHTTP sirve el challenge ACME en HTTP y redirige el resto a
 // HTTPS (o proxea directo si redirect desactivado).
-func NewHTTP(cfg *config.Config, mgr *autocert.Manager, backend http.Handler, errLog *log.Logger) *http.Server {
+// challenge debe construirse una vez con mgr.HTTPHandler(nil): eso
+// además activa http-01 como fallback en el Manager.
+func NewHTTP(cfg *config.Config, challenge http.Handler, backend http.Handler, errLog *log.Logger) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
-			mgr.HTTPHandler(nil).ServeHTTP(w, r)
+			challenge.ServeHTTP(w, r)
 			return
 		}
 		if cfg.RedirectHTTPToHTTPS {
@@ -40,6 +43,8 @@ func NewHTTP(cfg *config.Config, mgr *autocert.Manager, backend http.Handler, er
 }
 
 // NewHTTPS sirve el backend con TLS y certs del Manager.
+// NextProtos incluye acme.ALPNProto: sin él Go rechaza el handshake
+// tls-alpn-01 antes de que GetCertificate pueda responder.
 func NewHTTPS(cfg *config.Config, mgr *autocert.Manager, backend http.Handler, errLog *log.Logger) *http.Server {
 	return &http.Server{
 		Addr:         cfg.ListenHTTPS,
@@ -51,6 +56,7 @@ func NewHTTPS(cfg *config.Config, mgr *autocert.Manager, backend http.Handler, e
 		TLSConfig: &tls.Config{
 			GetCertificate: mgr.GetCertificate,
 			MinVersion:     tls.VersionTLS12,
+			NextProtos:     []string{"h2", "http/1.1", acme.ALPNProto},
 		},
 	}
 }

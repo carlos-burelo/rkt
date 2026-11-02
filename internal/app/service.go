@@ -64,8 +64,9 @@ func (p *Program) Run() {
 
 	backend := proxy.NewHandler(cfg, p.log)
 	p.mgr = acme.NewManager(cfg, p.log)
+	challenge := p.mgr.HTTPHandler(nil) // eager: activa http-01 como fallback
 	errLog := slog.NewLogLogger(p.log.Handler(), slog.LevelError)
-	p.srvHTTP = server.NewHTTP(cfg, p.mgr, backend, errLog)
+	p.srvHTTP = server.NewHTTP(cfg, challenge, backend, errLog)
 	p.srvTLS = server.NewHTTPS(cfg, p.mgr, backend, errLog)
 
 	p.log.Info("arrancando",
