@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	leacme "golang.org/x/crypto/acme"
@@ -49,12 +50,18 @@ func HostPolicy(cfg *config.Config) autocert.HostPolicy {
 }
 
 // NewManager crea el Manager con cache en disco y TOS aceptado.
+// Staging y prod usan subdirs distintos: el cert staging cacheado
+// jamás debe servirse como prod (ni viceversa).
 func NewManager(cfg *config.Config, log *slog.Logger) *autocert.Manager {
-	if err := os.MkdirAll(cfg.ACMECacheDir, 0o700); err != nil {
+	dir := filepath.Join(cfg.ACMECacheDir, "prod")
+	if cfg.ACMEStaging {
+		dir = filepath.Join(cfg.ACMECacheDir, "staging")
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		log.Warn("no se pudo crear cache dir", "err", err)
 	}
 	m := &autocert.Manager{
-		Cache:      autocert.DirCache(cfg.ACMECacheDir),
+		Cache:      autocert.DirCache(dir),
 		Prompt:     autocert.AcceptTOS,
 		Email:      cfg.ACMEEmail,
 		HostPolicy: HostPolicy(cfg),
