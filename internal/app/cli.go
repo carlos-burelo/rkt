@@ -1,6 +1,7 @@
 package app
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"log/slog"
@@ -28,8 +29,8 @@ func Run(cfgPath string, logger *slog.Logger) {
 		log.Fatal(err)
 	}
 
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
+	if flag.NArg() > 0 {
+		switch flag.Arg(0) {
 		case "install":
 			if err := s.Install(); err != nil {
 				log.Fatalf("install: %v", err)

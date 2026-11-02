@@ -129,6 +129,15 @@ if (-not $SkipFirewall) {
   }
 }
 
+# 6b. puertos libres: IIS suele ocupar 80 en Windows Server
+foreach ($p in 80, 443) {
+  $conn = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($conn) {
+    $proc = (Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue).Name
+    throw "Puerto $p ocupado por PID $($conn.OwningProcess) ($proc). Si es IIS/W3SVC: sc.exe stop W3SVC; Set-Service W3SVC -StartupType Disabled. Luego re-corre el instalador."
+  }
+}
+
 # 7. servicio: instala solo si falta (misma ruta, sin churn), luego arranca
 if (-not (Get-Service RktProxy -ErrorAction SilentlyContinue)) {
   & $exe -config $cfg install
