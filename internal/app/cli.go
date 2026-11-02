@@ -9,6 +9,9 @@ import (
 	"github.com/kardianos/service"
 )
 
+// Version la inyecta CI con -X en cada tag. Local: "dev".
+var Version = "dev"
+
 // Run cablea el servicio Windows y despacha subcomandos:
 // install | uninstall | start | stop | run. Sin args detecta
 // servicio vs interactivo.
@@ -55,6 +58,9 @@ func Run(cfgPath string, logger *slog.Logger) {
 		case "run":
 			// foreground, sin instalar (debug / dev)
 			prg.Run()
+			return
+		case "version":
+			fmt.Println(Version)
 			return
 		}
 	}

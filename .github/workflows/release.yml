@@ -24,7 +24,7 @@ jobs:
         shell: pwsh
 
       - name: Build windows/amd64
-        run: go build -trimpath -ldflags "-s -w" -o rkt-proxy-windows-amd64.exe ./cmd/rkt-proxy
+        run: go build -trimpath -ldflags "-s -w -X rkt-proxy/internal/app.Version=${{ github.ref_name }}" -o rkt-proxy-windows-amd64.exe ./cmd/rkt-proxy
         shell: pwsh
 
       - name: Checksum

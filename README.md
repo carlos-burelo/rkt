@@ -80,6 +80,26 @@ El instalador descarga el exe del release, verifica checksum, crea
 servicio. Tras instalar: edita `C:\Program Files\rkt-proxy\config.yaml`
 y reinicia con `sc.exe stop/start RktProxy`.
 
+## Actualizar
+
+Re-corre el one-liner: compara `VERSION.txt`, salta si ya está,
+hace backup a `rkt-proxy.exe.bak` y rollback auto si el servicio
+no levanta. Sin auto-update silencioso: el deploy es explícito.
+
+```powershell
+# último release
+irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1 | iex
+
+# pin de versión / rollback / forzar
+$s = irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1
+& ([scriptblock]::Create($s)) -Version v0.1.1
+& ([scriptblock]::Create($s)) -Rollback
+& ([scriptblock]::Create($s)) -Force
+```
+
+Sacar update = push + `git tag vX.Y.Z; git push origin vX.Y.Z`.
+El workflow compila, testea y publica el release solo.
+
 ## Servicio Windows (manual)
 
 ```powershell
