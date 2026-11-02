@@ -1,0 +1,19 @@
+# Copiar a config.yaml junto al .exe y ajustar.
+listen_http: ":80"
+listen_https: ":443"
+
+# Email Let's Encrypt (TOS + avisos). Obligatorio para prod.
+acme_email: "admin@tu-dominio.com"
+acme_staging: false
+acme_cache_dir: "C:\\ProgramData\\rkt-proxy\\certs"
+
+redirect_http_to_https: true
+
+routes:
+  - hosts: ["app1.tu-dominio.com"]
+    target: "http://127.0.0.1:3000"
+  - hosts: ["app2.tu-dominio.com", "www.tu-dominio.com"]
+    target: "http://127.0.0.1:8080"
+  # wildcard: cualquier sub no listado va a este backend
+  - hosts: ["*.tu-dominio.com"]
+    target: "http://127.0.0.1:4000"

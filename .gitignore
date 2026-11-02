@@ -1,0 +1,9 @@
+# binarios
+*.exe
+bin/
+
+# config real (con email/dominios); solo ejemplo en repo
+config.yaml
+
+# cache certs local
+certs/
