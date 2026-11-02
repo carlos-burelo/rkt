@@ -50,6 +50,9 @@ func Setup(configPath string) (*slog.Logger, func(), error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("abrir log: %w", err)
 	}
-	logger := slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, f), nil))
+	// Archivo primero: como servicio no hay consola y el write a
+	// stdout falla; MultiWriter aborta al primer error y el log
+	// quedaría vacío. El error de stdout lo ignora slog igual.
+	logger := slog.New(slog.NewTextHandler(io.MultiWriter(f, os.Stdout), nil))
 	return logger, func() { _ = f.Close() }, nil
 }
