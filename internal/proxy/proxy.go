@@ -88,11 +88,47 @@ func NewHandler(live *config.Live, log *slog.Logger) http.Handler {
 	})
 
 	if !live.Get().RateLimit.Enabled {
-		return waf.Middleware(live, backend, log)
+		return secureChain(live, backend, log)
 	}
 	rl := live.Get().RateLimit
 	// waf fuera: lo denegado no gasta tokens ni toca backend.
-	return waf.Middleware(live, ratelimit.New(rl.RPS, rl.Burst).Middleware(backend, log), log)
+	return secureChain(live, ratelimit.New(rl.RPS, rl.Burst).Middleware(backend, log), log)
+}
+
+// secureChain envuelve con recovery (anti-panic) + tope de body + waf.
+func secureChain(live *config.Live, next http.Handler, log *slog.Logger) http.Handler {
+	return recovery(log, maxBody(live, waf.Middleware(live, next, log), log))
+}
+
+// recovery convierte un panic en 500 sin tumbar el servicio.
+func recovery(log *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if v := recover(); v != nil {
+				log.Error("panic recuperado", "v", v, "host", r.Host, "path", r.URL.Path)
+				http.Error(w, "error interno", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
+// maxBody rechaza bodies gigantes (Content-Length) y acota chunked.
+func maxBody(live *config.Live, next http.Handler, log *slog.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		limit := live.Get().MaxBodyMB << 20
+		if limit <= 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if r.ContentLength > limit {
+			log.Warn("body gigante", "ip", r.RemoteAddr, "host", r.Host, "bytes", r.ContentLength)
+			http.Error(w, "body muy grande", http.StatusRequestEntityTooLarge)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
+		next.ServeHTTP(w, r)
+	})
 }
 
 // dialOpen true si el backend acepta TCP (sondeo barato loopback).

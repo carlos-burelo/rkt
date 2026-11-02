@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,5 +109,49 @@ routes:
 	}
 	if time.Since(start) > 5*time.Second {
 		t.Fatal("502 debe llegar tras la gracia, no colgarse")
+	}
+}
+
+func TestMaxBody(t *testing.T) {
+	live := liveFrom(t, `
+max_body_mb: 1
+rate_limit:
+  enabled: false
+routes:
+  - hosts: ["h.test"]
+    target: "http://127.0.0.1:9"
+`)
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := NewHandler(live, log)
+
+	big := httptest.NewRequest("POST", "/", strings.NewReader("x"))
+	big.Host = "h.test"
+	big.RemoteAddr = "127.0.0.1:1"
+	big.ContentLength = 2 << 20
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, big)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("2MB con tope 1MB: got %d, quiere 413", rec.Code)
+	}
+
+	small := httptest.NewRequest("POST", "/", strings.NewReader("x"))
+	small.Host = "otra.test"
+	small.RemoteAddr = "127.0.0.1:1"
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, small)
+	if rec.Code == http.StatusRequestEntityTooLarge {
+		t.Fatal("request chico no debe dar 413")
+	}
+}
+
+func TestRecovery(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	panicer := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("boom-test")
+	})
+	rec := httptest.NewRecorder()
+	recovery(log, panicer).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("panic: got %d, quiere 500", rec.Code)
 	}
 }

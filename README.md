@@ -178,6 +178,75 @@ icacls "C:\Program Files\rkt-proxy\config.yaml" /inheritance:r /grant:r "SYSTEM:
 icacls "C:\apps\app1\.env" /inheritance:r /grant:r "SYSTEM:(F)" "Administradores:(F)"
 ```
 
+## Deploy desde git (repos privados incluidos)
+
+Por app, con un PAT (`contents:read`, fine-grained a esos repos) como
+**variable de máquina** (la ve el servicio SYSTEM — nunca en YAML):
+
+```yaml
+apps:
+  - name: app1
+    dir: "C:\\apps\\app1"
+    deploy:
+      repo: "https://github.com/tuorg/app1.git"
+      ref: "main"                 # rama, tag o SHA (SHA = clon completo)
+      token_env: "GITHUB_TOKEN"   # default; solo para URLs http(s)
+      build: ["npm ci --omit=dev", "npm run build"]  # sintaxis cmd.exe
+```
+
+```powershell
+# una vez (persiste en máquina):
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1))) -GithubToken "ghp_..."
+
+rkt-proxy -config ... deploy app1
+```
+
+Flujo (todo en el servicio): preflight (git, token, `dir`) → clone
+`--depth 1` a staging → build → **para la app, swap atómico, arranca**
+(imprescindible en Windows: el rename se bloquea con handles abiertos) →
+healthz hasta sana (30s) → rollback automático si falla (devuelve backup +
+reinicia). Log del build en `logs/deploys/<app>-<ts>.log`. Sin red en tests:
+`repo` local (ruta) no pide token.
+
+## Auto-deploy con GitHub App (push-to-deploy)
+
+```yaml
+github:
+  app_id: 123456
+  installation_id: 7890123
+  key_file: "C:\\ProgramData\\rkt-proxy\\github-app.pem"
+  poll_interval: 60s   # mín 10s
+  # webhook_secret: "..."  # push instantáneo (ver abajo)
+```
+
+Setup único: crea la App (permiso `Contents: read`), instálala en los repos,
+copia el `.pem` al VPS con ACL solo SYSTEM+Admins. Desde ahí, cero config por
+repo nuevo: instálale la App y marca `auto: true` en su `deploy:`. Cada poll
+compara `HEAD` local vs remoto y despliega solo si cambió (tokens de 1h
+cacheados; repos http usan App, resto `token_env`). Sin inbound: puro
+outbound a `api.github.com`.
+
+## Webhook instantáneo (opcional)
+
+Con `webhook_secret` rkt sirve `POST /_rkt/hook/github` en :80/:443
+(fuera del routing, como `/.well-known`). GitHub firma con HMAC-SHA256:
+
+```yaml
+github:
+  # ...
+  webhook_secret: "cambia-esto-por-64-hex"
+```
+
+```powershell
+# genera secreto:
+[BitConverter]::ToString((1..32 | ForEach-Object { Get-Random -Max 256 })).Replace("-","").ToLower()
+```
+
+En la App: webhook URL `https://tu-dominio/_rkt/hook/github`, secret igual,
+evento `push`. Solo despliega ramas trackeadas con `auto: true` (SHA pineado
+nunca); responde `202` y despliega en fondo (log en servicio +
+`logs/deploys/`). Sin secreto el endpoint da 404.
+
 Ejemplo listo en [`configs/config.example.yaml`](configs/config.example.yaml).
 
 ## Actualizar y rollback
@@ -196,6 +265,27 @@ $s = irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/
 & ([scriptblock]::Create($s)) -Rollback
 & ([scriptblock]::Create($s)) -Force
 ```
+
+## Seguridad
+
+Capas activas: HostPolicy (solo tus dominios emiten cert), WAF `deny_paths`,
+rate-limit por IP, `max_body_mb` (default 10, `413` + acota chunked),
+recovery anti-panic (500 sin tumbar), HMAC en webhook (sin secreto = 404),
+timeouts de servidor, `/_rkt/*` reservado fuera del routing.
+
+```yaml
+max_body_mb: 10   # 0 = sin tope
+```
+
+Fronteras de confianza (léeme):
+
+- **Deploy = código del repo corriendo como SYSTEM.** Solo repos tuyos;
+  el swap exige parar la app (Windows) y el rollback es automático.
+- **Secretos**: `webhook_secret` (mín 16, rechazado si corto), PAT/App key y
+  `.env` con ACL SYSTEM+Admins (el instalador blinda `config.yaml`).
+  Rota PATs con fecha de expiración; prefiere GitHub App (tokens de 1h).
+- **healthz es loopback** por default; si lo expones, `/restart` y `/deploy`
+  quedan sin auth — no lo hagas.
 
 ## Logs
 

@@ -234,3 +234,55 @@ func TestAppsEnvFileAndExpand(t *testing.T) {
 		t.Fatal("env_file inexistente debe fallar")
 	}
 }
+
+func TestDeployValidation(t *testing.T) {
+	dir := t.TempDir()
+	base := "apps:\n  - name: a\n    command: x\n    dir: '" + dir + "'\n"
+	routes := "routes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:1\n"
+
+	cfg := testConfig(t, base+"    deploy:\n      repo: https://github.com/o/r.git\n"+routes)
+	d := cfg.Apps[0].Deploy
+	if d.Ref != "main" || d.TokenEnv != "GITHUB_TOKEN" {
+		t.Fatalf("defaults deploy mal: %+v", d)
+	}
+
+	for name, stanza := range map[string]string{
+		"sin repo":    "    deploy:\n      ref: main\n",
+		"build vacío": "    deploy:\n      repo: https://github.com/o/r.git\n      build: [\"\"]\n",
+	} {
+		f, _ := os.CreateTemp("", "rkt-*.yaml")
+		f.WriteString(base + stanza + routes)
+		f.Close()
+		if _, err := Load(f.Name()); err == nil {
+			t.Fatalf("%s: debió fallar", name)
+		}
+		os.Remove(f.Name())
+	}
+
+	f, _ := os.CreateTemp("", "rkt-*.yaml")
+	defer os.Remove(f.Name())
+	f.WriteString("apps:\n  - name: a\n    command: x\n    deploy:\n      repo: https://github.com/o/r.git\n" + routes)
+	f.Close()
+	if _, err := Load(f.Name()); err == nil {
+		t.Fatal("deploy sin dir debe fallar")
+	}
+}
+
+func TestSecurityDefaults(t *testing.T) {
+	cfg := testConfig(t, `
+routes:
+  - hosts: ["a.com"]
+    target: "http://127.0.0.1:3000"
+`)
+	if cfg.MaxBodyMB != 10 {
+		t.Fatalf("default max_body_mb debe ser 10: %d", cfg.MaxBodyMB)
+	}
+
+	f, _ := os.CreateTemp("", "rkt-*.yaml")
+	defer os.Remove(f.Name())
+	f.WriteString("max_body_mb: -1\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:1\n")
+	f.Close()
+	if _, err := Load(f.Name()); err == nil {
+		t.Fatal("max_body_mb negativo debe fallar")
+	}
+}

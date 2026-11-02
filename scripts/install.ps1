@@ -9,10 +9,11 @@
   # Actualizar a último release (idempotente, con backup + rollback auto):
   irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1 | iex
 .EXAMPLE
-  # Pin de versión o rollback:
+  # Pin de versión, rollback o token deploy:
   $s = irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1
   & ([scriptblock]::Create($s)) -Version v0.1.0
   & ([scriptblock]::Create($s)) -Rollback
+  & ([scriptblock]::Create($s)) -GithubToken "ghp_..."
 #>
 [CmdletBinding()]
 param(
@@ -22,7 +23,8 @@ param(
   [string]$LocalExe = "",
   [switch]$SkipFirewall,
   [switch]$Force,
-  [switch]$Rollback
+  [switch]$Rollback,
+  [string]$GithubToken = ""
 )
 $ErrorActionPreference = "Stop"
 
@@ -38,6 +40,12 @@ $cfg = Join-Path $InstallDir "config.yaml"
 $bak = "$exe.bak"
 $verFile = Join-Path $InstallDir "VERSION.txt"
 New-Item -ItemType Directory -Force $InstallDir | Out-Null
+
+# 0b. token deploy como env de máquina (lo ve el servicio SYSTEM)
+if ($GithubToken -ne "") {
+  [Environment]::SetEnvironmentVariable("GITHUB_TOKEN", $GithubToken, "Machine")
+  Write-Host "GITHUB_TOKEN guardado (máquina)."
+}
 
 # 0. rollback a versión anterior
 if ($Rollback) {
@@ -118,6 +126,11 @@ routes:
     target: "http://127.0.0.1:3000"
 '@ | Out-File $cfg -Encoding utf8
   Write-Host "Config creada en $cfg — EDÍTALA (email + routes) y reinicia el servicio."
+}
+
+# 5b. ACL config (webhook secret): solo SYSTEM + Administradores
+if (Test-Path $cfg) {
+  icacls $cfg /inheritance:r /grant:r "SYSTEM:(F)" "Administradores:(F)" | Out-Null
 }
 
 # 6. firewall 80/443

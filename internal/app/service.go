@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,7 +17,10 @@ import (
 	"rkt-proxy/internal/accesslog"
 	"rkt-proxy/internal/acme"
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/deploy"
+	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
+	"rkt-proxy/internal/hook"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/proxy"
 	"rkt-proxy/internal/server"
@@ -34,6 +38,8 @@ const pollInterval = 10 * time.Second
 type Program struct {
 	cfgPath   string
 	log       *slog.Logger
+	live      *config.Live
+	ghm       *github.Manager
 	srvHTTP   *http.Server
 	srvTLS    *http.Server
 	srvHealth *http.Server
@@ -83,6 +89,7 @@ func (p *Program) Run() {
 		os.Exit(1)
 	}
 	live := config.NewLive(cfg)
+	p.live = live
 
 	p.sup = supervisor.New(cfg.Apps, filepath.Join(logx.DirFor(p.cfgPath), "apps"), p.log)
 	p.sup.Start()
@@ -97,8 +104,21 @@ func (p *Program) Run() {
 	p.mgr = acme.NewManager(live, p.log)
 	challenge := p.mgr.HTTPHandler(nil) // eager: activa http-01 como fallback
 	errLog := slog.NewLogLogger(p.log.Handler(), slog.LevelError)
-	p.srvHTTP = server.NewHTTP(cfg, live, challenge, handler, errLog)
-	p.srvTLS = server.NewHTTPS(cfg, p.mgr, handler, errLog)
+	var control http.Handler
+	if cfg.Github != nil && cfg.Github.WebhookSecret != "" {
+		secret := cfg.Github.WebhookSecret
+		control = hook.NewHandler(live, secret, func(name string) {
+			go func() {
+				if rev, err := p.deployApp(name); err != nil {
+					p.log.Error("deploy por hook fallido", "app", name, "err", err)
+				} else {
+					p.log.Info("deploy por hook ok", "app", name, "rev", rev)
+				}
+			}()
+		}, p.log)
+	}
+	p.srvHTTP = server.NewHTTP(cfg, live, challenge, handler, control, errLog)
+	p.srvTLS = server.NewHTTPS(cfg, p.mgr, handler, control, errLog)
 
 	p.log.Info("arrancando",
 		"http", cfg.ListenHTTP,
@@ -115,10 +135,10 @@ func (p *Program) Run() {
 	}()
 	if cfg.Healthz.Enabled {
 		p.srvHealth = &http.Server{
-			Addr:         cfg.Healthz.Listen,
-			Handler:      health.NewHandler(health.Deps{Live: live, Version: Version, Apps: p.appStatuses, Restart: p.sup.Restart}),
-			ReadTimeout:  5 * time.Second,
-			WriteTimeout: 5 * time.Second,
+			Addr:    cfg.Healthz.Listen,
+			Handler: health.NewHandler(health.Deps{Live: live, Version: Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp}),
+			// Sin WriteTimeout: POST /deploy/* tarda minutos (solo loopback).
+			ReadTimeout: 10 * time.Second,
 		}
 		go func() {
 			if err := p.srvHealth.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -128,6 +148,16 @@ func (p *Program) Run() {
 	}
 	p.log.Info("hot-reload activo", "poll", pollInterval.String())
 	go p.watchConfig(live)
+	if cfg.Github != nil {
+		gh, err := github.New(cfg.Github.AppID, cfg.Github.InstallationID, cfg.Github.KeyFile, "")
+		if err != nil {
+			p.log.Error("github app inválida, sin auto-deploy", "err", err)
+		} else {
+			p.ghm = gh
+			p.log.Info("auto-deploy activo", "poll", cfg.Github.Poll().String())
+			go p.autoDeploy(live)
+		}
+	}
 	if err := p.srvTLS.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 		p.log.Error("https muerto", "err", err)
 		os.Exit(1)
@@ -147,6 +177,116 @@ func (p *Program) appStatuses() []health.AppStatus {
 		})
 	}
 	return out
+}
+
+// supCtl adapta Manager a deploy.Controller.
+type supCtl struct {
+	sup *supervisor.Manager
+	log *slog.Logger
+}
+
+func (c *supCtl) SwapAndRestart(name string, swap func() error) error {
+	return c.sup.SwapAndRestart(name, swap)
+}
+
+func (c *supCtl) Snapshot() []supervisor.Status {
+	return c.sup.Snapshot()
+}
+
+// deployApp ejecuta un deploy en el servicio: token del entorno del
+// SERVICIO (variable de máquina para SYSTEM), log a archivo.
+func (p *Program) deployApp(name string) (string, error) {
+	cfg := p.live.Get()
+	var app *config.App
+	for i := range cfg.Apps {
+		if cfg.Apps[i].Name == name {
+			app = &cfg.Apps[i]
+		}
+	}
+	if app == nil {
+		return "", fmt.Errorf("app %q inexistente", name)
+	}
+	if app.Deploy == nil {
+		return "", fmt.Errorf("app %q sin bloque deploy", name)
+	}
+	token := os.Getenv(app.Deploy.TokenEnv)
+	if deploy.NeedsAuth(app.Deploy.Repo) {
+		if p.ghm != nil {
+			var err error
+			token, err = p.ghm.Token()
+			if err != nil {
+				return "", fmt.Errorf("token github app: %w", err)
+			}
+		} else if token == "" {
+			return "", fmt.Errorf("falta token en env %s (variable de máquina para el servicio)", app.Deploy.TokenEnv)
+		}
+	}
+	dir := logx.DirFor(p.cfgPath)
+	if err := os.MkdirAll(filepath.Join(dir, "deploys"), 0o755); err != nil {
+		return "", err
+	}
+	out, err := os.OpenFile(
+		filepath.Join(dir, "deploys", name+"-"+time.Now().Format("20060102-150405")+".log"),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return "", err
+	}
+	defer out.Close()
+	rev, err := deploy.Run(*app, token, &supCtl{sup: p.sup, log: p.log}, out, p.log)
+	if err != nil {
+		return "", err
+	}
+	return rev, nil
+}
+
+// autoDeploy sondea GitHub por cambios y despliega (push-to-deploy con
+// delay de poll). El git local es el estado: si HEAD != remoto, deploy.
+func (p *Program) autoDeploy(live *config.Live) {
+	t := time.NewTicker(live.Get().Github.Poll())
+	defer t.Stop()
+	for range t.C {
+		cfg := live.Get()
+		if cfg.Github == nil || p.ghm == nil {
+			return
+		}
+		for i := range cfg.Apps {
+			a := &cfg.Apps[i]
+			if a.Deploy == nil || !a.Deploy.Auto {
+				continue
+			}
+			owner, repo, ok := github.ParseRepo(a.Deploy.Repo)
+			if !ok {
+				p.log.Warn("auto-deploy: repo no parseable", "app", a.Name)
+				continue
+			}
+			tok, err := p.ghm.Token()
+			if err != nil {
+				p.log.Warn("auto-deploy: sin token", "err", err)
+				continue
+			}
+			remote, err := p.ghm.CommitSHA(owner, repo, a.Deploy.Ref, tok)
+			if err != nil {
+				p.log.Warn("auto-deploy: sin remoto", "app", a.Name, "err", err)
+				continue
+			}
+			if local := deploy.HeadRev(a.Dir); local == "" || local == remote {
+				continue
+			}
+			p.log.Info("auto-deploy: cambio detectado", "app", a.Name, "rev", shortSHA(remote))
+			if rev, err := p.deployApp(a.Name); err != nil {
+				p.log.Error("auto-deploy fallido", "app", a.Name, "err", err)
+			} else {
+				p.log.Info("auto-deploy ok", "app", a.Name, "rev", rev)
+			}
+		}
+	}
+}
+
+func shortSHA(s string) string {
+	if len(s) > 7 {
+		return s[:7]
+	}
+	return s
 }
 
 // watchConfig recarga rutas + redirect sin downtime ante cambios del

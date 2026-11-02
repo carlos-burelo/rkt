@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -85,6 +86,9 @@ func Run(cfgPath string) {
 		case "restart":
 			cmdRestart(flag.Args()[1:], cfgPath)
 			return
+		case "deploy":
+			cmdDeploy(flag.Args()[1:], cfgPath)
+			return
 		case "logs":
 			cmdLogs(flag.Args()[1:], cfgPath)
 			return
@@ -128,6 +132,50 @@ func cmdRestart(args []string, cfgPath string) {
 		log.Fatalf("restart: %s %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 	fmt.Printf("app %s reiniciando (sin cortes hasta restart_grace)\n", args[0])
+}
+
+// cmdDeploy publica una app desde git: rkt-proxy deploy <app>
+// Dispara el deploy EN el servicio (vía healthz loopback) y espera el
+// resultado (tarda minutos: clone+build). Token en env del servicio.
+func cmdDeploy(args []string, cfgPath string) {
+	if len(args) != 1 || args[0] == "" {
+		log.Fatal("uso: deploy <app>")
+	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		log.Fatalf("deploy: %v", err)
+	}
+	found := false
+	for i := range cfg.Apps {
+		if cfg.Apps[i].Name == args[0] {
+			found = true
+			if cfg.Apps[i].Deploy == nil {
+				log.Fatalf("deploy: app %q sin bloque deploy en config", args[0])
+			}
+		}
+	}
+	if !found {
+		log.Fatalf("deploy: app %q inexistente en config", args[0])
+	}
+	if !cfg.Healthz.Enabled {
+		log.Fatal("deploy: requiere healthz activado")
+	}
+	client := &http.Client{Timeout: 10 * time.Minute}
+	resp, err := client.Post("http://"+cfg.Healthz.Listen+"/deploy/"+args[0], "application/json", nil)
+	if err != nil {
+		log.Fatalf("deploy: sin contacto con el servicio: %v", err)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Deployed string `json:"deployed"`
+		Rev      string `json:"rev"`
+		Error    string `json:"error"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("deploy: %s", out.Error)
+	}
+	fmt.Printf("deploy ok: %s rev %s\n", out.Deployed, out.Rev)
 }
 
 // cmdLogs imprime últimas N líneas del log y opcionalmente sigue (-f).

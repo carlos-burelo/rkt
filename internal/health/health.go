@@ -41,14 +41,20 @@ type Deps struct {
 	Version string
 	Apps    func() []AppStatus
 	Restart func(name string) bool
+	Deploy  func(name string) (string, error)
 }
 
-// NewHandler responde GET /healthz y POST /restart/<name>; resto 404/405.
-// Solo para listener loopback: restart no lleva auth.
+// NewHandler responde GET /healthz, POST /restart/<name> y
+// POST /deploy/<name>; resto 404/405. Solo para listener loopback:
+// restart/deploy no llevan auth.
 func NewHandler(d Deps) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/restart/") {
 			restart(w, r, d.Restart)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/deploy/") {
+			deployHandler(w, r, d.Deploy)
 			return
 		}
 		if r.URL.Path != "/healthz" {
@@ -105,4 +111,25 @@ func restart(w http.ResponseWriter, r *http.Request, fn func(name string) bool) 
 		return
 	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"restarted": name})
+}
+
+// deployHandler ejecuta POST /deploy/<name> en el servicio (tarda minutos).
+func deployHandler(w http.ResponseWriter, r *http.Request, fn func(name string) (string, error)) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodPost {
+		http.Error(w, "solo POST", http.StatusMethodNotAllowed)
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, "/deploy/")
+	if name == "" || strings.Contains(name, "/") || fn == nil {
+		http.NotFound(w, r)
+		return
+	}
+	rev, err := fn(name)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"deployed": name, "rev": rev})
 }

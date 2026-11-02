@@ -279,3 +279,45 @@ func TestRestartRevivesFailed(t *testing.T) {
 		return !s.Failed
 	}, "failed limpio tras restart")
 }
+
+func TestSwapAndRestart(t *testing.T) {
+	var cmd string
+	var args []string
+	if runtime.GOOS == "windows" {
+		cmd, args = "cmd.exe", []string{"/c", "ping -n 30 127.0.0.1 >nul"}
+	} else {
+		cmd, args = "sleep", []string{"30"}
+	}
+	var argYaml string
+	for _, a := range args {
+		argYaml += "\"" + a + "\", "
+	}
+	apps := loadApps(t, "apps:\n  - name: largo\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 30s\n    min_uptime: 1ms\n")
+	m := New(apps, t.TempDir(), testLog(t))
+	m.Start()
+	defer m.Stop()
+	waitFor(t, 5*time.Second, func() bool {
+		return m.Snapshot()[0].Running
+	}, "app corriendo")
+	pid1 := m.Snapshot()[0].Pid
+
+	deadDuringSwap := false
+	err := m.SwapAndRestart("largo", func() error {
+		deadDuringSwap = !m.Snapshot()[0].Running
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("swap: %v", err)
+	}
+	if !deadDuringSwap {
+		t.Fatal("swap debe correr con la app muerta")
+	}
+	waitFor(t, 5*time.Second, func() bool {
+		s := m.Snapshot()[0]
+		return s.Running && s.Pid != pid1
+	}, "arranque inmediato tras swap (sin esperar 30s)")
+
+	if err := m.SwapAndRestart("nadie", func() error { return nil }); err == nil {
+		t.Fatal("app inexistente debe fallar")
+	}
+}

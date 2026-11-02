@@ -24,6 +24,13 @@ apps:
       PORT: "3000"
     env_file: "C:\\apps\\app1\\.env"   # base; env: gana; ${VAR} expande
     restart_delay: 5s     # base; se duplica por crash rápido (tope 5m)
+    # deploy desde git (requiere healthz + git en VPS):
+    #deploy:
+    #  repo: "https://github.com/tuorg/app1.git"  # token vía env, nunca en YAML
+    #  ref: "main"                                # rama, tag o SHA
+    #  token_env: "GITHUB_TOKEN"                  # PAT contents:read
+    #  build: ["npm ci --omit=dev", "npm run build"]
+    #  auto: true                                 # auto-deploy con github app
     min_uptime: 10s       # vivir esto resetea backoff y no cuenta crash
     memory_mb: 512        # 0 = sin límite; el job niega commits (OOM -> restart)
 

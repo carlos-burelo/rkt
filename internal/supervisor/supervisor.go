@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/dotenv"
 )
 
 // crashWindow / maxCrashes: tope anti-crashloop.
@@ -42,6 +43,7 @@ type app struct {
 	cmd      *exec.Cmd
 	running  bool
 	alive    bool
+	held     bool
 	pid      int
 	started  time.Time
 	restarts int
@@ -51,6 +53,7 @@ type app struct {
 	crashes  []time.Time
 	stopCh   chan struct{}
 	restartC chan struct{}
+	resumeC  chan struct{}
 	stopped  bool
 }
 
@@ -62,9 +65,10 @@ func (a *app) startedAt() time.Time {
 
 // Manager supervisa N apps.
 type Manager struct {
-	mu       sync.Mutex
-	apps     []*app
-	stopping bool
+	mu        sync.Mutex
+	apps      []*app
+	stopping  bool
+	deploying map[string]bool
 }
 
 // New valida rutas de log pero no arranca nada. logsDir/<name>.log.
@@ -77,6 +81,7 @@ func New(apps []config.App, logsDir string, log *slog.Logger) *Manager {
 			logPath:  filepath.Join(logsDir, a.Name+".log"),
 			stopCh:   make(chan struct{}),
 			restartC: make(chan struct{}, 1),
+			resumeC:  make(chan struct{}, 1),
 		})
 	}
 	return m
@@ -129,6 +134,97 @@ func (m *Manager) Restart(name string) bool {
 			go a.loop()
 		}
 		return true
+	}
+	return false
+}
+
+// SwapAndRestart para el loop, ejecuta swap con la app muerta (imprescindible
+// en Windows: rename bloqueado por handles abiertos) y arranca al instante.
+// Resetea contadores crash. Solo un deploy por app a la vez.
+func (m *Manager) SwapAndRestart(name string, swap func() error) error {
+	m.mu.Lock()
+	if m.stopping {
+		m.mu.Unlock()
+		return fmt.Errorf("servicio parando")
+	}
+	var a *app
+	for _, x := range m.apps {
+		if x.cfg.Name == name {
+			a = x
+		}
+	}
+	if a == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("app %q inexistente", name)
+	}
+	if m.deploying == nil {
+		m.deploying = map[string]bool{}
+	}
+	if m.deploying[name] {
+		m.mu.Unlock()
+		return fmt.Errorf("deploy de %s ya en curso", name)
+	}
+	m.deploying[name] = true
+	m.mu.Unlock()
+	defer func() {
+		m.mu.Lock()
+		delete(m.deploying, name)
+		m.mu.Unlock()
+	}()
+
+	a.mu.Lock()
+	a.failed = false
+	a.crashes = nil
+	a.consec = 0
+	a.held = true
+	alive := a.alive
+	a.mu.Unlock()
+
+	a.killCurrent()
+	if !a.waitDead(10 * time.Second) {
+		a.unhold()
+		return fmt.Errorf("la app no murió para el swap")
+	}
+	err := swap()
+	a.mu.Lock()
+	a.held = false
+	a.mu.Unlock()
+	select {
+	case a.resumeC <- struct{}{}:
+	default:
+	}
+	select {
+	case a.restartC <- struct{}{}:
+	default:
+	}
+	if !alive {
+		go a.loop()
+	}
+	return err
+}
+
+// unhold libera un loop en espera (vía de error: nunca dejar colgado).
+func (a *app) unhold() {
+	a.mu.Lock()
+	a.held = false
+	a.mu.Unlock()
+	select {
+	case a.resumeC <- struct{}{}:
+	default:
+	}
+}
+
+// waitDead espera a que el loop marque la app muerta (post-kill).
+func (a *app) waitDead(d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		a.mu.Lock()
+		running := a.running
+		a.mu.Unlock()
+		if !running {
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	return false
 }
@@ -212,6 +308,18 @@ func (a *app) loop() {
 		default:
 		}
 
+		a.mu.Lock()
+		held := a.held
+		a.mu.Unlock()
+		if held {
+			// deploy en curso: espera al swap, sin contar delay
+			select {
+			case <-a.stopCh:
+				return
+			case <-a.resumeC:
+			}
+		}
+
 		if fast && crashes > maxCrashes {
 			a.mu.Lock()
 			a.failed = true
@@ -230,6 +338,8 @@ func (a *app) loop() {
 			return
 		case <-a.restartC:
 			// restart manual: sin espera
+		case <-a.resumeC:
+			// resume tardío de SwapAndRestart: sin espera
 		case <-time.After(delay):
 		}
 	}
@@ -276,7 +386,7 @@ func (a *app) start(job *jobCtx) bool {
 	cmd := exec.Command(a.cfg.Command, a.cfg.Args...)
 	configureProc(cmd)
 	cmd.Dir = a.cfg.Dir
-	cmd.Env = environWith(a.cfg.Env)
+	cmd.Env = dotenv.EnvironList(a.cfg.Env)
 	cmd.Stdout = f
 	cmd.Stderr = f
 	if err := cmd.Start(); err != nil {
@@ -329,27 +439,6 @@ func (a *app) killCurrent() {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait() // cosecha: libera handles y evita carrera con loop
 	}
-}
-
-// environWith mezcla entorno actual + overrides.
-func environWith(over map[string]string) []string {
-	base := map[string]string{}
-	for _, kv := range os.Environ() {
-		for i := 0; i < len(kv); i++ {
-			if kv[i] == '=' {
-				base[kv[:i]] = kv[i+1:]
-				break
-			}
-		}
-	}
-	for k, v := range over {
-		base[k] = v
-	}
-	out := make([]string, 0, len(base))
-	for k, v := range base {
-		out = append(out, k+"="+v)
-	}
-	return out
 }
 
 func exitString(err error) string {

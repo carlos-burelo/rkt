@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"rkt-proxy/internal/dotenv"
+	"rkt-proxy/internal/github"
 )
 
 // Route mapea uno o varios hosts al mismo backend.
@@ -28,6 +29,29 @@ func (r *Route) TargetURL() *url.URL { return r.targetURL }
 
 // App es un proceso supervisado (mini-PaaS). El proxy enruta
 // a sus puertos; rkt los levanta y reinicia si mueren.
+// Deploy publica la app desde git: pull+build+swap+restart+rollback.
+type Deploy struct {
+	Repo     string   `yaml:"repo"`
+	Ref      string   `yaml:"ref"`
+	TokenEnv string   `yaml:"token_env"`
+	Build    []string `yaml:"build"`
+	Auto     bool     `yaml:"auto"`
+}
+
+// Github auth vía GitHub App para repos privados (tokens 1h, cacheados).
+type Github struct {
+	AppID          int64  `yaml:"app_id"`
+	InstallationID int64  `yaml:"installation_id"`
+	KeyFile        string `yaml:"key_file"`
+	PollInterval   string `yaml:"poll_interval"`
+	WebhookSecret  string `yaml:"webhook_secret"`
+
+	poll time.Duration `yaml:"-"`
+}
+
+// Poll intervalo de auto-deploy (parseado en Load).
+func (g *Github) Poll() time.Duration { return g.poll }
+
 type App struct {
 	Name         string            `yaml:"name"`
 	Command      string            `yaml:"command"`
@@ -38,6 +62,7 @@ type App struct {
 	RestartDelay string            `yaml:"restart_delay"`
 	MinUptime    string            `yaml:"min_uptime"`
 	MemoryMB     uint64            `yaml:"memory_mb"`
+	Deploy       *Deploy           `yaml:"deploy"`
 
 	delay time.Duration `yaml:"-"`
 	minUp time.Duration `yaml:"-"`
@@ -62,6 +87,9 @@ type RateLimitConfig struct {
 	RPS     float64 `yaml:"requests_per_second"`
 	Burst   int     `yaml:"burst"`
 }
+
+// maxBodyDefaultMB tope de body por request (anti-DoS a backends).
+const maxBodyDefaultMB = 10
 
 // restartGraceDefault cubre el hueco de un restart de app.
 const restartGraceDefault = "10s"
@@ -89,6 +117,8 @@ type Config struct {
 	Healthz             HealthzConfig   `yaml:"healthz"`
 	RateLimit           RateLimitConfig `yaml:"rate_limit"`
 	RestartGrace        string          `yaml:"restart_grace"`
+	MaxBodyMB           int64           `yaml:"max_body_mb"`
+	Github              *Github         `yaml:"github"`
 	DenyPaths           []string        `yaml:"deny_paths"`
 	Apps                []App           `yaml:"apps"`
 	Routes              []Route         `yaml:"routes"`
@@ -107,6 +137,7 @@ func defaultConfig() Config {
 		RedirectHTTPToHTTPS: true,
 		Healthz:             HealthzConfig{Enabled: true, Listen: "127.0.0.1:8090"},
 		RateLimit:           RateLimitConfig{Enabled: true, RPS: 20, Burst: 40},
+		MaxBodyMB:           maxBodyDefaultMB,
 		DenyPaths:           append([]string{}, defaultDenyPaths...),
 	}
 }
@@ -147,6 +178,32 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("restart_grace inválido %q (ej 10s, 0 = directo a 502)", cfg.RestartGrace)
 	}
 	cfg.grace = g
+	if cfg.MaxBodyMB < 0 {
+		return nil, fmt.Errorf("max_body_mb inválido %d (>=0, 0 = sin tope)", cfg.MaxBodyMB)
+	}
+	if cfg.Github != nil {
+		gh := cfg.Github
+		if gh.AppID <= 0 || gh.InstallationID <= 0 {
+			return nil, fmt.Errorf("github sin app_id/installation_id")
+		}
+		if gh.PollInterval == "" {
+			gh.PollInterval = "60s"
+		}
+		p, err := time.ParseDuration(gh.PollInterval)
+		if err != nil || p < 10*time.Second {
+			return nil, fmt.Errorf("github poll_interval inválido %q (mín 10s)", gh.PollInterval)
+		}
+		gh.poll = p
+		if _, err := os.Stat(gh.KeyFile); err != nil {
+			return nil, fmt.Errorf("github key_file inaccesible %q", gh.KeyFile)
+		}
+		if _, err := github.New(gh.AppID, gh.InstallationID, gh.KeyFile, ""); err != nil {
+			return nil, fmt.Errorf("github: %w", err)
+		}
+		if gh.WebhookSecret != "" && len(gh.WebhookSecret) < 16 {
+			return nil, fmt.Errorf("github webhook_secret muy corto (mín 16 caracteres)")
+		}
+	}
 	for _, p := range cfg.DenyPaths {
 		if _, err := pathpkg.Match(p, ""); err != nil {
 			return nil, fmt.Errorf("deny_paths patrón inválido %q", p)
@@ -165,7 +222,10 @@ func Load(path string) (*Config, error) {
 		if strings.TrimSpace(a.Command) == "" {
 			return nil, fmt.Errorf("apps[%s] sin command", a.Name)
 		}
-		if a.Dir != "" {
+		if a.Deploy != nil && a.Dir == "" {
+			return nil, fmt.Errorf("apps[%s] deploy requiere dir", a.Name)
+		}
+		if a.Dir != "" && a.Deploy == nil {
 			if st, err := os.Stat(a.Dir); err != nil || !st.IsDir() {
 				return nil, fmt.Errorf("apps[%s] dir inexistente %q", a.Name, a.Dir)
 			}
@@ -186,6 +246,23 @@ func Load(path string) (*Config, error) {
 			return nil, fmt.Errorf("apps[%s] min_uptime inválido %q (ej 10s)", a.Name, a.MinUptime)
 		}
 		a.minUp = mu
+		if a.Deploy != nil {
+			d := a.Deploy
+			if strings.TrimSpace(d.Repo) == "" {
+				return nil, fmt.Errorf("apps[%s] deploy sin repo", a.Name)
+			}
+			if d.Ref == "" {
+				d.Ref = "main"
+			}
+			if d.TokenEnv == "" {
+				d.TokenEnv = "GITHUB_TOKEN"
+			}
+			for _, s := range d.Build {
+				if strings.TrimSpace(s) == "" {
+					return nil, fmt.Errorf("apps[%s] deploy con build vacío", a.Name)
+				}
+			}
+		}
 		// env: archivo base + inline encima, todo expandido.
 		// file ve OS; inline ve OS+file+inline-anteriores (ordenado).
 		fileVars := map[string]string{}
@@ -284,7 +361,19 @@ func NeedRestart(old, new *Config) []string {
 	if !appsEqual(old.Apps, new.Apps) {
 		out = append(out, "apps")
 	}
+	if !githubEqual(old.Github, new.Github) {
+		out = append(out, "github")
+	}
 	return out
+}
+
+// githubEqual compara bloque github (nil = ausente).
+func githubEqual(a, b *Github) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return a.AppID == b.AppID && a.InstallationID == b.InstallationID &&
+		a.KeyFile == b.KeyFile && a.PollInterval == b.PollInterval
 }
 
 // validAppName [a-z0-9-] para nombres de archivo de log seguros.
@@ -317,6 +406,7 @@ func appsEqual(a, b []App) bool {
 		}
 		if x.Command != y.Command || x.Dir != y.Dir || x.delay != y.delay ||
 			x.minUp != y.minUp || x.MemoryMB != y.MemoryMB ||
+			!deployEqual(x.Deploy, y.Deploy) ||
 			len(x.Args) != len(y.Args) || len(x.Env) != len(y.Env) {
 			return false
 		}
@@ -329,6 +419,23 @@ func appsEqual(a, b []App) bool {
 			if y.Env[k] != v {
 				return false
 			}
+		}
+	}
+	return true
+}
+
+// deployEqual compara deploy (nil = ausente).
+func deployEqual(a, b *Deploy) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	if a.Repo != b.Repo || a.Ref != b.Ref || a.TokenEnv != b.TokenEnv ||
+		a.Auto != b.Auto || len(a.Build) != len(b.Build) {
+		return false
+	}
+	for i := range a.Build {
+		if a.Build[i] != b.Build[i] {
+			return false
 		}
 	}
 	return true

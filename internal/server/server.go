@@ -19,10 +19,19 @@ import (
 // HTTPS (o proxea directo si redirect desactivado).
 // challenge debe construirse una vez con mgr.HTTPHandler(nil): eso
 // además activa http-01 como fallback en el Manager.
+// control (puede ser nil) atiende /_rkt/* antes que todo (plano control).
 // El flag redirect se lee de la config viva (hot-reload).
-func NewHTTP(cfg *config.Config, live *config.Live, challenge http.Handler, backend http.Handler, errLog *log.Logger) *http.Server {
+func NewHTTP(cfg *config.Config, live *config.Live, challenge http.Handler, backend http.Handler, control http.Handler, errLog *log.Logger) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/_rkt/") {
+			if control == nil {
+				http.NotFound(w, r)
+				return
+			}
+			control.ServeHTTP(w, r)
+			return
+		}
 		if strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
 			challenge.ServeHTTP(w, r)
 			return
@@ -46,10 +55,23 @@ func NewHTTP(cfg *config.Config, live *config.Live, challenge http.Handler, back
 // NewHTTPS sirve el backend con TLS y certs del Manager.
 // NextProtos incluye acme.ALPNProto: sin él Go rechaza el handshake
 // tls-alpn-01 antes de que GetCertificate pueda responder.
-func NewHTTPS(cfg *config.Config, mgr *autocert.Manager, backend http.Handler, errLog *log.Logger) *http.Server {
+// control (puede ser nil) atiende /_rkt/* antes que el backend.
+func NewHTTPS(cfg *config.Config, mgr *autocert.Manager, backend http.Handler, control http.Handler, errLog *log.Logger) *http.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/_rkt/") {
+			if control == nil {
+				http.NotFound(w, r)
+				return
+			}
+			control.ServeHTTP(w, r)
+			return
+		}
+		backend.ServeHTTP(w, r)
+	})
 	return &http.Server{
 		Addr:         cfg.ListenHTTPS,
-		Handler:      backend,
+		Handler:      mux,
 		ErrorLog:     errLog,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 60 * time.Second,

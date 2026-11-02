@@ -79,6 +79,19 @@ func EnvironMap() map[string]string {
 	return out
 }
 
+// EnvironList entorno + overrides (listo para exec.Cmd.Env).
+func EnvironList(over map[string]string) []string {
+	m := EnvironMap()
+	for k, v := range over {
+		m[k] = v
+	}
+	out := make([]string, 0, len(m))
+	for k, v := range m {
+		out = append(out, k+"="+v)
+	}
+	return out
+}
+
 // Expand resuelve ${VAR} y $VAR en cada valor contra scope.
 // scope previo = OS ∪ file; inline se aplica ordenado (determinista):
 // cada clave ve OS+file+inline-anteriores. $ suelto se deja literal.
