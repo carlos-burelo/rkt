@@ -5,9 +5,13 @@ Reverse proxy en Go para VPS Windows Server. Asigna dominios/subdominios a puert
 ## Layout
 
 ```text
-cmd/rkt-proxy/main.go       servicio Windows + servidores HTTP/HTTPS
+cmd/rkt-proxy/main.go       entrypoint (flags, 20 líneas)
+internal/app/service.go     Program: ciclo vida servicio + orquesta
+internal/app/cli.go         subcomandos install|uninstall|start|stop|run
 internal/config/            carga/validación YAML + match Host
 internal/proxy/             ReverseProxy (headers, 404/502)
+internal/acme/              Manager autocert + HostPolicy
+internal/server/            servidores HTTP (challenge+redirect) y HTTPS
 configs/config.example.yaml ejemplo canónico
 scripts/install-service.ps1 alta servicio (admin)
 bin/                        salida build (gitignored)
