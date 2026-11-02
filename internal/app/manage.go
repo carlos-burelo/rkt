@@ -571,9 +571,7 @@ func cmdGithubLogin(cfgPath string) {
 	fmt.Println("  " + url)
 	fmt.Println("Al aprobar, GitHub vuelve a /_rkt/setup y rkt registra solo.")
 	fmt.Println("La App necesita Setup URL: https://TU-DOMINIO/_rkt/setup")
-	if runtime.GOOS == "windows" {
-		_ = exec.Command("cmd.exe", "/C", "start", url).Start()
-	}
+	openBrowser(url)
 }
 
 // cmdGithubInit guía crear la App vía manifest oficial:
@@ -593,16 +591,29 @@ func cmdGithubInit(args []string) {
 	if *name == "" || *domain == "" {
 		log.Fatal("github init requiere --name y --domain")
 	}
-	link := "https://" + *domain + "/_rkt/new-app?name=" + url.QueryEscape(*name) + "&domain=" + url.QueryEscape(*domain)
-	if *org != "" {
-		link += "&org=" + url.QueryEscape(*org)
-	}
+	link := githubInitURL(*domain, *name, *org)
 	fmt.Println("Crea la GitHub App (permisos mínimos ya rellenados):")
 	fmt.Println("  " + link)
 	fmt.Println("Pulsa Create en GitHub; rkt se configura solo y te da el link de instalación.")
-	if runtime.GOOS == "windows" {
-		_ = exec.Command("cmd.exe", "/C", "start", link).Start()
+	openBrowser(link)
+}
+
+// githubInitURL construye la URL del form new-app.
+func githubInitURL(domain, name, org string) string {
+	link := "https://" + domain + "/_rkt/new-app?name=" + url.QueryEscape(name) + "&domain=" + url.QueryEscape(domain)
+	if org != "" {
+		link += "&org=" + url.QueryEscape(org)
 	}
+	return link
+}
+
+// openBrowser abre URL (best effort). En Windows, start exige título
+// vacío antes de la URL entrecomillada; sin comillas, el & la parte.
+func openBrowser(link string) {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	_ = exec.Command("cmd.exe", "/C", "start", "", link).Start()
 }
 
 func cmdDeployments(args []string, cfgPath string) {
