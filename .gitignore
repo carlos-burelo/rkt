@@ -13,3 +13,7 @@ certs/
 
 # índice local tgrep
 .tgrep/
+
+# web (monorepo): deps y build
+web/node_modules/
+web/dist/
