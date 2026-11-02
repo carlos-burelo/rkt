@@ -13,7 +13,8 @@ internal/proxy/             ReverseProxy (headers, 404/502)
 internal/acme/              Manager autocert + HostPolicy
 internal/server/            servidores HTTP (challenge+redirect) y HTTPS
 configs/config.example.yaml ejemplo canónico
-scripts/install-service.ps1 alta servicio (admin)
+scripts/install.ps1          instalador prod (irm|iex) + local con -LocalExe
+.github/workflows/release.yml build + release exe en cada tag v*
 bin/                        salida build (gitignored)
 ```
 
@@ -52,7 +53,35 @@ Copy-Item configs/config.example.yaml config.yaml
 
 Reglas: `hosts` canónico (sin dual `host`/`hosts`). Exacto gana a wildcard. `*.dominio` no cubre base `dominio`.
 
-## Servicio Windows
+## Instalación en prod (1 línea)
+
+Requiere push + tag (el workflow publica el `.exe` en Releases):
+
+```powershell
+git remote add origin git@github.com:TU_ORG/rkt-proxy.git
+git push -u origin main
+git tag v0.1.0; git push origin v0.1.0
+```
+
+En el VPS (PowerShell admin):
+
+```powershell
+irm https://raw.githubusercontent.com/TU_ORG/rkt-proxy/main/scripts/install.ps1 | iex
+```
+
+Con repo/versión explícitos:
+
+```powershell
+$s = irm https://raw.githubusercontent.com/TU_ORG/rkt-proxy/main/scripts/install.ps1
+& ([scriptblock]::Create($s)) -Repo miorg/rkt-proxy -Version v0.1.0
+```
+
+El instalador descarga el exe del release, verifica checksum, crea
+`config.yaml` si falta, abre 80/443 en firewall e instala/arranca el
+servicio. Tras instalar: edita `C:\Program Files\rkt-proxy\config.yaml`
+y reinicia con `sc.exe stop/start RktProxy`.
+
+## Servicio Windows (manual)
 
 ```powershell
 # consola admin:
