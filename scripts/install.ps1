@@ -129,7 +129,18 @@ if (-not $SkipFirewall) {
   }
 }
 
-# 6b. puertos libres: IIS suele ocupar 80 en Windows Server
+# 6c. PATH máquina para usar rkt-proxy desde cualquier terminal
+$machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+$clean = $machinePath -split ";" | ForEach-Object { $_.Trim().TrimEnd("\") }
+if ($clean -notcontains $InstallDir.TrimEnd("\")) {
+  [Environment]::SetEnvironmentVariable("Path", "$machinePath;$InstallDir", "Machine")
+  Add-Type -Namespace Win32 -Name Native -MemberDefinition '[DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);' | Out-Null
+  $res = [UIntPtr]::Zero
+  [Win32.Native]::SendMessageTimeout([IntPtr]0xffff, 0x1a, [UIntPtr]::Zero, "Environment", 0x2, 5000, [ref]$res) | Out-Null
+  Write-Host "PATH: $InstallDir agregado (reabre la terminal para usarlo)."
+}
+
+# 6d. puertos libres: IIS suele ocupar 80 en Windows Server
 foreach ($p in 80, 443) {
   $conn = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($conn) {
