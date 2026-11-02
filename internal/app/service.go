@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kardianos/service"
@@ -17,6 +18,7 @@ import (
 
 	"rkt-proxy/internal/accesslog"
 	"rkt-proxy/internal/acme"
+	"rkt-proxy/internal/api"
 	"rkt-proxy/internal/build"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
@@ -184,9 +186,17 @@ func (p *Program) Run() {
 		}
 	}()
 	if cfg.Healthz.Enabled {
+		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp})
+		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses})
 		p.srvHealth = &http.Server{
-			Addr:    cfg.Healthz.Listen,
-			Handler: health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp}),
+			Addr: cfg.Healthz.Listen,
+			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasPrefix(r.URL.Path, "/api/") {
+					apiH.ServeHTTP(w, r)
+					return
+				}
+				healthH.ServeHTTP(w, r)
+			}),
 			// Sin WriteTimeout: POST /deploy/* tarda minutos (solo loopback).
 			ReadTimeout: 10 * time.Second,
 		}
