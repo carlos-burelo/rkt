@@ -28,3 +28,14 @@ export interface Analytics {
 export async function fetchAnalytics(host: string, days = 7): Promise<Analytics> {
   return api<Analytics>(`/api/v1/analytics?host=${encodeURIComponent(host)}&days=${days}`);
 }
+
+export interface Obs {
+  hours: number;
+  buckets: { ts: string; req: number; err: number }[];
+  restarts: number;
+  down: string[];
+}
+
+export async function fetchObs(hours = 6): Promise<Obs> {
+  return api<Obs>(`/api/v1/observability?hours=${hours}`);
+}

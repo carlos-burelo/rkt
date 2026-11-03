@@ -10,6 +10,8 @@ import { CommandPalette } from "../shared/components/CommandPalette";
 import { useOnline } from "../shared/hooks/useOnline";
 import { DeployDrawer } from "../features/deployments/DeployDrawer";
 import { Overview } from "../features/overview/Overview";
+import { AnalyticsPage } from "../features/overview/AnalyticsPage";
+import { Observability } from "../features/overview/Observability";
 import { Deployments } from "../features/deployments/Deployments";
 import { AppDetail } from "../features/apps/AppDetail";
 import { Logs } from "../features/logs/Logs";
@@ -24,7 +26,7 @@ import { listRoutes } from "../features/routes/api";
 import { getSettings } from "../features/settings/api";
 import { listUsers } from "../features/users/api";
 
-export type Page = "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "app";
+export type Page = "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "app" | "analytics" | "observability";
 
 export function App() {
   const [who, setWho] = useState<Me | null>(null);
@@ -161,6 +163,8 @@ export function App() {
     { id: "overview", label: "Overview" },
     { id: "deployments", label: "Deployments" },
     { id: "logs", label: "Logs" },
+    { id: "analytics", label: "Analytics" },
+    { id: "observability", label: "Observability" },
     { id: "routes", label: "Domains" },
     { id: "settings", label: "Settings" },
     { id: "users", label: "Users", admin: true },
@@ -318,6 +322,8 @@ export function App() {
           {page === "routes" && <Routes routes={routes} canWrite={canWrite} refresh={refresh} fail={fail} />}
           {page === "settings" && <Settings settings={settings} canWrite={canWrite} refresh={refresh} fail={fail} />}
           {page === "users" && isAdmin && <Users users={users} refresh={refresh} fail={fail} />}
+          {page === "analytics" && <AnalyticsPage />}
+          {page === "observability" && <Observability />}
             </>
           )}
           <ToastStack toasts={toasts} dismiss={(id) => setToasts((ts) => ts.filter((t) => t.id !== id))} />

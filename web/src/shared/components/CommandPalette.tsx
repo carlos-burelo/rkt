@@ -26,7 +26,7 @@ export function CommandPalette({
   apps: { name: string; running: boolean; failed?: boolean }[];
   metas: AppMeta[];
   deps: Deployment[];
-  goPage: (p: "overview" | "deployments" | "logs" | "routes" | "settings" | "users") => void;
+  goPage: (p: "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability") => void;
   openApp: (name: string) => void;
   openDeploy: (d: Deployment) => void;
   onAction: (app: string, a: "restart" | "deploy" | "rollback") => void;
@@ -45,10 +45,12 @@ export function CommandPalette({
 
   const targets: PaletteTarget[] = useMemo(() => {
     const out: PaletteTarget[] = [];
-    const pages: [string, "overview" | "deployments" | "logs" | "routes" | "settings" | "users"][] = [
+    const pages: [string, "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability"][] = [
       ["Overview", "overview"],
       ["Deployments", "deployments"],
       ["Logs", "logs"],
+      ["Analytics", "analytics"],
+      ["Observability", "observability"],
       ["Domains", "routes"],
       ["Settings", "settings"],
       ["Users", "users"],
