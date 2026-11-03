@@ -1,9 +1,43 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    VitePWA({
+      registerType: "autoUpdate",
+      // registro manual en main.tsx (scope ./ por subpath /dashboard/)
+      injectRegister: false,
+      manifest: {
+        name: "rkt dashboard",
+        short_name: "rkt",
+        description: "Opera tu PaaS Windows: apps, deploys, logs.",
+        theme_color: "#09090b",
+        background_color: "#09090b",
+        display: "standalone",
+        start_url: "./",
+        scope: "./",
+        icons: [
+          { src: "icons/icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+        ],
+      },
+      workbox: {
+        // SPA: shell offline; api siempre red (con offline en UI).
+        navigateFallback: "index.html",
+        runtimeCaching: [
+          {
+            urlPattern: /^https?:.*\/api\/v1\/.*/i,
+            handler: "NetworkOnly",
+          },
+        ],
+      },
+    }),
+  ],
   base: "./",
   build: { outDir: "dist", emptyOutDir: true },
   server: {

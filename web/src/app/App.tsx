@@ -4,6 +4,8 @@ import { Me, Status, Deployment, RktEvent, AppMeta, User } from "../shared/lib/t
 import { logout, me } from "../features/auth/api";
 import { Login } from "../features/auth/Login";
 import { Dot, Err, Note } from "../shared/components/ui";
+import { InstallButton } from "../shared/components/InstallButton";
+import { useOnline } from "../shared/hooks/useOnline";
 import { DeployDrawer } from "../features/deployments/DeployDrawer";
 import { Overview } from "../features/overview/Overview";
 import { Deployments } from "../features/deployments/Deployments";
@@ -24,6 +26,7 @@ export type Page = "overview" | "deployments" | "logs" | "routes" | "settings" |
 
 export function App() {
   const [who, setWho] = useState<Me | null>(null);
+  const online = useOnline();
   const authed = who !== null;
   const isAdmin = who?.role === "admin";
   const canWrite = who?.role === "admin" || who?.role === "operator";
@@ -84,12 +87,12 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!authed) return;
+    if (!authed || !online) return;
     refresh();
     const t = setInterval(refresh, 5000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authed, page, appFilter]);
+  }, [authed, online, page, appFilter]);
 
   useEffect(() => {
     if (follow && logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -191,7 +194,13 @@ export function App() {
           ))}
         </div>
         <div className="flex-1" />
-        <div className="border-t border-zinc-800 p-3">
+        <div className="space-y-1 border-t border-zinc-800 p-3">
+          {!online && (
+            <p className="rounded-md bg-amber-500/15 px-2.5 py-1.5 text-xs text-amber-300">
+              Sin conexión — mostrando último estado
+            </p>
+          )}
+          <InstallButton />
           <p className="px-2.5 font-mono text-[11px] text-zinc-600">
             {who?.user} · {who?.role} · v{status?.version ?? "…"}
           </p>
