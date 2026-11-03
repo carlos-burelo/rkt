@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PathInput } from "../../shared/components/PathPicker";
-import { createApp, CreateAppIn } from "./api";
+import { createApp, CreateAppIn, detectApp, buildApp, DetectOut } from "./api";
+import { appAction } from "./api";
 
 type Origin = "git" | "local" | "manual";
 type Step = 1 | 2 | 3;
@@ -80,11 +81,13 @@ export function CreateDialog({
   const [dir, setDir] = useState("");
   const [domain, setDomain] = useState("");
   const [port, setPort] = useState("");
-  const [preset, setPreset] = useState("");
   const [auto, setAuto] = useState(true);
   const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [tried, setTried] = useState(false);
+  const [plan, setPlan] = useState<DetectOut | null>(null);
+  const [planBusy, setPlanBusy] = useState(false);
+  const [buildNow, setBuildNow] = useState(true);
 
   // nombre derivado mientras el usuario no lo escriba
   const suggested = useMemo(() => slugOf(origin === "git" ? repo : dir), [origin, repo, dir]);
@@ -102,7 +105,6 @@ export function CreateDialog({
     setDir("");
     setDomain("");
     setPort("");
-    setPreset("");
     setAuto(true);
     setAdvanced(false);
     setTried(false);
@@ -124,7 +126,20 @@ export function CreateDialog({
       if (!step2ok) return;
       setTried(false);
     }
-    setStep((s) => (s < 3 ? ((s + 1) as Step) : s));
+    if (step < 3) {
+      const target = (step + 1) as Step;
+      setStep(target);
+      if (target === 3) {
+        setPlan(null);
+        if (origin === "local" && dir.trim() !== "") {
+          setPlanBusy(true);
+          detectApp(dir.trim())
+            .then(setPlan)
+            .catch(() => setPlan(null))
+            .finally(() => setPlanBusy(false));
+        }
+      }
+    }
   }
 
   function submit() {
@@ -135,9 +150,9 @@ export function CreateDialog({
       dir: dir.trim() || undefined,
       domain: domain.trim() || undefined,
       port: port.trim() === "" ? undefined : Number(port),
-      preset: preset.trim() || undefined,
       auto: origin === "git" ? auto : false,
     };
+    const wantBuild = buildNow && origin !== "manual";
     setBusy(true);
     createApp(input)
       .then((app) => {
@@ -145,6 +160,11 @@ export function CreateDialog({
         setOpen(false);
         reset();
         onCreated(app);
+        if (wantBuild) {
+          // compilación en segundo plano: la salida queda en Despliegues
+          if (origin === "local") buildApp(app).catch(fail);
+          else appAction(app, "deploy").catch(fail);
+        }
       })
       .catch((e) => {
         setBusy(false);
@@ -292,7 +312,7 @@ export function CreateDialog({
               className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground"
               aria-expanded={advanced}
             >
-              {advanced ? "ocultar avanzado" : "avanzado · comando, puerto, preset"}
+              {advanced ? "ocultar avanzado" : "avanzado · comando, directorio y puerto"}
             </button>
 
             {advanced && (
@@ -324,35 +344,84 @@ export function CreateDialog({
                     className="tnum font-mono text-[11px]"
                   />
                 </Field>
-                <Field label="preset" hint="si la detección falla">
-                  <Input
-                    value={preset}
-                    onChange={(e) => setPreset(e.target.value)}
-                    placeholder="node, go, python…"
-                    className="font-mono text-[11px]"
-                  />
-                </Field>
               </div>
             )}
           </div>
         )}
 
         {step === 3 && (
-          <div className="border border-border">
-            {[
-              ["origen", ORIGINS.find((o) => o.id === origin)?.label ?? origin],
-              ["nombre", name],
-              ...(repo.trim() ? [["repositorio", repo.trim()]] : []),
-              ...(dir.trim() ? [["directorio", dir.trim()]] : []),
-              ["comando", command.trim() || "lo detecta rkt"],
-              ["dominio", domain.trim() || "sin dominio (puedes asignarlo después)"],
-              ...(origin === "git" ? [["auto-deploy", auto ? "sí, en cada push a main" : "no"] ] : []),
-            ].map(([k, v]) => (
-              <div key={k} className="flex items-baseline gap-3 border-b border-border/60 px-3 py-2 last:border-0">
-                <span className="micro w-28 shrink-0">{k}</span>
-                <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{v}</span>
+          <div className="space-y-3">
+            {origin === "local" && (
+              <div className="border border-border bg-card/40">
+                <div className="flex flex-wrap items-center gap-2 border-b border-border bg-secondary/20 px-3 py-1.5">
+                  <span aria-hidden className="h-1.5 w-1.5 bg-signal" />
+                  <span className="micro">detección</span>
+                  <span className="flex-1" />
+                  {planBusy ? (
+                    <span className="font-mono text-[9px] text-muted-foreground">analizando…</span>
+                  ) : plan ? (
+                    <span className="border border-signal/40 bg-signal/10 px-1.5 font-mono text-[9px] tracking-[0.08em] uppercase text-signal">
+                      {plan.framework}
+                      {plan.pm ? ` · ${plan.pm}` : ""}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-[9px] text-warn">sin plan detectado</span>
+                  )}
+                </div>
+                <div className="space-y-1.5 px-3 py-2">
+                  {plan && (
+                    <>
+                      <p className="font-mono text-[10px] text-muted-foreground">
+                        instala: {plan.install.length ? plan.install.join(" · ") : "nada"}
+                      </p>
+                      <p className="font-mono text-[10px] text-muted-foreground">
+                        compila: {plan.build.length ? plan.build.join(" · ") : "nada"}
+                      </p>
+                      <p className="truncate font-mono text-[10px] text-muted-foreground">
+                        {plan.static_dir
+                          ? `sirve estático: ${plan.static_abs}`
+                          : `arranca: ${plan.start.join(" ") || "—"}`}
+                      </p>
+                    </>
+                  )}
+                  {!plan && !planBusy && (
+                    <p className="font-mono text-[10px] leading-relaxed text-muted-foreground">
+                      no reconocí el proyecto; podrás definir comando en avanzado o en Ajustes.
+                    </p>
+                  )}
+                </div>
               </div>
-            ))}
+            )}
+
+            {origin === "git" && (
+              <p className="font-mono text-[10px] leading-relaxed text-muted-foreground">
+                el plan se detecta al clonar; el despliegue muestra cada paso.
+              </p>
+            )}
+
+            <div className="border border-border">
+              {[
+                ["origen", ORIGINS.find((o) => o.id === origin)?.label ?? origin],
+                ["nombre", name],
+                ...(repo.trim() ? [["repositorio", repo.trim()]] : []),
+                ...(dir.trim() ? [["directorio", dir.trim()]] : []),
+                ["comando", command.trim() || (plan?.start.join(" ") ?? "lo detecta rkt")],
+                ["dominio", domain.trim() || "sin dominio (puedes asignarlo después)"],
+                ...(origin === "git" ? [["auto-deploy", auto ? "sí, en cada push a main" : "no"]] : []),
+              ].map(([k, v]) => (
+                <div key={k} className="flex items-baseline gap-3 border-b border-border/60 px-3 py-2 last:border-0">
+                  <span className="micro w-28 shrink-0">{k}</span>
+                  <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{v}</span>
+                </div>
+              ))}
+            </div>
+
+            {origin !== "manual" && (
+              <label className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+                <Checkbox checked={buildNow} onCheckedChange={(v) => setBuildNow(v === true)} />
+                {origin === "git" ? "desplegar al crear" : "compilar al crear"}
+              </label>
+            )}
           </div>
         )}
 

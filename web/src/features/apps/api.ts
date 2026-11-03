@@ -46,8 +46,29 @@ export interface CreateAppIn {
   port?: number;
   command?: string;
   dir?: string;
-  preset?: string;
   auto?: boolean;
+}
+
+// DetectOut plan de build inferido (sin crear la app).
+export interface DetectOut {
+  path: string;
+  framework: string;
+  pm?: string;
+  install: string[];
+  build: string[];
+  start: string[];
+  static_dir?: string;
+  static_abs?: string;
+}
+
+export function detectApp(path: string): Promise<DetectOut> {
+  return api<DetectOut>(`/api/v1/detect?path=${encodeURIComponent(path)}`);
+}
+
+// buildApp compila una app local y devuelve el id de la salida.
+export async function buildApp(name: string): Promise<number> {
+  const res = await api<{ deployment: number }>(`/api/v1/apps/${name}/build`, { method: "POST" });
+  return res.deployment;
 }
 
 export async function createApp(input: CreateAppIn): Promise<string> {

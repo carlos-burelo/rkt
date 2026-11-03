@@ -39,6 +39,8 @@ type Deps struct {
 	Deploy   func(name, actor string) (string, error)
 	Rollback func(name, actor string) error
 	Retry    func(id int64, actor string) (string, error)
+	// Build compila una app local con su plan y devuelve el id de la salida.
+	Build func(name, actor string) (int64, error)
 	// TLS interroga cache de certs (nil = sin TLS).
 	TLS func(host string) (managed bool, expires string)
 }
@@ -623,6 +625,20 @@ func NewHandler(d Deps) http.Handler {
 				d.Apply(cp.Apps)
 			}
 			writeJSON(w, map[string]string{"ok": "true", "hint": "revisa huérfanas: routes list"})
+		case action == "build" && r.Method == http.MethodPost:
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			if d.Build == nil {
+				writeErr(w, http.StatusServiceUnavailable, "build deshabilitado")
+				return
+			}
+			id, err := d.Build(name, mustUser(r))
+			if err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			writeJSON(w, map[string]any{"deployment": id})
 		case action == "restart" && r.Method == http.MethodPost:
 			if !requireOperator(w, r, d.DB) {
 				return
@@ -875,6 +891,9 @@ func NewHandler(d Deps) http.Handler {
 
 	// Navegador de rutas para los pickers del dashboard (operator+).
 	mux.HandleFunc("/api/v1/fs", d.handleFS)
+
+	// Detección de plan sin crear app (preview Vercel-like).
+	mux.HandleFunc("/api/v1/detect", d.handleDetect)
 
 	// Usage 30d (rollup access.log, caché 5min). Sin cobro: solo uso.
 	mux.HandleFunc("/api/v1/usage", func(w http.ResponseWriter, r *http.Request) {
@@ -1216,9 +1235,14 @@ func sanitizeApp(a config.App, routes []config.Route) map[string]any {
 			}
 		}
 	}
+	// static: campo explícito o derivado del arranque __static (compat).
+	static := a.Static
+	if static == "" && len(a.Args) >= 2 && a.Args[0] == "__static" {
+		static = a.Args[1]
+	}
 	return map[string]any{
 		"name": a.Name, "command": a.Command, "args": a.Args,
-		"dir": a.Dir, "static": a.Static, "restart_delay": a.RestartDelay,
+		"dir": a.Dir, "static": static, "restart_delay": a.RestartDelay,
 		"min_uptime": a.MinUptime, "memory_mb": a.MemoryMB,
 		"port": port, "deploy": deploy, "domains": domains,
 	}

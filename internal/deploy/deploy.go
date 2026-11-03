@@ -59,11 +59,9 @@ func Run(app config.App, token string, ctl Controller, out io.Writer, log *slog.
 		return "", err
 	}
 	rev := gitRev(staging)
-	for _, step := range d.Build {
-		if err := runStep(step, staging, app.Env, out); err != nil {
-			_ = os.RemoveAll(staging)
-			return "", fmt.Errorf("build %q: %w", step, err)
-		}
+	if err := RunSteps(d.Build, staging, app.Env, out); err != nil {
+		_ = os.RemoveAll(staging)
+		return "", err
 	}
 
 	hadLive := dirExists(live)
@@ -215,6 +213,17 @@ func HeadRev(dir string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// RunSteps ejecuta pasos de build en orden en dir. Único hogar del shell
+// y de los marcadores ▶/✔/✘ que el dashboard usa como checklist.
+func RunSteps(steps []string, dir string, env map[string]string, out io.Writer) error {
+	for _, step := range steps {
+		if err := runStep(step, dir, env, out); err != nil {
+			return fmt.Errorf("build %q: %w", step, err)
+		}
+	}
+	return nil
 }
 
 // runStep ejecuta un paso de build en shell del OS con el env de la app.

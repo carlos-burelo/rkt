@@ -24,6 +24,7 @@ import (
 	"rkt-proxy/internal/alerts"
 	"rkt-proxy/internal/api"
 	"rkt-proxy/internal/build"
+	"rkt-proxy/internal/buildpack"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/dashboard"
@@ -207,7 +208,7 @@ func (p *Program) Run() {
 	}()
 	if cfg.Healthz.Enabled {
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment})
-		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Apply: p.sup.Apply, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus})
+		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Apply: p.sup.Apply, Build: p.buildLocal, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus})
 		sub, err := fs.Sub(web.Dist, "dist")
 		if err != nil {
 			p.log.Error("dashboard sin dist", "err", err)
@@ -413,6 +414,63 @@ func (p *Program) retryDeployment(id int64, actor string) (string, error) {
 		return p.runDeploy(app, actor+" (retry #"+strconv.FormatInt(id, 10)+")")
 	}
 	return "", fmt.Errorf("app %q inexistente", appName)
+}
+
+// buildLocal compila una app de directorio local con su plan (buildpack):
+// registra la salida como deployment en curso, corre install+build y
+// reinicia la unidad al terminar. Devuelve el id para seguir el log.
+func (p *Program) buildLocal(name, actor string) (int64, error) {
+	cfg := p.live.Get()
+	var app *config.App
+	for i := range cfg.Apps {
+		if cfg.Apps[i].Name == name {
+			app = &cfg.Apps[i]
+		}
+	}
+	if app == nil {
+		return 0, fmt.Errorf("app %q inexistente", name)
+	}
+	plan, err := buildpack.DetectDir(app.Dir)
+	if err != nil {
+		return 0, err
+	}
+	steps := append(append([]string{}, plan.Install...), plan.Build...)
+	if len(steps) == 0 {
+		return 0, fmt.Errorf("el plan %q no define pasos de build", plan.Kind)
+	}
+	logs := logx.DirFor(p.cfgPath)
+	if err := os.MkdirAll(filepath.Join(logs, "deploys"), 0o755); err != nil {
+		return 0, err
+	}
+	out, err := os.OpenFile(
+		filepath.Join(logs, "deploys", app.Name+"-build-"+time.Now().Format("20060102-150405")+".log"),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return 0, err
+	}
+	var depID int64
+	if p.db != nil {
+		depID, _ = p.db.InsertDeployment(app.Name, "local", out.Name(), actor, app.Env)
+	}
+	target := *app
+	go func() {
+		defer out.Close()
+		err := deploy.RunSteps(steps, target.Dir, target.Env, out)
+		status := "ok"
+		if err != nil {
+			status = "failed"
+			p.log.Error("build local fallido", "app", target.Name, "err", err)
+		}
+		if p.db != nil && depID > 0 {
+			if ferr := p.db.FinishDeployment(depID, status, "", "local"); ferr != nil {
+				p.log.Warn("historial no actualizado", "err", ferr)
+			}
+		}
+		if err == nil && p.sup != nil {
+			p.sup.Restart(target.Name)
+		}
+	}()
+	return depID, nil
 }
 
 // runDeploy pipeline común deploy/retry (único hogar).
