@@ -1,8 +1,9 @@
-import { RefObject, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppStatus, Deployment } from "../../shared/lib/types";
 import { deploymentLog } from "../deployments/api";
 import { fetchLog } from "./api";
 import { Bars } from "../../shared/components/feedback";
+import { PageHeader } from "../../shared/components/patterns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,6 +11,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select, SelectValue, SelectTrigger, SelectContent, SelectItem,
 } from "@/components/ui/select";
+import { useFleet } from "../overview/hooks";
+import { useUI } from "../../app/ui";
 
 type Level = "info" | "warning" | "error";
 
@@ -19,43 +22,47 @@ function levelOf(line: string): Level {
   return "info";
 }
 
-export function Logs({
-  apps,
-  appFilter,
-  setAppFilter,
-  log,
-  setLog,
-  follow,
-  setFollow,
-  refresh,
-  logRef,
-  deps,
-}: {
-  apps: AppStatus[];
-  appFilter: string;
-  setAppFilter: (s: string) => void;
-  log: string;
-  setLog: (s: string) => void;
-  follow: boolean;
-  setFollow: (b: boolean) => void;
-  refresh: () => void;
-  logRef: RefObject<HTMLPreElement | null>;
-  deps: Deployment[];
-}) {
+export function Logs() {
+  const { status, deps } = useFleet();
+  const apps: AppStatus[] = status?.apps ?? [];
+  const appFilter = useUI((u) => u.appFilter);
+  const setAppFilter = useUI((u) => u.setAppFilter);
+  const fail = useUI((u) => u.fail);
+  const online = useUI((u) => u.online);
   const [tab, setTab] = useState<"runtime" | "build">("runtime");
   const [q, setQ] = useState("");
   const [live, setLive] = useState(true);
   const [levels, setLevels] = useState<Record<Level, boolean>>({ info: true, warning: true, error: true });
+  const [log, setLog] = useState("");
+  const [follow, setFollow] = useState(true);
   const [build, setBuild] = useState("elige un deployment en Deployments");
-  const latest = deps.find((d) => appFilter === "" || d.app === appFilter);
+  const logRef = useRef<HTMLPreElement>(null);
+  const latest = deps.find((d: Deployment) => appFilter === "" || d.app === appFilter);
+
+  async function load() {
+    try {
+      setLog(await fetchLog(appFilter));
+    } catch (e) {
+      fail(e);
+    }
+  }
 
   useEffect(() => {
-    if (!live || tab !== "runtime") return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appFilter, online]);
+
+  useEffect(() => {
+    if (!live || tab !== "runtime" || !online) return;
     const t = setInterval(() => {
       fetchLog(appFilter).then(setLog).catch(() => {});
     }, 2000);
     return () => clearInterval(t);
-  }, [live, tab, appFilter, setLog]);
+  }, [live, tab, appFilter, online]);
+
+  useEffect(() => {
+    if (follow && logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [log, follow]);
 
   const lines = useMemo(() => {
     const all = log === "" ? [] : log.split("\n");
@@ -63,7 +70,6 @@ export function Logs({
     for (const l of all) counts[levelOf(l)]++;
     const rx = q.trim() === "" ? null : new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
     const vis = all.filter((l) => levels[levelOf(l)] && (!rx || rx.test(l)));
-    // histograma 24h desde timestamps time=YYYY-MM-DDTHH: (slog)
     const buckets = new Array<number>(24).fill(0);
     let stamped = 0;
     const nowH = Date.now();
@@ -82,7 +88,8 @@ export function Logs({
   }, [log, q, levels]);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      <PageHeader title="Logs" description="Runtime por app u operativo. Live refresca cada 2s; Build muestra el último deploy." />
       <div className="flex flex-wrap items-center gap-2">
         <Tabs value={tab} onValueChange={(v) => setTab(v as "runtime" | "build")}>
           <TabsList>
@@ -127,7 +134,7 @@ export function Logs({
             >
               {live ? "❚❚ Live" : "▶ Live"}
             </Button>
-            <Button variant="outline" size="sm" onClick={refresh}>
+            <Button variant="outline" size="sm" onClick={load}>
               recargar
             </Button>
             <Button
@@ -154,60 +161,57 @@ export function Logs({
             seguir
           </label>
           {lines.stamped > 0 && (
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
+            <div className="rounded-lg border bg-card p-3">
               <Bars data={lines.buckets} height={48} />
             </div>
           )}
-          <pre ref={logRef} className="h-[60vh] overflow-auto rounded-lg border border-zinc-800 bg-black p-3 font-mono text-xs leading-relaxed text-zinc-300">
-            {lines.vis.join("\n") || "sin líneas"}
+          <pre ref={logRef} className="h-[60vh] overflow-auto rounded-lg border bg-black p-3 font-mono text-xs leading-relaxed text-zinc-300">
+            {lines.vis.map((l, i) => {
+              const lv = levelOf(l);
+              return (
+                <div
+                  key={i}
+                  className={`border-l-2 pl-2 ${
+                    lv === "error" ? "border-red-500" : lv === "warning" ? "border-amber-500" : "border-transparent"
+                  }`}
+                >
+                  {l}
+                </div>
+              );
+            })}
+            {lines.vis.length === 0 && "sin líneas"}
           </pre>
         </>
       )}
       {tab === "build" && (
-        <BuildTab appFilter={appFilter} latest={latest} build={build} setBuild={setBuild} />
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {latest ? (
+              <>
+                <span className="font-mono">
+                  #{latest.id} {latest.app} {latest.rev.slice(0, 8)} ({latest.status})
+                </span>
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => {
+                    setBuild("cargando…");
+                    deploymentLog(latest.id)
+                      .then(setBuild)
+                      .catch((e) => setBuild(e instanceof Error ? e.message : "sin log"));
+                  }}
+                >
+                  cargar build log
+                </Button>
+              </>
+            ) : (
+              <span>Sin deployments{appFilter ? ` para ${appFilter}` : ""}.</span>
+            )}
+          </div>
+          <pre className="h-[60vh] overflow-auto rounded-lg border bg-black p-3 font-mono text-xs leading-relaxed text-zinc-300">
+            {build}
+          </pre>
+        </div>
       )}
-    </div>
-  );
-}
-
-function BuildTab({
-  appFilter,
-  latest,
-  build,
-  setBuild,
-}: {
-  appFilter: string;
-  latest: Deployment | undefined;
-  build: string;
-  setBuild: (s: string) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 text-xs text-zinc-400">
-        {latest ? (
-          <>
-            <span className="font-mono">
-              #{latest.id} {latest.app} {latest.rev.slice(0, 8)} ({latest.status})
-            </span>
-            <button
-              onClick={() => {
-                setBuild("cargando…");
-                deploymentLog(latest.id)
-                  .then(setBuild)
-                  .catch((e) => setBuild(e instanceof Error ? e.message : "sin log"));
-              }}
-              className="rounded-md border border-zinc-800 px-2 py-1 hover:text-zinc-100"
-            >
-              cargar build log
-            </button>
-          </>
-        ) : (
-          <span>Sin deployments{appFilter ? ` para ${appFilter}` : ""}.</span>
-        )}
-      </div>
-      <pre className="h-[60vh] overflow-auto rounded-lg border border-zinc-800 bg-black p-3 font-mono text-xs leading-relaxed text-zinc-300">
-        {build}
-      </pre>
     </div>
   );
 }

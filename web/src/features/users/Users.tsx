@@ -1,41 +1,59 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { User } from "../../shared/lib/types";
-import { createUser, deleteUser } from "./api";
+import { listUsers, createUser, deleteUser } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader, EmptyState } from "../../shared/components/patterns";
 import {
   Select, SelectValue, SelectTrigger, SelectContent, SelectItem,
 } from "@/components/ui/select";
+import { useUI } from "../../app/ui";
+import { useAuth } from "../auth/store";
 
-export function Users({
-  users,
-  refresh,
-  fail,
-}: {
-  users: User[];
-  refresh: () => void;
-  fail: (e: unknown) => void;
-}) {
+export function Users() {
+  const fail = useUI((u) => u.fail);
+  const me = useAuth((a) => a.who);
+  const [users, setUsers] = useState<User[]>([]);
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("viewer");
 
+  async function load() {
+    try {
+      setUsers(await listUsers());
+    } catch (e) {
+      fail(e);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-lg border border-zinc-800">
+      <PageHeader title="Users" description="Solo admin. Roles: viewer lee, operator muta, admin gestiona." />
+      <div className="overflow-hidden rounded-lg border">
         {users.map((u) => (
-          <div key={u.name} className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-900/40 px-4 py-2.5 last:border-0">
+          <div key={u.name} className="flex items-center gap-3 border-b bg-card/40 px-4 py-2.5 last:border-0">
             <span className="font-mono text-xs">{u.name}</span>
+            {me?.user === u.name && (
+              <Badge variant="outline" className="font-mono text-[11px]">tú</Badge>
+            )}
             <Badge variant="secondary" className="font-mono text-[11px]">{u.role}</Badge>
             <span className="flex-1" />
-            <span className="font-mono text-[11px] text-zinc-600">{u.created_at}</span>
-            <Button variant="ghost" size="sm" className="text-xs text-zinc-600 hover:text-red-300"
-              onClick={() => deleteUser(u.name).then(refresh).catch(fail)}>
+            <span className="font-mono text-[11px] text-muted-foreground">{u.created_at}</span>
+            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-red-300"
+              disabled={me?.user === u.name}
+              title={me?.user === u.name ? "no puedes borrarte a ti mismo" : "borrar"}
+              onClick={() => deleteUser(u.name).then(load).catch(fail)}>
               borrar
             </Button>
           </div>
         ))}
+        {users.length === 0 && <EmptyState title="Sin usuarios" hint="Crea el primero abajo." />}
       </div>
       <div className="flex gap-2">
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="usuario"
@@ -60,7 +78,7 @@ export function Users({
                 setName("");
                 setPassword("");
                 setRole("viewer");
-                refresh();
+                load();
               }).catch(fail);
           }}
         >

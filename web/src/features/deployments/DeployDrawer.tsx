@@ -1,11 +1,13 @@
 import { Root, Backdrop, Popup, Title, Close } from "@base_ui/react/dialog";
 import { useMemo } from "react";
-import { Deployment } from "../../shared/lib/types";
+import { useNavigate } from "react-router";
 import { rel, dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
 import { CopyButton } from "../../shared/components/feedback";
 import { Button } from "@/components/ui/button";
 import { Timeline } from "./Timeline";
+import { useUI } from "../../app/ui";
+import { useAuth } from "../auth/store";
 
 // steps checklist CI desde marcadores "▶/✔/✘ step" del build log.
 function Steps({ log }: { log: string }) {
@@ -42,26 +44,20 @@ function Steps({ log }: { log: string }) {
   );
 }
 
-export function DeployDrawer({
-  dep,
-  buildLog,
-  canWrite,
-  onAction,
-  onRetry,
-  onClose,
-}: {
-  dep: Deployment | null;
-  buildLog: string;
-  canWrite: boolean;
-  onAction: (app: string, a: "restart" | "deploy" | "rollback") => void;
-  onRetry: (id: number) => void;
-  onClose: () => void;
-}) {
+export function DeployDrawer() {
+  const sel = useUI((u) => u.sel);
+  const buildLog = useUI((u) => u.buildLog);
+  const act = useUI((u) => u.act);
+  const retry = useUI((u) => u.retry);
+  const setSel = useUI((u) => u.setSel);
+  const canWrite = useAuth((a) => a.canWrite);
+  const navigate = useNavigate();
+  const dep = sel;
   return (
     <Root
       open={dep !== null}
       onOpenChange={(open: boolean) => {
-        if (!open) onClose();
+        if (!open) setSel(null);
       }}
     >
       <Backdrop className="fixed inset-0 bg-black/70" />
@@ -85,24 +81,23 @@ export function DeployDrawer({
               <dt className="text-zinc-500">duración</dt><dd>{dur(dep.started_at, dep.finished_at)}</dd>
               <dt className="text-zinc-500">actor</dt><dd>{dep.triggered_by || "—"}</dd>
             </dl>
-            {dep.env_snapshot && dep.env_snapshot !== "{}" && (
-              <details className="rounded-lg border border-zinc-800 p-3">
-                <summary className="cursor-pointer text-xs text-zinc-400">env snapshot</summary>
-                <pre className="mt-2 overflow-auto font-mono text-[11px] text-zinc-500">{dep.env_snapshot}</pre>
-              </details>
-            )}
-            {canWrite && (
-              <div className="flex flex-wrap gap-2">
-                {(["restart", "deploy", "rollback"] as const).map((a) => (
-                  <Button key={a} variant="outline" size="sm" onClick={() => onAction(dep.app, a)}>
-                    {a} {dep.app}
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => { setSel(null); navigate(`/app/${dep.app}`); }}>
+                abrir app
+              </Button>
+              {canWrite && (
+                <>
+                  {(["restart", "deploy", "rollback"] as const).map((a) => (
+                    <Button key={a} variant="outline" size="sm" onClick={() => act(dep.app, a)}>
+                      {a}
+                    </Button>
+                  ))}
+                  <Button variant="outline" size="sm" onClick={() => retry(dep.id)}>
+                    retry #{dep.id}
                   </Button>
-                ))}
-                <Button variant="outline" size="sm" onClick={() => onRetry(dep.id)}>
-                  retry #{dep.id}
-                </Button>
-              </div>
-            )}
+                </>
+              )}
+            </div>
             <p className="text-xs uppercase tracking-wider text-zinc-500">timeline</p>
             <Timeline dep={dep} />
             <Steps log={buildLog} />

@@ -2,9 +2,13 @@ import { useEffect, useState } from "react";
 import { listApps, getEnv } from "../apps/api";
 import { AppMeta } from "../../shared/lib/types";
 import { Input } from "@/components/ui/input";
+import { PageHeader, EmptyState } from "../../shared/components/patterns";
+import { useUI } from "../../app/ui";
 
 // EnvAll vista agrupada por app con buscador global.
-export function EnvAll({ fail }: { fail: (e: unknown) => void }) {
+// Valores ocultos (detalle en cada app); aquí solo inventario.
+export function EnvAll() {
+  const fail = useUI((u) => u.fail);
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<{ app: string; vars: Record<string, string> }[]>([]);
 
@@ -29,6 +33,7 @@ export function EnvAll({ fail }: { fail: (e: unknown) => void }) {
   const f = q.toLowerCase();
   return (
     <div className="space-y-3">
+      <PageHeader title="Environment" description="Inventario por app (valores ocultos; edición en cada app)." />
       <Input
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -41,20 +46,21 @@ export function EnvAll({ fail }: { fail: (e: unknown) => void }) {
         );
         if (f !== "" && keys.length === 0) return null;
         return (
-          <div key={app} className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-            <p className="mb-2 font-mono text-xs text-zinc-300">
-              {app} <span className="text-zinc-600">{Object.keys(vars).length}</span>
+          <div key={app} className="rounded-lg border bg-card p-4">
+            <p className="mb-2 font-mono text-xs">
+              {app} <span className="text-muted-foreground">{Object.keys(vars).length}</span>
             </p>
             {keys.map((k) => (
               <p key={k} className="flex gap-3 py-0.5 font-mono text-xs">
-                <span className="w-56 truncate text-zinc-200">{k}</span>
-                <span className="truncate text-zinc-500">🔒 secreto</span>
+                <span className="w-56 truncate">{k}</span>
+                <span className="text-muted-foreground">🔒 secreto</span>
               </p>
             ))}
-            {keys.length === 0 && <p className="text-xs text-zinc-600">Sin vars.</p>}
+            {keys.length === 0 && <p className="text-xs text-muted-foreground">Sin vars.</p>}
           </div>
         );
       })}
+      {rows.length === 0 && <EmptyState title="Sin apps" hint="Registra tu primera app." />}
     </div>
   );
 }

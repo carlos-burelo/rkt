@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
-import { AppMeta, Deployment, AppStatus } from "../../shared/lib/types";
+import { useNavigate, useParams } from "react-router";
+import { ExternalLink } from "lucide-react";
 import { dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
-import { setEnv, delEnv, updateApp, deleteApp } from "./api";
-import { fetchAnalytics, Analytics } from "../overview/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PageHeader, Section, Time, EnvSecret } from "../../shared/components/patterns";
+import { setEnv, delEnv, updateApp, deleteApp } from "./api";
+import { useEnv } from "./hooks";
+import { fetchAnalytics, Analytics } from "../overview/api";
+import { useFleet } from "../overview/hooks";
+import { useUI } from "../../app/ui";
+import { useAuth } from "../auth/store";
 
 function Check({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -17,40 +23,28 @@ function Check({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
-export function AppDetail({
-  app,
-  meta,
-  status,
-  env,
-  deployments,
-  canWrite,
-  onAction,
-  onOpenDeploy,
-  onDeleted,
-  refresh,
-  fail,
-}: {
-  app: string;
-  meta: AppMeta | undefined;
-  status: AppStatus | undefined;
-  env: Record<string, string>;
-  deployments: Deployment[];
-  canWrite: boolean;
-  onAction: (app: string, a: "restart" | "deploy" | "rollback") => void;
-  onOpenDeploy: (d: Deployment) => void;
-  onDeleted: () => void;
-  refresh: () => void;
-  fail: (e: unknown) => void;
-}) {
+export function AppDetail() {
+  const { name = "" } = useParams();
+  const navigate = useNavigate();
+  const app = name;
+  const { metas, deps, status } = useFleet();
+  const { env, reload: reloadEnv } = useEnv(app);
+  const act = useUI((u) => u.act);
+  const fail = useUI((u) => u.fail);
+  const setSel = useUI((u) => u.setSel);
+  const { canWrite } = useAuth();
   const [key, setKey] = useState("");
   const [val, setVal] = useState("");
   const [form, setForm] = useState({ command: "", dir: "", restart_delay: "", min_uptime: "", repo: "", ref: "", auto: false });
   const [confirmDel, setConfirmDel] = useState("");
   const [stats, setStats] = useState<Analytics | null>(null);
 
-  const prod = deployments.find((d) => d.status === "ok");
+  const meta = metas.find((m) => m.name === app);
+  const st = status?.apps.find((a) => a.name === app);
+  const appDeps = deps.filter((d) => d.app === app);
+  const prod = appDeps.find((d) => d.status === "ok");
   const domains = meta?.domains ?? [];
-  const running = status ? status.running && !status.failed : false;
+  const running = st ? st.running && !st.failed : false;
 
   useEffect(() => {
     setForm({
@@ -73,76 +67,110 @@ export function AppDetail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [app, domains.join(",")]);
 
+  async function saveSettings() {
+    try {
+      await updateApp(app, {
+        command: form.command || undefined,
+        dir: form.dir || undefined,
+        restart_delay: form.restart_delay || undefined,
+        min_uptime: form.min_uptime || undefined,
+        deploy: form.repo
+          ? { repo: form.repo, ref: form.ref || "main", build: meta?.deploy?.build ?? [], auto: form.auto }
+          : null,
+      });
+    } catch (e) {
+      fail(e);
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <h2 className="font-mono text-lg">{app || "(sin app)"}</h2>
-        <Dot status={running ? "running" : "stopped"} />
-        <span className="flex-1" />
-        {canWrite && app && (
-          <div className="flex gap-2">
-            {(["restart", "deploy", "rollback"] as const).map((a) => (
-              <Button
-                key={a}
-                onClick={() => onAction(app, a)}
-                variant="outline" size="sm"
+      <PageHeader
+        title={app || "(sin app)"}
+        description={
+          st
+            ? `${st.failed ? "failed" : st.running ? "running" : "stopped"} · ${st.restarts} restarts${meta ? ` · ${meta.command}` : ""}`
+            : undefined
+        }
+        actions={
+          <>
+            <Dot status={running ? "running" : "stopped"} />
+            {domains[0] && (
+              <a
+                href={`https://${domains[0]}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 text-xs font-medium shadow-xs hover:bg-accent hover:text-accent-foreground"
               >
-                {a}
-              </Button>
-            ))}
-          </div>
-        )}
-      </div>
+                <ExternalLink className="h-3.5 w-3.5" /> Visit
+              </a>
+            )}
+            {canWrite && app && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => act(app, "restart")}>Restart</Button>
+                <Button variant="outline" size="sm" onClick={() => act(app, "deploy")}>Redeploy</Button>
+                <Button variant="outline" size="sm" onClick={() => act(app, "rollback")}>Rollback</Button>
+              </>
+            )}
+          </>
+        }
+      />
 
-      {/* production deployment */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-        <p className="mb-2 text-xs uppercase tracking-wider text-zinc-500">Production Deployment</p>
-        {!prod && <p className="text-xs text-zinc-500">Sin deploy ok todavía.</p>}
+      <Section
+        title="Production Deployment"
+        description={prod ? `rev ${prod.rev.slice(0, 8)} · ${dur(prod.started_at, prod.finished_at)}` : undefined}
+      >
+        {!prod && <p className="text-xs text-muted-foreground">Sin deploy ok todavía. Publica con Redeploy.</p>}
         {prod && (
-          <div className="space-y-1 font-mono text-xs">
-            <p>
-              {prod.app} · rev {prod.rev.slice(0, 8)} · {dur(prod.started_at, prod.finished_at)}
-              {prod.triggered_by ? <span className="text-zinc-500"> · por {prod.triggered_by}</span> : null}
-            </p>
+          <div className="space-y-1.5">
+            {domains.length === 0 && <p className="text-xs text-muted-foreground">Sin dominios — asigna uno en Domains.</p>}
             {domains.map((h) => (
-              <p key={h}>
-                <a href={`https://${h}`} target="_blank" rel="noreferrer" className="text-zinc-200 hover:underline">
+              <p key={h} className="font-mono text-xs">
+                <a href={`https://${h}`} target="_blank" rel="noreferrer" className="hover:underline">
                   https://{h} ⧉
                 </a>
               </p>
             ))}
-            {domains.length === 0 && <p className="text-zinc-500">Sin dominios (agrega en Domains).</p>}
+            <p className="font-mono text-[11px] text-muted-foreground">
+              {prod.triggered_by ? `por ${prod.triggered_by} · ` : ""}<Time iso={prod.finished_at} />
+            </p>
           </div>
         )}
+      </Section>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Section title="Checklist">
+          <Check ok={!!meta?.deploy?.repo} label="Repo conectado" />
+          <Check ok={domains.length > 0} label="Dominio asignado" />
+          <Check ok={!!prod} label="Primer deploy ok" />
+          <Check ok={Object.keys(env).length > 0} label="Env configurado" />
+          <Check ok={running} label="App corriendo" />
+        </Section>
+        <Section title="Tráfico 7d" description={domains[0]}>
+          {!stats && <p className="text-xs text-muted-foreground">Sin datos (¿tráfico hacia {domains[0] ?? "…"}?).</p>}
+          {stats && (
+            <div className="grid grid-cols-2 gap-3 font-mono">
+              <div><p className="text-xl tabular-nums">{stats.total}</p><p className="text-[11px] text-muted-foreground">reqs</p></div>
+              <div><p className="text-xl tabular-nums">{(stats.bytes / 1048576).toFixed(1)}M</p><p className="text-[11px] text-muted-foreground">bytes</p></div>
+              <div><p className="text-xl tabular-nums">{stats.p95 || "—"}</p><p className="text-[11px] text-muted-foreground">p95</p></div>
+              <div><p className="text-xl tabular-nums">{stats.by_class["5xx"] ?? 0}</p><p className="text-[11px] text-muted-foreground">5xx</p></div>
+            </div>
+          )}
+        </Section>
       </div>
 
-      {/* checklist */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-        <p className="mb-1 text-xs uppercase tracking-wider text-zinc-500">Production Checklist</p>
-        <Check ok={!!meta?.deploy?.repo} label="Repo conectado" />
-        <Check ok={domains.length > 0} label="Dominio asignado" />
-        <Check ok={!!prod} label="Primer deploy ok" />
-        <Check ok={Object.keys(env).length > 0} label="Env configurado" />
-        <Check ok={running} label="App corriendo" />
-      </div>
-
-      {/* tráfico 7d */}
-      {stats && (
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-          <p className="mb-2 text-xs uppercase tracking-wider text-zinc-500">Tráfico 7d · {domains[0]}</p>
-          <div className="grid grid-cols-2 gap-2 font-mono text-xs md:grid-cols-4">
-            <div><p className="text-lg text-zinc-100">{stats.total}</p><p className="text-zinc-500">reqs</p></div>
-            <div><p className="text-lg text-zinc-100">{(stats.bytes / 1048576).toFixed(1)}M</p><p className="text-zinc-500">bytes</p></div>
-            <div><p className="text-lg text-zinc-100">{stats.p95 || "—"}</p><p className="text-zinc-500">p95</p></div>
-            <div><p className="text-lg text-zinc-100">{stats.by_class["5xx"] ?? 0}</p><p className="text-zinc-500">5xx</p></div>
-          </div>
-        </div>
-      )}
-
-      {/* settings */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-        <p className="mb-2 text-xs uppercase tracking-wider text-zinc-500">Settings</p>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+      <Section
+        title="Settings"
+        description="Guardar valida y aplica (restart requerido para runtime)."
+        actions={
+          canWrite ? (
+            <Button variant="outline" size="sm" onClick={saveSettings}>
+              Guardar
+            </Button>
+          ) : undefined
+        }
+      >
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {(
             [
               ["command", form.command, (v: string) => setForm({ ...form, command: v })],
@@ -154,64 +182,41 @@ export function AppDetail({
             ] as const
           ).map(([label, v, set]) => (
             <label key={label} className="block">
-              <span className="font-mono text-[11px] text-zinc-500">{label}</span>
-              <Input
-                value={v}
-                onChange={(e) => set(e.target.value)}
-                disabled={!canWrite}
-                className="mt-0.5 font-mono text-xs"
-              />
+              <span className="font-mono text-[11px] text-muted-foreground">{label}</span>
+              <Input value={v} onChange={(e) => set(e.target.value)} disabled={!canWrite} className="mt-1 font-mono text-xs" />
             </label>
           ))}
           {canWrite && (
-            <label className="flex items-center gap-2 text-xs text-zinc-400">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Checkbox checked={form.auto} onCheckedChange={(v) => setForm({ ...form, auto: v === true })} />
               auto-deploy
             </label>
           )}
         </div>
-        {canWrite && (
-          <Button
-            variant="outline" size="sm"
-            className="mt-3"
-            onClick={() => {
-              updateApp(app, {
-                command: form.command || undefined,
-                dir: form.dir || undefined,
-                restart_delay: form.restart_delay || undefined,
-                min_uptime: form.min_uptime || undefined,
-                deploy: form.repo
-                  ? { repo: form.repo, ref: form.ref || "main", build: meta?.deploy?.build ?? [], auto: form.auto }
-                  : null,
-              }).then(refresh).catch(fail);
-            }}
-          >
-            guardar (restart requerido)
-          </Button>
-        )}
-      </div>
+      </Section>
 
-      {/* env */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-        <p className="mb-2 text-xs uppercase tracking-wider text-zinc-500">Environment (restart requerido)</p>
-        {Object.entries(env).map(([k, v]) => (
-          <div key={k} className="flex items-center gap-2 py-1 font-mono text-xs">
-            <span className="w-48 truncate text-zinc-200">{k}</span>
-            <span className="flex-1 truncate text-zinc-500">{v}</span>
+      <Section
+        title="Environment Variables"
+        description="Solo operator+. Los valores viven enmascarados; aplicar exige restart."
+      >
+        {Object.entries(env).map(([k]) => (
+          <div key={k} className="flex items-center gap-2 py-1">
+            <span className="w-48 shrink-0 truncate font-mono text-xs">{k}</span>
+            <EnvSecret value={env[k]} />
             {canWrite && (
-              <Button variant="ghost" size="sm" className="text-xs text-zinc-600 hover:text-red-300"
-                onClick={() => delEnv(app, k).then(refresh).catch(fail)}>
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-red-300"
+                onClick={() => delEnv(app, k).then(reloadEnv).catch(fail)}>
                 borrar
               </Button>
             )}
           </div>
         ))}
-        {Object.keys(env).length === 0 && <p className="text-xs text-zinc-600">Sin vars inline.</p>}
+        {Object.keys(env).length === 0 && <p className="text-xs text-muted-foreground">Sin vars inline.</p>}
         {canWrite && (
-          <div className="mt-2 flex gap-2">
+          <div className="mt-3 flex gap-2">
             <Input value={key} onChange={(e) => setKey(e.target.value)} placeholder="CLAVE"
               className="w-40 font-mono text-xs" />
-            <Input value={val} onChange={(e) => setVal(e.target.value)} placeholder="valor"
+            <Input value={val} onChange={(e) => setVal(e.target.value)} placeholder="valor (admite ${VAR})"
               className="flex-1 font-mono text-xs" />
             <Button
               variant="outline" size="sm"
@@ -219,7 +224,7 @@ export function AppDetail({
                 setEnv(app, key.trim(), val).then(() => {
                   setKey("");
                   setVal("");
-                  refresh();
+                  reloadEnv();
                 }).catch(fail);
               }}
             >
@@ -227,42 +232,42 @@ export function AppDetail({
             </Button>
           </div>
         )}
-      </div>
+      </Section>
 
-      {/* deploys */}
-      <div className="overflow-hidden rounded-lg border border-zinc-800">
-        {deployments.slice(0, 10).map((d) => (
-          <button key={d.id} onClick={() => onOpenDeploy(d)}
-            className="flex w-full items-center gap-3 border-b border-zinc-800 bg-zinc-900/40 px-4 py-2.5 text-left last:border-0 hover:bg-zinc-800/40">
-            <Dot status={d.status} />
-            <span className="font-mono text-xs text-zinc-400">{d.rev.slice(0, 8)}</span>
-            {d.triggered_by ? <span className="font-mono text-[11px] text-zinc-600">por {d.triggered_by}</span> : null}
-            <span className="flex-1" />
-            <span className="text-xs text-zinc-500">{dur(d.started_at, d.finished_at)}</span>
-            <span className="font-mono text-xs text-zinc-600">#{d.id}</span>
-          </button>
-        ))}
-      </div>
+      <Section title="Deployments" description="Últimos 10. Click abre build log y timeline.">
+        <div className="overflow-hidden rounded-lg border">
+          {appDeps.slice(0, 10).map((d) => (
+            <button key={d.id} onClick={() => setSel(d)}
+              className="flex w-full items-center gap-3 border-b bg-card/40 px-4 py-2.5 text-left last:border-0 hover:bg-accent/40">
+              <Dot status={d.status} />
+              <span className="font-mono text-xs text-muted-foreground">{d.rev.slice(0, 8)}</span>
+              {d.triggered_by ? <span className="hidden font-mono text-[11px] text-muted-foreground sm:block">por {d.triggered_by}</span> : null}
+              <span className="flex-1" />
+              <span className="text-xs text-muted-foreground"><Time iso={d.finished_at || d.started_at} /></span>
+              <span className="font-mono text-xs text-muted-foreground">#{d.id}</span>
+            </button>
+          ))}
+          {appDeps.length === 0 && <p className="p-4 text-xs text-muted-foreground">Sin deployments.</p>}
+        </div>
+      </Section>
 
-      {/* danger */}
       {canWrite && (
-        <div className="rounded-lg border border-red-900 bg-red-950/20 p-4">
-          <p className="mb-2 text-xs uppercase tracking-wider text-red-400">Danger zone</p>
+        <Section title="Danger zone" description="Borrar quita la app de la flota. Las routes quedan huérfanas: revísalas en Domains.">
           <div className="flex gap-2">
             <Input value={confirmDel} onChange={(e) => setConfirmDel(e.target.value)}
               placeholder={`escribe ${app} para borrar`}
-              className="flex-1 border-red-900 font-mono text-xs" />
+              className="flex-1 border-destructive/50 font-mono text-xs" />
             <Button
               variant="destructive" size="sm"
               disabled={confirmDel !== app}
               onClick={() => {
-                deleteApp(app).then(() => onDeleted()).catch(fail);
+                deleteApp(app).then(() => navigate("/deployments")).catch(fail);
               }}
             >
               borrar app
             </Button>
           </div>
-        </div>
+        </Section>
       )}
     </div>
   );

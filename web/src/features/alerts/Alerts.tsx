@@ -3,47 +3,65 @@ import { listRules, addRule, delRule, AlertRule } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader, EmptyState } from "../../shared/components/patterns";
 import {
   Select, SelectValue, SelectTrigger, SelectContent, SelectItem,
 } from "@/components/ui/select";
+import { useUI } from "../../app/ui";
+import { useAuth } from "../auth/store";
 
-export function Alerts({ canWrite, fail }: { canWrite: boolean; fail: (e: unknown) => void }) {
+export function Alerts() {
+  const canWrite = useAuth((a) => a.canWrite);
+  const fail = useUI((u) => u.fail);
   const [rules, setRules] = useState<AlertRule[]>([]);
   const [app, setApp] = useState("*");
   const [kind, setKind] = useState("failed");
   const [threshold, setThreshold] = useState("1");
   const [windowMin, setWindowMin] = useState("60");
 
-  function load() {
-    listRules().then(setRules).catch(fail);
+  async function load() {
+    try {
+      setRules(await listRules());
+    } catch (e) {
+      fail(e);
+    }
   }
 
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-lg border border-zinc-800">
+      <PageHeader
+        title="Alerts"
+        description="Reglas evaluadas cada minuto. El disparo queda como evento kind=alert (ver Overview)."
+      />
+      <div className="overflow-hidden rounded-lg border">
         {rules.map((r) => (
-          <div key={r.id} className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-900/40 px-4 py-2.5 last:border-0">
+          <div key={r.id} className="flex items-center gap-3 border-b bg-card/40 px-4 py-2.5 last:border-0">
             <span className="font-mono text-xs">#{r.id}</span>
             <span className="font-mono text-xs">{r.app}</span>
             <Badge variant="secondary" className="font-mono text-[11px]">{r.kind}</Badge>
-            <span className="font-mono text-xs text-zinc-400">≥{r.threshold}/{r.window_min}min</span>
+            <span className="font-mono text-xs text-muted-foreground">≥{r.threshold}/{r.window_min}min</span>
             <span className="flex-1" />
             {r.last_fired ? (
               <span className="font-mono text-[11px] text-amber-300">disparó {r.last_fired.slice(0, 16).replace("T", " ")}</span>
             ) : (
-              <span className="font-mono text-[11px] text-zinc-600">sin disparos</span>
+              <span className="font-mono text-[11px] text-muted-foreground">sin disparos</span>
             )}
             {canWrite && (
-            <Button variant="ghost" size="sm" className="text-xs text-zinc-600 hover:text-red-300"
-              onClick={() => delRule(r.id).then(load).catch(fail)}>
-              borrar
-            </Button>
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-red-300"
+                onClick={() => delRule(r.id).then(load).catch(fail)}>
+                borrar
+              </Button>
             )}
           </div>
         ))}
-        {rules.length === 0 && <p className="p-6 text-sm text-zinc-500">Sin reglas. Crea una abajo.</p>}
+        {rules.length === 0 && (
+          <EmptyState title="Sin reglas" hint="failed = caídas por app · error_rate = 5xx global (0.1 = 10%)." />
+        )}
       </div>
       {canWrite && (
         <div className="flex flex-wrap gap-2">

@@ -1,23 +1,18 @@
-import { AppStatus, RktEvent, Deployment, AppMeta } from "../../shared/lib/types";
+import { useNavigate } from "react-router";
 import { rel } from "../../shared/lib/time";
 import { Avatar, Dot } from "../../shared/components/ui";
-import { Button } from "@/components/ui/button";
 import { Metrics } from "./Metrics";
 import { UsageStrip } from "./UsageStrip";
+import { useFleet } from "./hooks";
 
-export function Overview({
-  apps,
-  evs,
-  deps,
-  metas,
-  openApp,
-}: {
-  apps: AppStatus[];
-  evs: RktEvent[];
-  deps: Deployment[];
-  metas: AppMeta[];
-  openApp: (name: string) => void;
-}) {
+export function Overview() {
+  const { status, evs, deps, metas, loading } = useFleet();
+  const navigate = useNavigate();
+  const openApp = (name: string) => navigate(`/app/${name}`);
+  const apps = status?.apps ?? [];
+
+  if (loading) return <p className="text-sm text-muted-foreground">cargando…</p>;
+
   const discovered = evs.filter((e) => e.kind === "discover").slice(0, 3);
   const openAlerts = evs.filter((e) => e.kind === "alert").slice(0, 3);
   return (
@@ -46,11 +41,12 @@ export function Overview({
                 <p className="text-sm font-medium">New repository detected</p>
                 <p className="font-mono text-xs text-zinc-500">{e.msg}</p>
               </div>
-              <Button
+              <button
                 onClick={() => openApp(e.app)}
+                className="rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white"
               >
                 Import
-              </Button>
+              </button>
             </div>
           ))}
         </section>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchObs, Obs } from "./api";
 import { Bars } from "../../shared/components/feedback";
+import { PageHeader } from "../../shared/components/patterns";
 
 export function Observability() {
   const [hours, setHours] = useState(6);
@@ -15,6 +16,7 @@ export function Observability() {
 
   return (
     <div className="space-y-4">
+      <PageHeader title="Observability" description="Serie por hora, restarts y apps caídas. Latencia real en Analytics." />
       <div className="flex rounded-md border border-zinc-800 p-0.5 w-fit">
         {[6, 24, 168].map((h) => (
           <button

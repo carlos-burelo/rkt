@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Analytics, fetchAnalytics } from "./api";
 import { Bars } from "../../shared/components/feedback";
+import { PageHeader } from "../../shared/components/patterns";
 
 const RANGES = [1, 7, 30];
 
@@ -31,6 +32,7 @@ export function AnalyticsPage() {
 
   return (
     <div className="space-y-4">
+      <PageHeader title="Analytics" description="Tráfico real desde access.log. Sin visitors ni bounce inventados." />
       <div className="flex flex-wrap items-center gap-2">
         <select
           value={host}
