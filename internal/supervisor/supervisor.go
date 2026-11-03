@@ -68,6 +68,9 @@ type Manager struct {
 	mu       sync.Mutex
 	apps     []*app
 	stopping bool
+	// logsDir y base para recrear apps al aplicar config nueva.
+	logsDir string
+	baseLog *slog.Logger
 	// OnEvent, si no nil, recibe died/restarted/failed (auditoría).
 	OnEvent   func(kind, app, msg string)
 	deploying map[string]bool
@@ -75,18 +78,108 @@ type Manager struct {
 
 // New valida rutas de log pero no arranca nada. logsDir/<name>.log.
 func New(apps []config.App, logsDir string, log *slog.Logger) *Manager {
-	m := &Manager{}
+	m := &Manager{logsDir: logsDir, baseLog: log}
 	for _, a := range apps {
-		m.apps = append(m.apps, &app{
-			cfg:      a,
-			log:      log.With("app", a.Name),
-			logPath:  filepath.Join(logsDir, a.Name+".log"),
-			stopCh:   make(chan struct{}),
-			restartC: make(chan struct{}, 1),
-			resumeC:  make(chan struct{}, 1),
-		})
+		m.apps = append(m.apps, m.makeApp(a))
 	}
 	return m
+}
+
+// makeApp construye el runner de una spec (sin arrancarlo).
+func (m *Manager) makeApp(a config.App) *app {
+	return &app{
+		cfg:      a,
+		log:      m.baseLog.With("app", a.Name),
+		logPath:  filepath.Join(m.logsDir, a.Name+".log"),
+		stopCh:   make(chan struct{}),
+		restartC: make(chan struct{}, 1),
+		resumeC:  make(chan struct{}, 1),
+	}
+}
+
+// Apply reconcilia la flota viva con specs nuevas: detiene las retiradas,
+// reinicia las que cambiaron y arranca las nuevas. Las iguales no se tocan.
+// Es el único camino para aplicar cambios de manifiesto en caliente.
+func (m *Manager) Apply(specs []config.App) {
+	m.mu.Lock()
+	if m.stopping {
+		m.mu.Unlock()
+		return
+	}
+	want := make(map[string]config.App, len(specs))
+	for _, s := range specs {
+		want[s.Name] = s
+	}
+	prev := make(map[string]*app, len(m.apps))
+	for _, a := range m.apps {
+		prev[a.cfg.Name] = a
+	}
+
+	next := make([]*app, 0, len(specs))
+	var start []*app
+	for _, s := range specs {
+		old, ok := prev[s.Name]
+		if ok && specsEqual(old.cfg, s) {
+			next = append(next, old)
+			continue
+		}
+		if ok {
+			old.stop()
+		}
+		na := m.makeApp(s)
+		na.onEvent = m.OnEvent
+		next = append(next, na)
+		start = append(start, na)
+	}
+	for name, a := range prev {
+		if _, keep := want[name]; !keep {
+			a.stop()
+		}
+	}
+	m.apps = next
+	m.mu.Unlock()
+
+	for _, a := range start {
+		a.log.Info("spec aplicada")
+		go a.loop()
+	}
+}
+
+// specsEqual compara lo que afecta al proceso (no metadatos de deploy).
+func specsEqual(a, b config.App) bool {
+	return a.Command == b.Command &&
+		a.Dir == b.Dir &&
+		a.Static == b.Static &&
+		a.RestartDelay == b.RestartDelay &&
+		a.MinUptime == b.MinUptime &&
+		a.MemoryMB == b.MemoryMB &&
+		a.EnvFile == b.EnvFile &&
+		equalStrings(a.Args, b.Args) &&
+		equalMap(a.Env, b.Env)
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func equalMap(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
 }
 
 // Start lanza todas en goroutines. No bloquea.

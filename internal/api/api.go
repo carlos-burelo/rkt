@@ -28,12 +28,14 @@ import (
 // Restart/Deploy/Rollback los provee el servicio (nil = deshabilitado).
 // Deploy/Rollback reciben actor (usuario de sesión).
 type Deps struct {
-	DB       *store.DB
-	Live     *config.Live
-	Version  string
-	LogsDir  string
-	Apps     func() []health.AppStatus
-	Restart  func(name string) bool
+	DB      *store.DB
+	Live    *config.Live
+	Version string
+	LogsDir string
+	Apps    func() []health.AppStatus
+	Restart func(name string) bool
+	// Apply aplica el manifiesto al supervisor (arranca/reinicia/detiene).
+	Apply    func([]config.App)
 	Deploy   func(name, actor string) (string, error)
 	Rollback func(name, actor string) error
 	Retry    func(id int64, actor string) (string, error)
@@ -596,6 +598,9 @@ func NewHandler(d Deps) http.Handler {
 				return
 			}
 			d.Live.Swap(cp)
+			if d.Apply != nil {
+				d.Apply(cp.Apps)
+			}
 			writeJSON(w, map[string]string{"ok": "true"})
 		case action == "" && r.Method == http.MethodDelete:
 			if !requireOperator(w, r, d.DB) {
@@ -614,6 +619,9 @@ func NewHandler(d Deps) http.Handler {
 				return
 			}
 			d.Live.Swap(cp)
+			if d.Apply != nil {
+				d.Apply(cp.Apps)
+			}
 			writeJSON(w, map[string]string{"ok": "true", "hint": "revisa huérfanas: routes list"})
 		case action == "restart" && r.Method == http.MethodPost:
 			if !requireOperator(w, r, d.DB) {

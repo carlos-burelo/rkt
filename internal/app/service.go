@@ -207,7 +207,7 @@ func (p *Program) Run() {
 	}()
 	if cfg.Healthz.Enabled {
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment})
-		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus})
+		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Apply: p.sup.Apply, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus})
 		sub, err := fs.Sub(web.Dist, "dist")
 		if err != nil {
 			p.log.Error("dashboard sin dist", "err", err)
@@ -699,6 +699,10 @@ func (p *Program) watchMerged(live *config.Live, db *store.DB) {
 		}
 		old := live.Get()
 		live.Swap(next)
+		if p.sup != nil {
+			// manifiesto en caliente: nuevas/actualizadas arrancan solas
+			p.sup.Apply(next.Apps)
+		}
 		p.log.Info("config recargada",
 			"routes", len(next.Routes),
 			"apps", len(next.Apps),
