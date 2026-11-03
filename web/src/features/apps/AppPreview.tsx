@@ -5,15 +5,63 @@ import { Dot } from "../../shared/components/ui";
 import { useFleet } from "../overview/hooks";
 import { publicUrl, publicHost } from "../../shared/lib/url";
 
-// Vista previa de la app servida (Vercel-like): iframe del dominio real.
-// Si el navegador no puede incrustarla (X-Frame-Options, DNS, TLS), se
-// dice claro y se ofrece abrir en pestaña; nada de fingir un screenshot.
-const PREVIEW_SIZES = { s: 150, m: 240, l: 380 } as const;
-type PreviewSize = keyof typeof PREVIEW_SIZES;
+// Vista previa en miniatura 16:9: el sitio se renderiza en un viewport
+// virtual 1280x720 y se escala completo al ancho del marco. No recorta.
+const PREVIEW_WIDTHS = { s: 360, m: 560, l: 800 } as const;
+type PreviewSize = keyof typeof PREVIEW_WIDTHS;
+
+const FRAME_W = 1280;
+const FRAME_H = 720;
 
 function initialSize(): PreviewSize {
   const saved = localStorage.getItem("rkt.preview.size");
   return saved === "m" || saved === "l" ? saved : "s";
+}
+
+// MiniFrame escala el iframe 1280x720 al ancho disponible manteniendo 16:9.
+function MiniFrame({
+  src,
+  nonce,
+  domain,
+  onLoad,
+}: {
+  src: string;
+  nonce: number;
+  domain: string;
+  onLoad: () => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0);
+
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const fit = () => setScale(el.clientWidth / FRAME_W);
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={box} className="relative aspect-video w-full overflow-hidden bg-background">
+      <iframe
+        key={nonce}
+        src={src}
+        title={`vista previa de ${domain}`}
+        loading="lazy"
+        onLoad={onLoad}
+        style={{
+          width: FRAME_W,
+          height: FRAME_H,
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+          pointerEvents: "none",
+        }}
+        className="absolute top-0 left-0 border-0"
+      />
+    </div>
+  );
 }
 
 export function AppPreview({ domain, running }: { domain: string; running: boolean }) {
@@ -94,20 +142,29 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
       )}
 
       {running && state !== "blocked" && (
-        <div className="relative">
-          <iframe
-            key={nonce}
-            src={src}
-            title={`vista previa de ${domain}`}
-            className="block w-full bg-background"
-            style={{ height: PREVIEW_SIZES[size] }}
-            onLoad={() => setState("ok")}
-          />
-          {state === "loading" && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/70">
-              <p className="font-mono text-[10px] text-muted-foreground">cargando {domain}…</p>
-            </div>
-          )}
+        <div className="relative p-2" style={{ maxWidth: PREVIEW_WIDTHS[size] }}>
+          <div className="relative">
+            <MiniFrame src={src} nonce={nonce} domain={domain} onLoad={() => setState("ok")} />
+            {state === "ok" && (
+              <a
+                href={src}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`abrir ${domain} en pestaña`}
+                title={`abrir ${domain}`}
+                className="absolute inset-0 z-10 flex items-end justify-end bg-transparent p-2 opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+              >
+                <span className="border border-border bg-background/90 px-2 py-1 font-mono text-[9px] tracking-[0.08em] uppercase">
+                  abrir <ExternalLink className="inline h-3 w-3" />
+                </span>
+              </a>
+            )}
+            {state === "loading" && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/70">
+                <p className="font-mono text-[10px] text-muted-foreground">cargando {domain}…</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
