@@ -762,5 +762,6 @@ func (s *Server) Run(ctx context.Context) error {
 		func(ctx context.Context, req *mcp.CallToolRequest, a removeAppArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppsRemove(a))
 		})
+	s.registerMore(srv)
 	return srv.Run(ctx, &mcp.StdioTransport{})
 }

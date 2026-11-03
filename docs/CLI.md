@@ -124,6 +124,15 @@ local y registra deployment), `env_set` (solo escritura),
 `discover` (registro inmediato), `deploy_check` (preflight JSON),
 `deployment_logs` (tail del build), `wait_healthy` (gate post-deploy),
 `restart`, `rollback`, `deploy`, `retry`, `apps_remove` (baja con rutas).
+
+Catálogo extendido (control total): `app_get`, `app_env_keys`, `env_delete`,
+`routes_add|update|remove`, `domains_suggest`, `verify_domain` (DNS + HTTP
+real por Host), `hosts_list|add|remove`, `deployment_get`, `deploy_wait`,
+`git_status`, `diff_rev`, `disk_usage`, `log_search`, `usage_summary`,
+`proxy_map`, `backends_probe`, `settings_list|set`, `alerts_list|add|remove`,
+`discover_status`, `users_list|add|remove|passwd`, `config_export|import`
+(import exige `confirm=replace` y conserva Env de apps existentes si el YAML
+no lo trae), `prune` (exige `confirm=prune`).
 Límite: no toca el servicio Windows; los cambios de manifiesto se aplican
 en caliente en ≤10s (supervisor.Apply).
 
