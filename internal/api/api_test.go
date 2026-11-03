@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,9 +25,14 @@ func testDeps(t *testing.T) (Deps, *store.DB, func()) {
 	logsDir := filepath.Join(dir, "logs")
 	os.MkdirAll(filepath.Join(logsDir, "apps"), 0o755)
 	os.WriteFile(filepath.Join(logsDir, "rkt.log"), []byte("l1\nl2\nl3\n"), 0o644)
-	cfg := &config.Config{Routes: []config.Route{
-		{Hosts: []string{"a.test"}, Target: "http://127.0.0.1:9"},
-	}}
+	cfg := &config.Config{
+		Apps: []config.App{
+			{Name: "w", Command: "c", Dir: dir, Env: map[string]string{"K": "v"}, RestartDelay: "5s"},
+		},
+		Routes: []config.Route{
+			{Hosts: []string{"a.test"}, Target: "http://127.0.0.1:9"},
+		},
+	}
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
@@ -35,6 +41,19 @@ func testDeps(t *testing.T) (Deps, *store.DB, func()) {
 		DB: db, Live: config.NewLive(cfg), Version: "test",
 		LogsDir: logsDir,
 		Apps:    func() []health.AppStatus { return []health.AppStatus{{Name: "w", Running: true}} },
+		Restart: func(name string) bool { return name == "w" },
+		Deploy: func(name string) (string, error) {
+			if name != "w" {
+				return "", fmt.Errorf("no")
+			}
+			return "rev1", nil
+		},
+		Rollback: func(name string) error {
+			if name != "w" {
+				return fmt.Errorf("no")
+			}
+			return nil
+		},
 	}
 	return d, db, func() { db.Close() }
 }
@@ -212,5 +231,189 @@ func TestUsersSoloAdmin(t *testing.T) {
 	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/users/op2", admTok))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("baja: %d", rec.Code)
+	}
+}
+
+func loginAs(t *testing.T, h http.Handler, db *store.DB, name, role string) string {
+	t.Helper()
+	if err := db.CreateUser(name, "password-larga-1", role); err != nil {
+		t.Fatal(err)
+	}
+	return login(t, h, name, "password-larga-1")
+}
+
+func TestAppsSinEnvYAcciones(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	opTok := loginAs(t, h, db, "op", store.RoleOperator)
+	visTok := loginAs(t, h, db, "vis", store.RoleViewer)
+
+	// lista sin env (secretos no salen)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps", opTok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("apps: %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), `"K"`) {
+		t.Fatalf("env filtrado: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"w"`) {
+		t.Fatalf("falta app: %s", rec.Body.String())
+	}
+
+	// viewer no acciona
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodPost, "/api/v1/apps/w/restart", visTok))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer restart: quiere 403, got %d", rec.Code)
+	}
+	// operator sí
+	for path, want := range map[string]int{
+		"/api/v1/apps/w/restart":     http.StatusOK,
+		"/api/v1/apps/w/deploy":      http.StatusOK,
+		"/api/v1/apps/w/rollback":    http.StatusOK,
+		"/api/v1/apps/nadie/restart": http.StatusNotFound,
+	} {
+		rec = httptest.NewRecorder()
+		h.ServeHTTP(rec, authed(http.MethodPost, path, opTok))
+		if rec.Code != want {
+			t.Fatalf("%s: quiere %d, got %d (%s)", path, want, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestRoutesCRUD(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	opTok := loginAs(t, h, db, "op", store.RoleOperator)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/routes", opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "a.test") {
+		t.Fatalf("list: %d %s", rec.Code, rec.Body.String())
+	}
+	// alta duplicada rechaza
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/routes",
+		strings.NewReader(`{"hosts":["a.test"],"target":"http://127.0.0.1:9"}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("dup: quiere 400, got %d", rec.Code)
+	}
+	// alta ok + baja por host
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/routes",
+		strings.NewReader(`{"hosts":["b.test"],"target":"http://127.0.0.1:10"}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("alta: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/routes?host=b.test", opTok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("baja: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/routes?host=nadie.test", opTok))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("baja fantasma: quiere 404, got %d", rec.Code)
+	}
+}
+
+func TestEnvCRUD(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	opTok := loginAs(t, h, db, "op", store.RoleOperator)
+	visTok := loginAs(t, h, db, "vis", store.RoleViewer)
+
+	// viewer no lee secretos
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w/env", visTok))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer env: quiere 403, got %d", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w/env", opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"K":"v"`) {
+		t.Fatalf("get: %d %s", rec.Code, rec.Body.String())
+	}
+	// set + unset
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/apps/w/env",
+		strings.NewReader(`{"key":"N","value":"1"}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w/env", opTok))
+	if !strings.Contains(rec.Body.String(), `"N":"1"`) {
+		t.Fatalf("set no aplicado: %s", rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/apps/w/env?key=N", opTok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unset: %d", rec.Code)
+	}
+}
+
+func TestSettingsRW(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	opTok := loginAs(t, h, db, "op", store.RoleOperator)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/settings", opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "base_domain") {
+		t.Fatalf("get: %d %s", rec.Code, rec.Body.String())
+	}
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/settings",
+		strings.NewReader(`{"key":"base_domain","value":"ejemplo.com"}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set: %d", rec.Code)
+	}
+	// desconocido rechaza
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/settings",
+		strings.NewReader(`{"key":"otro","value":"x"}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("desconocido: quiere 400, got %d", rec.Code)
+	}
+}
+
+func TestDeploymentLog(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	dir := t.TempDir()
+	lp := filepath.Join(dir, "w-1.log")
+	os.WriteFile(lp, []byte("b1\nb2\n"), 0o644)
+	id, err := db.InsertDeployment("w", "abc", lp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewHandler(d)
+	opTok := loginAs(t, h, db, "op", store.RoleOperator)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, fmt.Sprintf("/api/v1/deployments/%d/log", id), opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "b1") {
+		t.Fatalf("log: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/deployments/99999/log", opTok))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("fantasma: quiere 404, got %d", rec.Code)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/logx"
@@ -22,12 +23,46 @@ import (
 )
 
 // Deps dependencias inyectables. LogsDir = logx.DirFor(cfgPath).
+// Restart/Deploy/Rollback los provee el servicio (nil = deshabilitado).
 type Deps struct {
-	DB      *store.DB
-	Live    *config.Live
-	Version string
-	LogsDir string
-	Apps    func() []health.AppStatus
+	DB       *store.DB
+	Live     *config.Live
+	Version  string
+	LogsDir  string
+	Apps     func() []health.AppStatus
+	Restart  func(name string) bool
+	Deploy   func(name string) (string, error)
+	Rollback func(name string) error
+}
+
+// cloneFleet copia editable de la flota viva (Live se lee sin lock;
+// mutar el puntero vivo = race con handlers).
+func cloneFleet(live *config.Live) *config.Config {
+	src := live.Get()
+	out := *src
+	out.Apps = make([]config.App, len(src.Apps))
+	for i, a := range src.Apps {
+		out.Apps[i] = a
+		if a.Env != nil {
+			env := make(map[string]string, len(a.Env))
+			for k, v := range a.Env {
+				env[k] = v
+			}
+			out.Apps[i].Env = env
+		}
+		if a.Deploy != nil {
+			d := *a.Deploy
+			d.Build = append([]string(nil), a.Deploy.Build...)
+			out.Apps[i].Deploy = &d
+		}
+		out.Apps[i].Args = append([]string(nil), a.Args...)
+	}
+	out.Routes = make([]config.Route, len(src.Routes))
+	for i, r := range src.Routes {
+		out.Routes[i] = r
+		out.Routes[i].Hosts = append([]string(nil), r.Hosts...)
+	}
+	return &out
 }
 
 // ctxUser/ctxRole usuario autenticado en el request.
@@ -301,6 +336,7 @@ func NewHandler(d Deps) http.Handler {
 		}
 		writeJSON(w, evs)
 	})
+	// Apps: lista/detalle sin env (los secretos solo vía /env, operator).
 	mux.HandleFunc("/api/v1/logs", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
@@ -321,6 +357,270 @@ func NewHandler(d Deps) http.Handler {
 		}
 		writeJSON(w, map[string]any{"log": out})
 	})
+	mux.HandleFunc("/api/v1/apps", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+			return
+		}
+		writeJSON(w, sanitizeApps(d.Live.Get().Apps))
+	})
+	mux.HandleFunc("/api/v1/apps/", func(w http.ResponseWriter, r *http.Request) {
+		rest := strings.TrimPrefix(r.URL.Path, "/api/v1/apps/")
+		name, action := rest, ""
+		if i := strings.Index(rest, "/"); i >= 0 {
+			name, action = rest[:i], rest[i+1:]
+		}
+		a := cfgfile.FindApp(d.Live.Get(), name)
+		if a == nil {
+			writeErr(w, http.StatusNotFound, "app inexistente")
+			return
+		}
+		switch {
+		case action == "" && r.Method == http.MethodGet:
+			writeJSON(w, sanitizeApp(*a))
+		case action == "restart" && r.Method == http.MethodPost:
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			if d.Restart == nil || !d.Restart(name) {
+				writeErr(w, http.StatusNotFound, "restart fallido")
+				return
+			}
+			writeJSON(w, map[string]string{"ok": "true"})
+		case action == "deploy" && r.Method == http.MethodPost:
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			if d.Deploy == nil {
+				writeErr(w, http.StatusServiceUnavailable, "deploy deshabilitado")
+				return
+			}
+			rev, err := d.Deploy(name)
+			if err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			writeJSON(w, map[string]string{"rev": rev})
+		case action == "rollback" && r.Method == http.MethodPost:
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			if d.Rollback == nil {
+				writeErr(w, http.StatusServiceUnavailable, "rollback deshabilitado")
+				return
+			}
+			if err := d.Rollback(name); err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			writeJSON(w, map[string]string{"ok": "true"})
+		case action == "env" && r.Method == http.MethodGet:
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			env := a.Env
+			if env == nil {
+				env = map[string]string{}
+			}
+			writeJSON(w, env)
+		case action == "env" && r.Method == http.MethodPut:
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			var in struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			}
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
+				writeErr(w, http.StatusBadRequest, "JSON inválido")
+				return
+			}
+			if strings.TrimSpace(in.Key) == "" {
+				writeErr(w, http.StatusBadRequest, "key vacía")
+				return
+			}
+			cp := cloneFleet(d.Live)
+			if err := cfgfile.SetEnv(d.DB, cp, name, strings.TrimSpace(in.Key), in.Value); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			d.Live.Swap(cp) // inmediato (watchMerged lo reconfirma)
+			writeJSON(w, map[string]string{"ok": "true"})
+		case action == "env" && r.Method == http.MethodDelete:
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			key := r.URL.Query().Get("key")
+			if key == "" {
+				writeErr(w, http.StatusBadRequest, "falta ?key=")
+				return
+			}
+			cp := cloneFleet(d.Live)
+			t := cfgfile.FindApp(cp, name)
+			delete(t.Env, key)
+			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			d.Live.Swap(cp) // inmediato (watchMerged lo reconfirma)
+			writeJSON(w, map[string]string{"ok": "true"})
+		default:
+			writeErr(w, http.StatusNotFound, "ruta inválida")
+		}
+	})
+
+	// Routes: misma semántica que CLI (rm quita host).
+	mux.HandleFunc("/api/v1/routes", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			type routeOut struct {
+				Hosts  []string `json:"hosts"`
+				Target string   `json:"target"`
+			}
+			out := []routeOut{}
+			for _, x := range d.Live.Get().Routes {
+				out = append(out, routeOut{x.Hosts, x.Target})
+			}
+			writeJSON(w, out)
+		case http.MethodPost:
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			var in struct {
+				Hosts  []string `json:"hosts"`
+				Target string   `json:"target"`
+			}
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
+				writeErr(w, http.StatusBadRequest, "JSON inválido")
+				return
+			}
+			if len(in.Hosts) == 0 || in.Target == "" {
+				writeErr(w, http.StatusBadRequest, "hosts y target requeridos")
+				return
+			}
+			cp := cloneFleet(d.Live)
+			cp.Routes = append(cp.Routes, config.Route{Hosts: in.Hosts, Target: in.Target})
+			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			d.Live.Swap(cp) // hot-reload inmediato
+			w.WriteHeader(http.StatusCreated)
+			writeJSON(w, map[string]string{"ok": "true"})
+		case http.MethodDelete:
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			host := r.URL.Query().Get("host")
+			if host == "" {
+				writeErr(w, http.StatusBadRequest, "falta ?host=")
+				return
+			}
+			cp := cloneFleet(d.Live)
+			kept := []config.Route{}
+			removed := false
+			for _, x := range cp.Routes {
+				hosts := []string{}
+				for _, h := range x.Hosts {
+					if strings.EqualFold(h, host) {
+						removed = true
+						continue
+					}
+					hosts = append(hosts, h)
+				}
+				if len(hosts) > 0 {
+					x.Hosts = hosts
+					kept = append(kept, x)
+				} else if len(x.Hosts) > 0 {
+					removed = true
+				}
+			}
+			if !removed {
+				writeErr(w, http.StatusNotFound, "host no encontrado")
+				return
+			}
+			cp.Routes = kept
+			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			d.Live.Swap(cp) // hot-reload inmediato
+			writeJSON(w, map[string]string{"ok": "true"})
+		default:
+			writeErr(w, http.StatusMethodNotAllowed, "GET|POST|DELETE")
+		}
+	})
+
+	// Settings: lectura viewer, escritura operator (solo conocidas).
+	mux.HandleFunc("/api/v1/settings", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			out := map[string]string{}
+			for _, k := range store.KnownSettings() {
+				out[k] = d.DB.GetSetting(k)
+			}
+			writeJSON(w, out)
+		case http.MethodPut:
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			var in struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			}
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
+				writeErr(w, http.StatusBadRequest, "JSON inválido")
+				return
+			}
+			known := false
+			for _, k := range store.KnownSettings() {
+				if k == in.Key {
+					known = true
+				}
+			}
+			if !known {
+				writeErr(w, http.StatusBadRequest, "setting desconocido")
+				return
+			}
+			if err := d.DB.SetSetting(in.Key, in.Value); err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			writeJSON(w, map[string]string{"ok": "true"})
+		default:
+			writeErr(w, http.StatusMethodNotAllowed, "GET|PUT")
+		}
+	})
+
+	// Build log de un deploy (para vista detalle).
+	mux.HandleFunc("/api/v1/deployments/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+			return
+		}
+		rest := strings.TrimPrefix(r.URL.Path, "/api/v1/deployments/")
+		parts := strings.Split(rest, "/")
+		if len(parts) != 2 || parts[1] != "log" {
+			writeErr(w, http.StatusNotFound, "ruta inválida (…/ID/log)")
+			return
+		}
+		id, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil || id <= 0 {
+			writeErr(w, http.StatusBadRequest, "id inválido")
+			return
+		}
+		_, lp, ok := d.DB.DeploymentLogPath(id)
+		if !ok {
+			writeErr(w, http.StatusNotFound, "sin log para ese deploy")
+			return
+		}
+		out, err := logx.Tail(lp, queryInt(r, "n", 200))
+		if err != nil {
+			writeErr(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"log": out})
+	})
 
 	// todo autenticado salvo login: envuelve mux (login se valida aparte
 	// por ruta para no romper el bootstrap sin usuarios).
@@ -332,6 +632,41 @@ func NewHandler(d Deps) http.Handler {
 		}
 		authed.ServeHTTP(w, r)
 	})
+}
+
+// requireOperator exige rol operator+ (escribe 403 si no).
+func requireOperator(w http.ResponseWriter, r *http.Request, db *store.DB) bool {
+	_ = db
+	_, role := UserOf(r)
+	if roleLevel(role) < roleLevel(store.RoleOperator) {
+		writeErr(w, http.StatusForbidden, "requiere rol operator")
+		return false
+	}
+	return true
+}
+
+// sanitizeApp quita Env (secretos solo vía /env, operator).
+func sanitizeApp(a config.App) map[string]any {
+	deploy := any(nil)
+	if a.Deploy != nil {
+		deploy = map[string]any{
+			"repo": a.Deploy.Repo, "ref": a.Deploy.Ref,
+			"build": a.Deploy.Build, "auto": a.Deploy.Auto,
+		}
+	}
+	return map[string]any{
+		"name": a.Name, "command": a.Command, "args": a.Args,
+		"dir": a.Dir, "restart_delay": a.RestartDelay,
+		"min_uptime": a.MinUptime, "deploy": deploy,
+	}
+}
+
+func sanitizeApps(apps []config.App) []map[string]any {
+	out := []map[string]any{}
+	for _, a := range apps {
+		out = append(out, sanitizeApp(a))
+	}
+	return out
 }
 
 func queryInt(r *http.Request, key string, def int) int {

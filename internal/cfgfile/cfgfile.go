@@ -89,6 +89,16 @@ func itoaOrEmpty(n int64) string {
 	return fmt.Sprintf("%d", n)
 }
 
+// SaveFleet valida (defaults + Validate) y persiste atómico.
+// Camino único de escritura CLI/API (antes persist duplicado en app).
+func SaveFleet(db *store.DB, cfg *config.Config) error {
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("inválido, no guardado: %w", err)
+	}
+	return db.ImportFleet(cfg)
+}
+
 // Snapshot fusiona infra del YAML base + flota de DB.
 // La DB solo guarda validado; aquí solo re-parseo mecánico (targets,
 // duplicados). El env NO se re-fusiona (DB guarda ya expandido).

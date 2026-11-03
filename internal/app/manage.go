@@ -67,11 +67,7 @@ func merged(cfgPath string) (*config.Config, *store.DB) {
 }
 
 func persist(cfgPath string, db *store.DB, cfg *config.Config) {
-	cfg.ApplyDefaults()
-	if err := cfg.Validate(); err != nil {
-		log.Fatalf("inválido, no guardado: %v", err)
-	}
-	if err := db.ImportFleet(cfg); err != nil {
+	if err := cfgfile.SaveFleet(db, cfg); err != nil {
 		log.Fatalf("guardar: %v", err)
 	}
 }

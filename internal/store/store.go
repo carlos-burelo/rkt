@@ -202,6 +202,18 @@ func (d *DB) ListDeployments(app string, n int) ([]Deployment, error) {
 	return out, rows.Err()
 }
 
+// DeploymentLogPath devuelve (app, log_path) de un deploy para tail.
+func (d *DB) DeploymentLogPath(id int64) (string, string, bool) {
+	var app, lp string
+	if err := d.sql.QueryRow(`SELECT app, log_path FROM deployments WHERE id=?`, id).Scan(&app, &lp); err != nil {
+		return "", "", false
+	}
+	if lp == "" {
+		return "", "", false
+	}
+	return app, lp, true
+}
+
 // InsertEvent suceso auditable (died/restarted/failed/deploy...).
 func (d *DB) InsertEvent(kind, app, msg string) error {
 	_, err := d.sql.Exec(
