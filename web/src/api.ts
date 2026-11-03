@@ -75,3 +75,74 @@ export interface User {
   role: string;
   created_at: string;
 }
+
+export interface AppMeta {
+  name: string;
+  command: string;
+  args: string[];
+  dir: string;
+  restart_delay: string;
+  min_uptime: string;
+  deploy: { repo: string; ref: string; build: string[]; auto: boolean } | null;
+}
+
+export async function listApps(): Promise<AppMeta[]> {
+  return api<AppMeta[]>("/api/v1/apps");
+}
+
+export async function appAction(name: string, action: "restart" | "deploy" | "rollback"): Promise<void> {
+  await api(`/api/v1/apps/${name}/${action}`, { method: "POST" });
+}
+
+export async function getEnv(app: string): Promise<Record<string, string>> {
+  return api<Record<string, string>>(`/api/v1/apps/${app}/env`);
+}
+
+export async function setEnv(app: string, key: string, value: string): Promise<void> {
+  await api(`/api/v1/apps/${app}/env`, { method: "PUT", body: JSON.stringify({ key, value }) });
+}
+
+export async function delEnv(app: string, key: string): Promise<void> {
+  await api(`/api/v1/apps/${app}/env?key=${encodeURIComponent(key)}`, { method: "DELETE" });
+}
+
+export interface Route {
+  hosts: string[];
+  target: string;
+}
+
+export async function listRoutes(): Promise<Route[]> {
+  return api<Route[]>("/api/v1/routes");
+}
+
+export async function addRoute(hosts: string[], target: string): Promise<void> {
+  await api("/api/v1/routes", { method: "POST", body: JSON.stringify({ hosts, target }) });
+}
+
+export async function delRoute(host: string): Promise<void> {
+  await api(`/api/v1/routes?host=${encodeURIComponent(host)}`, { method: "DELETE" });
+}
+
+export async function getSettings(): Promise<Record<string, string>> {
+  return api<Record<string, string>>("/api/v1/settings");
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  await api("/api/v1/settings", { method: "PUT", body: JSON.stringify({ key, value }) });
+}
+
+export async function listUsers(): Promise<User[]> {
+  return api<User[]>("/api/v1/users");
+}
+
+export async function createUser(name: string, password: string, role: string): Promise<void> {
+  await api("/api/v1/users", { method: "POST", body: JSON.stringify({ name, password, role }) });
+}
+
+export async function deleteUser(name: string): Promise<void> {
+  await api(`/api/v1/users/${name}`, { method: "DELETE" });
+}
+
+export async function deploymentLog(id: number): Promise<string> {
+  return (await api<{ log: string }>(`/api/v1/deployments/${id}/log?n=300`)).log;
+}
