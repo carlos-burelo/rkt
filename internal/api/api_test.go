@@ -606,3 +606,61 @@ func TestDomainsTLS(t *testing.T) {
 		t.Fatalf("tls off: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestAlertsCRUD(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	opTok := loginAs(t, h, db, "op", store.RoleOperator)
+	visTok := loginAs(t, h, db, "vis", store.RoleViewer)
+
+	// viewer lista (vacío ok)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/alerts", visTok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list: %d", rec.Code)
+	}
+	// viewer no crea
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alerts",
+		strings.NewReader(`{"app":"*","kind":"failed","threshold":1,"window_min":60}`))
+	req.Header.Set("Authorization", "Bearer "+visTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer alta: quiere 403, got %d", rec.Code)
+	}
+	// kind malo rechaza
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/alerts",
+		strings.NewReader(`{"app":"*","kind":"otro","threshold":1,"window_min":60}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("kind malo: quiere 400, got %d", rec.Code)
+	}
+	// alta ok + lista 1 + baja
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/alerts",
+		strings.NewReader(`{"app":"w","kind":"failed","threshold":2,"window_min":30}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("alta: %d %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil || created.ID <= 0 {
+		t.Fatalf("alta sin id: %s", rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/alerts", opTok))
+	if !strings.Contains(rec.Body.String(), `"app":"w"`) {
+		t.Fatalf("lista sin regla: %s", rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/alerts/99999", opTok))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("baja fantasma: quiere 400, got %d", rec.Code)
+	}
+}

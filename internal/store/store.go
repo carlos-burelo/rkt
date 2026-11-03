@@ -91,6 +91,16 @@ var migrations = []string{
 	// v7: trazabilidad deploy (quién + con qué env).
 	`ALTER TABLE deployments ADD COLUMN triggered_by TEXT NOT NULL DEFAULT '';
 	ALTER TABLE deployments ADD COLUMN env_snapshot TEXT NOT NULL DEFAULT '{}';`,
+	// v8: reglas de alerta (motor las evalúa en tick).
+	`CREATE TABLE IF NOT EXISTS alert_rules (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		app TEXT NOT NULL DEFAULT '*',
+		kind TEXT NOT NULL DEFAULT 'failed',
+		threshold REAL NOT NULL DEFAULT 1,
+		window_min INTEGER NOT NULL DEFAULT 60,
+		last_fired TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL DEFAULT ''
+	);`,
 }
 
 // DB wrapper.

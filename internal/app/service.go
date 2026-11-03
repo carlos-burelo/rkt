@@ -21,6 +21,7 @@ import (
 
 	"rkt-proxy/internal/accesslog"
 	"rkt-proxy/internal/acme"
+	"rkt-proxy/internal/alerts"
 	"rkt-proxy/internal/api"
 	"rkt-proxy/internal/build"
 	"rkt-proxy/internal/cfgfile"
@@ -36,6 +37,7 @@ import (
 	"rkt-proxy/internal/server"
 	"rkt-proxy/internal/store"
 	"rkt-proxy/internal/supervisor"
+	"rkt-proxy/internal/weblog"
 	"rkt-proxy/web"
 )
 
@@ -223,6 +225,7 @@ func (p *Program) Run() {
 	}
 	p.log.Info("hot-reload activo", "poll", pollInterval.String())
 	go p.watchMerged(live, db)
+	go p.alertLoop(live, db)
 	if cfg.Github != nil {
 		gh, err := github.New(cfg.Github.AppID, cfg.Github.KeyFile, "")
 		if err != nil {
@@ -500,6 +503,62 @@ func (p *Program) rollbackApp(name, actor string) error {
 		}
 	}
 	return err
+}
+
+// alertLoop evalúa reglas cada minuto: failed por app desde events,
+// error_rate global desde access.log (entries no traen app).
+// Disparo = evento kind=alert + cooldown de ventana.
+func (p *Program) alertLoop(live *config.Live, db *store.DB) {
+	_ = live
+	t := time.NewTicker(time.Minute)
+	defer t.Stop()
+	for range t.C {
+		rules, err := db.ListRules()
+		if err != nil || len(rules) == 0 {
+			continue
+		}
+		now := time.Now().UTC()
+		evs, _ := db.ListEvents(500, "", "")
+		for _, r := range rules {
+			since := now.Add(-time.Duration(r.WindowMin) * time.Minute)
+			failed := 0
+			for _, e := range evs {
+				t, err := time.Parse(time.RFC3339, e.Ts)
+				if err != nil || t.Before(since) {
+					continue
+				}
+				if r.App != "*" && e.App != r.App {
+					continue
+				}
+				if e.Kind == "died" || e.Kind == "failed" {
+					failed++
+				}
+			}
+			rate := 0.0
+			if r.Kind == "error_rate" {
+				total, errs := 0, 0
+				for _, e := range weblog.ParseFile(filepath.Join(logx.DirFor(p.cfgPath), "access.log")) {
+					if e.Time.Before(since) {
+						continue
+					}
+					total++
+					if e.Status >= 500 {
+						errs++
+					}
+				}
+				if total > 0 {
+					rate = float64(errs) / float64(total)
+				}
+			}
+			if alerts.Fired(r, failed, rate, now) {
+				msg := alerts.Describe(r)
+				if err := db.InsertEvent("alert", r.App, msg); err == nil {
+					_ = db.MarkFired(r.ID, now)
+					p.log.Warn("alerta disparada", "regla", r.ID, "msg", msg)
+				}
+			}
+		}
+	}
 }
 
 // runDiscovery registra repos nuevos de todas las instalaciones.
