@@ -400,9 +400,6 @@ func NeedRestart(old, new *Config) []string {
 	if old.RateLimit != new.RateLimit {
 		out = append(out, "rate_limit")
 	}
-	if !appsEqual(old.Apps, new.Apps) {
-		out = append(out, "apps")
-	}
 	if !githubEqual(old.Github, new.Github) {
 		out = append(out, "github")
 	}
@@ -469,57 +466,6 @@ func validAppName(s string) bool {
 			continue
 		}
 		return false
-	}
-	return true
-}
-
-// appsEqual compara apps por nombre (orden irrelevante).
-func appsEqual(a, b []App) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	byName := map[string]App{}
-	for _, x := range a {
-		byName[x.Name] = x
-	}
-	for _, y := range b {
-		x, ok := byName[y.Name]
-		if !ok {
-			return false
-		}
-		if x.Command != y.Command || x.Dir != y.Dir || x.delay != y.delay ||
-			x.minUp != y.minUp || x.MemoryMB != y.MemoryMB ||
-			!deployEqual(x.Deploy, y.Deploy) ||
-			len(x.Args) != len(y.Args) || len(x.Env) != len(y.Env) {
-			return false
-		}
-		for i := range x.Args {
-			if x.Args[i] != y.Args[i] {
-				return false
-			}
-		}
-		for k, v := range x.Env {
-			if y.Env[k] != v {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-// deployEqual compara deploy (nil = ausente).
-func deployEqual(a, b *Deploy) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
-	}
-	if a.Repo != b.Repo || a.Ref != b.Ref || a.TokenEnv != b.TokenEnv ||
-		a.Auto != b.Auto || len(a.Build) != len(b.Build) {
-		return false
-	}
-	for i := range a.Build {
-		if a.Build[i] != b.Build[i] {
-			return false
-		}
 	}
 	return true
 }

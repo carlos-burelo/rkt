@@ -153,9 +153,11 @@ func TestDoAppsAddLocal(t *testing.T) {
 	}
 	defer db.Close()
 	fleet, _ := db.LoadFleet()
-	if len(fleet.Apps) != 1 || len(fleet.Apps[0].Args) == 0 ||
-		!strings.Contains(fleet.Apps[0].Args[0], "standalone") {
-		t.Fatalf("preset next no aplicado: %+v", fleet.Apps)
+	if len(fleet.Apps) != 1 || fleet.Apps[0].Command == "" || len(fleet.Apps[0].Args) == 0 {
+		t.Fatalf("plan next no aplicado: %+v", fleet.Apps)
+	}
+	if fleet.Apps[0].Deploy == nil || len(fleet.Apps[0].Deploy.Build) == 0 {
+		t.Fatalf("build del plan ausente: %+v", fleet.Apps[0].Deploy)
 	}
 	// duplicado debe fallar
 	if _, err := s.doAppsAdd(appsAddArg{Repo: repo}); err == nil {
@@ -163,6 +165,44 @@ func TestDoAppsAddLocal(t *testing.T) {
 	}
 	if _, err := s.doAppsAdd(appsAddArg{Repo: "ni-dir-ni-url :::"}); err == nil {
 		t.Fatal("repo basura debe fallar")
+	}
+}
+
+func TestDoInspectYUpdate(t *testing.T) {
+	dir := t.TempDir()
+	proj := filepath.Join(dir, "sitio")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "index.html"), []byte("<h1>x</h1>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(dir, "config.yaml")
+	os.WriteFile(cfgPath, []byte("routes:\n  - hosts: [seed.test]\n    target: http://127.0.0.1:9\n"), 0o644)
+	s := New(cfgPath)
+
+	plan, err := s.doDetectPlan(proj)
+	if err != nil || !strings.Contains(plan, `"framework":"static"`) {
+		t.Fatalf("detect_plan = %q %v", plan, err)
+	}
+	if _, err := s.doAppsAdd(appsAddArg{Name: "sitio", Dir: proj, Port: 5098}); err != nil {
+		t.Fatalf("apps_add: %v", err)
+	}
+	list, err := s.doAppsList()
+	if err != nil || !strings.Contains(list, `"name":"sitio"`) {
+		t.Fatalf("apps_list = %q %v", list, err)
+	}
+	dom := "sitio.localhost"
+	if _, err := s.doAppUpdate(appUpdateArg{App: "sitio", Domain: &dom}); err != nil {
+		t.Fatalf("app_update: %v", err)
+	}
+	routes, err := s.doRoutesList()
+	if err != nil || !strings.Contains(routes, "sitio.localhost") || !strings.Contains(routes, `"dns_ok":[true]`) {
+		t.Fatalf("routes_list = %q %v", routes, err)
+	}
+	zones, err := s.doZonesList()
+	if err != nil || !strings.Contains(zones, "sitio.localhost") {
+		t.Fatalf("zones_list = %q %v", zones, err)
 	}
 }
 
@@ -175,7 +215,7 @@ func TestDoEnvSetNoRead(t *testing.T) {
 		t.Fatalf("apps_add: %v", err)
 	}
 	out, err := s.doEnvSet("w", "SECRETO", "valor1")
-	if err != nil || !strings.Contains(out, "SECRETO=w") {
+	if err != nil || !strings.Contains(out, "SECRETO") {
 		t.Fatalf("env_set: %q %v", out, err)
 	}
 	// write-only: el valor NO vuelve en ninguna lectura

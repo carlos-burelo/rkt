@@ -48,15 +48,20 @@ type Deps struct {
 	Deploy   func(name, actor string) (string, error)
 	Rollback func(name, actor string) error
 	Retry    func(id int64, actor string) (string, error)
+	Build    func(name, actor string) (int64, error)
 }
 
 // NewHandler responde GET /healthz, POST /restart/<name>,
-// POST /deploy/<name> y POST /rollback/<name>; resto 404/405.
-// Solo para listener loopback: sin auth.
+// POST /deploy/<name>, /rollback/<name>, /retry/<id> y /build/<name>;
+// resto 404/405. Solo para listener loopback: sin auth.
 func NewHandler(d Deps) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/restart/") {
 			restart(w, r, d.Restart)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/build/") {
+			buildHandler(w, r, d.Build)
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/deploy/") {
@@ -131,6 +136,27 @@ func restart(w http.ResponseWriter, r *http.Request, fn func(name string) bool) 
 		return
 	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"restarted": name})
+}
+
+// buildHandler compila un directorio local (POST /build/<name>).
+func buildHandler(w http.ResponseWriter, r *http.Request, fn func(name, actor string) (int64, error)) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "solo POST", http.StatusMethodNotAllowed)
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, "/build/")
+	if name == "" || strings.Contains(name, "/") || fn == nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	id, err := fn(name, "local")
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"deployment": id})
 }
 
 // deployHandler ejecuta POST /deploy/<name> en el servicio (tarda minutos).

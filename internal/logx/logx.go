@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -66,8 +67,15 @@ func Tail(path string, n int) (string, error) {
 	if len(lines) > n {
 		lines = lines[len(lines)-n:]
 	}
-	return strings.Join(lines, "\n"), nil
+	return StripANSI(strings.Join(lines, "\n")), nil
 }
+
+// ansiRx secuencias de color/control de terminal (build logs de pnpm,
+// astro, go…). El dashboard no las renderiza: se limpian al servir.
+var ansiRx = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
+
+// StripANSI quita códigos ANSI conservando el texto.
+func StripANSI(s string) string { return ansiRx.ReplaceAllString(s, "") }
 
 // Setup abre (creando dir) el log y devuelve logger multi
 // consola+archivo más closer.

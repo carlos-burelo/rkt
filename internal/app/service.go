@@ -84,7 +84,7 @@ func isHealthPath(p string) bool {
 	if p == "/healthz" {
 		return true
 	}
-	for _, prefix := range []string{"/restart/", "/deploy/", "/rollback/", "/retry/"} {
+	for _, prefix := range []string{"/restart/", "/build/", "/deploy/", "/rollback/", "/retry/"} {
 		if strings.HasPrefix(p, prefix) {
 			return true
 		}
@@ -216,7 +216,7 @@ func (p *Program) Run() {
 		}
 	}()
 	if cfg.Healthz.Enabled {
-		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment})
+		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal})
 		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Apply: p.sup.Apply, Build: p.buildLocal, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus})
 		sub, err := fs.Sub(web.Dist, "dist")
 		if err != nil {

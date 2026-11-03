@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"rkt-proxy/internal/appview"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/health"
@@ -496,7 +497,7 @@ func NewHandler(d Deps) http.Handler {
 			live := d.Live.Get()
 			out := []map[string]any{}
 			for _, x := range live.Apps {
-				out = append(out, sanitizeApp(x, live.Routes))
+				out = append(out, appview.App(live, x))
 			}
 			writeJSON(w, out)
 			return
@@ -542,7 +543,7 @@ func NewHandler(d Deps) http.Handler {
 		}
 		switch {
 		case action == "" && r.Method == http.MethodGet:
-			writeJSON(w, sanitizeApp(*a, d.Live.Get().Routes))
+			writeJSON(w, appview.App(d.Live.Get(), *a))
 		case action == "" && r.Method == http.MethodPut:
 			if !requireOperator(w, r, d.DB) {
 				return
@@ -1145,7 +1146,7 @@ func NewHandler(d Deps) http.Handler {
 					}
 				}
 				rs.TLS = append(rs.TLS, state)
-				rs.DNSOK = append(rs.DNSOK, resolvesLocal(h))
+				rs.DNSOK = append(rs.DNSOK, appview.ResolvesLocal(h))
 			}
 			out = append(out, rs)
 		}
@@ -1215,26 +1216,6 @@ func mustUser(r *http.Request) string {
 	return u
 }
 
-// resolvesLocal: el host apunta a loopback desde esta máquina.
-// *.localhost lo resuelven los navegadores sin hosts; el resto se pregunta
-// al resolver del sistema (si no está en hosts, no es alcanzable).
-func resolvesLocal(host string) bool {
-	h := strings.ToLower(strings.TrimSpace(host))
-	if h == "localhost" || strings.HasSuffix(h, ".localhost") {
-		return true
-	}
-	ips, err := net.LookupHost(h)
-	if err != nil {
-		return false
-	}
-	for _, ip := range ips {
-		if ip == "127.0.0.1" || ip == "::1" {
-			return true
-		}
-	}
-	return false
-}
-
 // createAppFromRepo alta con inferencia vía cfgfile.CreateApp (hogar
 // único, también usado por MCP). Escribe vía AddApp y refresca Live.
 func createAppFromRepo(db *store.DB, live *config.Live, repo, name, domain string, port int, command, dir string, auto bool) (string, error) {
@@ -1260,48 +1241,6 @@ func requireOperator(w http.ResponseWriter, r *http.Request, db *store.DB) bool 
 		return false
 	}
 	return true
-}
-
-// sanitizeApp quita Env (secretos solo vía /env, operator).
-// domains: hosts cuyas routes apuntan al PORT de la app (mapeo real,
-// no adivinanza por nombre).
-func sanitizeApp(a config.App, routes []config.Route) map[string]any {
-	deploy := any(nil)
-	if a.Deploy != nil {
-		deploy = map[string]any{
-			"repo": a.Deploy.Repo, "ref": a.Deploy.Ref,
-			"build": a.Deploy.Build, "auto": a.Deploy.Auto,
-		}
-	}
-	// domains: hosts cuyas routes apuntan al PORT de la app (mapeo real,
-	// no adivinanza por nombre).
-	domains := []string{}
-	port := a.Env["PORT"]
-	if port != "" {
-		want := "http://127.0.0.1:" + port
-		for _, r := range routes {
-			if r.Target == want {
-				domains = append(domains, r.Hosts...)
-			}
-		}
-	}
-	// static: campo explícito o derivado del arranque __static (compat).
-	static := a.Static
-	if static == "" && len(a.Args) >= 2 && a.Args[0] == "__static" {
-		static = a.Args[1]
-	}
-	dnsOK := true
-	for _, h := range domains {
-		if !resolvesLocal(h) {
-			dnsOK = false
-		}
-	}
-	return map[string]any{
-		"name": a.Name, "command": a.Command, "args": a.Args,
-		"dir": a.Dir, "static": static, "env_file": a.EnvFile, "restart_delay": a.RestartDelay,
-		"min_uptime": a.MinUptime, "memory_mb": a.MemoryMB,
-		"port": port, "deploy": deploy, "domains": domains, "dns_ok": dnsOK,
-	}
 }
 
 func queryInt(r *http.Request, key string, def int) int {

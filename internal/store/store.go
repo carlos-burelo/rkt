@@ -117,9 +117,11 @@ func Open(path string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// busy_timeout ANTES de WAL: journal_mode necesita lock y, sin timeout,
+	// dos clientes (MCP + servicio) fallaban con SQLITE_BUSY al abrir.
 	for _, p := range []string{
+		"PRAGMA busy_timeout=10000",
 		"PRAGMA journal_mode=WAL",
-		"PRAGMA busy_timeout=5000",
 		"PRAGMA synchronous=NORMAL",
 		"PRAGMA foreign_keys=ON",
 	} {

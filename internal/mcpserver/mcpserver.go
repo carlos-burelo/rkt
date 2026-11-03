@@ -17,7 +17,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"rkt-proxy/internal/appview"
 	"rkt-proxy/internal/build"
+	"rkt-proxy/internal/buildpack"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/deploy"
@@ -176,14 +178,25 @@ func (s *Server) doRestart(app string) (string, error) {
 	if app == "" {
 		return "", fmt.Errorf("falta app")
 	}
-	code, body, err := s.post("/restart/"+app, 30*time.Second)
-	if err != nil {
-		return "", fmt.Errorf("sin servicio: %w", err)
+	// Una app recién dada de alta puede no estar en el supervisor hasta
+	// que el servicio recarga el manifiesto (~10s): reintenta sin fallar.
+	deadline := time.Now().Add(15 * time.Second)
+	var last string
+	for {
+		code, body, err := s.post("/restart/"+app, 30*time.Second)
+		if err == nil && code == http.StatusOK {
+			return fmt.Sprintf("app %s reiniciando", app), nil
+		}
+		if err != nil {
+			last = err.Error()
+		} else {
+			last = deploy.OneLine(body)
+		}
+		if time.Now().After(deadline) {
+			return "", fmt.Errorf("restart: %s", last)
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
-	if code != http.StatusOK {
-		return "", fmt.Errorf("restart: %s", deploy.OneLine(body))
-	}
-	return fmt.Sprintf("app %s reiniciando", app), nil
 }
 
 // doRollback vuelve a live.prev (tarda: swap+restart+health).
@@ -285,6 +298,21 @@ type waitHealthyArg struct {
 	App      string `json:"app,omitempty" jsonschema:"nombre de la app"`
 	TimeoutS int    `json:"timeout_s,omitempty" jsonschema:"tope segundos (default 60, máx 300)"`
 }
+type dirArg struct {
+	Dir string `json:"dir" jsonschema:"directorio del proyecto a analizar"`
+}
+type appUpdateArg struct {
+	App       string    `json:"app" jsonschema:"nombre de la app"`
+	Domain    *string   `json:"domain,omitempty" jsonschema:"dominio (vacío = quitarlo)"`
+	Port      *int      `json:"port,omitempty" jsonschema:"puerto local (retargeta rutas)"`
+	Static    *string   `json:"static,omitempty" jsonschema:"dir servido como estático"`
+	EnvFile   *string   `json:"env_file,omitempty" jsonschema:"dotenv adicional"`
+	Command   *string   `json:"command,omitempty" jsonschema:"binario de arranque"`
+	Dir       *string   `json:"dir,omitempty" jsonschema:"directorio de trabajo"`
+	Args      *[]string `json:"args,omitempty" jsonschema:"argumentos del proceso"`
+	MemoryMB  *uint64   `json:"memory_mb,omitempty" jsonschema:"límite RAM en MB (0 = sin tope)"`
+	MinUptime *string   `json:"min_uptime,omitempty" jsonschema:"uptime mínimo sano (ej 10s)"`
+}
 
 // doAppsAdd registra app con inferencia (igual que `apps add` sin flags).
 func (s *Server) doAppsAdd(a appsAddArg) (string, error) {
@@ -319,7 +347,7 @@ func (s *Server) doEnvSet(app, key, value string) (string, error) {
 	if err := cfgfile.SetEnv(db, cfg, app, key, value); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s=%s (restart requerido)", key, app), nil
+	return fmt.Sprintf("%s: %s guardada (reinicia para aplicar)", app, key), nil
 }
 
 // doDiscover corre auto-registro ahora (sin esperar el poll).
@@ -385,6 +413,148 @@ func (s *Server) doDeployCheck(app string) (string, error) {
 	}
 	out, _ := json.Marshal(checks)
 	return string(out), nil
+}
+
+// doAppsList flota completa con dominio, puerto, plan y estado DNS.
+func (s *Server) doAppsList() (string, error) {
+	cfg, db, err := cfgfile.LoadMerged(s.cfgPath)
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	out, err := json.Marshal(appview.Apps(cfg))
+	return string(out), err
+}
+
+// doRoutesList rutas con aviso de DNS local por host.
+func (s *Server) doRoutesList() (string, error) {
+	cfg, db, err := cfgfile.LoadMerged(s.cfgPath)
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	type row struct {
+		Hosts  []string `json:"hosts"`
+		Target string   `json:"target"`
+		DNSOK  []bool   `json:"dns_ok"`
+	}
+	out := []row{}
+	for _, r := range cfg.Routes {
+		dns := make([]bool, 0, len(r.Hosts))
+		for _, h := range r.Hosts {
+			dns = append(dns, appview.ResolvesLocal(h))
+		}
+		out = append(out, row{Hosts: r.Hosts, Target: r.Target, DNSOK: dns})
+	}
+	b, err := json.Marshal(out)
+	return string(b), err
+}
+
+// doZonesList zonas locales agrupadas (apex + subdominios).
+func (s *Server) doZonesList() (string, error) {
+	cfg, db, err := cfgfile.LoadMerged(s.cfgPath)
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	b, err := json.Marshal(appview.BuildZones(cfg.Routes, db.GetSetting(store.KeyBaseDomain)))
+	return string(b), err
+}
+
+// doDetectPlan plan de build inferido sin crear la app.
+func (s *Server) doDetectPlan(dir string) (string, error) {
+	if dir == "" {
+		return "", fmt.Errorf("falta dir")
+	}
+	plan, err := buildpack.DetectDir(dir)
+	if err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(map[string]any{
+		"dir": dir, "framework": plan.Kind, "pm": plan.PM,
+		"install": plan.Install, "build": plan.Build, "start": plan.Start,
+		"static_dir": plan.StaticDir, "static_abs": plan.Static(dir),
+	})
+	return string(b), err
+}
+
+// doBuild compila un directorio local vía el servicio; devuelve el id.
+func (s *Server) doBuild(app string) (string, error) {
+	if app == "" {
+		return "", fmt.Errorf("falta app")
+	}
+	// app recién registrada: el servicio la aplica en ≤10s; reintenta.
+	deadline := time.Now().Add(20 * time.Second)
+	var last string
+	for {
+		code, body, err := s.post("/build/"+app, 60*time.Second)
+		if err == nil && code == http.StatusOK {
+			return string(body), nil
+		}
+		if err != nil {
+			last = err.Error()
+		} else {
+			last = deploy.OneLine(body)
+		}
+		if time.Now().After(deadline) {
+			return "", fmt.Errorf("build: %s", last)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// doAppUpdate cambia dominio/puerto/proceso; el servicio aplica ≤10s.
+func (s *Server) doAppUpdate(a appUpdateArg) (string, error) {
+	if a.App == "" {
+		return "", fmt.Errorf("falta app")
+	}
+	cfg, db, err := cfgfile.LoadMerged(s.cfgPath)
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	app := cfgfile.FindApp(cfg, a.App)
+	if app == nil {
+		return "", fmt.Errorf("app %q inexistente", a.App)
+	}
+	if a.Command != nil {
+		app.Command = *a.Command
+	}
+	if a.Args != nil {
+		app.Args = *a.Args
+	}
+	if a.Dir != nil {
+		app.Dir = *a.Dir
+	}
+	if a.Static != nil {
+		app.Static = *a.Static
+	}
+	if a.EnvFile != nil {
+		app.EnvFile = *a.EnvFile
+	}
+	if a.MemoryMB != nil {
+		app.MemoryMB = *a.MemoryMB
+	}
+	if a.MinUptime != nil {
+		app.MinUptime = *a.MinUptime
+	}
+	if a.Port != nil {
+		if err := cfgfile.SetAppPort(cfg, a.App, *a.Port); err != nil {
+			return "", err
+		}
+	}
+	if a.Domain != nil {
+		if err := cfgfile.SetAppDomain(cfg, a.App, *a.Domain); err != nil {
+			return "", err
+		}
+	}
+	if err := app.ValidateApp(0); err != nil {
+		return "", err
+	}
+	if err := cfgfile.SaveFleet(db, cfg); err != nil {
+		return "", err
+	}
+	return "manifiesto actualizado (el servicio lo aplica en ≤10s)", nil
 }
 
 // doDeploymentLogs tail del log del último deploy de la app.
@@ -499,6 +669,30 @@ func (s *Server) Run(ctx context.Context) error {
 	mcp.AddTool(srv, &mcp.Tool{Name: "wait_healthy", Description: "Espera app sana hasta timeout_s (default 60, máx 300). Para gates post-deploy."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a waitHealthyArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doWaitHealthy(a.App, a.TimeoutS))
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "apps_list", Description: "Flota con dominio, puerto, estático, deploy y dns_ok (JSON)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
+			return text(s.doAppsList())
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "routes_list", Description: "Rutas host→target con dns_ok por host (JSON)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
+			return text(s.doRoutesList())
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "zones_list", Description: "Zonas locales (localhost/test/base) con apex y subdominios (JSON)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
+			return text(s.doZonesList())
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "detect_plan", Description: "Plan de build inferido para un directorio (framework, install/build/start o estático)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a dirArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doDetectPlan(a.Dir))
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "build", Description: "Compila una app de directorio local con su plan (tarda; sigue con deployments_list)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a appArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doBuild(a.App))
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "app_update", Description: "Cambia dominio, puerto, comando, args, dir, estático, env_file o memoria de una app (aplica en ≤10s)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a appUpdateArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doAppUpdate(a))
 		})
 	return srv.Run(ctx, &mcp.StdioTransport{})
 }

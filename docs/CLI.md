@@ -114,11 +114,17 @@ Settings, Users, CI, Alerts. ⌘K paleta, toasts, PWA offline.
 Servidor [Model Context Protocol](https://modelcontextprotocol.io) por stdio.
 Monitoreo: `status`, `logs` (`n`, `app`), `deployments_list` (`n`, `app`),
 `events_list` (`n`, `kind`, `app`), `version`.
-Pipeline: `apps_add` (repo→app inferida), `env_set` (solo escritura),
+Flota: `apps_list` (dominio, puerto, estático, deploy, `dns_ok`),
+`routes_list` (host→target con `dns_ok`), `zones_list` (localhost/test/base
+con apex y subdominios), `detect_plan` (framework + install/build/start).
+Pipeline: `apps_add` (repo/dir→app inferida), `app_update` (dominio, puerto,
+comando, args, dir, estático, env_file, memoria), `build` (compila un dir
+local y registra deployment), `env_set` (solo escritura),
 `discover` (registro inmediato), `deploy_check` (preflight JSON),
 `deployment_logs` (tail del build), `wait_healthy` (gate post-deploy),
-`restart`, `rollback`, `deploy`.
-Límite: no muta config fuera de apps/env, ni toca el servicio Windows.
+`restart`, `rollback`, `deploy`, `retry`.
+Límite: no toca el servicio Windows; los cambios de manifiesto se aplican
+en caliente en ≤10s (supervisor.Apply).
 
 ```jsonc
 // opencode.json
