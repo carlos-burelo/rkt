@@ -40,9 +40,15 @@ func TestDoStatus(t *testing.T) {
 }
 
 func TestDoStatusSinServicio(t *testing.T) {
-	s := New(filepath.Join(t.TempDir(), "noexiste.yaml"))
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	// healthz en un puerto cerrado: determinista aunque el dev local corra
+	if err := os.WriteFile(cfgPath, []byte("healthz:\n  enabled: true\n  listen: \"127.0.0.1:1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := New(cfgPath)
 	if _, err := s.doStatus(); err == nil {
-		t.Fatal("debió fallar sin config")
+		t.Fatal("debía fallar sin servicio")
 	}
 }
 

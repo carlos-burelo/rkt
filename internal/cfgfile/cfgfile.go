@@ -1,23 +1,124 @@
-// Package cfgfile: lee/escribe config.yaml con backup y validación.
+// Package cfgfile: configuración en SQLite (única fuente). El YAML solo
+// se lee una vez para migrar instalaciones viejas y queda como .migrated.
 // El CLI muta por aquí; el servicio solo lee.
 package cfgfile
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/store"
 )
 
-// Load lee y valida el YAML (solo infra/healthz; sin DB).
-// Para CLI de solo-lectura (status, restart...). La flota vive en DB.
+// Load infra desde DB (sin flota). Para CLI que solo necesita healthz.
 func Load(path string) (*config.Config, error) {
-	return config.Load(path)
+	db, err := store.Open(logx.DBPath(path))
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	return LoadBase(db, path)
+}
+
+// LoadMerged abre DB, carga infra + flota y la devuelve lista.
+func LoadMerged(cfgPath string) (*config.Config, *store.DB, error) {
+	db, err := store.Open(logx.DBPath(cfgPath))
+	if err != nil {
+		return nil, nil, err
+	}
+	base, err := LoadBase(db, cfgPath)
+	if err != nil {
+		db.Close()
+		return nil, nil, err
+	}
+	merged, err := Snapshot(db, base)
+	if err != nil {
+		db.Close()
+		return nil, nil, err
+	}
+	if err := OverlayGithub(merged, db); err != nil {
+		db.Close()
+		return nil, nil, err
+	}
+	return merged, db, nil
+}
+
+// LoadBase infra desde DB. Si no hay fila, migra el YAML una vez o usa
+// defaults y persiste. Deja el YAML como .migrated (nunca más se lee).
+func LoadBase(db *store.DB, cfgPath string) (*config.Config, error) {
+	raw, err := db.LoadInfra()
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > 0 {
+		base := config.Default()
+		if err := json.Unmarshal(raw, base); err != nil {
+			return nil, fmt.Errorf("infra corrupta en DB: %w", err)
+		}
+		if err := base.Finalize(); err != nil {
+			return nil, err
+		}
+		return base, nil
+	}
+
+	base := config.Default()
+	yamlPath := logx.Abs(cfgPath)
+	if st, err := os.Stat(yamlPath); err == nil && !st.IsDir() {
+		if y, err := config.Load(yamlPath); err == nil {
+			base = y
+			if db.ConfigVersion() == 0 {
+				if err := db.ImportFleet(y); err != nil {
+					return nil, err
+				}
+				if y.Github != nil {
+					seedGithubSettings(db, y.Github)
+				}
+			}
+			_ = os.Rename(yamlPath, yamlPath+".migrated")
+		}
+	}
+	if err := base.Finalize(); err != nil {
+		return nil, err
+	}
+	if err := SaveInfra(db, base); err != nil {
+		return nil, err
+	}
+	return base, nil
+}
+
+// SaveInfra persiste la parte de infraestructura (apps/rutas no van aquí).
+func SaveInfra(db *store.DB, cfg *config.Config) error {
+	cfg.ApplyDefaults()
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return db.SaveInfra(raw)
+}
+
+// SeedDev crea infra local si la DB está virgen (dev sin YAML).
+func SeedDev(db *store.DB, port string) error {
+	raw, err := db.LoadInfra()
+	if err != nil {
+		return err
+	}
+	if len(raw) > 0 {
+		return nil
+	}
+	cfg := config.Default()
+	cfg.ListenHTTP = ":" + port
+	cfg.ListenHTTPS = ""
+	cfg.ACMEEmail = "dev@localhost"
+	cfg.RedirectHTTPToHTTPS = false
+	cfg.RateLimit.Enabled = false
+	return SaveInfra(db, cfg)
 }
 
 // OverlayGithub aplica settings (origen setup browser) sobre el bloque
-// github del YAML. La DB manda si tiene app_id; si no, queda el YAML.
+// github de la infra. La DB manda si tiene app_id.
 func OverlayGithub(cfg *config.Config, db *store.DB) error {
 	if v := db.GetSetting("github_app_id"); v != "" {
 		var id int64
@@ -36,40 +137,7 @@ func OverlayGithub(cfg *config.Config, db *store.DB) error {
 	return nil
 }
 
-// LoadMerged abre DB, importa el YAML si la flota está fresca y fusiona
-// infra YAML + flota DB. Devuelve config lista y DB abierta (cerrar).
-func LoadMerged(cfgPath string) (*config.Config, *store.DB, error) {
-	db, err := store.Open(logx.DBPath(cfgPath))
-	if err != nil {
-		return nil, nil, err
-	}
-	base, err := config.Load(cfgPath)
-	if err != nil {
-		db.Close()
-		return nil, nil, err
-	}
-	if db.ConfigVersion() == 0 {
-		if err := db.ImportFleet(base); err != nil {
-			db.Close()
-			return nil, nil, err
-		}
-		if base.Github != nil {
-			seedGithubSettings(db, base.Github)
-		}
-	}
-	merged, err := Snapshot(db, base)
-	if err != nil {
-		db.Close()
-		return nil, nil, err
-	}
-	if err := OverlayGithub(merged, db); err != nil {
-		db.Close()
-		return nil, nil, err
-	}
-	return merged, db, nil
-}
-
-// seedGithubSettings vuelca el bloque YAML a settings (una vez).
+// seedGithubSettings vuelca el bloque YAML a settings (migración una vez).
 func seedGithubSettings(db *store.DB, gh *config.Github) {
 	set := func(k, v string) {
 		if v != "" {
@@ -99,9 +167,7 @@ func SaveFleet(db *store.DB, cfg *config.Config) error {
 	return db.ImportFleet(cfg)
 }
 
-// Snapshot fusiona infra del YAML base + flota de DB.
-// La DB solo guarda validado; aquí solo re-parseo mecánico (targets,
-// duplicados). El env NO se re-fusiona (DB guarda ya expandido).
+// Snapshot fusiona infra (DB) + flota (DB).
 func Snapshot(db *store.DB, base *config.Config) (*config.Config, error) {
 	fleet, err := db.LoadFleet()
 	if err != nil {

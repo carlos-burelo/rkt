@@ -52,11 +52,11 @@ type Deploy struct {
 // Multi-instalación (org + personal): se registran solas vía setup
 // del browser o eventos de instalación. Sin installation_id fijo.
 type Github struct {
-	AppID         int64  `yaml:"app_id"`
-	AppSlug       string `yaml:"app_slug"`
-	KeyFile       string `yaml:"key_file"`
-	PollInterval  string `yaml:"poll_interval"`
-	WebhookSecret string `yaml:"webhook_secret"`
+	AppID         int64  `yaml:"app_id" json:"app_id"`
+	AppSlug       string `yaml:"app_slug" json:"app_slug"`
+	KeyFile       string `yaml:"key_file" json:"key_file"`
+	PollInterval  string `yaml:"poll_interval" json:"poll_interval"`
+	WebhookSecret string `yaml:"webhook_secret" json:"webhook_secret"`
 
 	poll time.Duration `yaml:"-"`
 }
@@ -111,15 +111,15 @@ func (a *App) SetDelays(delay, minUp time.Duration) {
 // HealthzConfig expone salud en listener loopback dedicado
 // (no compite con paths de backends ni se expone a internet).
 type HealthzConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	Listen  string `yaml:"listen"`
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Listen  string `yaml:"listen" json:"listen"`
 }
 
 // RateLimitConfig frena abuso por IP (bots) antes del backend.
 type RateLimitConfig struct {
-	Enabled bool    `yaml:"enabled"`
-	RPS     float64 `yaml:"requests_per_second"`
-	Burst   int     `yaml:"burst"`
+	Enabled bool    `yaml:"enabled" json:"enabled"`
+	RPS     float64 `yaml:"requests_per_second" json:"requests_per_second"`
+	Burst   int     `yaml:"burst" json:"burst"`
 }
 
 // maxBodyDefaultMB tope de body por request (anti-DoS a backends).
@@ -142,20 +142,20 @@ var defaultDenyPaths = []string{
 
 // Config canónica. Un solo camino, nada legacy.
 type Config struct {
-	ListenHTTP          string          `yaml:"listen_http"`
-	ListenHTTPS         string          `yaml:"listen_https"`
-	ACMEEmail           string          `yaml:"acme_email"`
-	ACMEStaging         bool            `yaml:"acme_staging"`
-	ACMECacheDir        string          `yaml:"acme_cache_dir"`
-	RedirectHTTPToHTTPS bool            `yaml:"redirect_http_to_https"`
-	Healthz             HealthzConfig   `yaml:"healthz"`
-	RateLimit           RateLimitConfig `yaml:"rate_limit"`
-	RestartGrace        string          `yaml:"restart_grace"`
-	MaxBodyMB           int64           `yaml:"max_body_mb"`
-	Github              *Github         `yaml:"github"`
-	DenyPaths           []string        `yaml:"deny_paths"`
-	Apps                []App           `yaml:"apps"`
-	Routes              []Route         `yaml:"routes"`
+	ListenHTTP          string          `yaml:"listen_http" json:"listen_http"`
+	ListenHTTPS         string          `yaml:"listen_https" json:"listen_https"`
+	ACMEEmail           string          `yaml:"acme_email" json:"acme_email"`
+	ACMEStaging         bool            `yaml:"acme_staging" json:"acme_staging"`
+	ACMECacheDir        string          `yaml:"acme_cache_dir" json:"acme_cache_dir"`
+	RedirectHTTPToHTTPS bool            `yaml:"redirect_http_to_https" json:"redirect_http_to_https"`
+	Healthz             HealthzConfig   `yaml:"healthz" json:"healthz"`
+	RateLimit           RateLimitConfig `yaml:"rate_limit" json:"rate_limit"`
+	RestartGrace        string          `yaml:"restart_grace" json:"restart_grace"`
+	MaxBodyMB           int64           `yaml:"max_body_mb" json:"max_body_mb"`
+	Github              *Github         `yaml:"github" json:"github,omitempty"`
+	DenyPaths           []string        `yaml:"deny_paths" json:"deny_paths"`
+	Apps                []App           `yaml:"apps" json:"-"`
+	Routes              []Route         `yaml:"routes" json:"-"`
 
 	grace time.Duration `yaml:"-"`
 }
@@ -176,7 +176,22 @@ func defaultConfig() Config {
 	}
 }
 
-// Load lee y valida. Error = no arrancar.
+// Default config base sin apps/rutas (semilla de la DB).
+func Default() *Config {
+	c := defaultConfig()
+	return &c
+}
+
+// Finalize aplica defaults, valida y resuelve env (config sin YAML).
+func (c *Config) Finalize() error {
+	c.ApplyDefaults()
+	if err := c.Validate(); err != nil {
+		return err
+	}
+	return c.ResolveEnvAll()
+}
+
+// Load lee y valida YAML. Solo migración/tests: la fuente es la DB.
 func Load(path string) (*Config, error) {
 	cfg := defaultConfig()
 	data, err := os.ReadFile(path)
@@ -186,11 +201,7 @@ func Load(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse yaml: %w", err)
 	}
-	cfg.ApplyDefaults()
-	if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
-	if err := cfg.ResolveEnvAll(); err != nil {
+	if err := cfg.Finalize(); err != nil {
 		return nil, err
 	}
 	return &cfg, nil
@@ -271,9 +282,6 @@ func (cfg *Config) ResolveEnvAll() error {
 // Validate verifica todo y parsea (grace, github, apps, routes).
 // No toca env (ver ResolveEnvAll).
 func (cfg *Config) Validate() error {
-	if len(cfg.Routes) == 0 {
-		return fmt.Errorf("config sin routes")
-	}
 	if cfg.Healthz.Enabled && cfg.Healthz.Listen == "" {
 		return fmt.Errorf("healthz sin listen")
 	}

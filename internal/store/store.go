@@ -101,6 +101,12 @@ var migrations = []string{
 		last_fired TEXT NOT NULL DEFAULT '',
 		created_at TEXT NOT NULL DEFAULT ''
 	);`,
+	// v9: config de infraestructura en DB (YAML deja de ser fuente).
+	`CREATE TABLE IF NOT EXISTS infra (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		data TEXT NOT NULL,
+		updated_at TEXT NOT NULL DEFAULT ''
+	);`,
 }
 
 // DB wrapper.

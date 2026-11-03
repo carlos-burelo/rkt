@@ -18,10 +18,10 @@ import (
 
 	"rkt-proxy/internal/build"
 	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/mcpserver"
 	"rkt-proxy/internal/staticweb"
+	"rkt-proxy/internal/store"
 )
 
 // JSON salida máquina para comandos de lectura (--json).
@@ -227,8 +227,7 @@ func printDashboardURL(cfgPath string) {
 	fmt.Printf("dashboard: http://%s/ (crea tu admin ahí la primera vez)\n", cfg.Healthz.Listen)
 }
 
-// cmdDev levanta entorno local: genera rkt.dev.yaml (HTTP alto, sin TLS)
-// si falta y corre en foreground.
+// cmdDev levanta entorno local: siembra infra en DB (sin YAML) y corre.
 func cmdDev(args []string, cfgPath string) {
 	fs := flag.NewFlagSet("dev", flag.ContinueOnError)
 	port := fs.String("port", "8080", "puerto HTTP local")
@@ -239,20 +238,21 @@ func cmdDev(args []string, cfgPath string) {
 	if path == "" || path == "config.yaml" {
 		path = "rkt.dev.yaml"
 	}
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		content := "listen_http: \":" + *port + "\"\n" +
-			"redirect_http_to_https: false\n" +
-			"acme_email: \"dev@localhost\"\n" +
-			"healthz:\n  enabled: true\n  listen: \"127.0.0.1:8090\"\n" +
-			"rate_limit:\n  enabled: false\n" +
-			"routes:\n  - hosts: [\"app1.test\"]\n    target: \"http://127.0.0.1:3000\"\n"
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-			log.Fatalf("dev: %v", err)
-		}
-		fmt.Printf("config local creada: %s\n", path)
+	db, err := store.Open(logx.DBPath(path))
+	if err != nil {
+		log.Fatalf("dev: %v", err)
 	}
-	fmt.Println("Hosts sugeridos (admin, C:\\Windows\\System32\\drivers\\etc\\hosts):")
-	fmt.Println("  127.0.0.1  app1.test")
+	if _, statErr := os.Stat(logx.Abs(path)); statErr == nil {
+		// migra YAML existente a DB (una vez) sin perder infra
+		if _, err := cfgfile.LoadBase(db, path); err != nil {
+			log.Fatalf("dev: migrar config: %v", err)
+		}
+	} else if err := cfgfile.SeedDev(db, *port); err != nil {
+		log.Fatalf("dev: %v", err)
+	}
+	_ = db.Close()
+	fmt.Println("Datos en", logx.DirFor(path), "(config en SQLite, sin YAML)")
+	fmt.Println("Dominios locales: usa *.localhost (resuelve solo) o `rkt hosts add <host>` como admin.")
 	fmt.Println("Sin TLS ni puerto 80: no pide admin. Polling GitHub sí funciona; webhooks no (sin inbound).")
 	RunForeground(path)
 }
@@ -281,7 +281,7 @@ func cmdRestart(args []string, cfgPath string) {
 	if len(args) != 1 || args[0] == "" {
 		log.Fatal("uso: restart <app>")
 	}
-	cfg, err := config.Load(cfgPath)
+	cfg, err := cfgfile.Load(cfgPath)
 	if err != nil {
 		log.Fatalf("restart: %v", err)
 	}
@@ -310,7 +310,7 @@ func cmdDeploy(args []string, cfgPath string) {
 	if len(args) != 1 || args[0] == "" {
 		log.Fatal("uso: deploy <app>")
 	}
-	cfg, err := config.Load(cfgPath)
+	cfg, err := cfgfile.Load(cfgPath)
 	if err != nil {
 		log.Fatalf("deploy: %v", err)
 	}

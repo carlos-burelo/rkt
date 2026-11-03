@@ -28,11 +28,16 @@ func Abs(p string) string {
 			return c
 		}
 	}
-	exe, err := os.Executable()
-	if err != nil {
-		return p
+	if exe, err := os.Executable(); err == nil {
+		if c := filepath.Join(filepath.Dir(exe), p); fileExists(c) {
+			return c
+		}
 	}
-	return filepath.Join(filepath.Dir(exe), p)
+	// Sin archivo: el CWD es el ancla estable (dev desde el repo).
+	if wd, err := os.Getwd(); err == nil {
+		return filepath.Join(wd, p)
+	}
+	return p
 }
 
 func fileExists(p string) bool {

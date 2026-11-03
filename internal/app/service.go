@@ -766,39 +766,21 @@ func shortSHA(s string) string {
 	return s
 }
 
-// watchMerged recarga sin downtime ante cambios del YAML (infra) o de
-// la DB (flota vía CLI). Fuente inválida = se conserva la anterior.
-// Campos que exigen reinicio solo se avisan.
+// watchMerged recarga la flota cuando cambia la DB (única fuente).
+// Fuente inválida = se conserva la anterior.
 func (p *Program) watchMerged(live *config.Live, db *store.DB) {
 	t := time.NewTicker(pollInterval)
 	defer t.Stop()
-	var lastTime, lastSize int64
-	if st, err := os.Stat(p.cfgPath); err == nil {
-		lastTime, lastSize = st.ModTime().UnixNano(), st.Size()
-	}
 	lastVer := db.ConfigVersion()
-	base, err := config.Load(p.cfgPath)
-	if err != nil {
-		p.log.Warn("yaml ilegible para watcher, solo DB", "err", err)
-	}
 	for range t.C {
-		changed := false
-		if st, err := os.Stat(p.cfgPath); err == nil {
-			if st.ModTime().UnixNano() != lastTime || st.Size() != lastSize {
-				lastTime, lastSize = st.ModTime().UnixNano(), st.Size()
-				if b, err := config.Load(p.cfgPath); err != nil {
-					p.log.Warn("yaml nuevo inválido, conservo anterior", "err", err)
-				} else {
-					base = b
-					changed = true
-				}
-			}
-		}
-		if v := db.ConfigVersion(); v != lastVer {
+		if v := db.ConfigVersion(); v == lastVer {
+			continue
+		} else {
 			lastVer = v
-			changed = true
 		}
-		if !changed {
+		base, err := cfgfile.LoadBase(db, p.cfgPath)
+		if err != nil {
+			p.log.Warn("infra inválida en DB, conservo anterior", "err", err)
 			continue
 		}
 		next, err := cfgfile.Snapshot(db, base)
