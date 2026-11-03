@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -990,6 +991,43 @@ func NewHandler(d Deps) http.Handler {
 			return
 		}
 		writeJSON(w, map[string]string{"ok": "true"})
+	})
+
+	// Proxy: routes con alcance real (dial) + TLS por host.
+	// Lo que Vercel esconde, rkt lo muestra: cada host, a dónde va,
+	// si el backend responde y si el cert existe.
+	mux.HandleFunc("/api/v1/proxy", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+			return
+		}
+		type routeStatus struct {
+			Hosts  []string `json:"hosts"`
+			Target string   `json:"target"`
+			OK     bool     `json:"ok"`
+			TLS    []string `json:"tls"`
+		}
+		out := []routeStatus{}
+		for _, x := range d.Live.Get().Routes {
+			rs := routeStatus{Hosts: x.Hosts, Target: x.Target, TLS: []string{}}
+			if u, err := url.Parse(x.Target); err == nil && u.Host != "" {
+				rs.OK = health.BackendOK(u.Host)
+			}
+			for _, h := range x.Hosts {
+				state := "off"
+				if d.TLS != nil {
+					if ok, exp := d.TLS(h); ok {
+						state = exp
+						if state == "" {
+							state = "auto"
+						}
+					}
+				}
+				rs.TLS = append(rs.TLS, state)
+			}
+			out = append(out, rs)
+		}
+		writeJSON(w, out)
 	})
 
 	// Build log de un deploy (para vista detalle) + retry mismo rev.

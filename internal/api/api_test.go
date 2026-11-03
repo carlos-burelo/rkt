@@ -727,3 +727,35 @@ func TestAlertsCRUD(t *testing.T) {
 		t.Fatalf("baja fantasma: quiere 400, got %d", rec.Code)
 	}
 }
+
+func TestProxyStatus(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	// backend caído (puerto cerrado) + TLS apagado (nil)
+	h := NewHandler(d)
+	opTok := loginAs(t, h, db, "op", store.RoleOperator)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/proxy", opTok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("proxy: %d", rec.Code)
+	}
+	var rows []struct {
+		Hosts  []string `json:"hosts"`
+		Target string   `json:"target"`
+		OK     bool     `json:"ok"`
+		TLS    []string `json:"tls"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Hosts[0] != "a.test" {
+		t.Fatalf("filas mal: %+v", rows)
+	}
+	if rows[0].OK {
+		t.Fatal("puerto 9 cerrado debe dar ok=false")
+	}
+	if len(rows[0].TLS) != 1 || rows[0].TLS[0] != "off" {
+		t.Fatalf("tls mal: %+v", rows[0].TLS)
+	}
+}

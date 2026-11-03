@@ -10,6 +10,7 @@ import { CommandPalette } from "../shared/components/CommandPalette";
 import { useOnline } from "../shared/hooks/useOnline";
 import { DeployDrawer } from "../features/deployments/DeployDrawer";
 import { Overview } from "../features/overview/Overview";
+import { Proxy } from "../features/proxy/Proxy";
 import { CreateDialog } from "../features/apps/CreateDialog";
 import { AnalyticsPage } from "../features/overview/AnalyticsPage";
 import { Observability } from "../features/overview/Observability";
@@ -30,7 +31,7 @@ import { listRoutes } from "../features/routes/api";
 import { getSettings } from "../features/settings/api";
 import { listUsers } from "../features/users/api";
 
-export type Page = "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "app" | "analytics" | "observability" | "environment" | "ci" | "alerts";
+export type Page = "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "app" | "analytics" | "observability" | "environment" | "ci" | "alerts" | "proxy";
 
 export function App() {
   const [who, setWho] = useState<Me | null>(null);
@@ -174,6 +175,7 @@ export function App() {
 
   const nav: { id: Page; label: string; admin?: boolean }[] = [
     { id: "overview", label: "Overview" },
+    { id: "proxy", label: "Proxy" },
     { id: "deployments", label: "Deployments" },
     { id: "ci", label: "CI" },
     { id: "logs", label: "Logs" },
@@ -325,6 +327,7 @@ export function App() {
           ) : (
             <>
           {page === "overview" && <Overview apps={apps} evs={evs} deps={deps} metas={metas} openApp={openApp} />}
+          {page === "proxy" && <Proxy fail={fail} />}
           {page === "deployments" && (
             <Deployments deps={vis} filtered={filter !== "" || appFilter !== ""} onSelect={setSel} />
           )}

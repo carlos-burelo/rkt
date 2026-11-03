@@ -90,12 +90,8 @@ func NewHandler(d Deps) http.Handler {
 				continue
 			}
 			seen[t.Host] = true
-			c := backendCheck{Target: t.String()}
-			conn, err := net.DialTimeout("tcp", t.Host, 2*time.Second)
-			if err == nil {
-				c.OK = true
-				conn.Close()
-			} else {
+			c := backendCheck{Target: t.String(), OK: BackendOK(t.Host)}
+			if !c.OK {
 				st.Status = "degraded"
 			}
 			st.Backends = append(st.Backends, c)
@@ -103,6 +99,16 @@ func NewHandler(d Deps) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(st)
 	})
+}
+
+// BackendOK dial TCP corto a host:puerto (único hogar del alcance).
+func BackendOK(hostport string) bool {
+	conn, err := net.DialTimeout("tcp", hostport, 2*time.Second)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
 }
 
 // restart ejecuta POST /restart/<name> contra el supervisor.
