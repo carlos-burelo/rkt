@@ -18,11 +18,11 @@ export function CI({
           En curso ({running.length})
         </p>
         {running.length === 0 && <p className="text-xs text-zinc-600">Nada corriendo.</p>}
-        {running.length > 0 && <Deployments deps={running} filtered={false} onSelect={onSelect} />}
+        {running.length > 0 && <Deployments deps={running} appFilter="" toolbar={false} onSelect={onSelect} />}
       </div>
       <div>
         <p className="mb-2 text-xs uppercase tracking-wider text-zinc-500">Últimos</p>
-        <Deployments deps={done} filtered={false} onSelect={onSelect} />
+        <Deployments deps={done} appFilter="" toolbar={false} onSelect={onSelect} />
       </div>
     </div>
   );

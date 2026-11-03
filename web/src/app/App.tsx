@@ -4,20 +4,25 @@ import { Toaster } from "@/components/ui/sonner";
 import {
   LayoutGrid, Network, Rocket, Hammer, Terminal, BarChart3, Activity,
   Bell, Globe, FlaskConical, Settings as SettingsIcon, Users as UsersIcon,
-  Plus, Menu, X, Search,
+  Plus, ChevronUp,
 } from "lucide-react";
 import { api } from "../shared/lib/http";
 import { Me, Status, Deployment, RktEvent, AppMeta, User } from "../shared/lib/types";
 import { logout, me, authStatus } from "../features/auth/api";
 import { Login } from "../features/auth/Login";
 import { Setup } from "../features/auth/Setup";
-import { Dot, Err, Avatar } from "../shared/components/ui";
+import { Dot, Err } from "../shared/components/ui";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
+  SidebarGroupLabel, SidebarHeader, SidebarInput, SidebarInset, SidebarMenu,
+  SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { InstallButton } from "../shared/components/InstallButton";
 import { CommandPalette } from "../shared/components/CommandPalette";
 import { useOnline } from "../shared/hooks/useOnline";
@@ -68,7 +73,6 @@ export function App() {
   const isAdmin = who?.role === "admin";
   const canWrite = who?.role === "admin" || who?.role === "operator";
   const [page, setPage] = useState<Page>("deployments");
-  const [filter, setFilter] = useState("");
   const [appFilter, setAppFilter] = useState("");
   const [status, setStatus] = useState<Status | null>(null);
   const [metas, setMetas] = useState<AppMeta[]>([]);
@@ -85,7 +89,6 @@ export function App() {
   const [settings, setSettingsMap] = useState<Record<string, string>>({});
   const [users, setUsers] = useState<User[]>([]);
   const [palette, setPalette] = useState(false);
-  const [menu, setMenu] = useState(false);
   const [brand, setBrand] = useState("rkt");
   const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -191,12 +194,6 @@ export function App() {
   if (!authed) return <Login onOk={setWho} />;
 
   const apps = status?.apps ?? [];
-  const f = filter.toLowerCase();
-  const vis = deps.filter(
-    (d) =>
-      (appFilter === "" || d.app === appFilter) &&
-      (f === "" || d.app.toLowerCase().includes(f) || d.rev.toLowerCase().includes(f)),
-  );
   const appMeta = metas.find((m) => m.name === appFilter);
 
   async function act(app: string, a: "restart" | "deploy" | "rollback") {
@@ -212,203 +209,199 @@ export function App() {
   function openApp(name: string) {
     setAppFilter(name);
     setPage("app");
-    setMenu(false);
   }
 
   return (
-    <div className="flex min-h-screen bg-background text-sm text-foreground">
+    <SidebarProvider>
       <Toaster theme="dark" position="bottom-right" />
-      {/* topbar móvil */}
-      <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-3 border-b bg-background/95 px-4 py-2.5 backdrop-blur md:hidden">
-        <Button variant="outline" size="icon" onClick={() => setMenu(true)} aria-label="menú">
-          <Menu />
-        </Button>
-        <span className="font-bold tracking-tight">▲ {brand}</span>
-        <span className="flex-1" />
-        {!online && <span className="text-xs text-amber-300">offline</span>}
-      </div>
-      {menu && (
-        <div className="fixed inset-0 z-40 bg-black/70 md:hidden" onClick={() => setMenu(false)} />
-      )}
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r bg-background transition-transform md:static md:z-auto md:w-56 md:translate-x-0 ${
-          menu ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <div className="flex items-center gap-2 border-b px-4 py-3">
-          <Avatar name={brand} />
-          <span className="text-sm font-semibold tracking-tight">{brand}</span>
-          <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">local</span>
-          <span className="flex-1" />
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMenu(false)} aria-label="cerrar">
-            <X />
-          </Button>
-        </div>
-        {canWrite && (
-          <div className="px-3 pt-3">
-            <Button className="w-full" size="sm" onClick={() => setCreateOpen(true)}>
+      <Sidebar collapsible="icon">
+        <SidebarHeader>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" onClick={() => setPage("overview")}>
+                <Avatar className="h-8 w-8 rounded-lg text-sm">
+                  <AvatarFallback className="rounded-lg">{(brand.trim()[0] ?? "R").toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">{brand}</span>
+                  <span className="truncate text-xs text-muted-foreground">local</span>
+                </div>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+          {canWrite && (
+            <Button className="mt-1 w-full" size="sm" onClick={() => setCreateOpen(true)}>
               <Plus /> Create New
             </Button>
-          </div>
-        )}
-        <div className="px-3 pt-3">
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full justify-between text-muted-foreground"
+          )}
+          <button
             onClick={() => setPalette(true)}
+            className="mt-2 flex w-full items-center justify-between rounded-md border border-input bg-transparent px-2 py-1.5 text-xs text-muted-foreground hover:border-ring"
           >
-            <span className="flex items-center gap-2"><Search /> Buscar o accionar…</span>
+            <span>Buscar o accionar…</span>
             <kbd className="rounded border px-1 font-mono text-[10px]">⌘K</kbd>
-          </Button>
-        </div>
-        <div className="px-3 pt-3">
-          <Input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Buscar app o sha…"
-            className="h-8 text-xs"
-          />
-        </div>
-        <nav className="space-y-0.5 p-3">
-          {NAV.filter((n) => !n.admin || isAdmin).map((n) => (
-            <Button
-              key={n.id}
-              variant={page === n.id || (n.id === "deployments" && page === "app") ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              size="sm"
-              onClick={() => {
-                setPage(n.id);
-                setMenu(false);
-              }}
-            >
-              <n.icon />
-              {n.label}
-            </Button>
-          ))}
-        </nav>
-        <div className="border-t p-3">
-          <p className="px-2.5 pb-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">Apps</p>
-          <Button
-            variant={appFilter === "" ? "secondary" : "ghost"}
-            size="sm"
-            className="w-full justify-start font-mono text-xs"
-            onClick={() => setAppFilter("")}
-          >
-            todas
-          </Button>
-          {apps.map((a) => (
-            <Button
-              key={a.name}
-              variant={appFilter === a.name ? "secondary" : "ghost"}
-              size="sm"
-              className="w-full justify-start font-mono text-xs"
-              onClick={() => openApp(a.name)}
-            >
-              <Dot status={a.failed ? "failed" : a.running ? "running" : "stopped"} />
-              {a.name}
-            </Button>
-          ))}
-        </div>
-        <div className="flex-1" />
-        <div className="space-y-1 border-t p-3">
+          </button>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {NAV.filter((n) => !n.admin || isAdmin).map((n) => (
+                  <SidebarMenuItem key={n.id}>
+                    <SidebarMenuButton
+                      isActive={page === n.id || (n.id === "deployments" && page === "app")}
+                      onClick={() => setPage(n.id)}
+                      tooltip={n.label}
+                    >
+                      <n.icon />
+                      <span>{n.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          <SidebarGroup>
+            <SidebarGroupLabel>Apps</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={appFilter === ""}
+                    onClick={() => setAppFilter("")}
+                    className="font-mono text-xs"
+                  >
+                    <span>todas</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {apps.map((a) => (
+                  <SidebarMenuItem key={a.name}>
+                    <SidebarMenuButton
+                      isActive={appFilter === a.name}
+                      onClick={() => openApp(a.name)}
+                      className="font-mono text-xs"
+                      tooltip={a.name}
+                    >
+                      <Dot status={a.failed ? "failed" : a.running ? "running" : "stopped"} />
+                      <span>{a.name}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter>
           {!online && (
             <p className="rounded-md bg-amber-500/15 px-2.5 py-1.5 text-xs text-amber-300">
-              Sin conexión — mostrando último estado
+              Sin conexión
             </p>
           )}
           <InstallButton />
-          <DropdownMenu>
-            <DropdownMenuTrigger className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left outline-none hover:bg-accent">
-              <Avatar name={who?.user ?? "?"} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium">{who?.user}</p>
-                <p className="font-mono text-[10px] text-muted-foreground">{who?.role} · v{status?.version ?? "…"}</p>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left outline-none hover:bg-accent">
+                  <Avatar className="h-6 w-6 text-[11px]">
+                    <AvatarFallback>{(who?.user.trim()[0] ?? "?").toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="grid min-w-0 flex-1 text-left text-xs leading-tight">
+                    <span className="truncate font-medium">{who?.user}</span>
+                    <span className="truncate font-mono text-[10px] text-muted-foreground">
+                      {who?.role} · v{status?.version ?? "…"}
+                    </span>
+                  </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40">
+                  <DropdownMenuItem onClick={() => logout().finally(() => setWho(null))}>
+                    Salir
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+      <SidebarInset>
+        <header className="flex items-center gap-2 border-b px-4 py-2.5">
+          <SidebarTrigger />
+          <span className="text-xs text-muted-foreground">▲ {brand}{page === "app" ? ` / ${appFilter}` : ""}</span>
+          <span className="flex-1 text-center text-sm font-medium capitalize">
+            {page === "app" ? appFilter || "app" : page}
+          </span>
+          {!online && <span className="text-xs text-amber-300">offline</span>}
+          {canWrite && (
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus /> Create New
+            </Button>
+          )}
+          <Avatar className="h-6 w-6 text-[11px]">
+            <AvatarFallback>{(who?.user.trim()[0] ?? "?").toUpperCase()}</AvatarFallback>
+          </Avatar>
+        </header>
+        <main className="min-w-0 flex-1 p-4 md:p-6">
+          <div className="mx-auto max-w-5xl">
+            <Err msg={err} />
+            {boot ? (
+              <div className="space-y-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
               </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={() => logout().finally(() => setWho(null))}>
-                Salir
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </aside>
-
-      <main className="min-w-0 flex-1 p-4 pt-16 md:p-6 md:pt-6">
-        <div className="mx-auto max-w-4xl">
-          <div className="mb-4 hidden items-center gap-3 text-sm md:flex">
-            <span className="text-xs text-muted-foreground">▲ {brand}{page === "app" ? ` / ${appFilter}` : ""}</span>
-            <span className="flex-1 text-center text-sm font-medium capitalize">
-              {page === "app" ? appFilter || "app" : page}
-            </span>
-            {!online && <span className="text-xs text-amber-300">offline</span>}
-            {canWrite && (
-              <Button size="sm" onClick={() => setCreateOpen(true)}>
-                <Plus /> Create New
-              </Button>
+            ) : (
+              <>
+                {page === "overview" && <Overview apps={apps} evs={evs} deps={deps} metas={metas} openApp={openApp} />}
+                {page === "proxy" && <Proxy fail={fail} />}
+                {page === "deployments" && (
+                  <Deployments deps={deps} appFilter={appFilter} onSelect={setSel} />
+                )}
+                {page === "app" && (
+                  <AppDetail
+                    app={appFilter}
+                    meta={appMeta}
+                    status={apps.find((a) => a.name === appFilter)}
+                    env={env}
+                    deployments={deps.filter((d) => d.app === appFilter)}
+                    canWrite={canWrite}
+                    onAction={act}
+                    onOpenDeploy={setSel}
+                    onDeleted={() => {
+                      setAppFilter("");
+                      setPage("deployments");
+                      refresh();
+                    }}
+                    refresh={refresh}
+                    fail={fail}
+                  />
+                )}
+                {page === "logs" && (
+                  <Logs
+                    apps={apps}
+                    appFilter={appFilter}
+                    setAppFilter={setAppFilter}
+                    log={log}
+                    setLog={setLog}
+                    follow={follow}
+                    setFollow={setFollow}
+                    refresh={refresh}
+                    logRef={logRef}
+                    deps={deps}
+                  />
+                )}
+                {page === "routes" && <Routes routes={routes} canWrite={canWrite} refresh={refresh} fail={fail} />}
+                {page === "settings" && <Settings settings={settings} canWrite={canWrite} refresh={refresh} fail={fail} />}
+                {page === "users" && isAdmin && <Users users={users} refresh={refresh} fail={fail} />}
+                {page === "analytics" && <AnalyticsPage />}
+                {page === "observability" && <Observability />}
+                {page === "alerts" && <Alerts canWrite={canWrite} fail={fail} />}
+                {page === "environment" && <EnvAll fail={fail} />}
+                {page === "ci" && <CI deps={deps} onSelect={setSel} />}
+              </>
             )}
-            <Avatar name={who?.user ?? "?"} />
           </div>
-          <Err msg={err} />
-          {boot ? (
-            <div className="space-y-2">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : (
-            <>
-          {page === "overview" && <Overview apps={apps} evs={evs} deps={deps} metas={metas} openApp={openApp} />}
-          {page === "proxy" && <Proxy fail={fail} />}
-          {page === "deployments" && (
-            <Deployments deps={vis} filtered={filter !== "" || appFilter !== ""} onSelect={setSel} />
-          )}
-          {page === "app" && (
-            <AppDetail
-              app={appFilter}
-              meta={appMeta}
-              status={apps.find((a) => a.name === appFilter)}
-              env={env}
-              deployments={deps.filter((d) => d.app === appFilter)}
-              canWrite={canWrite}
-              onAction={act}
-              onOpenDeploy={setSel}
-              onDeleted={() => {
-                setAppFilter("");
-                setPage("deployments");
-                refresh();
-              }}
-              refresh={refresh}
-              fail={fail}
-            />
-          )}
-          {page === "logs" && (
-            <Logs
-              apps={apps}
-              appFilter={appFilter}
-              setAppFilter={setAppFilter}
-              log={log}
-              setLog={setLog}
-              follow={follow}
-              setFollow={setFollow}
-              refresh={refresh}
-              logRef={logRef}
-              deps={deps}
-            />
-          )}
-          {page === "routes" && <Routes routes={routes} canWrite={canWrite} refresh={refresh} fail={fail} />}
-          {page === "settings" && <Settings settings={settings} canWrite={canWrite} refresh={refresh} fail={fail} />}
-          {page === "users" && isAdmin && <Users users={users} refresh={refresh} fail={fail} />}
-          {page === "analytics" && <AnalyticsPage />}
-          {page === "observability" && <Observability />}
-          {page === "alerts" && <Alerts canWrite={canWrite} fail={fail} />}
-          {page === "environment" && <EnvAll fail={fail} />}
-          {page === "ci" && <CI deps={deps} onSelect={setSel} />}
-            </>
-          )}
-        </div>
-      </main>
+        </main>
+      </SidebarInset>
 
       <CreateDialog
         open={createOpen}
@@ -448,6 +441,6 @@ export function App() {
         openDeploy={setSel}
         onAction={act}
       />
-    </div>
+    </SidebarProvider>
   );
 }
