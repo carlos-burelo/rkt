@@ -1,0 +1,15 @@
+# Normaliza texto a LF en cualquier checkout (Windows CI incluido).
+# gofmt -l falla con CRLF; los binarios no se tocan.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.avif binary
+*.woff binary
+*.woff2 binary
+*.mp4 binary
+*.webm binary
