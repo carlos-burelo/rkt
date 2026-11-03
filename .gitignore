@@ -14,6 +14,9 @@ certs/
 # índice local tgrep
 .tgrep/
 
+# reglas locales de agente (no se comitean)
+AGENTS.md
+
 # web (monorepo): deps y build (pero .gitkeep mantiene embed compilable)
 web/node_modules/
 web/dist/*
