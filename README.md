@@ -1,9 +1,9 @@
 # rkt
 
-[![release](https://img.shields.io/github/v/release/carlos-burelo/rkt-proxy)](https://github.com/carlos-burelo/rkt-proxy/releases/latest)
+[![release](https://img.shields.io/github/v/release/carlos-burelo/rkt)](https://github.com/carlos-burelo/rkt/releases/latest)
 [![go](https://img.shields.io/badge/go-1.26-blue)](https://go.dev)
-[![platform](https://img.shields.io/badge/platform-windows--amd64-blue)](https://github.com/carlos-burelo/rkt-proxy)
-[![license](https://img.shields.io/github/license/carlos-burelo/rkt-proxy)](LICENSE)
+[![platform](https://img.shields.io/badge/platform-windows--amd64-blue)](https://github.com/carlos-burelo/rkt)
+[![license](https://img.shields.io/github/license/carlos-burelo/rkt)](LICENSE)
 
 PaaS para **Windows Server** en un solo binario Go. Proxy inverso con TLS
 automático, supervisor de procesos, deploys desde Git, dashboard y servidor MCP.
@@ -98,7 +98,7 @@ Requisitos: registro DNS `A`, puertos `80/443` abiertos y PowerShell como
 administrador.
 
 ```powershell
-irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 | iex
 ```
 
 El instalador descarga el release, verifica checksum, registra el servicio

@@ -1,17 +1,17 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-  Instala rkt-proxy en Windows Server (prod): binario + SQLite + firewall + servicio.
+  Instala rkt en Windows Server (prod): binario + SQLite + firewall + servicio.
 .DESCRIPTION
   Pensado para: irm <url> | iex. Descarga el .exe del último GitHub release,
   abre 80/443 y registra/arranca el servicio. La config se siembra sola en
   SQLite (`<dir>/logs/rkt.db`) y se edita por dashboard/CLI.
 .EXAMPLE
   # Actualizar a último release (idempotente, con backup + rollback auto):
-  irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1 | iex
+  irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 | iex
 .EXAMPLE
   # Pin de versión, rollback o token deploy:
-  $s = irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1
+  $s = irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1
   & ([scriptblock]::Create($s)) -Version v0.1.0
   & ([scriptblock]::Create($s)) -Rollback
   & ([scriptblock]::Create($s)) -GithubToken "ghp_..."
@@ -29,7 +29,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
-if ([string]::IsNullOrWhiteSpace($Repo)) { $Repo = "carlos-burelo/rkt-proxy" }
+if ([string]::IsNullOrWhiteSpace($Repo)) { $Repo = "carlos-burelo/rkt" }
 
 # 1. admin obligatorio (bindear 80/443 + servicio)
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
