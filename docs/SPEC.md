@@ -1,5 +1,16 @@
 # SPEC — dashboard rkt estilo Vercel (inspiración, no clon)
 
+## Estado (2026-11-03, todo construido salvo nota)
+
+Hecho: B1–B9 (trazabilidad, discover-event, usage/analytics/
+observability, app PUT/DELETE, retry, TLS, site_name/quotas, alertas),
+UI 1–12 (layout, overview, deployments, app, logs, analytics,
+observability, domains, env, settings, users, CI, alerts, ⌘K, PWA).
+Diferido honesto: 10.2 shared env (fase 2), notificaciones push de
+alertas (solo evento+dashboard), facetas de log por línea (sin campos).
+
+Fuente: 8 capturas vercel.com/coatl (Team Overview, Deployments, Analytics,
+
 Fuente: 8 capturas vercel.com/coatl (Team Overview, Deployments, Analytics,
 Project Overview, Env Vars, Domains, Settings, Logs). Marca, iconos y
 Geist NO se copian. Se copian patrones UX + densidad.

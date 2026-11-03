@@ -53,8 +53,12 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 | `env list <app>` | Vars inline (`KEY=valor` por línea) |
 | `env set <app> CLAVE=valor` | Escribe (+expande `${}`) |
 | `env unset <app> CLAVE` | Borra |
-| `settings list` | `node_bin, python_bin, base_domain, port_pool` |
-| `settings set CLAVE=valor` | Escribe setting |
+| `settings list` | `node_bin, python_bin, base_domain, port_pool, site_name, quota_reqs, quota_bytes` |
+| `settings set CLAVE=valor` | Escribe setting (solo conocidas) |
+| `users list` | Usuarios dashboard (`name, role, created_at`) |
+| `users add <nombre> [--role admin]` | Alta con password sin eco (el primero se fuerza a admin) |
+| `users del <nombre>` | Baja (protege último admin, mata sesiones) |
+| `users passwd <nombre>` | Rota password e invalida sesiones |
 | `config export [file]` | Vuelca YAML completo (+`x-settings`) para git |
 | `config import <file>` | Restaura flota + settings (valida antes) |
 | `github login` | URL para instalar la App en browser |
@@ -83,6 +87,27 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 
 `apps list` / `routes list`: arrays de objetos con los campos de la tabla.
 Vacío = `[]` (nunca `null` en listas).
+
+## Dashboard (`/dashboard/` + `/api/v1/`)
+
+SPA embebida servida en el listener healthz (loopback). Auth por
+credenciales: crea el primer admin con `users add`, entra en
+`/dashboard/`, sesión por cookie httpOnly (30d). Roles:
+viewer lee, operator muta, admin gestiona usuarios.
+
+Endpoints principales (todos salvo login exigen sesión):
+`GET status|deployments|events|logs|apps|routes|settings|users|alerts`,
+`GET apps/:name|deployments/:id/log|domains/:host/tls|usage|analytics|observability`,
+`POST auth/login|auth/logout|users|routes|apps|apps/:n/restart|deploy|rollback|deployments/:id/retry|alerts`,
+`PUT apps/:name|apps/:n/env|settings`, `DELETE users/:n|routes?host|apps/:n|apps/:n/env?key|alerts/:id`.
+Errores: JSON `{error}` (401 sin sesión, 403 sin rol).
+
+Páginas: Overview (métricas, usage, alertas, discovery, actividad),
+Deployments (filtros, drawer con build log + timeline + pasos CI),
+App (production, checklist, tráfico, settings, env, danger),
+Logs (runtime/build, search, niveles, live, histograma),
+Analytics, Observability, Domains (TLS), Environment (agrupado),
+Settings, Users, CI, Alerts. ⌘K paleta, toasts, PWA offline.
 
 ## MCP (`rkt mcp`)
 
