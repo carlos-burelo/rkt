@@ -24,6 +24,12 @@ var presetBinKey = map[string]string{
 	"next": store.KeyNodeBin, "node": store.KeyNodeBin, "python": store.KeyPythonBin,
 }
 
+// PresetBinKey expone la clave de setting del binario de un preset.
+func PresetBinKey(preset string) (string, bool) {
+	k, ok := presetBinKey[preset]
+	return k, ok
+}
+
 // PresetBuild tabla canónica next|node|python -> build/args/env.
 // Unico lugar con estos literales; CLI/MCP/discover la usan.
 func PresetBuild(preset, port string) (build, args []string, env map[string]string) {

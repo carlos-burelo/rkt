@@ -239,6 +239,9 @@ export function CreateDialog({
                   placeholder="C:\proyectos\mi-app"
                   ariaLabel="directorio"
                 />
+                <span className="font-mono text-[9px] normal-case text-muted-foreground/70">
+                  el comando se infiere del proyecto; si falla, define comando o configura node_bin/python_bin en Ajustes
+                </span>
               </Field>
             )}
 

@@ -102,6 +102,16 @@ func CreateApp(db *store.DB, repo, name, domain string, port int, command, dir, 
 		if err != nil {
 			return config.App{}, nil, "", err
 		}
+	} else if dir != "" {
+		// directorio local: misma inferencia que un repo (preset, nombre, puerto)
+		if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+			return config.App{}, nil, "", fmt.Errorf("directorio no existe: %s", dir)
+		}
+		var err error
+		sug, err = discover.Suggest(db, nil, dir)
+		if err != nil {
+			return config.App{}, nil, "", err
+		}
 	} else {
 		sug = &discover.Suggestion{}
 	}
@@ -111,11 +121,18 @@ func CreateApp(db *store.DB, repo, name, domain string, port int, command, dir, 
 	if name == "" {
 		return config.App{}, nil, "", fmt.Errorf("sin nombre (pasa name)")
 	}
+	if preset == "" {
+		preset = sug.Preset
+	}
 	if command == "" {
 		command = sug.Command
 	}
 	if command == "" {
-		return config.App{}, nil, "", fmt.Errorf("sin binario (pasa command absoluto)")
+		// error accionable: dice qué falta y dónde se arregla
+		if binKey, ok := discover.PresetBinKey(preset); ok {
+			return config.App{}, nil, "", fmt.Errorf("sin binario para preset %q (define comando o configura %s en Ajustes)", preset, binKey)
+		}
+		return config.App{}, nil, "", fmt.Errorf("sin binario inferido (define comando o configura node_bin/python_bin en Ajustes)")
 	}
 	if dir == "" {
 		dir = sug.Dir
@@ -134,9 +151,6 @@ func CreateApp(db *store.DB, repo, name, domain string, port int, command, dir, 
 		domains = []string{domain}
 	} else if sug.Domain != "" {
 		domains = []string{sug.Domain}
-	}
-	if preset == "" {
-		preset = sug.Preset
 	}
 	build, args, env := discover.PresetBuild(preset, portS)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
