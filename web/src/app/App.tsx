@@ -54,6 +54,7 @@ export function App() {
   const [users, setUsers] = useState<User[]>([]);
   const [palette, setPalette] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [brand, setBrand] = useState("rkt");
   const logRef = useRef<HTMLPreElement>(null);
 
   function toast(kind: "ok" | "err", msg: string) {
@@ -96,7 +97,14 @@ export function App() {
 
   useEffect(() => {
     me()
-      .then(setWho)
+      .then((m) => {
+        setWho(m);
+        getSettings()
+          .then((s) => {
+            if (s.site_name) setBrand(s.site_name);
+          })
+          .catch(() => {});
+      })
       .catch(() => setWho(null));
   }, []);
 
@@ -177,7 +185,7 @@ export function App() {
         <button onClick={() => setMenu(true)} className="rounded border border-zinc-800 px-2 py-1 text-zinc-300" aria-label="menú">
           ☰
         </button>
-        <span className="font-bold tracking-tight">▲ rkt</span>
+        <span className="font-bold tracking-tight">▲ {brand}</span>
         <span className="flex-1" />
         {!online && <span className="text-xs text-amber-300">offline</span>}
       </div>
@@ -190,7 +198,7 @@ export function App() {
         }`}
       >
         <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-          <span className="text-base font-bold tracking-tight">▲ rkt</span>
+          <span className="text-base font-bold tracking-tight">▲ {brand}</span>
           <button onClick={() => setMenu(false)} className="rounded px-2 text-zinc-500 md:hidden" aria-label="cerrar">
             ✕
           </button>

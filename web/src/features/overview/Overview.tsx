@@ -2,6 +2,7 @@ import { AppStatus, RktEvent, Deployment } from "../../shared/lib/types";
 import { rel } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
 import { Metrics } from "./Metrics";
+import { UsageStrip } from "./UsageStrip";
 
 export function Overview({
   apps,
@@ -17,6 +18,7 @@ export function Overview({
   return (
     <div className="space-y-3">
       <Metrics apps={apps} deps={deps} />
+      <UsageStrip />
       {evs.filter((e) => e.kind === "discover").slice(0, 3).map((e) => (
         <div key={e.id} className="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3">
           <div className="flex-1">

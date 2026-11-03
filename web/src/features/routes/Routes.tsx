@@ -1,6 +1,30 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Route } from "../../shared/lib/types";
-import { addRoute, delRoute } from "./api";
+import { addRoute, delRoute, tlsStatus } from "./api";
+
+function TLSBadge({ host }: { host: string }) {
+  const [txt, setTxt] = useState("…");
+  const [ok, setOk] = useState(false);
+  useEffect(() => {
+    tlsStatus(host)
+      .then((t) => {
+        setOk(t.managed);
+        setTxt(t.expires || "?");
+      })
+      .catch(() => {
+        setOk(false);
+        setTxt("?");
+      });
+  }, [host]);
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 font-mono text-[11px] ${ok ? "bg-emerald-500/15 text-emerald-300" : "bg-zinc-800 text-zinc-500"}`}
+      title={txt}
+    >
+      {ok ? `TLS ${txt}` : "sin TLS"}
+    </span>
+  );
+}
 
 export function Routes({
   routes,
@@ -22,6 +46,7 @@ export function Routes({
         {routes.map((r) => (
           <div key={r.hosts.join(",") + r.target} className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-900/40 px-4 py-2.5 last:border-0">
             <span className="font-mono text-xs">{r.hosts.join(", ")}</span>
+            <TLSBadge host={r.hosts[0]} />
             <span className="text-zinc-600">→</span>
             <span className="font-mono text-xs text-zinc-400">{r.target}</span>
             <span className="flex-1" />

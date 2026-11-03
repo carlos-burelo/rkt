@@ -39,3 +39,16 @@ export interface Obs {
 export async function fetchObs(hours = 6): Promise<Obs> {
   return api<Obs>(`/api/v1/observability?hours=${hours}`);
 }
+
+export interface Usage {
+  days: number;
+  total: number;
+  bytes: number;
+  err_rate: number;
+  p95: string;
+  by_day: Record<string, number>;
+}
+
+export async function fetchUsage(days = 30): Promise<Usage> {
+  return api<Usage>(`/api/v1/usage?days=${days}`);
+}
