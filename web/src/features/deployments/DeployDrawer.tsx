@@ -2,6 +2,7 @@ import { Root, Backdrop, Popup, Title, Close } from "@base_ui/react/dialog";
 import { Deployment } from "../../shared/lib/types";
 import { rel, dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
+import { CopyButton } from "../../shared/components/feedback";
 
 export function DeployDrawer({
   dep,
@@ -39,7 +40,7 @@ export function DeployDrawer({
             </div>
             <dl className="grid grid-cols-2 gap-1.5 font-mono text-xs">
               <dt className="text-zinc-500">status</dt><dd>{dep.status}</dd>
-              <dt className="text-zinc-500">rev</dt><dd className="truncate">{dep.rev}</dd>
+              <dt className="text-zinc-500">rev</dt><dd className="truncate">{dep.rev} <CopyButton text={dep.rev} /></dd>
               <dt className="text-zinc-500">inicio</dt><dd>{rel(dep.started_at)}</dd>
               <dt className="text-zinc-500">duración</dt><dd>{dur(dep.started_at, dep.finished_at)}</dd>
             </dl>

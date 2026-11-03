@@ -3,7 +3,8 @@ import { api } from "../shared/lib/http";
 import { Me, Status, Deployment, RktEvent, AppMeta, User } from "../shared/lib/types";
 import { logout, me } from "../features/auth/api";
 import { Login } from "../features/auth/Login";
-import { Dot, Err, Note } from "../shared/components/ui";
+import { Dot, Err } from "../shared/components/ui";
+import { Toast, ToastStack, CopyButton, Skeleton } from "../shared/components/feedback";
 import { InstallButton } from "../shared/components/InstallButton";
 import { CommandPalette } from "../shared/components/CommandPalette";
 import { useOnline } from "../shared/hooks/useOnline";
@@ -41,7 +42,8 @@ export function App() {
   const [log, setLog] = useState("");
   const [follow, setFollow] = useState(true);
   const [err, setErr] = useState("");
-  const [note, setNote] = useState("");
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [boot, setBoot] = useState(true);
   const [sel, setSel] = useState<Deployment | null>(null);
   const [buildLog, setBuildLog] = useState("");
   const [env, setEnvMap] = useState<Record<string, string>>({});
@@ -50,6 +52,11 @@ export function App() {
   const [users, setUsers] = useState<User[]>([]);
   const [palette, setPalette] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
+
+  function toast(kind: "ok" | "err", msg: string) {
+    const id = Date.now() + Math.random();
+    setToasts((ts) => [...ts.slice(-3), { id, kind, msg }]);
+  }
 
   function fail(e: unknown) {
     if (e instanceof Error && e.message.startsWith("no autorizado")) {
@@ -79,6 +86,8 @@ export function App() {
       if (page === "app" && appFilter) setEnvMap(await getEnv(appFilter));
     } catch (e) {
       fail(e);
+    } finally {
+      setBoot(false);
     }
   }
 
@@ -133,12 +142,11 @@ export function App() {
 
   async function act(app: string, a: "restart" | "deploy" | "rollback") {
     try {
-      setNote("");
       await appAction(app, a);
-      setNote(`${a} ${app} ok`);
+      toast("ok", `${a} ${app} ok`);
       refresh();
     } catch (e) {
-      fail(e);
+      toast("err", e instanceof Error ? e.message : "error");
     }
   }
 
@@ -240,7 +248,10 @@ export function App() {
       <main className="min-w-0 flex-1 p-6">
         <div className="mx-auto max-w-4xl">
           <Err msg={err} />
-          <Note msg={note} />
+          {boot ? (
+            <Skeleton rows={6} />
+          ) : (
+            <>
           {page === "overview" && <Overview apps={apps} evs={evs} openApp={openApp} />}
           {page === "deployments" && (
             <Deployments deps={vis} filtered={filter !== "" || appFilter !== ""} onSelect={setSel} />
@@ -273,6 +284,9 @@ export function App() {
           {page === "routes" && <Routes routes={routes} canWrite={canWrite} refresh={refresh} fail={fail} />}
           {page === "settings" && <Settings settings={settings} canWrite={canWrite} refresh={refresh} fail={fail} />}
           {page === "users" && isAdmin && <Users users={users} refresh={refresh} fail={fail} />}
+            </>
+          )}
+          <ToastStack toasts={toasts} dismiss={(id) => setToasts((ts) => ts.filter((t) => t.id !== id))} />
         </div>
       </main>
 

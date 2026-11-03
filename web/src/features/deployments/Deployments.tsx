@@ -1,6 +1,7 @@
 import { Deployment } from "../../shared/lib/types";
 import { rel } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
+import { CopyButton } from "../../shared/components/feedback";
 
 export function Deployments({
   deps,
@@ -22,6 +23,7 @@ export function Deployments({
           <Dot status={d.status} />
           <span className="font-mono">{d.app}</span>
           <span className="font-mono text-xs text-zinc-500">{d.rev.slice(0, 8)}</span>
+          <CopyButton text={d.rev} />
           <span className="flex-1" />
           <span className="text-xs text-zinc-500">
             {d.status === "running" ? "building…" : rel(d.finished_at || d.started_at)}
