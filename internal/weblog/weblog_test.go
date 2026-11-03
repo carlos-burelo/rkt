@@ -75,3 +75,22 @@ func TestParseFileYSummary(t *testing.T) {
 		t.Fatalf("inexistente debe dar vacío, got %d", len(es))
 	}
 }
+
+// FuzzParseLine: ninguna línea del mundo real puede tumbar el parser.
+func FuzzParseLine(f *testing.F) {
+	for _, seed := range strings.Split(sample, "\n") {
+		f.Add(seed)
+	}
+	f.Add("")
+	f.Add("[")
+	f.Add(`1.2.3.4 - - [03/Nov/2026:10:00:00 -0600] "GET / HTTP/1.1" 200 1 "-" "u" host="a.test" dur=1ms`)
+	f.Fuzz(func(t *testing.T, line string) {
+		e, ok := ParseLine(line)
+		if !ok {
+			return
+		}
+		if e.Method == "" {
+			t.Fatalf("ok sin método: %q", line)
+		}
+	})
+}

@@ -111,3 +111,25 @@ func TestListEvents(t *testing.T) {
 		t.Fatalf("límite: %d", len(none))
 	}
 }
+
+// TestSaveInfraSubeVersion: la infra es config viva; sin bump el hot-reload
+// nunca vería cambios de globales/settings.
+func TestSaveInfraSubeVersion(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "rkt.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	v1 := db.ConfigVersion()
+	if err := db.SaveInfra([]byte(`{"listen_http":":80"}`)); err != nil {
+		t.Fatal(err)
+	}
+	v2 := db.ConfigVersion()
+	if v2 <= v1 {
+		t.Fatalf("config_version no subió: %d -> %d", v1, v2)
+	}
+	raw, err := db.LoadInfra()
+	if err != nil || string(raw) != `{"listen_http":":80"}` {
+		t.Fatalf("infra = %q %v", raw, err)
+	}
+}

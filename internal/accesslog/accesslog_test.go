@@ -1,6 +1,8 @@
 package accesslog
 
 import (
+	"bufio"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -62,6 +64,31 @@ func TestRecorderFlush(t *testing.T) {
 	if !base.flushed {
 		t.Fatal("el Flush no llegó al writer real")
 	}
+}
+
+// TestRecorderHijack: WebSockets necesitan Hijack a través del middleware.
+func TestRecorderHijack(t *testing.T) {
+	base := &hijackSpy{ResponseWriter: httptest.NewRecorder()}
+	r := &recorder{ResponseWriter: base}
+	conn, _, err := http.NewResponseController(r).Hijack()
+	if err != nil {
+		t.Fatalf("Hijack: %v", err)
+	}
+	_ = conn.Close()
+	if !base.hijacked {
+		t.Fatal("el Hijack no llegó al writer real")
+	}
+}
+
+type hijackSpy struct {
+	http.ResponseWriter
+	hijacked bool
+}
+
+func (h *hijackSpy) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h.hijacked = true
+	c1, c2 := net.Pipe()
+	return c1, bufio.NewReadWriter(bufio.NewReader(c2), bufio.NewWriter(c2)), nil
 }
 
 // TestWriteHeaderUnaVez: una cabecera final repetida se ignora en vez de

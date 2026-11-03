@@ -152,3 +152,33 @@ func TestRetryEndpoint(t *testing.T) {
 		t.Fatalf("retry malo: code=%d", rec.Code)
 	}
 }
+
+// TestHealthzAppsEstado: el healthz refleja el estado real de la flota
+// (caída = degraded) y expone pid/reinicios.
+func TestHealthzAppsEstado(t *testing.T) {
+	h := NewHandler(Deps{
+		Live:    liveWithRoutes(t),
+		Version: "x",
+		Apps: func() []AppStatus {
+			return []AppStatus{
+				{Name: "web", Running: true, Pid: 123, HTTPOK: true},
+				{Name: "caida", Running: false, Failed: true, Restarts: 3},
+			}
+		},
+	})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	var st struct {
+		Status string      `json:"status"`
+		Apps   []AppStatus `json:"apps"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&st); err != nil {
+		t.Fatal(err)
+	}
+	if st.Status != "degraded" {
+		t.Fatalf("estado = %q, quiere degraded", st.Status)
+	}
+	if len(st.Apps) != 2 || st.Apps[0].Pid != 123 || st.Apps[1].Restarts != 3 {
+		t.Fatalf("apps = %+v", st.Apps)
+	}
+}
