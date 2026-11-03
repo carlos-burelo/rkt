@@ -6,23 +6,26 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"rkt-proxy/internal/store"
 )
 
-func testDB(t *testing.T, token string) *store.DB {
+func testDB(t *testing.T) (*store.DB, *http.Cookie) {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if token != "" {
-		if err := db.SetSetting("dashboard_token", token); err != nil {
-			t.Fatal(err)
-		}
+	if err := db.CreateUser("adm", "password-larga-1", store.RoleAdmin); err != nil {
+		t.Fatal(err)
 	}
-	return db
+	tok, err := db.NewSession("adm", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db, &http.Cookie{Name: "rkt_token", Value: tok}
 }
 
 func testDist(t *testing.T) string {
@@ -33,8 +36,9 @@ func testDist(t *testing.T) string {
 	return dir
 }
 
-func Test401SinToken(t *testing.T) {
-	h := NewHandler(testDB(t, "s3cr3t"), os.DirFS(testDist(t)))
+func Test401SinSesion(t *testing.T) {
+	db, _ := testDB(t)
+	h := NewHandler(db, os.DirFS(testDist(t)))
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -44,9 +48,8 @@ func Test401SinToken(t *testing.T) {
 }
 
 func TestSirveYFallback(t *testing.T) {
-	db := testDB(t, "s3cr3t")
+	db, cookie := testDB(t)
 	h := NewHandler(db, os.DirFS(testDist(t)))
-	cookie := &http.Cookie{Name: "rkt_token", Value: "s3cr3t"}
 
 	for path, want := range map[string]string{
 		"/dashboard/":          "<html>spa</html>",
@@ -64,10 +67,10 @@ func TestSirveYFallback(t *testing.T) {
 }
 
 func Test503SinDist(t *testing.T) {
-	db := testDB(t, "s3cr3t")
+	db, cookie := testDB(t)
 	h := NewHandler(db, os.DirFS(t.TempDir())) // vacío
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/", nil)
-	req.AddCookie(&http.Cookie{Name: "rkt_token", Value: "s3cr3t"})
+	req.AddCookie(cookie)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {

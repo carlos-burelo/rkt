@@ -44,5 +44,5 @@ func NewHandler(db *store.DB, fsys fs.FS) http.Handler {
 		r.URL.Path = "/" + path
 		fileSrv.ServeHTTP(w, r)
 	})
-	return api.RequireToken(db, mux)
+	return api.RequireAuth(db, mux)
 }
