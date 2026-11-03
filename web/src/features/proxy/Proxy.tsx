@@ -46,7 +46,7 @@ export function Proxy() {
           <div className="flex items-center gap-2">
             <Select value={fState} onValueChange={(v: string | null) => setFState(v ?? "all")}>
               <SelectTrigger className="w-40 text-xs" aria-label="estado">
-                <SelectValue />
+                <span>{fState === "all" ? "Todos los estados" : fState === "ok" ? "En ruta" : "Varados"}</span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los estados</SelectItem>
@@ -56,7 +56,7 @@ export function Proxy() {
             </Select>
             <Select value={fTls} onValueChange={(v: string | null) => setFTls(v ?? "all")}>
               <SelectTrigger className="w-32 text-xs" aria-label="tls">
-                <SelectValue />
+                <span>{fTls === "all" ? "Todos los TLS" : fTls === "tls" ? "Con TLS" : "Sin TLS"}</span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los TLS</SelectItem>

@@ -77,7 +77,7 @@ export function Users() {
             className="tnum flex-1 font-mono text-xs" />
           <Select value={role} onValueChange={(v: string | null) => setRole(v ?? "viewer")}>
             <SelectTrigger className="w-32 font-mono text-xs">
-              <SelectValue />
+              <span className="capitalize">{role}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="viewer">viewer</SelectItem>

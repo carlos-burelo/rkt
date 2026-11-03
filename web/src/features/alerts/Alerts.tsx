@@ -78,7 +78,7 @@ export function Alerts() {
               className="w-32 font-mono text-xs" />
             <Select value={kind} onValueChange={(v: string | null) => setKind(v ?? "failed")}>
               <SelectTrigger className="w-36 font-mono text-xs">
-                <SelectValue />
+                <span>{kind}</span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="failed">failed</SelectItem>

@@ -113,7 +113,7 @@ export function Logs() {
           <>
             <Select value={appFilter || "__all"} onValueChange={(v: string | null) => setAppFilter(v === "__all" ? "" : (v ?? ""))}>
               <SelectTrigger className="w-52 font-mono text-xs">
-                <SelectValue placeholder="app" />
+                <span className="truncate">{appFilter || "operativo (rkt.log)"}</span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all">operativo (rkt.log)</SelectItem>
