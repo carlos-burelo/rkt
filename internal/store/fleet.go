@@ -22,11 +22,14 @@ const (
 	KeyPythonBin  = "python_bin"
 	KeyBaseDomain = "base_domain"
 	KeyPortPool   = "port_pool"
+	KeySiteName   = "site_name"
+	KeyQuotaReqs  = "quota_reqs"
+	KeyQuotaBytes = "quota_bytes"
 )
 
 // KnownSettings lista para `settings list` y export.
 func KnownSettings() []string {
-	return []string{KeyNodeBin, KeyPythonBin, KeyBaseDomain, KeyPortPool}
+	return []string{KeyNodeBin, KeyPythonBin, KeyBaseDomain, KeyPortPool, KeySiteName, KeyQuotaReqs, KeyQuotaBytes}
 }
 
 // GetSetting lee un setting ("").

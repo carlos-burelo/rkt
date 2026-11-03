@@ -4,6 +4,8 @@ package app
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -190,7 +192,7 @@ func (p *Program) Run() {
 	}()
 	if cfg.Healthz.Enabled {
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp})
-		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment})
+		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus})
 		sub, err := fs.Sub(web.Dist, "dist")
 		if err != nil {
 			p.log.Error("dashboard sin dist", "err", err)
@@ -446,6 +448,28 @@ func (p *Program) appToken(app *config.App) (string, error) {
 		return token, nil
 	}
 	return "", fmt.Errorf("falta token en env %s (variable de máquina para el servicio)", app.Deploy.TokenEnv)
+}
+
+// tlsStatus interroga la cache ACME (existe/expira). Sin manager/TLS: off.
+func (p *Program) tlsStatus(host string) (bool, string) {
+	if p.mgr == nil {
+		return false, ""
+	}
+	// wildcard *.ejemplo.com vive bajo base sin *.
+	h := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(host)), "*.")
+	data, err := p.mgr.Cache.Get(context.Background(), h)
+	if err != nil || len(data) == 0 {
+		return false, ""
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return true, ""
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return true, ""
+	}
+	return true, cert.NotAfter.UTC().Format("2006-01-02")
 }
 
 // rollbackApp devuelve live.prev a live (rollback manual).

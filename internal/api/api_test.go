@@ -582,3 +582,27 @@ func TestAppPutDelete(t *testing.T) {
 		t.Fatalf("post-delete: quiere 404, got %d", rec.Code)
 	}
 }
+
+func TestDomainsTLS(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	d.TLS = func(host string) (bool, string) {
+		if host == "a.test" {
+			return true, "2027-01-01"
+		}
+		return false, ""
+	}
+	h := NewHandler(d)
+	opTok := loginAs(t, h, db, "op", store.RoleOperator)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/domains/a.test/tls", opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "2027-01-01") {
+		t.Fatalf("tls: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/domains/otro.test/tls", opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"managed":false`) {
+		t.Fatalf("tls off: %d %s", rec.Code, rec.Body.String())
+	}
+}

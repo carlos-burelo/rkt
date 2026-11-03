@@ -36,6 +36,8 @@ type Deps struct {
 	Deploy   func(name, actor string) (string, error)
 	Rollback func(name, actor string) error
 	Retry    func(id int64, actor string) (string, error)
+	// TLS interroga cache de certs (nil = sin TLS).
+	TLS func(host string) (managed bool, expires string)
 }
 
 // cloneFleet copia editable de la flota viva (Live se lee sin lock;
@@ -850,6 +852,25 @@ func NewHandler(d Deps) http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(b)
+	})
+
+	// TLS de un dominio (desde cache ACME; sin manager = no manejado).
+	mux.HandleFunc("/api/v1/domains/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+			return
+		}
+		rest := strings.TrimPrefix(r.URL.Path, "/api/v1/domains/")
+		parts := strings.Split(rest, "/")
+		if len(parts) != 2 || parts[1] != "tls" || parts[0] == "" {
+			writeErr(w, http.StatusNotFound, "ruta inválida (…/HOST/tls)")
+			return
+		}
+		managed, expires := false, ""
+		if d.TLS != nil {
+			managed, expires = d.TLS(parts[0])
+		}
+		writeJSON(w, map[string]any{"host": parts[0], "managed": managed, "expires": expires})
 	})
 
 	// Build log de un deploy (para vista detalle) + retry mismo rev.
