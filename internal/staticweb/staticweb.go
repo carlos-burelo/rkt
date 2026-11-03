@@ -6,12 +6,41 @@ package staticweb
 import (
 	"fmt"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 )
+
+// Tipos que el registro de Windows no siempre conoce (sitios modernos).
+func init() {
+	for ext, typ := range map[string]string{
+		".avif":  "image/avif",
+		".webp":  "image/webp",
+		".woff2": "font/woff2",
+		".wasm":  "application/wasm",
+		".mp4":   "video/mp4",
+		".webm":  "video/webm",
+		".svg":   "image/svg+xml",
+		".json":  "application/json",
+	} {
+		_ = mime.AddExtensionType(ext, typ)
+	}
+}
+
+// cacheFor: assets con hash son inmutables; html se revalida siempre.
+func cacheFor(clean, ext string) string {
+	if strings.HasPrefix(clean, "/_astro/") || strings.HasPrefix(clean, "/assets/") ||
+		strings.HasPrefix(clean, "/static/") || strings.HasPrefix(clean, "/_next/static/") {
+		return "public, max-age=31536000, immutable"
+	}
+	if ext == "" || ext == ".html" {
+		return "no-cache"
+	}
+	return "public, max-age=3600"
+}
 
 // Handler sirve root con fallback: 404.html si existe (404) o index.html
 // (SPA). Así sirve tanto sitios multipágina como SPAs sin configuración.
@@ -23,23 +52,41 @@ func Handler(root string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		clean := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
 		target := filepath.Join(root, filepath.FromSlash(clean))
+		ext := strings.ToLower(filepath.Ext(clean))
 		if st, err := os.Stat(target); err == nil && !st.IsDir() {
+			w.Header().Set("Cache-Control", cacheFor(clean, ext))
 			fsrv.ServeHTTP(w, r)
 			return
 		}
 		if st, err := os.Stat(target); err == nil && st.IsDir() {
 			if _, err := os.Stat(filepath.Join(target, "index.html")); err == nil {
+				w.Header().Set("Cache-Control", "no-cache")
 				fsrv.ServeHTTP(w, r)
 				return
 			}
 		}
+		// Un asset que no existe NO debe devolver el index (el navegador
+		// recibiría HTML como JS/CSS). Solo rutas sin extensión son SPA.
+		if ext != "" && ext != ".html" {
+			w.Header().Set("Cache-Control", "no-cache")
+			if _, err := os.Stat(notFound); err == nil {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(http.StatusNotFound)
+				http.ServeFile(w, r, notFound)
+				return
+			}
+			http.NotFound(w, r)
+			return
+		}
 		if _, err := os.Stat(notFound); err == nil {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache")
 			w.WriteHeader(http.StatusNotFound)
 			http.ServeFile(w, r, notFound)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFile(w, r, index)
 	})
 }
