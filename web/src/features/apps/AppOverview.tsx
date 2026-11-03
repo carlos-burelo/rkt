@@ -7,6 +7,7 @@ import { Section, Stat, Time } from "../../shared/components/patterns";
 import { fetchAnalytics, Analytics } from "../overview/api";
 import { useFleet } from "../overview/hooks";
 import { useEnvCount } from "./hooks";
+import { AppPreview } from "./AppPreview";
 
 function Check({ ok, label, hint }: { ok: boolean; label: string; hint: string }) {
   return (
@@ -59,6 +60,8 @@ export function AppOverview() {
 
   return (
     <div className="space-y-4">
+      {domains[0] && <AppPreview domain={domains[0]} running={running} />}
+
       <Section
         title="Despliegue en producción"
         description={prod ? `rev ${prod.rev.slice(0, 8)} · ${dur(prod.started_at, prod.finished_at)}` : "sin salida correcta"}
