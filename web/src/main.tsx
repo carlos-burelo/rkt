@@ -7,20 +7,29 @@ import { App } from "./app/App";
 // /app/x/logs) no debe resolver assets/manifest relativos a esa ruta.
 if ("serviceWorker" in navigator) {
   const base = import.meta.env.BASE_URL;
-  // Si ya había un SW controlando, un cambio de versión recarga una vez
-  // para no quedarse sirviendo el bundle viejo desde caché.
-  if (navigator.serviceWorker.controller) {
-    let reloading = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (reloading) return;
-      reloading = true;
-      window.location.reload();
-    });
-  }
+  // Solo recarga si esta pestaña ya estaba controlada: la primera
+  // instalación (clientsClaim) no debe refrescar en medio del login.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || reloading) return;
+    reloading = true;
+    window.location.reload();
+  });
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register(`${base}sw.js`, { scope: base }).catch(() => {
-      // sin SW (dev/http): la app funciona igual, sin offline
-    });
+    navigator.serviceWorker
+      .register(`${base}sw.js`, { scope: base, updateViaCache: "none" })
+      .then((reg) => {
+        // buscar versión nueva al volver a la pestaña y cada minuto
+        const update = () => reg.update().catch(() => {});
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) update();
+        });
+        window.setInterval(update, 60_000);
+      })
+      .catch(() => {
+        // sin SW (dev/http): la app funciona igual, sin offline
+      });
   });
 }
 

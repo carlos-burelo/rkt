@@ -153,7 +153,7 @@ func TestSetup(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	var gotID int64
 	var gotAccount string
-	h := SetupHandler(SetupDeps{Log: log,
+	h := SetupHandler(SetupDeps{Log: log, DashboardURL: "http://127.0.0.1:8090/settings?github=ok",
 		Verify: func(id int64) (string, error) {
 			if id != 42 {
 				return "", fmt.Errorf("no")
@@ -167,11 +167,11 @@ func TestSetup(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?installation_id=42&setup_action=install", nil))
-	if rec.Code != http.StatusOK || gotID != 42 || gotAccount != "miorg" {
+	if rec.Code != http.StatusSeeOther || gotID != 42 || gotAccount != "miorg" {
 		t.Fatalf("setup ok: code=%d id=%d account=%q", rec.Code, gotID, gotAccount)
 	}
-	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
-		t.Fatalf("content-type: %q", ct)
+	if loc := rec.Header().Get("Location"); loc != "http://127.0.0.1:8090/settings?github=ok" {
+		t.Fatalf("location: %q", loc)
 	}
 
 	for url, code := range map[string]int{
@@ -237,11 +237,11 @@ func TestSetupManifest(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?setup_action=manifest&code=buen-code", nil))
-	if rec.Code != http.StatusOK || savedSlug != "mi-app" {
+	if rec.Code != http.StatusSeeOther || savedSlug != "mi-app" {
 		t.Fatalf("code=%d slug=%q", rec.Code, savedSlug)
 	}
-	if body := rec.Body.String(); !strings.Contains(body, "/installations/new") {
-		t.Fatal("falta link de instalación")
+	if loc := rec.Header().Get("Location"); loc != "https://github.com/apps/mi-app/installations/new" {
+		t.Fatalf("location: %q", loc)
 	}
 
 	rec = httptest.NewRecorder()
@@ -268,7 +268,7 @@ func TestSetupManifestBareCode(t *testing.T) {
 	// redirect real de GitHub: ?code= sin setup_action
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?code=abc123", nil))
-	if rec.Code != http.StatusOK || !called {
+	if rec.Code != http.StatusSeeOther || !called {
 		t.Fatalf("code pelado: code=%d called=%v", rec.Code, called)
 	}
 }
@@ -318,7 +318,7 @@ func TestManifestJSON(t *testing.T) {
 	if err := json.Unmarshal(manifestJSON("mi-app", "vps.test", false, true), &m); err != nil {
 		t.Fatal(err)
 	}
-	if m.Name != "mi-app" || m.Public || m.DefaultPermissions["contents"] != "read" {
+	if m.Name != "mi-app" || !m.Public || m.DefaultPermissions["contents"] != "read" {
 		t.Fatalf("manifest mal: %+v", m)
 	}
 	// candado de regresión: GitHub rechaza installation* en manifest
@@ -337,6 +337,7 @@ func TestManifestLocalSinWebhook(t *testing.T) {
 	var m struct {
 		URL            string         `json:"url"`
 		RedirectURL    string         `json:"redirect_url"`
+		Public         bool           `json:"public"`
 		DefaultEvents  []string       `json:"default_events"`
 		HookAttributes map[string]any `json:"hook_attributes"`
 	}
@@ -346,20 +347,10 @@ func TestManifestLocalSinWebhook(t *testing.T) {
 	if m.URL != "http://127.0.0.1:8080" || m.RedirectURL != "http://127.0.0.1:8080/_rkt/setup" {
 		t.Fatalf("urls locales mal: %+v", m)
 	}
+	if !m.Public {
+		t.Fatal("la App debe ser pública para instalarse en organizaciones")
+	}
 	if m.HookAttributes != nil || len(m.DefaultEvents) != 0 {
 		t.Fatalf("local no debe pedir webhook/eventos: %+v %v", m.HookAttributes, m.DefaultEvents)
-	}
-}
-
-func TestGuiaInstalacionPideTodosLosRepos(t *testing.T) {
-	h := SetupHandler(SetupDeps{Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?install=mi-app", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("guide = %d", rec.Code)
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "All repositories") || !strings.Contains(body, "https://github.com/apps/mi-app/installations/new") {
-		t.Fatalf("guía incompleta: %s", body)
 	}
 }

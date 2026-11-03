@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import { getSettings, setSetting, getGithubStatus, GithubStatus } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,8 @@ export function Settings() {
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [gh, setGh] = useState<GithubStatus | null>(null);
+  const [params, setParams] = useSearchParams();
+  const justInstalled = params.get("github") === "ok";
 
   async function load() {
     try {
@@ -53,10 +56,24 @@ export function Settings() {
         description="Ajustes de flota. Aplican en caliente salvo binarios, que exigen reinicio del servicio."
         meta={<span className="tnum font-mono text-[10px] text-muted-foreground">{Object.keys(settings).length} claves</span>}
       />
+      {justInstalled && (
+        <div className="flex items-center justify-between gap-3 border border-ok/35 bg-ok/5 px-3 py-2">
+          <p className="font-mono text-[10px] text-ok">
+            GitHub conectado ✓ · los repos ya aparecen en “nueva app”
+          </p>
+          <button
+            type="button"
+            onClick={() => setParams({}, { replace: true })}
+            className="font-mono text-[9px] uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground"
+          >
+            cerrar
+          </button>
+        </div>
+      )}
       <Section
         title="GitHub App"
         accent={!!gh?.configured && gh.repository_selection !== "all"}
-        description="clona repos privados sin PAT · necesita acceso a todos los repositorios"
+        description="clona repos privados sin PAT · instala la App en cada org para ver sus repos"
         actions={
           gh?.configured && gh.install_url ? (
             <a
@@ -75,7 +92,8 @@ export function Settings() {
           <div className="space-y-2">
             <p className="text-[12px] text-muted-foreground">
               Sin App conectada. Crea la GitHub App desde aquí y en el paso de instalación elige{" "}
-              <b className="text-foreground">All repositories</b>.
+              <b className="text-foreground">All repositories</b>. Para repos de una organización, instálala
+              también en esa org.
             </p>
             {gh.setup_url ? (
               <div className="space-y-2">

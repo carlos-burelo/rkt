@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -238,9 +239,10 @@ func (p *Program) Run() {
 			}))
 		}
 		mux.Handle("/_rkt/setup", hook.SetupHandler(hook.SetupDeps{
-			Log:     p.log,
-			Verify:  p.verifyInstallation,
-			OnSetup: p.onSetup,
+			Log:          p.log,
+			Verify:       p.verifyInstallation,
+			OnSetup:      p.onSetup,
+			DashboardURL: dashboardURL(cfg.Healthz.Listen),
 			Exchange: func(code string) (*github.ManifestCredentials, error) {
 				return github.ExchangeManifestCode("", code)
 			},
@@ -439,7 +441,20 @@ func (p *Program) onManifest(c *github.ManifestCredentials) (string, error) {
 		}
 	}
 	p.log.Info("app github creada, instala en browser", "slug", slug)
-	return "/_rkt/setup?install=" + slug, nil
+	return "https://github.com/apps/" + slug + "/installations/new", nil
+}
+
+// dashboardURL arma el destino de vuelta tras instalar la App. El panel
+// embebido vive en el listener de control (loopback), no en el proxy.
+func dashboardURL(listen string) string {
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil || port == "" {
+		return ""
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, port) + "/settings?github=ok"
 }
 
 // setupOrigin devuelve el origen público para el manifest. Sin base_domain

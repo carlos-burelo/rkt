@@ -47,6 +47,33 @@ func TestSirveYFallback(t *testing.T) {
 	}
 }
 
+func TestCacheHeaders(t *testing.T) {
+	dir := testDist(t)
+	os.MkdirAll(filepath.Join(dir, "assets"), 0o755)
+	os.WriteFile(filepath.Join(dir, "assets", "app-abc123.js"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "sw.js"), []byte("x"), 0o644)
+	h := NewHandler(os.DirFS(dir))
+
+	for path, want := range map[string]string{
+		"/":                     "no-store",
+		"/ruta-spa/":            "no-store",
+		"/sw.js":                "no-cache",
+		"/app.js":               "no-cache",
+		"/assets/app-abc123.js": "public, max-age=31536000, immutable",
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if got := rec.Header().Get("Cache-Control"); got != want {
+			t.Fatalf("%s: cache=%q quiere %q", path, got, want)
+		}
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/sw.js", nil))
+	if got := rec.Header().Get("Service-Worker-Allowed"); got != "/" {
+		t.Fatalf("service-worker-allowed=%q", got)
+	}
+}
+
 func Test503SinDist(t *testing.T) {
 	h := NewHandler(os.DirFS(t.TempDir())) // vacío
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

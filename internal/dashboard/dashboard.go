@@ -19,6 +19,15 @@ func init() {
 	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 }
 
+// cacheFor: bundles con hash inmutables; shell, sw y manifest siempre
+// revalidan para que un deploy se vea al recargar (sin Ctrl+Shift+R).
+func cacheFor(p string) string {
+	if strings.HasPrefix(p, "assets/") || strings.HasPrefix(p, "workbox-") {
+		return "public, max-age=31536000, immutable"
+	}
+	return "no-cache"
+}
+
 // NewHandler SPA en "/" con fallback a index.html (history routing).
 // fsys = web/dist (embed en prod, DirFS en tests).
 func NewHandler(fsys fs.FS) http.Handler {
@@ -31,7 +40,8 @@ func NewHandler(fsys fs.FS) http.Handler {
 			_, _ = w.Write([]byte("dashboard sin compilar: corre `pnpm --dir web build`"))
 			return
 		}
-		http.ServeContent(w, r, "index.html", time.Now(), bytes.NewReader(data))
+		w.Header().Set("Cache-Control", "no-store")
+		http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(data))
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/")
@@ -44,6 +54,10 @@ func NewHandler(fsys fs.FS) http.Handler {
 		if _, err := fs.Stat(fsys, path); err != nil {
 			serveIndex(w, r)
 			return
+		}
+		w.Header().Set("Cache-Control", cacheFor(path))
+		if path == "sw.js" {
+			w.Header().Set("Service-Worker-Allowed", "/")
 		}
 		r.URL.Path = "/" + path
 		fileSrv.ServeHTTP(w, r)
