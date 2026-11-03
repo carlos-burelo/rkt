@@ -125,8 +125,18 @@ func bearerOf(r *http.Request) string {
 }
 
 // RequireAuth cualquier sesión válida. Inyecta usuario/rol en contexto.
+// Rechaza mutaciones con Origin de otro host (defensa CSRF además de SameSite).
 func RequireAuth(db *store.DB, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+			if origin := r.Header.Get("Origin"); origin != "" {
+				u, err := url.Parse(origin)
+				if err != nil || !strings.EqualFold(u.Host, r.Host) {
+					writeErr(w, http.StatusForbidden, "origen no permitido")
+					return
+				}
+			}
+		}
 		tok := bearerOf(r)
 		if tok == "" {
 			writeErr(w, http.StatusUnauthorized, "falta credencial (login)")

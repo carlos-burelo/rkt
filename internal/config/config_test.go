@@ -307,3 +307,49 @@ func TestMergeEnvGlobalYOverride(t *testing.T) {
 		t.Fatal("sin entradas debe ser nil")
 	}
 }
+
+func TestHealthzSoloLoopback(t *testing.T) {
+	ok := testConfig(t, `
+healthz:
+  enabled: true
+  listen: "127.0.0.1:8090"
+`)
+	if !ok.Healthz.Enabled {
+		t.Fatal("healthz debió quedar activo")
+	}
+	for _, bad := range []string{"0.0.0.0:8090", ":8090", "192.168.1.5:8090"} {
+		f, err := os.CreateTemp("", "rkt-*.yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = f.WriteString("healthz:\n  enabled: true\n  listen: \"" + bad + "\"\n")
+		f.Close()
+		_, err = Load(f.Name())
+		_ = os.Remove(f.Name())
+		if err == nil {
+			t.Fatalf("healthz %q expuesto debe fallar", bad)
+		}
+	}
+}
+
+// FuzzMatch: hosts arbitrarios no pueden tumbar el matcher ni devolver
+// targets que no estén en las rutas.
+func FuzzMatch(f *testing.F) {
+	for _, s := range []string{"", "a.test", "A.TEST:443", "*", "..", "a.test.", "xn--x.test", "a b"} {
+		f.Add(s)
+	}
+	cfg := &Config{Routes: []Route{
+		{Hosts: []string{"a.test", "*.b.test"}, Target: "http://127.0.0.1:3000"},
+	}}
+	for i := range cfg.Routes {
+		if err := cfg.Routes[i].Resolve(); err != nil {
+			f.Fatalf("ruta semilla: %v", err)
+		}
+	}
+	f.Fuzz(func(t *testing.T, host string) {
+		got := cfg.Match(host)
+		if got != nil && got.String() != "http://127.0.0.1:3000" {
+			t.Fatalf("target inesperado: %s", got)
+		}
+	})
+}

@@ -819,3 +819,67 @@ func TestProxyStatus(t *testing.T) {
 		t.Fatalf("tls mal: %+v", rows[0].TLS)
 	}
 }
+
+func TestOriginAjenoRechazado(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	tok := loginAs(t, h, db, "op", store.RoleOperator)
+
+	req := authed(http.MethodPost, "/api/v1/apps/w/restart", tok)
+	req.Header.Set("Origin", "http://evil.test")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("origin ajeno = %d, quiere 403 (%s)", rec.Code, rec.Body.String())
+	}
+
+	req = authed(http.MethodPost, "/api/v1/apps/w/restart", tok)
+	req.Header.Set("Origin", "http://example.com") // mismo Host que httptest
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code == http.StatusForbidden {
+		t.Fatalf("origin propio no debe dar 403: %s", rec.Body.String())
+	}
+}
+
+func TestUsageEndpoint(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	tok := loginAs(t, h, db, "op", store.RoleOperator)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w/usage?window=60", tok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("usage = %d (%s)", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		App     string `json:"app"`
+		Running bool   `json:"running"`
+		Traffic struct {
+			WindowS int `json:"window_s"`
+		} `json:"traffic"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("json: %v (%s)", err, rec.Body.String())
+	}
+	if out.App != "w" || !out.Running {
+		t.Fatalf("reporte = %+v", out)
+	}
+	if out.Traffic.WindowS != 60 {
+		t.Fatalf("ventana = %d", out.Traffic.WindowS)
+	}
+}
+
+func TestUsageAppInexistente(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	tok := loginAs(t, h, db, "op", store.RoleOperator)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/nope/usage", tok))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("uso de app inexistente = %d", rec.Code)
+	}
+}

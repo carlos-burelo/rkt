@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	pathpkg "path"
@@ -310,6 +311,11 @@ func (cfg *Config) Validate() error {
 	if cfg.Healthz.Enabled && cfg.Healthz.Listen == "" {
 		return fmt.Errorf("healthz sin listen")
 	}
+	// Fail-closed: healthz expone acciones sin auth (restart/deploy). Solo
+	// loopback. Exponerlo en LAN/publicaría el control de la máquina.
+	if cfg.Healthz.Enabled && !isLoopbackAddr(cfg.Healthz.Listen) {
+		return fmt.Errorf("healthz.listen debe ser loopback (127.0.0.1:8090 o [::1]:8090), no %q", cfg.Healthz.Listen)
+	}
 	if cfg.RateLimit.Enabled && (cfg.RateLimit.RPS <= 0 || cfg.RateLimit.Burst < 1) {
 		return fmt.Errorf("rate_limit inválido: rps>0 y burst>=1")
 	}
@@ -528,4 +534,18 @@ func (c *Config) Match(host string) *url.URL {
 		}
 	}
 	return nil
+}
+
+// isLoopbackAddr true si el listen es exclusivamente loopback.
+func isLoopbackAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
