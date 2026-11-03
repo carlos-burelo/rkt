@@ -4,7 +4,7 @@ import { Me, Status, Deployment, RktEvent, AppMeta, User } from "../shared/lib/t
 import { logout, me, authStatus } from "../features/auth/api";
 import { Login } from "../features/auth/Login";
 import { Setup } from "../features/auth/Setup";
-import { Dot, Err } from "../shared/components/ui";
+import { Dot, Err, Avatar, Glyph } from "../shared/components/ui";
 import { Toast, ToastStack, CopyButton, Skeleton } from "../shared/components/feedback";
 import { InstallButton } from "../shared/components/InstallButton";
 import { CommandPalette } from "../shared/components/CommandPalette";
@@ -130,6 +130,14 @@ export function App() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPalette((v) => !v);
+      } else if (
+        e.key === "/" &&
+        !(e.target instanceof HTMLInputElement) &&
+        !(e.target instanceof HTMLTextAreaElement) &&
+        !(e.target instanceof HTMLSelectElement)
+      ) {
+        e.preventDefault();
+        setPalette(true);
       }
     };
     window.addEventListener("keydown", h);
@@ -220,8 +228,11 @@ export function App() {
           menu ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-          <span className="text-base font-bold tracking-tight">▲ {brand}</span>
+        <div className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3">
+          <Avatar name={brand} />
+          <span className="text-sm font-semibold tracking-tight">{brand}</span>
+          <span className="rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">local</span>
+          <span className="flex-1" />
           <button onClick={() => setMenu(false)} className="rounded px-2 text-zinc-500 md:hidden" aria-label="cerrar">
             ✕
           </button>
@@ -261,12 +272,13 @@ export function App() {
                   setPage(n.id);
                   setMenu(false);
                 }}
-                className={`block w-full rounded-md px-2.5 py-1.5 text-left ${
+                className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left ${
                   page === n.id || (n.id === "deployments" && page === "app")
                     ? "bg-zinc-800 font-medium text-white"
                     : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
                 }`}
               >
+                <span className="w-4 text-center text-xs text-zinc-500">{Glyph[n.id] ?? "·"}</span>
                 {n.label}
               </button>
             ))}
@@ -302,9 +314,13 @@ export function App() {
             </p>
           )}
           <InstallButton />
-          <p className="px-2.5 font-mono text-[11px] text-zinc-600">
-            {who?.user} · {who?.role} · v{status?.version ?? "…"}
-          </p>
+          <div className="flex items-center gap-2.5 px-2.5 py-1.5">
+            <Avatar name={who?.user ?? "?"} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium">{who?.user}</p>
+              <p className="font-mono text-[10px] text-zinc-600">{who?.role} · v{status?.version ?? "…"}</p>
+            </div>
+          </div>
           <button
             onClick={() => {
               logout().finally(() => setWho(null));
@@ -318,11 +334,11 @@ export function App() {
 
       <main className="min-w-0 flex-1 p-4 pt-16 md:p-6 md:pt-6">
         <div className="mx-auto max-w-4xl">
-          <div className="mb-4 hidden items-center gap-2 text-sm md:flex">
-            <span className="text-zinc-500">▲ {brand}</span>
-            <span className="text-zinc-700">/</span>
-            <span className="capitalize">{page === "app" ? appFilter || "app" : page}</span>
-            <span className="flex-1" />
+          <div className="mb-4 hidden items-center gap-3 text-sm md:flex">
+            <span className="text-xs text-zinc-600">▲ {brand}{page === "app" ? ` / ${appFilter}` : ""}</span>
+            <span className="flex-1 text-center text-sm font-medium capitalize">
+              {page === "app" ? appFilter || "app" : page}
+            </span>
             {!online && <span className="text-xs text-amber-300">offline</span>}
             {canWrite && (
               <button
@@ -332,7 +348,7 @@ export function App() {
                 + Create New
               </button>
             )}
-            <span className="font-mono text-[11px] text-zinc-600">{who?.user} · {who?.role}</span>
+            <Avatar name={who?.user ?? "?"} />
           </div>
           <Err msg={err} />
           {boot ? (
