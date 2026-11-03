@@ -71,6 +71,43 @@ func fakeAPI(t *testing.T, pub *rsa.PublicKey, hits *int64) *httptest.Server {
 	}))
 }
 
+func TestInstallationDetail(t *testing.T) {
+	key, path := testKey(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/app/installations/7" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"id":                   7,
+			"repository_selection": "all",
+			"target_type":          "Organization",
+			"html_url":             "https://github.com/organizations/acme/settings/installations/7",
+			"account":              map[string]string{"login": "acme"},
+		})
+	}))
+	defer srv.Close()
+	m, err := New(1, path, srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := m.InstallationDetail(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.ID != 7 || info.Account != "acme" || info.RepositorySelection != "all" || info.TargetType != "Organization" {
+		t.Fatalf("info = %+v", info)
+	}
+	if _, err := m.InstallationDetail(999); err == nil {
+		t.Fatal("instalación inexistente debe fallar")
+	}
+	_ = key
+}
+
 func TestTokenCached(t *testing.T) {
 	key, path := testKey(t)
 	var hits int64

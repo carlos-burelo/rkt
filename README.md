@@ -224,11 +224,12 @@ rkt github init --name rkt-deployer --domain tu-dominio.coatl.in --org dacyti-gs
 Abre la URL que imprime (form con manifest oficial ya rellenado: permisos
 mínimos + webhook + setup). Pulsa Create en GitHub; al aprobar, GitHub vuelve
 a `/_rkt/setup`, rkt canjea el code, guarda PEM + settings y te da el link de
-instalación. Instala en orgs/repos y listo: repo nuevo = app + deploy solos.
-(Sin `--org` = App personal. Alternativa manual: App a mano + `github login`.) Cada poll
-compara `HEAD` local vs remoto y despliega solo si cambió (tokens de 1h
-cacheados; repos http usan App, resto `token_env`). Sin inbound: puro
-outbound a `api.github.com`.
+instalación. **Instala eligiendo All repositories**: GitHub no permite forzar
+la selección desde el manifest, y sin acceso total los repos privados fallan.
+Ajustes → GitHub App muestra el alcance y el botón para cambiarlo. Repo nuevo
+= app + deploy solos. (Sin `--org` = App personal.) Cada poll compara `HEAD`
+local vs remoto y despliega solo si cambió (tokens de 1h cacheados; repos http
+usan App, resto `token_env`). Sin inbound: puro outbound a `api.github.com`.
 
 ## Webhook instantáneo (opcional)
 

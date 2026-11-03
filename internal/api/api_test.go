@@ -820,6 +820,29 @@ func TestProxyStatus(t *testing.T) {
 	}
 }
 
+func TestGithubEndpoint(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	tok := loginAs(t, h, db, "op", store.RoleOperator)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/github", tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"configured":false`) {
+		t.Fatalf("github sin deps = %d %s", rec.Code, rec.Body.String())
+	}
+
+	d.Github = func() (map[string]any, error) {
+		return map[string]any{"configured": true, "repository_selection": "all", "repositories": "12"}, nil
+	}
+	h = NewHandler(d)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/github", tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"repository_selection":"all"`) {
+		t.Fatalf("github status = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestOriginAjenoRechazado(t *testing.T) {
 	d, db, done := testDeps(t)
 	defer done()

@@ -119,6 +119,34 @@ type installationResp struct {
 	Account struct {
 		Login string `json:"login"`
 	} `json:"account"`
+	RepositorySelection string `json:"repository_selection"`
+	TargetType          string `json:"target_type"`
+	HTMLURL             string `json:"html_url"`
+}
+
+// InstallationInfo datos de una instalación (setup y estado).
+type InstallationInfo struct {
+	ID                  int64  `json:"id"`
+	Account             string `json:"account"`
+	TargetType          string `json:"target_type"`
+	RepositorySelection string `json:"repository_selection"`
+	HTMLURL             string `json:"html_url"`
+}
+
+// InstallationDetail consulta una instalación (JWT).
+func (m *Manager) InstallationDetail(id int64) (InstallationInfo, error) {
+	jwt, err := m.mintJWT()
+	if err != nil {
+		return InstallationInfo{}, err
+	}
+	var out installationResp
+	if err := m.getJSON(fmt.Sprintf("%s/app/installations/%d", m.apiBase, id), jwt, &out); err != nil {
+		return InstallationInfo{}, err
+	}
+	return InstallationInfo{
+		ID: out.ID, Account: out.Account.Login, TargetType: out.TargetType,
+		RepositorySelection: out.RepositorySelection, HTMLURL: out.HTMLURL,
+	}, nil
 }
 
 func (m *Manager) getJSON(url, bearer string, out any) error {

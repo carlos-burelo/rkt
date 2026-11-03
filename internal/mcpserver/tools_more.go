@@ -734,6 +734,11 @@ func (s *Server) doDiscoverStatus() (string, error) {
 		out["poll_interval"] = cfg.Github.PollInterval
 		out["key_file_ok"] = keyOK
 		out["webhook_secret"] = cfg.Github.WebhookSecret != ""
+		out["account"] = db.GetSetting("github_account")
+		out["repository_selection"] = db.GetSetting("github_repo_selection")
+		out["repositories"] = db.GetSetting("github_repo_count")
+		out["install_url"] = db.GetSetting("github_install_url")
+		out["all_repositories"] = db.GetSetting("github_repo_selection") == "all"
 	}
 	out["base_domain"] = db.GetSetting(store.KeyBaseDomain)
 	return jsonText(out)

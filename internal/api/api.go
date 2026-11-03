@@ -48,6 +48,8 @@ type Deps struct {
 	Build func(name, actor string) (int64, error)
 	// TLS interroga cache de certs (nil = sin TLS).
 	TLS func(host string) (managed bool, expires string)
+	// Github estado vivo de la GitHub App (nil = no configurada).
+	Github func() (map[string]any, error)
 }
 
 // cloneFleet copia editable de la flota viva (Live se lee sin lock;
@@ -869,6 +871,24 @@ func NewHandler(d Deps) http.Handler {
 		default:
 			writeErr(w, http.StatusMethodNotAllowed, "método no permitido")
 		}
+	})
+
+	// GitHub App: estado, alcance de repos e instalación.
+	mux.HandleFunc("/api/v1/github", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+			return
+		}
+		if d.Github == nil {
+			writeJSON(w, map[string]any{"configured": false})
+			return
+		}
+		st, err := d.Github()
+		if err != nil {
+			writeErr(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		writeJSON(w, st)
 	})
 
 	// Routes: misma semántica que CLI (rm quita host).

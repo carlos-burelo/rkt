@@ -332,3 +332,16 @@ func TestManifestJSON(t *testing.T) {
 		t.Fatalf("hook mal: %+v", m.HookAttributes)
 	}
 }
+
+func TestGuiaInstalacionPideTodosLosRepos(t *testing.T) {
+	h := SetupHandler(SetupDeps{Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?install=mi-app", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("guide = %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "All repositories") || !strings.Contains(body, "https://github.com/apps/mi-app/installations/new") {
+		t.Fatalf("guía incompleta: %s", body)
+	}
+}
