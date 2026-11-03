@@ -268,6 +268,64 @@ func NewHandler(d Deps) http.Handler {
 	cache := newMemo()
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("/api/v1/auth/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+			return
+		}
+		n, err := d.DB.CountUsers()
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"setup_required": n == 0})
+	})
+	mux.HandleFunc("/api/v1/auth/setup", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "solo POST")
+			return
+		}
+		n, err := d.DB.CountUsers()
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if n > 0 {
+			writeErr(w, http.StatusForbidden, "setup ya completado")
+			return
+		}
+		ip := clientIP(r)
+		if th.blocked(ip) {
+			writeErr(w, http.StatusTooManyRequests, "demasiados intentos, espera 60s")
+			return
+		}
+		var in struct {
+			User     string `json:"user"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
+			writeErr(w, http.StatusBadRequest, "JSON inválido")
+			return
+		}
+		// re-chequea bajo carrera: el primero gana, el resto 403
+		if err := d.DB.CreateUser(in.User, in.Password, store.RoleAdmin); err != nil {
+			th.fail(ip)
+			writeErr(w, http.StatusForbidden, "setup ya completado o datos inválidos")
+			return
+		}
+		th.ok(ip)
+		tok, err := d.DB.NewSession(in.User, store.SessionTTL)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name: "rkt_token", Value: tok, Path: "/",
+			HttpOnly: true, SameSite: http.SameSiteLaxMode,
+			MaxAge: int((store.SessionTTL).Seconds()),
+		})
+		writeJSON(w, map[string]any{"user": in.User, "role": store.RoleAdmin, "token": tok})
+	})
 	mux.HandleFunc("/api/v1/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeErr(w, http.StatusMethodNotAllowed, "solo POST")
@@ -1073,11 +1131,13 @@ func NewHandler(d Deps) http.Handler {
 		writeJSON(w, map[string]any{"log": out})
 	})
 
-	// todo autenticado salvo login: envuelve mux (login se valida aparte
-	// por ruta para no romper el bootstrap sin usuarios).
+	// todo autenticado salvo login/status/setup: envuelve mux (login y
+	// setup se validan aparte por ruta para no romper el bootstrap
+	// sin usuarios).
 	authed := RequireAuth(d.DB, mux)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/auth/login" {
+		switch r.URL.Path {
+		case "/api/v1/auth/login", "/api/v1/auth/status", "/api/v1/auth/setup":
 			mux.ServeHTTP(w, r)
 			return
 		}

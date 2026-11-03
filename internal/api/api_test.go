@@ -122,6 +122,63 @@ func TestSinUsuariosNadaOpera(t *testing.T) {
 	}
 }
 
+func TestSetupOneShot(t *testing.T) {
+	d, _, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+
+	// status público dice setup requerido
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/auth/status", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"setup_required":true`) {
+		t.Fatalf("status: %d %s", rec.Code, rec.Body.String())
+	}
+	// setup crea admin + auto-login (cookie)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/setup",
+		strings.NewReader(`{"user":"jefe","password":"password-larga-1"}`))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("setup: %d %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Token string `json:"token"`
+		Role  string `json:"role"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || out.Token == "" || out.Role != "admin" {
+		t.Fatalf("setup sin sesión admin: %s", rec.Body.String())
+	}
+	foundCookie := false
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "rkt_token" && c.Value != "" && c.HttpOnly {
+			foundCookie = true
+		}
+	}
+	if !foundCookie {
+		t.Fatal("setup sin cookie httpOnly")
+	}
+	// segundo setup prohibido (one-shot)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/setup",
+		strings.NewReader(`{"user":"otro","password":"password-larga-2"}`))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("segundo setup: quiere 403, got %d", rec.Code)
+	}
+	// status ya no requiere setup
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/auth/status", nil))
+	if !strings.Contains(rec.Body.String(), `"setup_required":false`) {
+		t.Fatalf("status post-setup: %s", rec.Body.String())
+	}
+	// sesión del setup opera
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/status", out.Token))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status con sesión setup: %d", rec.Code)
+	}
+}
+
 func TestLoginStatusLogs(t *testing.T) {
 	d, db, done := testDeps(t)
 	defer done()

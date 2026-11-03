@@ -17,6 +17,7 @@ import (
 	"github.com/kardianos/service"
 
 	"rkt-proxy/internal/build"
+	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/mcpserver"
@@ -42,6 +43,10 @@ func Run(cfgPath string) {
 		DisplayName: "RKT",
 		Description: "PaaS Go: dominios con TLS auto, apps supervisadas y deploys.",
 		Arguments:   []string{"-config", logx.Abs(cfgPath)},
+		Option: service.KeyValue{
+			// arranca solo tras instalar + en cada boot (sin comandos)
+			"StartImmediately": true,
+		},
 	}
 	prg := New(cfgPath, logger)
 	s, err := service.New(prg, svcConfig)
@@ -55,7 +60,8 @@ func Run(cfgPath string) {
 			if err := s.Install(); err != nil {
 				log.Fatalf("install: %v", err)
 			}
-			fmt.Println("servicio instalado. Arranca con: sc start Rkt")
+			fmt.Println("servicio instalado y arrancado.")
+			printDashboardURL(cfgPath)
 			return
 		case "uninstall":
 			_ = s.Stop()
@@ -191,6 +197,20 @@ Gestión (flota en SQLite, con backup implícito):
 Ayuda:
   help                                   esta pantalla`)
 	os.Exit(code)
+}
+
+// printDashboardURL dice dónde entra el operador (sin comandos extra:
+// el servicio ya arrancó y el setup inicial vive en la propia UI).
+func printDashboardURL(cfgPath string) {
+	cfg, err := cfgfile.Load(cfgPath)
+	if err != nil {
+		return
+	}
+	if !cfg.Healthz.Enabled {
+		fmt.Println("aviso: healthz desactivado, sin dashboard local")
+		return
+	}
+	fmt.Printf("dashboard: http://%s/dashboard/ (crea tu admin ahí la primera vez)\n", cfg.Healthz.Listen)
 }
 
 // cmdDev levanta entorno local: genera rkt.dev.yaml (HTTP alto, sin TLS)
