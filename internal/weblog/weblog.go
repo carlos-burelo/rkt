@@ -95,7 +95,8 @@ func ParseLine(line string) (Entry, bool) {
 	rest = afterQuoted(rest, 2)
 	for _, f := range strings.Fields(rest) {
 		if v, ok := strings.CutPrefix(f, "host="); ok {
-			e.Host = v
+			// el access log escribe host="..." (%q); se acepta con y sin comillas
+			e.Host = strings.Trim(v, `"`)
 		} else if v, ok := strings.CutPrefix(f, "dur="); ok {
 			if d, err := time.ParseDuration(v); err == nil {
 				e.Dur = d

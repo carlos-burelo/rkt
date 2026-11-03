@@ -14,6 +14,17 @@ línea rota sin sentido
 127.0.0.1:4 - - [03/Nov/2026:10:03:00 -0600] "GET /a HTTP/1.1" 200 - "-" "Test/1" host=a.test dur=2ms
 `
 
+func TestParseLineHostEntreComillas(t *testing.T) {
+	// el access log real escribe host=%q; el parser debe quitar comillas
+	e, ok := ParseLine(`127.0.0.1:9 - - [03/Nov/2026:10:00:00 -0600] "GET / HTTP/2.0" 200 10 "-" "ua" host="sicesa.localhost" dur=2ms`)
+	if !ok {
+		t.Fatal("debe parsear")
+	}
+	if e.Host != "sicesa.localhost" {
+		t.Fatalf("host = %q", e.Host)
+	}
+}
+
 func TestParseLine(t *testing.T) {
 	e, ok := ParseLine(`127.0.0.1:9 - - [03/Nov/2026:10:00:00 -0600] "GET /a?x=1 HTTP/1.1" 200 100 "-" "Test/1" host=a.test dur=1.5ms`)
 	if !ok {
