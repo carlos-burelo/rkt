@@ -1,148 +1,162 @@
 import { useNavigate } from "react-router";
-import { ArrowRight } from "lucide-react";
+import { AppStatus, RktEvent, Deployment, AppMeta } from "../../shared/lib/types";
+import { rel } from "../../shared/lib/time";
+import { Avatar, Dot, StatusBadge } from "../../shared/components/ui";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, Dot, stateOf } from "../../shared/components/ui";
-import { CopyButton } from "../../shared/components/feedback";
 import { Metrics } from "./Metrics";
 import { UsageStrip } from "./UsageStrip";
+import { useUI } from "../../app/ui";
 import { useFleet } from "./hooks";
-import { useAuth } from "../auth/store";
 
-// Overview: manifiesto de la terminal. Cada app es un contenedor:
-// glyph + nombre + destino (dominio) + rev en curso + estado.
-// Sin tarjetas-métrica genéricas: las placas llevan ventana honesta.
+function FirstRun({ apps, metas, deps }: { apps: AppStatus[]; metas: AppMeta[]; deps: Deployment[] }) {
+  const setCreateOpen = useUI((u) => u.setCreateOpen);
+  const hasApp = apps.length > 0;
+  const hasDomain = metas.some((m) => (m.domains ?? []).length > 0);
+  const hasDeploy = deps.some((d) => d.status === "ok");
+  const done = [hasApp, hasDomain, hasDeploy].filter(Boolean).length;
+  if (done === 3) return null;
+  return (
+    <section className="rounded-xl border bg-card p-5">
+      <div className="mb-1 flex items-center justify-between">
+        <h3 className="text-sm font-medium">Primeros pasos</h3>
+        <span className="font-mono text-xs text-muted-foreground">{done}/3</span>
+      </div>
+      <div className="mb-3 h-1.5 overflow-hidden rounded bg-secondary">
+        <div className="h-full rounded bg-primary transition-all" style={{ width: `${(done / 3) * 100}%` }} />
+      </div>
+      {(
+        [
+          [hasApp, "Crea tu primera app"],
+          [hasDomain, "Asigna un dominio"],
+          [hasDeploy, "Publica tu primer deploy"],
+        ] as const
+      ).map(([ok, label]) => (
+        <p key={label} className="flex items-center gap-2 py-1 text-xs">
+          <span className={`inline-block h-2 w-2 rounded-full ${ok ? "bg-emerald-400" : "bg-zinc-700"}`} />
+          <span className={ok ? "text-muted-foreground line-through" : ""}>{label}</span>
+        </p>
+      ))}
+      {!hasApp && (
+        <Button className="mt-3" size="sm" onClick={() => setCreateOpen(true)}>
+          Crear mi primera app
+        </Button>
+      )}
+    </section>
+  );
+}
+
 export function Overview() {
   const { status, evs, deps, metas, loading } = useFleet();
-  const { canWrite } = useAuth();
   const navigate = useNavigate();
-  const openApp = (name: string) => navigate(`/app/${name}`);
+  const act = useUI((u) => u.act);
+  const setSel = useUI((u) => u.setSel);
   const apps = status?.apps ?? [];
+  const openApp = (name: string) => navigate(`/app/${name}`);
 
   if (loading) return <p className="text-sm text-muted-foreground">cargando…</p>;
 
   const discovered = evs.filter((e) => e.kind === "discover").slice(0, 3);
   const openAlerts = evs.filter((e) => e.kind === "alert").slice(0, 3);
-  const recent = deps.slice(0, 5);
+  const lastDep = (app: string) => deps.find((d) => d.app === app);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {apps.length === 0 && <FirstRun apps={apps} metas={metas} deps={deps} />}
       <Metrics apps={apps} deps={deps} />
-
       {openAlerts.length > 0 && (
-        <section aria-label="alertas abiertas" className="overflow-hidden rounded-lg border border-amber-500/30">
+        <section>
+          <h3 className="mb-2 text-sm font-medium">Alerts</h3>
           {openAlerts.map((e) => (
-            <div key={e.id} className="flex items-center gap-3 border-b border-amber-500/20 bg-amber-500/10 px-4 py-3 last:border-0">
-              <Dot status="degraded" />
-              <div className="min-w-0 flex-1">
-                <p className="tnum truncate font-mono text-xs">{e.app} · {e.msg}</p>
+            <div key={e.id} className="mb-2 flex items-center gap-3 rounded-lg border border-amber-900 bg-amber-950/30 px-4 py-3">
+              <span className="h-2 w-2 rounded-full bg-amber-400" />
+              <div className="flex-1">
+                <p className="font-mono text-xs">{e.app} · {e.msg}</p>
+                <p className="font-mono text-[11px] text-zinc-500">{rel(e.ts)}</p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => navigate("/alerts")}>
-                ver alerta
-              </Button>
             </div>
           ))}
         </section>
       )}
-
       {discovered.length > 0 && (
-        <section aria-label="repos detectados" className="overflow-hidden rounded-lg border">
+        <section>
+          <h3 className="mb-2 text-sm font-medium">Inbox</h3>
           {discovered.map((e) => (
-            <div key={e.id} className="flex items-center gap-3 border-b bg-card px-4 py-3 last:border-0">
-              <div className="min-w-0 flex-1">
+            <div key={e.id} className="mb-2 flex items-center gap-3 rounded-lg border px-4 py-3">
+              <div className="flex-1">
                 <p className="text-sm font-medium">New repository detected</p>
-                <p className="tnum truncate font-mono text-xs text-muted-foreground">{e.msg}</p>
+                <p className="font-mono text-xs text-muted-foreground">{e.msg}</p>
               </div>
-              {canWrite ? (
-                <Button size="sm" onClick={() => openApp(e.app)}>
-                  Import
-                </Button>
-              ) : (
-                <Badge variant="outline" className="font-mono text-[11px]">{e.app}</Badge>
-              )}
+              <Button onClick={() => openApp(e.app)}>Import</Button>
             </div>
           ))}
         </section>
       )}
-
-      <section aria-label="apps">
-        <div className="mb-2 flex items-baseline justify-between">
-          <h3 className="text-sm font-medium">Contenedores · {apps.length}</h3>
-          <p className="font-mono text-[11px] text-muted-foreground">nombre · destino · estado</p>
-        </div>
+      <section>
+        <h3 className="mb-2 text-sm font-medium">Projects</h3>
         <div className="overflow-hidden rounded-lg border">
           {apps.map((a) => {
-            const st = stateOf(a);
             const meta = metas.find((m) => m.name === a.name);
             const domain = meta?.domains[0];
-            const last = deps.find((d) => d.app === a.name);
+            const dep = lastDep(a.name);
+            const state = a.failed ? "failed" : a.running ? "running" : "stopped";
             return (
-              <button
+              <div
                 key={a.name}
-                onClick={() => openApp(a.name)}
-                className="group flex w-full items-center gap-3 border-b bg-card/40 px-4 py-3 text-left last:border-0 hover:bg-accent/40"
+                className="flex w-full items-center gap-3 border-b bg-card/40 px-4 py-3 text-left last:border-0"
               >
-                <span aria-hidden className="manifest-strip h-8 w-1 shrink-0 rounded-full opacity-70" />
                 <Avatar name={a.name} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-mono text-sm">{a.name}</p>
-                  <p className="tnum truncate font-mono text-[11px] text-muted-foreground">
-                    {domain ?? "sin dominio"}{last ? ` · ${last.rev.slice(0, 8)}` : ""}
+                <div className="min-w-0">
+                  <button onClick={() => openApp(a.name)} className="font-mono text-sm hover:underline">
+                    {a.name}
+                  </button>
+                  <p className="truncate font-mono text-xs text-muted-foreground">
+                    {meta?.port ? `:${meta.port} ` : ""}{domain ?? "sin dominio"}
                   </p>
                 </div>
-                <span className="tnum hidden font-mono text-[11px] text-muted-foreground sm:block">
-                  {a.restarts} restarts
+                <span className="hidden font-mono text-xs text-muted-foreground md:block">
+                  {dep ? `${dep.rev.slice(0, 8)} · ${rel(dep.finished_at || dep.started_at)}` : "sin deploys"}
                 </span>
-                <Badge
-                  variant={st === "failed" ? "destructive" : st === "running" ? "secondary" : "outline"}
-                  className="tnum font-mono text-[11px] font-normal"
+                <span className="flex-1" />
+                <StatusBadge status={state} />
+                <Dot status={state} />
+                <Button
+                  variant="ghost" size="sm"
+                  className="text-xs"
+                  onClick={() => act(a.name, "restart")}
+                  title={`restart ${a.name}`}
                 >
-                  <Dot status={st} />
-                  <span className="ml-1.5">{st}</span>
-                </Badge>
-                <span aria-hidden className="text-muted-foreground transition-transform group-hover:translate-x-0.5"><ArrowRight className="h-3.5 w-3.5" /></span>
-              </button>
+                  restart
+                </Button>
+                <Button
+                  variant="ghost" size="sm"
+                  className="text-xs"
+                  onClick={() => openApp(a.name)}
+                >
+                  abrir ›
+                </Button>
+              </div>
             );
           })}
           {apps.length === 0 && (
-            <div className="p-6">
-              <p className="text-sm font-medium">Terminal vacía</p>
-              <p className="mt-1 font-mono text-xs text-muted-foreground">
-                Registra tu primera app con <span className="text-foreground">rkt apps add --name mi-app --port 3000</span>
-              </p>
-            </div>
+            <p className="p-6 text-sm text-muted-foreground">
+              Sin apps. Usa <span className="font-medium text-foreground">Create New</span> arriba o <span className="font-mono">apps add</span> en CLI.
+            </p>
           )}
         </div>
       </section>
-
-      {recent.length > 0 && (
-        <section aria-label="salidas recientes">
-          <div className="mb-2 flex items-baseline justify-between">
-            <h3 className="text-sm font-medium">Últimas salidas</h3>
-            <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigate("/deployments")}>
-              tablero completo <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-          <div className="overflow-hidden rounded-lg border">
-            {recent.map((d) => (
-              <div
-                key={d.id}
-                className="flex items-center gap-3 border-b bg-card/40 px-4 py-2.5 last:border-0"
-              >
-                <Dot status={d.status} />
-                <span className="truncate font-mono text-xs">{d.app}</span>
-                <span className="tnum font-mono text-[11px] text-muted-foreground">#{d.id} · {d.rev.slice(0, 8)}</span>
-                <CopyButton text={d.rev} />
-                <span className="flex-1" />
-                <span className="tnum font-mono text-[11px] text-muted-foreground">
-                  {d.status === "running" ? "en curso…" : d.triggered_by ? `por ${d.triggered_by}` : ""}
-                </span>
-              </div>
+      {evs.length > 0 && (
+        <section>
+          <h3 className="mb-2 text-sm font-medium">Recent activity</h3>
+          <div className="rounded-lg border bg-card p-4">
+            {evs.slice(0, 8).map((e) => (
+              <p key={e.id} className="truncate py-0.5 font-mono text-xs text-muted-foreground">
+                <span className="text-zinc-600">{rel(e.ts)}</span>{" "}
+                <span className="text-zinc-300">{e.kind}</span> {e.app} {e.msg}
+              </p>
             ))}
           </div>
         </section>
       )}
-
       <UsageStrip />
     </div>
   );

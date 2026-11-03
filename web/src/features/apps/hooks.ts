@@ -16,3 +16,9 @@ export function useEnv(app: string): { env: Record<string, string>; reload: () =
   }, [app, online, gen]);
   return { env, reload };
 }
+
+// useEnvCount solo el conteo (checklist sin traer valores).
+export function useEnvCount(app: string): number {
+  const { env } = useEnv(app);
+  return Object.keys(env).length;
+}

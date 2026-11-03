@@ -50,6 +50,7 @@ export interface AppMeta {
   restart_delay: string;
   min_uptime: string;
   memory_mb: number;
+  port: string;
   domains: string[];
   deploy: { repo: string; ref: string; build: string[]; auto: boolean } | null;
 }

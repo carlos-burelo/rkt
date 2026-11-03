@@ -14,7 +14,10 @@ import { AnalyticsPage } from "../features/overview/AnalyticsPage";
 import { Observability } from "../features/overview/Observability";
 import { Alerts } from "../features/alerts/Alerts";
 import { EnvAll } from "../features/env/EnvAll";
-import { AppDetail } from "../features/apps/AppDetail";
+import { AppTabs } from "../features/apps/AppTabs";
+import { AppOverview } from "../features/apps/AppOverview";
+import { AppEnv } from "../features/apps/AppEnv";
+import { AppSettings } from "../features/apps/AppSettings";
 import { Routes } from "../features/routes/Routes";
 import { Settings } from "../features/settings/Settings";
 import { Users } from "../features/users/Users";
@@ -66,6 +69,14 @@ function UsersRoute() {
   return <Users />;
 }
 
+function AppDeploysTab() {
+  return <Deployments />;
+}
+
+function AppLogsTab() {
+  return <Logs />;
+}
+
 export const router = createBrowserRouter(
   [
     { path: "/login", element: <LoginRoute /> },
@@ -87,7 +98,19 @@ export const router = createBrowserRouter(
             { path: "observability", element: <Observability /> },
             { path: "alerts", element: <Alerts /> },
             { path: "environment", element: <EnvAll /> },
-            { path: "app/:name", element: <AppDetail /> },
+            {
+              path: "app/:name",
+              element: <AppTabs />,
+              children: [
+                { index: true, element: <Navigate to="overview" replace /> },
+                { path: "overview", element: <AppOverview /> },
+                { path: "deploys", element: <AppDeploysTab /> },
+                { path: "logs", element: <AppLogsTab /> },
+                { path: "analytics", element: <AnalyticsPage /> },
+                { path: "env", element: <AppEnv /> },
+                { path: "settings", element: <AppSettings /> },
+              ],
+            },
             { path: "routes", element: <Routes /> },
             { path: "settings", element: <Settings /> },
             { path: "users", element: <UsersRoute /> },
