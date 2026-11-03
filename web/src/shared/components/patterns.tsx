@@ -1,100 +1,179 @@
 import { useState } from "react";
 import { CopyButton } from "./feedback";
 import { rel } from "../lib/time";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
-// PageHeader: título + descripción + acciones. Sin kicker.
+// PageHeader: folio de terminal. La regla de señal es la firma, no un kicker.
 export function PageHeader({
   title,
   description,
   actions,
+  meta,
 }: {
   title: string;
   description?: string;
   actions?: React.ReactNode;
+  meta?: React.ReactNode;
 }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end gap-3">
-      <div className="min-w-0 flex-1">
-        <h2 className="text-balance text-xl font-semibold tracking-tight">{title}</h2>
-        {description && <p className="mt-1 max-w-[75ch] text-sm text-muted-foreground">{description}</p>}
+    <header className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2.5">
+          <span aria-hidden className="h-1 w-4 shrink-0 bg-signal" />
+          <h1 className="text-[24px] leading-none font-semibold tracking-[-0.03em]">{title}</h1>
+        </div>
+        {description && <p className="mt-2 max-w-[78ch] text-[13px] leading-relaxed text-muted-foreground">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
-    </div>
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        {meta}
+        {actions}
+      </div>
+    </header>
   );
 }
 
-// Section: tarjeta hairline con encabezado. Sin sombra dura.
+// Section: bloque de manifiesto con cabecera hairline, sin sombra.
 export function Section({
   title,
   description,
   actions,
   children,
   accent = false,
+  className,
 }: {
   title: string;
   description?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
   accent?: boolean;
+  className?: string;
 }) {
   return (
-    <Card className="gap-0 overflow-hidden py-0">
-      {accent && <div aria-hidden className="manifest-strip h-1 w-full opacity-60" />}
-      <CardHeader className="flex-row items-start gap-3 space-y-0 border-b px-5 py-4">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-medium">{title}</h3>
-          {description && <p className="mt-0.5 max-w-[75ch] text-xs text-muted-foreground">{description}</p>}
+    <section className={cn("border border-border bg-card/45", accent && "border-t-signal/70", className)}>
+      <header className="flex flex-wrap items-center gap-3 border-b border-border bg-secondary/20 px-3 py-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span aria-hidden className={cn("h-1.5 w-1.5 shrink-0", accent ? "bg-signal" : "bg-muted-foreground/40")} />
+          <h2 className="text-[12px] font-medium tracking-tight">{title}</h2>
+          {description && <p className="hidden truncate text-[11px] text-muted-foreground sm:block">{description}</p>}
         </div>
         {actions}
-      </CardHeader>
-      <CardContent className="px-5 py-4">{children}</CardContent>
-    </Card>
+      </header>
+      <div className="p-3">{children}</div>
+    </section>
   );
 }
 
-// Stat: placa terminal de escala fija. Número tabular arriba, etiqueta
-// abajo, sub mono honesto con ventana. Todas las placas del grupo miden
-// lo mismo; la tira superior solo marca signal/warn/bad/ok.
+const TONE_TEXT = {
+  signal: "text-signal",
+  ok: "text-ok",
+  warn: "text-warn",
+  bad: "text-bad",
+} as const;
+
+const TONE_MARK = {
+  signal: "bg-signal",
+  ok: "bg-ok",
+  warn: "bg-warn",
+  bad: "bg-bad",
+} as const;
+
+// Stat: celda de libro, no tarjeta. Número tabular, etiqueta mono, ventana honesta.
 export function Stat({
   value,
   label,
   sub,
   tone,
+  className,
 }: {
   value: string;
   label: string;
   sub?: string;
-  tone?: "signal" | "ok" | "warn" | "bad";
+  tone?: keyof typeof TONE_TEXT;
+  className?: string;
 }) {
-  const toneCls =
-    tone === "bad"
-      ? "text-red-300"
-      : tone === "warn"
-        ? "text-amber-300"
-        : tone === "ok"
-          ? "text-emerald-300"
-          : tone === "signal"
-            ? "text-signal"
-            : "";
-  const topCls =
-    tone === "signal"
-      ? "plate-top plate-top-signal"
-      : tone === "bad"
-        ? "plate-top bg-red-400/70"
-        : tone === "warn"
-          ? "plate-top bg-amber-400/70"
-          : tone === "ok"
-            ? "plate-top bg-emerald-400/60"
-            : "plate-top";
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
-      <div aria-hidden className={topCls} />
-      <div className="px-4 pb-3 pt-3">
-        <p className={`tnum text-2xl font-semibold tracking-tight ${toneCls}`}>{value}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{label}</p>
-        {sub && <p className="tnum mt-0.5 font-mono text-[11px] text-muted-foreground">{sub}</p>}
+    <div className={cn("min-w-0 bg-card/55 px-4 py-3", className)}>
+      <div className="flex items-center gap-2">
+        {tone && <span aria-hidden className={cn("h-1 w-1 shrink-0", TONE_MARK[tone])} />}
+        <span className="micro truncate">{label}</span>
       </div>
+      <p className={cn("mt-2 font-mono text-[26px] leading-none font-medium tracking-[-0.04em] tnum", tone && TONE_TEXT[tone])}>
+        {value}
+      </p>
+      {sub && <p className="mt-1.5 truncate font-mono text-[10px] text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+export function StatGrid({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={cn("grid grid-cols-2 gap-px border border-border bg-border md:grid-cols-4", className)}>
+      {children}
+    </div>
+  );
+}
+
+export function Segmented<T extends string>({
+  value,
+  onChange,
+  items,
+  label,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  items: { value: T; label: string; count?: number }[];
+  label: string;
+}) {
+  return (
+    <div className="inline-flex items-center border border-border" role="group" aria-label={label}>
+      {items.map((it) => {
+        const active = it.value === value;
+        return (
+          <button
+            key={it.value}
+            type="button"
+            onClick={() => onChange(it.value)}
+            aria-pressed={active}
+            className={cn(
+              "inline-flex h-7 items-center gap-1.5 border-r border-border px-2.5 font-mono text-[10px] tracking-[0.08em] uppercase transition-colors last:border-r-0",
+              active ? "bg-signal text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
+          >
+            {it.label}
+            {it.count !== undefined && <span className="tnum opacity-70">{it.count}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function Meter({
+  label,
+  value,
+  frac,
+  tone = "ok",
+}: {
+  label: string;
+  value: string;
+  frac?: number;
+  tone?: "ok" | "warn" | "bad" | "signal";
+}) {
+  const bar = tone === "bad" ? "bg-bad" : tone === "warn" ? "bg-warn" : tone === "signal" ? "bg-signal" : "bg-ok";
+  const pct = frac === undefined ? 0 : Math.min(100, Math.max(1, frac * 100));
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="micro">{label}</span>
+        <span className="tnum font-mono text-[11px] text-foreground">{value}</span>
+      </div>
+      {frac === undefined ? (
+        <div aria-hidden className="mt-1.5 h-px bg-border" />
+      ) : (
+        <div className="mt-1.5 h-1 overflow-hidden bg-secondary" role="img" aria-label={`${label} ${value}`}>
+          <div className={cn("h-full", bar)} style={{ width: `${pct}%` }} />
+        </div>
+      )}
     </div>
   );
 }
@@ -116,12 +195,12 @@ export function EnvSecret({ value }: { value: string }) {
   const [show, setShow] = useState(false);
   return (
     <span className="flex min-w-0 flex-1 items-center gap-1.5">
-      <span className="tnum min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+      <span className="tnum min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
         {show ? value : "••••••••"}
       </span>
       <button
         onClick={() => setShow(!show)}
-        className="shrink-0 rounded px-1 font-mono text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+        className="shrink-0 rounded-[1px] px-1 font-mono text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
         title={show ? "ocultar" : "mostrar"}
       >
         {show ? "ocultar" : "mostrar"}
@@ -131,12 +210,13 @@ export function EnvSecret({ value }: { value: string }) {
   );
 }
 
-// EmptyState terminal: marco dashed + hint mono. Todas las listas vacías.
+// EmptyState terminal: folio sin registros, no tarjeta dashed.
 export function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/70 bg-card/30 p-10 text-center">
-      <p className="text-sm font-medium">{title}</p>
-      {hint && <p className="tnum max-w-[60ch] font-mono text-[11px] text-muted-foreground">{hint}</p>}
+    <div className="flex flex-col items-center gap-2 border border-border bg-card/30 px-6 py-10 text-center">
+      <span className="micro text-muted-foreground/55">sin registros</span>
+      <p className="text-[13px] font-medium">{title}</p>
+      {hint && <p className="tnum max-w-[64ch] font-mono text-[11px] leading-relaxed text-muted-foreground">{hint}</p>}
       {action}
     </div>
   );

@@ -3,14 +3,19 @@ import { User } from "../../shared/lib/types";
 import { listUsers, createUser, deleteUser } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { PageHeader, EmptyState, Section, Time } from "../../shared/components/patterns";
 import { Avatar, Dot } from "../../shared/components/ui";
 import {
-  Select, SelectValue, SelectTrigger, SelectContent, SelectItem,
+  Select, SelectTrigger, SelectContent, SelectItem,
 } from "@/components/ui/select";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
+
+const ROLE_CLASS: Record<string, string> = {
+  admin: "border-signal/35 bg-signal/10 text-signal",
+  operator: "border-info/30 bg-info/10 text-info",
+  viewer: "border-border text-muted-foreground",
+};
 
 export function Users() {
   const fail = useUI((u) => u.fail);
@@ -34,64 +39,95 @@ export function Users() {
   }, []);
 
   return (
-    <div className="space-y-3">
-      <PageHeader title="Users" description="Solo admin. Roles: viewer lee, operator muta, admin gestiona." />
-      <div className="overflow-hidden rounded-lg border" role="table" aria-label="usuarios">
-        <div className="tnum hidden grid-cols-[2rem_1fr_7rem_10rem_5rem] items-center gap-3 border-b bg-muted/40 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground sm:grid" aria-hidden>
-          <span>est</span>
-          <span>usuario</span>
-          <span>rol</span>
-          <span className="text-right">alta</span>
-          <span className="text-right">acción</span>
+    <div className="space-y-4">
+      <PageHeader
+        title="Users"
+        description="Solo admin. Viewer lee, operator muta la flota, admin gestiona usuarios y configuración."
+        meta={<span className="tnum font-mono text-[10px] text-muted-foreground">{users.length} cuentas</span>}
+      />
+      <div className="border border-border" role="table" aria-label="usuarios">
+        <div
+          className="hidden grid-cols-[1.5rem_minmax(0,1fr)_7rem_9rem_4rem] items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 sm:grid"
+          aria-hidden
+        >
+          <span className="micro">est</span>
+          <span className="micro">usuario</span>
+          <span className="micro">rol</span>
+          <span className="micro text-right">alta</span>
+          <span />
         </div>
         {users.map((u) => (
-          <div key={u.name} className="flex items-center gap-3 border-b bg-card/40 px-4 py-2.5 last:border-0 sm:grid sm:grid-cols-[2rem_1fr_7rem_10rem_5rem]">
+          <div
+            key={u.name}
+            className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-2 border-b border-border/70 bg-card/35 px-3 py-2.5 last:border-0 sm:grid-cols-[1.5rem_minmax(0,1fr)_7rem_9rem_4rem] sm:gap-3"
+          >
             <Dot status={me?.user === u.name ? "running" : "stopped"} />
-            <span className="flex min-w-0 flex-1 items-center gap-2">
+            <span className="flex min-w-0 items-center gap-2">
               <Avatar name={u.name} />
-              <span className="truncate font-mono text-xs">{u.name}</span>
+              <span className="truncate font-mono text-[11px]">{u.name}</span>
               {me?.user === u.name && (
-                <Badge variant="outline" className="font-mono text-[11px]">tú</Badge>
+                <span className="font-mono text-[8px] tracking-[0.08em] text-muted-foreground uppercase">tú</span>
               )}
             </span>
-            <Badge
-              variant={u.role === "admin" ? "default" : u.role === "operator" ? "outline" : "secondary"}
-              className="tnum font-mono text-[11px] font-normal"
+            <span
+              className={`tnum inline-flex h-5 w-fit items-center border px-1.5 font-mono text-[9px] tracking-[0.08em] uppercase ${
+                ROLE_CLASS[u.role] ?? ROLE_CLASS.viewer
+              }`}
             >
               {u.role}
-            </Badge>
-            <span className="tnum hidden text-right font-mono text-[11px] text-muted-foreground sm:block"><Time iso={u.created_at} /></span>
-            <span className="flex-1 sm:hidden" />
-            <span className="text-right">
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-red-300"
+            </span>
+            <span className="tnum hidden text-right font-mono text-[10px] text-muted-foreground sm:block">
+              <Time iso={u.created_at} />
+            </span>
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="xs"
+                className="text-muted-foreground hover:text-bad"
                 disabled={me?.user === u.name}
                 title={me?.user === u.name ? "no puedes borrarte a ti mismo" : "borrar"}
-                onClick={() => deleteUser(u.name).then(load).catch(fail)}>
+                onClick={() => deleteUser(u.name).then(load).catch(fail)}
+              >
                 borrar
               </Button>
-            </span>
+            </div>
           </div>
         ))}
         {users.length === 0 && <EmptyState title="Sin usuarios" hint="Crea el primero abajo." />}
       </div>
-      <Section title="Nuevo usuario" description="Viewer lee · operator muta · admin gestiona. Mín 12 caracteres.">
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="usuario"
-            className="w-32 font-mono text-xs" />
-          <Input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="password (mín 12)" type="password"
-            className="tnum flex-1 font-mono text-xs" />
-          <Select value={role} onValueChange={(v: string | null) => setRole(v ?? "viewer")}>
-            <SelectTrigger className="w-32 font-mono text-xs">
-              <span className="capitalize">{role}</span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="viewer">viewer</SelectItem>
-              <SelectItem value="operator">operator</SelectItem>
-              <SelectItem value="admin">admin</SelectItem>
-            </SelectContent>
-          </Select>
+
+      <Section title="Nuevo usuario" description="viewer lee · operator muta · admin gestiona · password mín 12">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <label className="field-label w-32 shrink-0">
+            usuario
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="usuario" className="h-7 font-mono text-[11px]" />
+          </label>
+          <label className="field-label min-w-0 flex-1">
+            password
+            <Input
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="mín 12 caracteres"
+              type="password"
+              className="tnum h-7 font-mono text-[11px]"
+            />
+          </label>
+          <label className="field-label w-32 shrink-0">
+            rol
+            <Select value={role} onValueChange={(v: string | null) => setRole(v ?? "viewer")}>
+              <SelectTrigger className="h-7 font-mono text-[11px]">
+                <span className="capitalize">{role}</span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="viewer">viewer</SelectItem>
+                <SelectItem value="operator">operator</SelectItem>
+                <SelectItem value="admin">admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
           <Button
-            variant="outline" size="sm"
+            variant="outline"
+            size="sm"
             onClick={() => {
               createUser(name.trim(), password, role)
                 .then(() => {
@@ -99,7 +135,8 @@ export function Users() {
                   setPassword("");
                   setRole("viewer");
                   load();
-                }).catch(fail);
+                })
+                .catch(fail);
             }}
           >
             crear

@@ -3,8 +3,8 @@ import { login } from "./api";
 import { Me } from "../../shared/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Avatar } from "../../shared/components/ui";
+import { Err } from "../../shared/components/ui";
+import { AccessShell } from "./AccessShell";
 
 export function Login({ onOk }: { onOk: (me: Me) => void }) {
   const [user, setUser] = useState("");
@@ -13,6 +13,7 @@ export function Login({ onOk }: { onOk: (me: Me) => void }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    setErr("");
     try {
       const me = await login(user.trim(), pass);
       onOk(me);
@@ -22,30 +23,46 @@ export function Login({ onOk }: { onOk: (me: Me) => void }) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-80 overflow-hidden py-0">
-        <div aria-hidden className="manifest-strip h-1.5 w-full opacity-80" />
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <Avatar name="rkt" />
-            <div>
-              <CardTitle className="text-lg tracking-tight">rkt</CardTitle>
-              <p className="tnum font-mono text-[11px] text-muted-foreground">terminal · acceso</p>
-            </div>
-          </div>
-          <CardDescription>
-            Accede con tu usuario (creado por CLI: <span className="tnum font-mono">users add</span>).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pb-6">
-          <form onSubmit={submit} className="space-y-3">
-            <Input value={user} onChange={(e) => setUser(e.target.value)} placeholder="usuario" autoComplete="username" className="font-mono text-xs" />
-            <Input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="password" autoComplete="current-password" className="font-mono text-xs" />
-            {err !== "" && <p className="text-xs text-destructive">{err}</p>}
-            <Button type="submit" className="w-full">Entrar</Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+    <AccessShell
+      kicker="terminal · acceso"
+      title="Entrar al manifiesto"
+      description="Sesión de operador. Usa la cuenta creada por CLI; rkt no abre registro público."
+      footer={
+        <p className="font-mono text-[9px] leading-relaxed text-muted-foreground/70">
+          alta de usuarios: <span className="text-foreground/80">rkt users add</span>
+          <br />
+          roles: viewer · operator · admin
+        </p>
+      }
+    >
+      <form onSubmit={submit} className="space-y-3">
+        <Err msg={err} />
+        <label className="field-label">
+          usuario
+          <Input
+            value={user}
+            onChange={(e) => setUser(e.target.value)}
+            placeholder="operador"
+            autoComplete="username"
+            className="h-8 font-mono text-[12px]"
+          />
+        </label>
+        <label className="field-label">
+          password
+          <Input
+            type="password"
+            value={pass}
+            onChange={(e) => setPass(e.target.value)}
+            placeholder="••••••••••••"
+            autoComplete="current-password"
+            className="tnum h-8 font-mono text-[12px]"
+          />
+        </label>
+        <Button type="submit" className="mt-1 h-8 w-full justify-between">
+          <span>Entrar</span>
+          <span aria-hidden className="font-mono text-[9px] tracking-[0.08em] opacity-60">↵</span>
+        </Button>
+      </form>
+    </AccessShell>
   );
 }

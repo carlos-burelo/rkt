@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Lock } from "lucide-react";
+import { ArrowRight, Lock, Search } from "lucide-react";
 import { useNavigate } from "react-router";
 import { listApps, getEnv } from "../apps/api";
 import { AppMeta } from "../../shared/lib/types";
@@ -35,44 +35,68 @@ export function EnvAll() {
   }, []);
 
   const f = q.toLowerCase();
+  const total = rows.reduce((n, r) => n + Object.keys(r.vars).length, 0);
+  const visible = rows.filter(({ app, vars }) => {
+    if (f === "") return true;
+    return app.toLowerCase().includes(f) || Object.keys(vars).some((k) => k.toLowerCase().includes(f));
+  });
+
   return (
-    <div className="space-y-3">
-      <PageHeader title="Environment" description="Inventario por app (valores ocultos; edición en cada app)." />
-      <Input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Buscar variable o app…"
-        className="max-w-md text-xs"
+    <div className="space-y-4">
+      <PageHeader
+        title="Environment"
+        description="Inventario por app. Los valores viven enmascarados; la edición ocurre en la ficha de cada unidad."
+        meta={
+          <span className="tnum font-mono text-[10px] text-muted-foreground">
+            {rows.length} apps · {total} vars
+          </span>
+        }
       />
-      {rows.map(({ app, vars }) => {
-        const keys = Object.keys(vars).filter(
-          (k) => f === "" || k.toLowerCase().includes(f) || app.toLowerCase().includes(f),
-        );
-        if (f !== "" && keys.length === 0) return null;
+      <div className="flex items-center gap-2 border border-border bg-card/35 p-2">
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="buscar variable o app…"
+            className="h-7 border-transparent bg-transparent pl-8 font-mono text-[11px] hover:border-input"
+          />
+        </div>
+        <span className="flex-1" />
+        <span className="folio">valores ocultos</span>
+      </div>
+
+      {visible.map(({ app, vars }) => {
+        const keys = Object.keys(vars).filter((k) => f === "" || k.toLowerCase().includes(f) || app.toLowerCase().includes(f));
         return (
-          <div key={app} className="overflow-hidden rounded-lg border">
+          <section key={app} className="border border-border">
             <button
               onClick={() => navigate(`/app/${app}`)}
-              className="flex w-full items-center gap-3 border-b bg-card px-4 py-3 text-left hover:bg-accent/40"
+              className="flex w-full items-center gap-2.5 border-b border-border bg-secondary/20 px-3 py-2 text-left hover:bg-accent/40"
             >
               <Avatar name={app} />
-              <span className="min-w-0 flex-1 truncate font-mono text-xs">{app}</span>
-              <span className="tnum font-mono text-[11px] text-muted-foreground">
-                {Object.keys(vars).length} vars
-              </span>
+              <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{app}</span>
+              <span className="tnum font-mono text-[9px] text-muted-foreground">{Object.keys(vars).length} vars</span>
+              <ArrowRight className="h-3 w-3 text-muted-foreground/40" />
             </button>
             {keys.map((k) => (
-              <div key={k} className="flex items-center gap-3 border-b bg-card/40 px-4 py-2 last:border-0">
-                <Lock className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="secreto" />
-                <span className="w-56 truncate font-mono text-xs">{k}</span>
-                <span className="tnum font-mono text-[11px] text-muted-foreground">secreto · editar en app</span>
+              <div key={k} className="flex items-center gap-2 border-b border-border/60 bg-card/35 px-3 py-1.5 last:border-0">
+                <Lock className="h-3 w-3 shrink-0 text-muted-foreground/60" aria-label="secreto" />
+                <span className="w-52 shrink-0 truncate font-mono text-[11px]">{k}</span>
+                <span className="flex-1" />
+                <span className="font-mono text-[9px] text-muted-foreground/60">secreto · editar en app</span>
               </div>
             ))}
-            {keys.length === 0 && <p className="bg-card/40 px-4 py-3 text-xs text-muted-foreground">Sin vars.</p>}
-          </div>
+            {keys.length === 0 && (
+              <p className="bg-card/30 px-3 py-3 font-mono text-[10px] text-muted-foreground">sin vars para este filtro</p>
+            )}
+          </section>
         );
       })}
-      {rows.length === 0 && <EmptyState title="Sin apps" hint="Registra tu primera app." />}
+      {rows.length === 0 && <EmptyState title="Sin apps" hint="Registra tu primera app para ver su inventario." />}
+      {rows.length > 0 && visible.length === 0 && (
+        <EmptyState title="Sin coincidencias" hint={`Ninguna variable o app coincide con “${q}”.`} />
+      )}
     </div>
   );
 }

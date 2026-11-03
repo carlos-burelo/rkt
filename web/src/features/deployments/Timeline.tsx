@@ -10,21 +10,33 @@ export function Timeline({ dep }: { dep: Deployment }) {
       : { label: "Build", sub: dur(dep.started_at, dep.finished_at), state: dep.status === "ok" ? "ok" : "bad" },
     dep.status === "running"
       ? { label: "Fin", sub: "pendiente", state: "idle" }
-      : { label: dep.status === "ok" ? "Live" : "Fallido", sub: rel(dep.finished_at), state: dep.status === "ok" ? "ok" : "bad" },
+      : {
+          label: dep.status === "ok" ? "Live" : "Fallido",
+          sub: rel(dep.finished_at),
+          state: dep.status === "ok" ? "ok" : "bad",
+        },
   ];
-  const color = (s: string) =>
-    s === "ok" ? "bg-emerald-400" : s === "run" ? "bg-emerald-400 animate-pulse" : s === "bad" ? "bg-red-400" : "bg-muted-foreground/50";
+  const mark = (s: string) =>
+    s === "ok"
+      ? "border-ok/50 bg-ok"
+      : s === "run"
+        ? "border-signal/50 bg-signal animate-signal-blink"
+        : s === "bad"
+          ? "border-bad/50 bg-bad"
+          : "border-border bg-transparent";
+  const text = (s: string) =>
+    s === "ok" ? "text-ok" : s === "run" ? "text-signal" : s === "bad" ? "text-bad" : "text-muted-foreground";
   return (
     <ol className="space-y-0">
       {steps.map((s, i) => (
         <li key={s.label} className="flex gap-3">
           <div className="flex flex-col items-center">
-            <span className={`mt-1 h-2.5 w-2.5 rounded-full ${color(s.state)}`} />
+            <span className={`mt-1 h-2 w-2 border ${mark(s.state)}`} />
             {i < steps.length - 1 && <span className="w-px flex-1 bg-border" />}
           </div>
-          <div className="pb-4">
-            <p className="text-xs font-medium">{s.label}</p>
-            <p className="tnum font-mono text-[11px] text-muted-foreground">{s.sub}</p>
+          <div className="pb-3">
+            <p className={`font-mono text-[10px] tracking-[0.08em] uppercase ${text(s.state)}`}>{s.label}</p>
+            <p className="tnum mt-0.5 font-mono text-[10px] text-muted-foreground">{s.sub}</p>
           </div>
         </li>
       ))}

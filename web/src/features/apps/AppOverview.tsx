@@ -2,18 +2,36 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router";
 import { ExternalLink } from "lucide-react";
 import { dur } from "../../shared/lib/time";
-import { Dot } from "../../shared/components/ui";
-import { Section, Time } from "../../shared/components/patterns";
+import { CopyButton } from "../../shared/components/feedback";
+import { Section, Stat, Time } from "../../shared/components/patterns";
 import { fetchAnalytics, Analytics } from "../overview/api";
 import { useFleet } from "../overview/hooks";
 import { useEnvCount } from "./hooks";
 
-function Check({ ok, label }: { ok: boolean; label: string }) {
+function Check({ ok, label, hint }: { ok: boolean; label: string; hint: string }) {
   return (
-    <p className="flex items-center gap-2 py-1 text-xs">
-      <span className={`inline-block h-2 w-2 rounded-full ${ok ? "bg-emerald-400" : "bg-zinc-700"}`} />
-      <span className={ok ? "text-zinc-300" : "text-zinc-500"}>{label}</span>
-    </p>
+    <div className="flex items-center gap-2.5 py-2">
+      <span
+        aria-hidden
+        className={`h-2 w-2 shrink-0 border ${ok ? "border-ok/60 bg-ok" : "border-border bg-transparent"}`}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px]">{label}</span>
+        <span className="mt-0.5 block truncate font-mono text-[9px] text-muted-foreground">{hint}</span>
+      </span>
+      <span className={`font-mono text-[9px] tracking-[0.08em] uppercase ${ok ? "text-ok" : "text-muted-foreground/70"}`}>
+        {ok ? "listo" : "pendiente"}
+      </span>
+    </div>
+  );
+}
+
+function Cell({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 bg-card/45 px-3 py-2">
+      <p className="micro">{label}</p>
+      <div className="tnum mt-1 truncate font-mono text-[11px]">{children}</div>
+    </div>
   );
 }
 
@@ -42,47 +60,88 @@ export function AppOverview() {
   return (
     <div className="space-y-4">
       <Section
-        title="Production Deployment"
-        description={prod ? `rev ${prod.rev.slice(0, 8)} · ${dur(prod.started_at, prod.finished_at)}` : undefined}
+        title="Deployment en producción"
+        description={prod ? `rev ${prod.rev.slice(0, 8)} · ${dur(prod.started_at, prod.finished_at)}` : "sin salida ok"}
+        accent={!prod}
       >
-        {!prod && <p className="text-xs text-muted-foreground">Sin deploy ok todavía. Publica con Redeploy.</p>}
-        {prod && (
-          <div className="space-y-1.5">
-            <p className="flex items-center gap-2 font-mono text-xs">
-              <Dot status="ok" />
-              {prod.rev.slice(0, 8)}
-              {prod.triggered_by ? <span className="text-muted-foreground">por {prod.triggered_by}</span> : null}
-              <span className="flex-1" />
-              <Time iso={prod.finished_at} />
-            </p>
-            {domains.length === 0 && <p className="text-xs text-muted-foreground">Sin dominios — asigna uno en Domains.</p>}
-            {domains.map((h) => (
-              <p key={h} className="font-mono text-xs">
-                <a href={`https://${h}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 hover:underline">
-                  https://{h} <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                </a>
-              </p>
-            ))}
+        {!prod && (
+          <div className="border border-border bg-card/30 px-4 py-6 text-center">
+            <p className="micro text-muted-foreground/60">sin registro</p>
+            <p className="mt-2 text-[12px]">Todavía no hay un deploy ok.</p>
+            <p className="mt-1 font-mono text-[10px] text-muted-foreground">publica con Redeploy desde la ficha de la unidad.</p>
           </div>
+        )}
+        {prod && (
+          <>
+            <div className="grid grid-cols-2 gap-px border border-border bg-border sm:grid-cols-4">
+              <Cell label="revisión">
+                <span className="flex items-center gap-1">
+                  {prod.rev.slice(0, 8)}
+                  <CopyButton text={prod.rev} />
+                </span>
+              </Cell>
+              <Cell label="duración">{dur(prod.started_at, prod.finished_at)}</Cell>
+              <Cell label="publicó">{prod.triggered_by || "—"}</Cell>
+              <Cell label="hora">
+                <Time iso={prod.finished_at} />
+              </Cell>
+            </div>
+            <div className="mt-3 border border-border">
+              <div className="flex items-center gap-2 border-b border-border bg-secondary/20 px-3 py-1.5">
+                <span className="micro">destinos</span>
+                <span className="tnum ml-auto font-mono text-[9px] text-muted-foreground">{domains.length}</span>
+              </div>
+              {domains.length === 0 && (
+                <p className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
+                  sin dominios — asigna uno en Domains.
+                </p>
+              )}
+              {domains.map((h) => (
+                <a
+                  key={h}
+                  href={`https://${h}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group flex items-center gap-2 border-b border-border/60 px-3 py-1.5 last:border-0 hover:bg-accent/40"
+                >
+                  <span aria-hidden className="h-1 w-1 bg-ok" />
+                  <span className="min-w-0 flex-1 truncate font-mono text-[10px]">{h}</span>
+                  <ExternalLink className="h-3 w-3 text-muted-foreground/50 group-hover:text-foreground" />
+                </a>
+              ))}
+            </div>
+          </>
         )}
       </Section>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Section title="Checklist">
-          <Check ok={!!meta?.deploy?.repo} label="Repo conectado" />
-          <Check ok={domains.length > 0} label="Dominio asignado" />
-          <Check ok={!!prod} label="Primer deploy ok" />
-          <Check ok={envCount > 0} label="Env configurado" />
-          <Check ok={running} label="App corriendo" />
+        <Section title="Checklist de ruta" description="lo que falta para servir">
+          <div className="divide-y divide-border/60">
+            <Check ok={!!meta?.deploy?.repo} label="Repo conectado" hint="deploy.repo" />
+            <Check ok={domains.length > 0} label="Dominio asignado" hint="Domains → nueva ruta" />
+            <Check ok={!!prod} label="Primer deploy ok" hint="Redeploy" />
+            <Check ok={envCount > 0} label="Env configurado" hint="Environment" />
+            <Check ok={running} label="App corriendo" hint="supervisor" />
+          </div>
         </Section>
-        <Section title="Tráfico 7d" description={domains[0]}>
-          {!stats && <p className="text-xs text-muted-foreground">Sin datos (¿tráfico hacia {domains[0] ?? "…"}?).</p>}
+
+        <Section title="Tráfico 7d" description={domains[0] ?? "sin dominio"}>
+          {!stats && (
+            <p className="border border-border bg-card/30 px-3 py-4 font-mono text-[10px] text-muted-foreground">
+              sin datos{domains[0] ? ` para ${domains[0]}` : ""} · access.log local
+            </p>
+          )}
           {stats && (
-            <div className="grid grid-cols-2 gap-3 font-mono">
-              <div><p className="text-xl tabular-nums">{stats.total}</p><p className="text-[11px] text-muted-foreground">reqs</p></div>
-              <div><p className="text-xl tabular-nums">{(stats.bytes / 1048576).toFixed(1)}M</p><p className="text-[11px] text-muted-foreground">bytes</p></div>
-              <div><p className="text-xl tabular-nums">{stats.p95 || "—"}</p><p className="text-[11px] text-muted-foreground">p95</p></div>
-              <div><p className="text-xl tabular-nums">{stats.by_class["5xx"] ?? 0}</p><p className="text-[11px] text-muted-foreground">5xx</p></div>
+            <div className="grid grid-cols-2 gap-px border border-border bg-border">
+              <Stat value={`${stats.total}`} label="requests" sub="ventana 7d" />
+              <Stat value={`${(stats.bytes / 1048576).toFixed(1)}M`} label="bytes" sub="access.log" />
+              <Stat value={stats.p95 || "—"} label="p95" sub="latencia" />
+              <Stat
+                value={`${stats.by_class["5xx"] ?? 0}`}
+                label="5xx"
+                sub="errores servidor"
+                tone={(stats.by_class["5xx"] ?? 0) > 0 ? "warn" : undefined}
+              />
             </div>
           )}
         </Section>

@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router";
-import { ExternalLink } from "lucide-react";
-import { Dot } from "../../shared/components/ui";
-import { Button } from "@/components/ui/button";
+import { ExternalLink, RotateCw } from "lucide-react";
+import { Dot, StatusBadge } from "../../shared/components/ui";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFleet } from "../overview/hooks";
 import { useUI } from "../../app/ui";
@@ -16,6 +16,15 @@ const TABS = [
   { id: "env", label: "Environment" },
   { id: "settings", label: "Settings" },
 ] as const;
+
+function Cell({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 bg-card/45 px-3 py-2">
+      <p className="micro">{label}</p>
+      <div className="mt-1 truncate font-mono text-[11px]">{children}</div>
+    </div>
+  );
+}
 
 // AppTabs ficha por app con tabs anidadas (el scroll-muro murió).
 // Fija appFilter para que Deployments/Logs reutilicen su filtro.
@@ -35,46 +44,77 @@ export function AppTabs() {
 
   const meta = metas.find((m) => m.name === name);
   const st = status?.apps.find((a) => a.name === name);
-  const running = st ? st.running && !st.failed : false;
+  const state = st?.failed ? "failed" : st?.running ? "running" : "stopped";
   const domains = meta?.domains ?? [];
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="font-mono text-lg">{name || "(sin app)"}</h2>
-        <Dot status={st?.failed ? "failed" : running ? "running" : "stopped"} />
-        <span className="flex-1" />
-        {domains[0] && (
-          <a
-            href={`https://${domains[0]}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 text-xs font-medium shadow-xs hover:bg-accent hover:text-accent-foreground"
-          >
-            <ExternalLink className="h-3.5 w-3.5" /> Visit
-          </a>
-        )}
-        {canWrite && name && (
-          <>
-            <Button variant="outline" size="sm" onClick={() => act(name, "restart")}>Restart</Button>
-            <Button variant="outline" size="sm" onClick={() => act(name, "deploy")}>Redeploy</Button>
-            <Button variant="outline" size="sm" onClick={() => act(name, "rollback")}>Rollback</Button>
-          </>
-        )}
-      </div>
-      {st && (
-        <p className="font-mono text-xs text-muted-foreground">
-          {st.failed ? "failed" : st.running ? "running" : "stopped"} · {st.restarts} restarts
-          {meta ? ` · ${meta.command}` : ""}
-        </p>
-      )}
+      <header className="border border-border bg-card/35">
+        <div className="flex flex-wrap items-start gap-3 border-b border-border px-4 py-4">
+          <span aria-hidden className="mt-1.5 h-5 w-1 shrink-0 bg-signal" />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="truncate font-mono text-[24px] leading-none font-medium tracking-[-0.04em]">{name || "(sin app)"}</h1>
+              <Dot status={state} />
+              <StatusBadge status={state} />
+            </div>
+            <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+              unidad de flota · bahía {meta?.port ? `:${meta.port}` : "sin asignar"} ·{" "}
+              {domains.length > 0 ? `${domains.length} destino${domains.length > 1 ? "s" : ""}` : "sin destino"}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {domains[0] && (
+              <a
+                href={`https://${domains[0]}`}
+                target="_blank"
+                rel="noreferrer"
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                <ExternalLink className="h-3 w-3" /> Visit
+              </a>
+            )}
+            {canWrite && name && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => act(name, "restart")}>
+                  <RotateCw className="h-3 w-3" /> Restart
+                </Button>
+                <Button size="sm" onClick={() => act(name, "deploy")}>Redeploy</Button>
+                <Button variant="ghost" size="sm" onClick={() => act(name, "rollback")}>Rollback</Button>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-px bg-border md:grid-cols-4">
+          <Cell label="estado">
+            <span className={st?.failed ? "text-bad" : st?.running ? "text-ok" : "text-muted-foreground"}>
+              {state}
+            </span>
+          </Cell>
+          <Cell label="reinicios">
+            <span className="tnum">{st?.restarts ?? 0}</span>
+          </Cell>
+          <Cell label="destino">
+            {domains[0] ? (
+              <a href={`https://${domains[0]}`} target="_blank" rel="noreferrer" className="hover:text-signal hover:underline">
+                {domains[0]}
+              </a>
+            ) : (
+              <span className="text-muted-foreground">sin dominio</span>
+            )}
+          </Cell>
+          <Cell label="comando">
+            <span className="text-muted-foreground">{meta?.command || "—"}</span>
+          </Cell>
+        </div>
+      </header>
       <Tabs
         value={TABS.some((t) => t.id === active) ? active : "overview"}
         onValueChange={(v) => {
           if (v) navigate(v);
         }}
       >
-        <TabsList>
+        <TabsList className="w-full gap-5">
           {TABS.map((t) => (
             <TabsTrigger key={t.id} value={t.id}>
               {t.label}

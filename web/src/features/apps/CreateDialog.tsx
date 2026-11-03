@@ -1,6 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createApp } from "./api";
@@ -31,31 +31,50 @@ export function CreateDialog({
         if (!o) setOpen(false);
       }}
     >
-      <DialogContent>
+      <DialogContent className="gap-4">
         <DialogHeader>
-          <DialogTitle>Create New</DialogTitle>
+          <div className="flex items-center gap-2">
+            <span aria-hidden className="h-1 w-4 bg-signal" />
+            <span className="micro">alta de unidad</span>
+          </div>
+          <DialogTitle className="mt-1 text-[18px] tracking-[-0.02em]">Nueva app</DialogTitle>
+          <DialogDescription className="font-mono text-[10px] leading-relaxed">
+            repo git, dir local o manual. El nombre queda como identidad de la unidad en el manifiesto.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-2">
-          <Input
-            value={repo}
-            onChange={(e) => setRepo(e.target.value)}
-            placeholder="repo git https o dir local (vacío = manual)"
-          />
-          <div className="flex gap-2">
+        <div className="space-y-3">
+          <label className="field-label">
+            repo o directorio
             <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="nombre [a-z0-9-]"
+              value={repo}
+              onChange={(e) => setRepo(e.target.value)}
+              placeholder="https://github.com/… o C:\ruta (vacío = manual)"
+              className="font-mono text-[11px]"
             />
-            <Input
-              value={command}
-              onChange={(e) => setCommand(e.target.value)}
-              placeholder="binario absoluto"
-            />
+          </label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="field-label">
+              nombre
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="[a-z0-9-]"
+                className="font-mono text-[11px]"
+              />
+            </label>
+            <label className="field-label">
+              comando
+              <Input
+                value={command}
+                onChange={(e) => setCommand(e.target.value)}
+                placeholder="binario absoluto"
+                className="font-mono text-[11px]"
+              />
+            </label>
           </div>
           <Button
             disabled={busy}
-            className="w-full"
+            className="w-full justify-between"
             onClick={() => {
               setBusy(true);
               createApp({ repo: repo.trim() || undefined, name: name.trim() || undefined, command: command.trim() || undefined })
@@ -73,17 +92,19 @@ export function CreateDialog({
                 });
             }}
           >
-            {busy ? "creando…" : "Crear app"}
+            <span>{busy ? "creando…" : "Crear app"}</span>
+            <span aria-hidden className="font-mono text-[9px] tracking-[0.08em] opacity-60">↵</span>
           </Button>
           <Button
-            variant="outline"
-            className="w-full"
+            variant="ghost"
+            className="w-full justify-between"
             onClick={() => {
               setOpen(false);
               goDomains();
             }}
           >
-            Conectar dominio <ArrowRight className="h-3.5 w-3.5" />
+            <span>Conectar dominio</span>
+            <ArrowRight className="h-3.5 w-3.5" />
           </Button>
         </div>
       </DialogContent>

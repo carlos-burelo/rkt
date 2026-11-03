@@ -1,4 +1,3 @@
-import { Avatar as AvatarPrimitive, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -11,40 +10,39 @@ export function stateOf(a: { running: boolean; failed?: boolean; restarts?: numb
 }
 
 const DOT: Record<string, string> = {
-  ok: "bg-emerald-400",
-  running: "bg-emerald-400 animate-pulse",
-  degraded: "bg-amber-400",
-  failed: "bg-red-400",
-  stopped: "bg-muted-foreground/60",
+  ok: "bg-ok",
+  running: "bg-ok animate-status-pulse",
+  degraded: "bg-warn",
+  failed: "bg-bad",
+  stopped: "bg-muted-foreground/45",
 };
 
-export function Dot({ status }: { status: string }) {
+export function Dot({ status, className }: { status: string; className?: string }) {
   const key = status === "ok" ? "ok" : status === "running" ? "running" : status;
   return (
     <span
-      className={cn("inline-block h-2 w-2 shrink-0 rounded-full", DOT[key] ?? DOT.stopped)}
+      className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-[1px]", DOT[key] ?? DOT.stopped, className)}
       title={status}
       aria-label={`estado ${status}`}
     />
   );
 }
 
-const BADGE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  ok: "secondary",
-  running: "secondary",
-  degraded: "outline",
-  failed: "destructive",
-  stopped: "outline",
+const STATUS_TONE: Record<string, string> = {
+  ok: "border-ok/30 bg-ok/10 text-ok",
+  running: "border-ok/30 bg-ok/10 text-ok",
+  degraded: "border-warn/30 bg-warn/10 text-warn",
+  failed: "border-bad/30 bg-bad/10 text-bad",
+  stopped: "border-border bg-transparent text-muted-foreground",
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
   return (
     <Badge
-      variant={BADGE_VARIANT[status] ?? "outline"}
-      className={cn("tnum font-mono text-[11px] font-normal", className)}
+      variant="outline"
+      className={cn("tnum", STATUS_TONE[status] ?? STATUS_TONE.stopped, className)}
     >
-      <Dot status={status} />
-      <span className="ml-1.5">{status}</span>
+      {status}
     </Badge>
   );
 }
@@ -52,42 +50,69 @@ export function StatusBadge({ status, className }: { status: string; className?:
 export function Err({ msg }: { msg: string }) {
   if (!msg) return null;
   return (
-    <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-      {msg}
+    <p className="mb-4 flex items-start gap-2 border border-bad/30 bg-bad/8 px-3 py-2 font-mono text-[11px] leading-relaxed text-bad">
+      <span aria-hidden className="mt-px shrink-0">!</span>
+      <span>{msg}</span>
     </p>
   );
 }
 
-// Tira de manifiesto por estado: bahía izquierda de 3px en cada fila.
-// Semáforo solo donde hay estado real (failed/running/degraded).
+// Tira de manifiesto por estado: una línea de 1px en el canto de la fila.
+// El punto de estado vive en la columna de estado, no en la tira.
 export function StateRail({ status }: { status: string }) {
   const cls =
     status === "failed" || status === "bad"
-      ? "bg-red-400"
+      ? "bg-bad"
       : status === "running" || status === "ok"
-        ? "bg-emerald-400"
+        ? "bg-ok"
         : status === "degraded" || status === "warning"
-          ? "bg-amber-400"
-          : "bg-zinc-700/60";
+          ? "bg-warn"
+          : "bg-muted-foreground/30";
   return <span aria-hidden className={`manifest-rail ${cls}`} />;
 }
 
+// Glyph de unidad: cuadrado con inicial, no avatar circular.
 const GLYPH_TONES = [
-  "bg-emerald-500/15 text-emerald-300",
-  "bg-amber-500/15 text-amber-300",
-  "bg-zinc-500/15 text-zinc-300",
-  "bg-sky-500/15 text-sky-300",
+  "border-border bg-secondary/60 text-muted-foreground",
+  "border-border bg-secondary/60 text-muted-foreground",
+  "border-border bg-secondary/60 text-muted-foreground",
+  "border-border bg-secondary/60 text-muted-foreground",
 ];
 
-export function Avatar({ name }: { name: string }) {
+export function Avatar({ name, className }: { name: string; className?: string }) {
   const ch = (name.trim()[0] ?? "?").toUpperCase();
   let h = 0;
   for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return (
-    <AvatarPrimitive className="h-6 w-6 text-[11px]">
-      <AvatarFallback className={cn("font-semibold", GLYPH_TONES[h % GLYPH_TONES.length])}>
-        {ch}
-      </AvatarFallback>
-    </AvatarPrimitive>
+    <span
+      className={cn(
+        "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[1px] border font-mono text-[10px] font-medium uppercase",
+        GLYPH_TONES[h % GLYPH_TONES.length],
+        className,
+      )}
+      aria-hidden
+    >
+      {ch}
+    </span>
+  );
+}
+
+// Marca propia: esquina de contenedor / folio, dibujada, no copiada.
+export function BrandMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden className={className}>
+      <path d="M3.5 3.5h12.8l4.2 4.2v12.8H3.5V3.5Z" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M16.3 3.5v4.2h4.2" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M3.5 12h17M8 16h8" stroke="currentColor" strokeWidth="1" opacity=".55" />
+      <path d="M6.5 6.5h2.2v2.2H6.5zM6.5 15.3h2.2v2.2H6.5z" fill="currentColor" opacity=".8" />
+    </svg>
+  );
+}
+
+export function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="inline-flex h-4 min-w-4 items-center justify-center rounded-[1px] border border-border bg-secondary/50 px-1 font-mono text-[9px] text-muted-foreground">
+      {children}
+    </kbd>
   );
 }

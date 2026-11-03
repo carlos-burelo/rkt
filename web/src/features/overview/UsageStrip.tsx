@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
 import { fetchUsage, Usage } from "./api";
 import { getSettings } from "../settings/api";
+import { Meter } from "../../shared/components/patterns";
 
-// UsageStrip: uso 30d vs quotas (solo visual, sin cobro). Barras con
-// umbral honesto: verde → ámbar → rojo según fracción del límite.
+type Tone = "ok" | "warn" | "bad" | "signal";
+
+function toneOf(frac: number | undefined): Tone {
+  if (frac === undefined) return "signal";
+  if (frac > 0.9) return "bad";
+  if (frac > 0.7) return "warn";
+  return "ok";
+}
+
+// UsageStrip: uso 30d vs quotas (solo visual, sin cobro). La barra solo
+// existe cuando hay tope declarado; sin tope se muestra la cifra honesta.
 export function UsageStrip() {
   const [u, setU] = useState<Usage | null>(null);
   const [q, setQ] = useState<Record<string, string>>({});
@@ -13,41 +23,28 @@ export function UsageStrip() {
     getSettings().then(setQ).catch(() => {});
   }, []);
 
-  if (!u) return null;
+  if (!u) return <p className="font-mono text-[10px] text-muted-foreground">sin lectura de access.log</p>;
   const qReqs = parseInt(q.quota_reqs || "0", 10);
   const qBytes = parseInt(q.quota_bytes || "0", 10);
-  const bars: [string, string, number][] = [
-    ["Requests", `${u.total}${qReqs > 0 ? ` / ${qReqs}` : ""}`, qReqs > 0 ? u.total / qReqs : 0],
-    ["Bandwidth", `${(u.bytes / 1048576).toFixed(1)}M${qBytes > 0 ? ` / ${(qBytes / 1048576).toFixed(0)}M` : ""}`, qBytes > 0 ? u.bytes / qBytes : 0],
-    ["Error rate", `${(u.err_rate * 100).toFixed(1)}%`, u.err_rate],
+  const reqFrac = qReqs > 0 ? u.total / qReqs : undefined;
+  const byteFrac = qBytes > 0 ? u.bytes / qBytes : undefined;
+  const bars: { label: string; value: string; frac?: number }[] = [
+    { label: "requests", value: `${u.total}${qReqs > 0 ? ` / ${qReqs}` : ""}`, frac: reqFrac },
+    {
+      label: "bandwidth",
+      value: `${(u.bytes / 1048576).toFixed(1)}M${qBytes > 0 ? ` / ${(qBytes / 1048576).toFixed(0)}M` : ""}`,
+      frac: byteFrac,
+    },
+    { label: "error rate", value: `${(u.err_rate * 100).toFixed(1)}%`, frac: u.err_rate },
   ];
   return (
-    <div className="overflow-hidden rounded-lg border">
-      <div className="tnum flex items-center gap-3 border-b bg-muted/40 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-        <span>usage · 30 días</span>
-        <span className="flex-1" />
-        <span>access.log local</span>
-      </div>
-      <div className="bg-card/40 p-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {bars.map(([label, v, frac]) => (
-            <div key={label}>
-              <div className="tnum flex justify-between font-mono text-xs">
-                <span className="text-muted-foreground">{label}</span>
-                <span>{v}</span>
-              </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded bg-muted" role="img" aria-label={`${label} ${v}`}>
-                <div
-                  className={`h-full rounded ${frac > 0.9 ? "bg-red-400" : frac > 0.7 ? "bg-amber-400" : "bg-emerald-400"}`}
-                  style={{ width: `${Math.min(100, Math.max(2, frac * 100))}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-        <p className="tnum mt-3 font-mono text-[11px] text-muted-foreground">
-          medido de access.log local · límites solo visuales (settings quota_*)
-        </p>
+    <div className="space-y-3">
+      {bars.map((b) => (
+        <Meter key={b.label} label={b.label} value={b.value} frac={b.frac} tone={toneOf(b.frac)} />
+      ))}
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-border/60 pt-2">
+        <span className="font-mono text-[9px] text-muted-foreground">medido de access.log local · 30d</span>
+        <span className="tnum font-mono text-[9px] text-muted-foreground">p95 {u.p95 || "—"}</span>
       </div>
     </div>
   );

@@ -31,15 +31,25 @@ export function AppSettings() {
     });
   }, [meta]);
 
+  const fields = [
+    { label: "command", key: "command" as const, hint: "binario o comando de arranque" },
+    { label: "dir", key: "dir" as const, hint: "directorio de trabajo" },
+    { label: "restart_delay", key: "restart_delay" as const, hint: "espera entre reinicios" },
+    { label: "min_uptime", key: "min_uptime" as const, hint: "uptime mínimo para contar sano" },
+    { label: "repo", key: "repo" as const, hint: "git https o ruta local" },
+    { label: "ref", key: "ref" as const, hint: "rama o tag" },
+  ];
+
   return (
     <div className="space-y-4">
       <Section
-        title="Settings"
-        description="Guardar valida y aplica (restart requerido para runtime)."
+        title="Configuración de unidad"
+        description="guardar valida y aplica · runtime exige restart"
         actions={
           canWrite ? (
             <Button
-              variant="outline" size="sm"
+              variant="outline"
+              size="sm"
               onClick={() => {
                 updateApp(name, {
                   command: form.command || undefined,
@@ -57,39 +67,49 @@ export function AppSettings() {
           ) : undefined
         }
       >
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {(
-            [
-              ["command", form.command, (v: string) => setForm({ ...form, command: v })],
-              ["dir", form.dir, (v: string) => setForm({ ...form, dir: v })],
-              ["restart_delay", form.restart_delay, (v: string) => setForm({ ...form, restart_delay: v })],
-              ["min_uptime", form.min_uptime, (v: string) => setForm({ ...form, min_uptime: v })],
-              ["repo", form.repo, (v: string) => setForm({ ...form, repo: v })],
-              ["ref", form.ref, (v: string) => setForm({ ...form, ref: v })],
-            ] as const
-          ).map(([label, v, set]) => (
-            <label key={label} className="block">
-              <span className="font-mono text-[11px] text-muted-foreground">{label}</span>
-              <Input value={v} onChange={(e) => set(e.target.value)} disabled={!canWrite} className="mt-1 font-mono text-xs" />
+        <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 md:grid-cols-2">
+          {fields.map((f) => (
+            <label key={f.key} className="field-label">
+              <span className="flex items-baseline justify-between gap-2">
+                <span>{f.label}</span>
+                <span className="normal-case tracking-normal text-muted-foreground/55">{f.hint}</span>
+              </span>
+              <Input
+                value={form[f.key]}
+                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                disabled={!canWrite}
+                className="h-7 font-mono text-[11px]"
+              />
             </label>
           ))}
-          {canWrite && (
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Checkbox checked={form.auto} onCheckedChange={(v) => setForm({ ...form, auto: v === true })} />
-              auto-deploy
-            </label>
-          )}
         </div>
+        {canWrite && (
+          <label className="mt-3 flex w-fit items-center gap-2 border border-border bg-card/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+            <Checkbox checked={form.auto} onCheckedChange={(v) => setForm({ ...form, auto: v === true })} />
+            auto-deploy al recibir push
+          </label>
+        )}
       </Section>
 
       {canWrite && (
-        <Section title="Danger zone" description="Borrar quita la app de la flota. Las routes quedan huérfanas: revísalas en Domains.">
-          <div className="flex gap-2">
-            <Input value={confirmDel} onChange={(e) => setConfirmDel(e.target.value)}
+        <section className="border border-bad/30 bg-bad/4">
+          <header className="flex flex-wrap items-center gap-2 border-b border-bad/25 bg-bad/8 px-3 py-2">
+            <span aria-hidden className="h-1.5 w-1.5 bg-bad" />
+            <h2 className="text-[12px] font-medium text-bad">Danger zone</h2>
+            <p className="hidden text-[11px] text-bad/65 sm:block">
+              borrar quita la app de la flota; las routes quedan huérfanas
+            </p>
+          </header>
+          <div className="flex flex-col gap-2 p-3 sm:flex-row">
+            <Input
+              value={confirmDel}
+              onChange={(e) => setConfirmDel(e.target.value)}
               placeholder={`escribe ${name} para borrar`}
-              className="flex-1 border-destructive/50 font-mono text-xs" />
+              className="h-7 flex-1 border-bad/30 font-mono text-[11px]"
+            />
             <Button
-              variant="destructive" size="sm"
+              variant="destructive"
+              size="sm"
               disabled={confirmDel !== name}
               onClick={() => {
                 deleteApp(name).then(() => navigate("/deployments")).catch(fail);
@@ -98,7 +118,7 @@ export function AppSettings() {
               borrar app
             </Button>
           </div>
-        </Section>
+        </section>
       )}
     </div>
   );
