@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -171,5 +173,62 @@ func TestRecoveryAbortHandler(t *testing.T) {
 	}
 	if body := rec.Body.String(); body != "" {
 		t.Fatalf("abort no debe escribir body: %q", body)
+	}
+}
+
+// TestBodyChunkedExcedeTope: sin Content-Length (chunked) el tope se
+// descubre al proxyar; debe responder 413, no 502.
+func TestBodyChunkedExcedeTope(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer backend.Close()
+	live := liveFrom(t, fmt.Sprintf(`
+max_body_mb: 1
+rate_limit:
+  enabled: false
+routes:
+  - hosts: ["h.test"]
+    target: "%s"
+`, backend.URL))
+	h := NewHandler(live, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	big := bytes.Repeat([]byte("a"), 2<<20)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(big))
+	req.ContentLength = -1 // chunked
+	req.Host = "h.test"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("chunked grande = %d, quiere 413 (%s)", rec.Code, rec.Body.String())
+	}
+}
+
+// TestClienteCanceladoNoEsBackendCaido: si el cliente cancela, el proxy no
+// responde 502 ni inventa un error de backend.
+func TestClienteCanceladoNoEsBackendCaido(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		_, _ = w.Write([]byte("tarde"))
+	}))
+	defer backend.Close()
+	live := liveFrom(t, fmt.Sprintf(`
+rate_limit:
+  enabled: false
+routes:
+  - hosts: ["h.test"]
+    target: "%s"
+`, backend.URL))
+	h := NewHandler(live, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
+	req.Host = "h.test"
+	cancel()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code == http.StatusBadGateway {
+		t.Fatalf("cliente cancelado no debe ser 502: %s", rec.Body.String())
 	}
 }

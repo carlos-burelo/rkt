@@ -59,6 +59,18 @@ func NewHandler(live *config.Live, log *slog.Logger) http.Handler {
 			},
 			Transport: transport,
 			ErrorHandler: func(rw http.ResponseWriter, req *http.Request, err error) {
+				// Cliente que corta (cerrar pestaña, cancelar video) no es un
+				// backend caído: se registra en debug y no se responde nada.
+				if req.Context().Err() != nil {
+					log.Debug("petición cancelada por el cliente", "host", req.Host, "path", req.URL.Path)
+					return
+				}
+				var tooBig *http.MaxBytesError
+				if errors.As(err, &tooBig) {
+					log.Warn("body por encima del tope", "host", req.Host, "path", req.URL.Path, "limit", tooBig.Limit)
+					http.Error(rw, "body muy grande", http.StatusRequestEntityTooLarge)
+					return
+				}
 				log.Error("backend caído", "host", req.Host, "target", target.String(), "err", err)
 				http.Error(rw, "backend no disponible", http.StatusBadGateway)
 			},
