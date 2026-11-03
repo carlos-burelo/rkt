@@ -199,12 +199,28 @@ func (s *Server) doRestart(app string) (string, error) {
 	}
 }
 
+// postApplied reintenta 404 mientras el servicio aplica un alta reciente
+// (watcher ≤10s). Errores de red no se reintentan.
+func (s *Server) postApplied(path string, timeout time.Duration) (int, []byte, error) {
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		code, body, err := s.post(path, timeout)
+		if err != nil {
+			return 0, nil, err
+		}
+		if code != http.StatusNotFound || time.Now().After(deadline) {
+			return code, body, nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
 // doRollback vuelve a live.prev (tarda: swap+restart+health).
 func (s *Server) doRollback(app string) (string, error) {
 	if app == "" {
 		return "", fmt.Errorf("falta app")
 	}
-	code, body, err := s.post("/rollback/"+app, 10*time.Minute)
+	code, body, err := s.postApplied("/rollback/"+app, 10*time.Minute)
 	if err != nil {
 		return "", fmt.Errorf("sin servicio: %w", err)
 	}
@@ -219,7 +235,7 @@ func (s *Server) doDeploy(app string) (string, error) {
 	if app == "" {
 		return "", fmt.Errorf("falta app")
 	}
-	code, body, err := s.post("/deploy/"+app, 10*time.Minute)
+	code, body, err := s.postApplied("/deploy/"+app, 10*time.Minute)
 	if err != nil {
 		return "", fmt.Errorf("sin servicio: %w", err)
 	}
@@ -234,7 +250,7 @@ func (s *Server) doRetry(id int) (string, error) {
 	if id <= 0 {
 		return "", fmt.Errorf("falta id")
 	}
-	code, body, err := s.post(fmt.Sprintf("/retry/%d", id), 10*time.Minute)
+	code, body, err := s.postApplied(fmt.Sprintf("/retry/%d", id), 10*time.Minute)
 	if err != nil {
 		return "", fmt.Errorf("sin servicio: %w", err)
 	}
@@ -300,6 +316,10 @@ type waitHealthyArg struct {
 }
 type dirArg struct {
 	Dir string `json:"dir" jsonschema:"directorio del proyecto a analizar"`
+}
+type removeAppArg struct {
+	App        string `json:"app" jsonschema:"nombre de la app"`
+	KeepRoutes bool   `json:"keep_routes,omitempty" jsonschema:"conservar rutas huérfanas (default: borrarlas)"`
 }
 type appUpdateArg struct {
 	App       string    `json:"app" jsonschema:"nombre de la app"`
@@ -557,6 +577,50 @@ func (s *Server) doAppUpdate(a appUpdateArg) (string, error) {
 	return "manifiesto actualizado (el servicio lo aplica en ≤10s)", nil
 }
 
+// doAppsRemove borra una app de la flota (y sus rutas salvo keep_routes).
+// El servicio la detiene al aplicar el manifiesto (≤10s).
+func (s *Server) doAppsRemove(a removeAppArg) (string, error) {
+	if a.App == "" {
+		return "", fmt.Errorf("falta app")
+	}
+	cfg, db, err := cfgfile.LoadMerged(s.cfgPath)
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	app := cfgfile.FindApp(cfg, a.App)
+	if app == nil {
+		return "", fmt.Errorf("app %q inexistente", a.App)
+	}
+	target := ""
+	if port := app.Env["PORT"]; port != "" {
+		target = "http://127.0.0.1:" + port
+	}
+	kept := cfg.Apps[:0]
+	for _, x := range cfg.Apps {
+		if x.Name != a.App {
+			kept = append(kept, x)
+		}
+	}
+	cfg.Apps = kept
+	routesDropped := 0
+	if !a.KeepRoutes && target != "" {
+		routes := cfg.Routes[:0]
+		for _, r := range cfg.Routes {
+			if r.Target == target {
+				routesDropped++
+				continue
+			}
+			routes = append(routes, r)
+		}
+		cfg.Routes = routes
+	}
+	if err := cfgfile.SaveFleet(db, cfg); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("app %s borrada (%d rutas)", a.App, routesDropped), nil
+}
+
 // doDeploymentLogs tail del log del último deploy de la app.
 func (s *Server) doDeploymentLogs(app string, n int) (string, error) {
 	matches, err := filepath.Glob(filepath.Join(logx.DirFor(s.cfgPath), "deploys", app+"-*.log"))
@@ -693,6 +757,10 @@ func (s *Server) Run(ctx context.Context) error {
 	mcp.AddTool(srv, &mcp.Tool{Name: "app_update", Description: "Cambia dominio, puerto, comando, args, dir, estático, env_file o memoria de una app (aplica en ≤10s)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appUpdateArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppUpdate(a))
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "apps_remove", Description: "Borra una app de la flota (detiene el proceso al aplicar, ≤10s). Por defecto borra sus rutas."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a removeAppArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doAppsRemove(a))
 		})
 	return srv.Run(ctx, &mcp.StdioTransport{})
 }

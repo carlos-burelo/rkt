@@ -62,6 +62,19 @@ func (f *fakeCtl) Snapshot() []supervisor.Status {
 	return []supervisor.Status{{Name: "web", Running: f.healthy, Failed: !f.healthy}}
 }
 
+func TestIsSHAAceptaRevCorto(t *testing.T) {
+	for _, s := range []string{"3cb6176", "6360d12", "0123456789abcdef0123456789abcdef01234567"} {
+		if !isSHA(s) {
+			t.Fatalf("%q debe reconocerse como commit", s)
+		}
+	}
+	for _, s := range []string{"", "main", "v1.2", "3cb61", "zzzzzzz"} {
+		if isSHA(s) {
+			t.Fatalf("%q no es commit", s)
+		}
+	}
+}
+
 func testApp(dir, repo string, build []string) config.App {
 	return config.App{
 		Name: "web", Command: "x", Dir: dir,

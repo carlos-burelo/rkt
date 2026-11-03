@@ -123,7 +123,7 @@ comando, args, dir, estático, env_file, memoria), `build` (compila un dir
 local y registra deployment), `env_set` (solo escritura),
 `discover` (registro inmediato), `deploy_check` (preflight JSON),
 `deployment_logs` (tail del build), `wait_healthy` (gate post-deploy),
-`restart`, `rollback`, `deploy`, `retry`.
+`restart`, `rollback`, `deploy`, `retry`, `apps_remove` (baja con rutas).
 Límite: no toca el servicio Windows; los cambios de manifiesto se aplican
 en caliente en ≤10s (supervisor.Apply).
 

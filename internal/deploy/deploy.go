@@ -204,8 +204,10 @@ func NeedsAuth(repo string) bool {
 	return strings.HasPrefix(repo, "http://") || strings.HasPrefix(repo, "https://")
 }
 
+// isSHA acepta 7–40 hex: los deployments guardan el rev corto y retry
+// debe re-clonar el commit, no intentar `--branch <sha>`.
 func isSHA(s string) bool {
-	if len(s) != 40 {
+	if len(s) < 7 || len(s) > 40 {
 		return false
 	}
 	for i := 0; i < len(s); i++ {
