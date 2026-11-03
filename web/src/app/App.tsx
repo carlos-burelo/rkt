@@ -307,10 +307,12 @@ export function App() {
               appFilter={appFilter}
               setAppFilter={setAppFilter}
               log={log}
+              setLog={setLog}
               follow={follow}
               setFollow={setFollow}
               refresh={refresh}
               logRef={logRef}
+              deps={deps}
             />
           )}
           {page === "routes" && <Routes routes={routes} canWrite={canWrite} refresh={refresh} fail={fail} />}
