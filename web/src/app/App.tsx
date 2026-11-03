@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../shared/lib/http";
 import { Me, Status, Deployment, RktEvent, AppMeta, User } from "../shared/lib/types";
-import { logout, me } from "../features/auth/api";
+import { logout, me, authStatus } from "../features/auth/api";
 import { Login } from "../features/auth/Login";
+import { Setup } from "../features/auth/Setup";
 import { Dot, Err } from "../shared/components/ui";
 import { Toast, ToastStack, CopyButton, Skeleton } from "../shared/components/feedback";
 import { InstallButton } from "../shared/components/InstallButton";
@@ -60,6 +61,7 @@ export function App() {
   const [palette, setPalette] = useState(false);
   const [menu, setMenu] = useState(false);
   const [brand, setBrand] = useState("rkt");
+  const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
 
@@ -102,16 +104,25 @@ export function App() {
   }
 
   useEffect(() => {
-    me()
-      .then((m) => {
-        setWho(m);
-        getSettings()
-          .then((s) => {
-            if (s.site_name) setBrand(s.site_name);
+    authStatus()
+      .then((s) => {
+        setSetupRequired(s.setup_required);
+        if (s.setup_required) return;
+        return me()
+          .then((m) => {
+            setWho(m);
+            getSettings()
+              .then((gs) => {
+                if (gs.site_name) setBrand(gs.site_name);
+              })
+              .catch(() => {});
           })
-          .catch(() => {});
+          .catch(() => setWho(null));
       })
-      .catch(() => setWho(null));
+      .catch(() => {
+        setSetupRequired(false);
+        setWho(null);
+      });
   }, []);
 
   useEffect(() => {
@@ -146,6 +157,8 @@ export function App() {
     }
   }, [sel]);
 
+  if (setupRequired === null) return null;
+  if (setupRequired) return <Setup onOk={setWho} />;
   if (!authed) return <Login onOk={setWho} />;
 
   const apps = status?.apps ?? [];

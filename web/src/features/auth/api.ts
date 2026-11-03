@@ -19,3 +19,14 @@ export async function logout(): Promise<void> {
 export async function me(): Promise<Me> {
   return api<Me>("/api/v1/auth/me");
 }
+
+export async function authStatus(): Promise<{ setup_required: boolean }> {
+  return api<{ setup_required: boolean }>("/api/v1/auth/status");
+}
+
+export async function setup(user: string, password: string): Promise<Me> {
+  return api<Me>("/api/v1/auth/setup", {
+    method: "POST",
+    body: JSON.stringify({ user, password }),
+  });
+}
