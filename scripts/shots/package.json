@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "shots": "node run.mjs"
+    "shots": "node run.mjs",
+    "mock": "node mock.mjs"
   },
   "dependencies": {
     "playwright": "^1.49.0"

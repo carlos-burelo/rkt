@@ -19,6 +19,7 @@ const apps = [
   { name: "billing-worker", running: false, restarts: 7, failed: true },
   { name: "admin", running: true, restarts: 0, failed: false },
   { name: "legacy", running: false, restarts: 2, failed: false },
+  { name: "edge-preview", running: true, restarts: 0, failed: false },
 ];
 
 const metas = [
@@ -28,6 +29,7 @@ const metas = [
   { name: "billing-worker", command: "python worker.py", args: [], dir: "C:/rkt/apps/billing", restart_delay: "5s", min_uptime: "30s", memory_mb: 512, port: "3004", domains: [], deploy: { repo: "https://github.com/xavi/billing", ref: "main", build: ["pip install -r requirements.txt"], auto: true } },
   { name: "admin", command: "node dist/server.js", args: [], dir: "C:/rkt/apps/admin", restart_delay: "2s", min_uptime: "10s", memory_mb: 256, port: "3005", domains: ["admin.rkt.dev"], deploy: { repo: "https://github.com/xavi/admin", ref: "main", build: ["pnpm install", "pnpm build"], auto: false } },
   { name: "legacy", command: "C:/rkt/apps/legacy/legacy.exe", args: [], dir: "C:/rkt/apps/legacy", restart_delay: "3s", min_uptime: "15s", memory_mb: 128, port: "3006", domains: [], deploy: null },
+  { name: "edge-preview", runtime: "external", external: true, command: "", args: [], dir: "C:/dev/edge-preview", restart_delay: "5s", min_uptime: "10s", memory_mb: 0, port: "3010", domains: ["preview.rkt.dev"], deploy: null, run_command: "pnpm exec vite --host 127.0.0.1 --port 3010 --strictPort" },
 ];
 
 const depSeed = [
@@ -86,6 +88,7 @@ const routes = [
   { hosts: ["docs.rkt.dev", "www.rkt.dev"], target: "http://127.0.0.1:3003" },
   { hosts: ["admin.rkt.dev"], target: "http://127.0.0.1:3005" },
   { hosts: ["legacy.rkt.dev"], target: "http://127.0.0.1:3006" },
+  { hosts: ["preview.rkt.dev"], target: "http://127.0.0.1:3010" },
 ];
 
 const proxy = routes.map((r, i) => ({
@@ -220,7 +223,7 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
     }
     if (p === "/api/v1/auth/login" || p === "/api/v1/auth/setup") return json(route, { user: "xavi", role: "admin" });
     if (p === "/api/v1/auth/logout") return json(route, { ok: "bye" });
-    if (p === "/api/v1/status") return json(route, { version: "0.4.2", routes: routes.length, apps });
+    if (p === "/api/v1/status") return json(route, { version: "0.6.6", routes: routes.length, apps });
     if (p === "/api/v1/deployments") return json(route, deps);
     if (p.startsWith("/api/v1/deployments/") && p.endsWith("/log")) return json(route, { log: buildLog });
     if (p.startsWith("/api/v1/deployments/") && p.endsWith("/retry")) return json(route, { rev: "9f3c2a1" });
@@ -280,6 +283,7 @@ const main = async () => {
   for (const tab of ["overview", "deploys", "logs", "analytics", "env", "settings"]) {
     await shot(`app-${tab}`, `app/checkout/${tab}`);
   }
+  await shot("app-external", "app/edge-preview/overview");
 
   // overlays desktop
   await page.goto(`${BASE}/overview`, { waitUntil: "networkidle" });
