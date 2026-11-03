@@ -99,20 +99,24 @@ func SaveInfra(db *store.DB, cfg *config.Config) error {
 	return db.SaveInfra(raw)
 }
 
-// SeedDev crea infra local si la DB está virgen (dev sin YAML).
-func SeedDev(db *store.DB, port string) error {
+// ApplyDev impone los listeners de `rkt dev` en cada arranque y activa la CA
+// local cuando hay HTTPS. La DB sigue mandando en todo lo demás; esto evita
+// que --http/--https se ignoren cuando la infra ya existe.
+func ApplyDev(db *store.DB, httpAddr, httpsAddr string) error {
+	cfg := config.Default()
 	raw, err := db.LoadInfra()
 	if err != nil {
 		return err
 	}
 	if len(raw) > 0 {
-		return nil
+		if err := json.Unmarshal(raw, cfg); err != nil {
+			return fmt.Errorf("infra corrupta en DB: %w", err)
+		}
 	}
-	cfg := config.Default()
-	cfg.ListenHTTP = ":" + port
-	cfg.ListenHTTPS = ""
-	cfg.ACMEEmail = "dev@localhost"
-	cfg.RedirectHTTPToHTTPS = false
+	cfg.ListenHTTP = httpAddr
+	cfg.ListenHTTPS = httpsAddr
+	cfg.LocalCA = httpsAddr != ""
+	cfg.RedirectHTTPToHTTPS = httpsAddr != ""
 	cfg.RateLimit.Enabled = false
 	return SaveInfra(db, cfg)
 }

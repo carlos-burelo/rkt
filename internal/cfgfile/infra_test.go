@@ -19,25 +19,33 @@ func openDB(t *testing.T, cfgPath string) *store.DB {
 	return db
 }
 
-func TestSeedDevYPersistencia(t *testing.T) {
+func TestApplyDevYPersistencia(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "rkt.dev.yaml")
 	db := openDB(t, cfgPath)
-	if err := SeedDev(db, "8091"); err != nil {
+	if err := ApplyDev(db, "127.0.0.1:80", "127.0.0.1:443"); err != nil {
 		t.Fatal(err)
 	}
 	base, err := LoadBase(db, cfgPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if base.ListenHTTP != ":8091" || base.ACMEEmail != "dev@localhost" {
-		t.Fatalf("infra dev = %+v", base)
+	if base.ListenHTTP != "127.0.0.1:80" || base.ListenHTTPS != "127.0.0.1:443" {
+		t.Fatalf("listeners dev = %q %q", base.ListenHTTP, base.ListenHTTPS)
 	}
-	// segunda carga sin YAML: misma infra desde DB
-	db2 := openDB(t, cfgPath)
-	base2, err := LoadBase(db2, cfgPath)
-	if err != nil || base2.ListenHTTP != ":8091" {
-		t.Fatalf("recarga = %+v %v", base2, err)
+	if !base.LocalCA || !base.RedirectHTTPToHTTPS {
+		t.Fatalf("dev debe usar CA local y redirigir 80→443: %+v", base)
+	}
+	// reaplicar con otros puertos no se ignora aunque la DB ya exista
+	if err := ApplyDev(db, "127.0.0.1:8080", ""); err != nil {
+		t.Fatal(err)
+	}
+	base2, err := LoadBase(db, cfgPath)
+	if err != nil || base2.ListenHTTP != "127.0.0.1:8080" || base2.ListenHTTPS != "" {
+		t.Fatalf("reaplicar = %+v %v", base2, err)
+	}
+	if base2.LocalCA || base2.RedirectHTTPToHTTPS {
+		t.Fatalf("sin https no debe haber CA local ni redirect: %+v", base2)
 	}
 }
 

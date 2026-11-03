@@ -388,16 +388,20 @@ sc.exe stop Rkt
 ## Desarrollo local (sin VPS)
 
 ```powershell
-rkt dev --port 8080
+rkt dev
 ```
 
-Genera `rkt.dev.yaml` (HTTP alto, **sin TLS**, rate-limit off) y corre en
-foreground. Sin admin, sin puertos 80/443, sin DNS público: agrega
-`127.0.0.1 app1.test` a `C:\Windows\System32\drivers\etc\hosts` (una vez,
-como admin) y abre `http://app1.test:8080`. Todo lo demás funciona igual
-(supervisor, hot-reload, healthz, polling GitHub, `deploy` con repos
-locales); webhooks no (sin inbound). `listen_https` vacío en cualquier
-config desactiva TLS.
+Corre en foreground con los **mismos puertos que producción**:
+`127.0.0.1:80` (HTTP) y `127.0.0.1:443` (HTTPS), redirección 80→443 y
+rate-limit off. El TLS usa una **CA propia** (`logs/devca/ca.crt`, se
+instala sola en el almacén Root del usuario, sin admin); ACME no puede
+emitir para `.localhost`. Dominios `.localhost` resuelven solos; para otros
+agrega `127.0.0.1 app1.test` a `C:\Windows\System32\drivers\etc\hosts`
+(una vez, como admin). Abre `https://app1.test` — la misma URL que en prod.
+
+Flags: `--http 127.0.0.1:80` y `--https 127.0.0.1:443` (vacío desactiva TLS).
+`listen_https` vacío en cualquier config desactiva TLS. Firefox no usa el
+almacén de Windows: importa `logs/devca/ca.crt` a mano si lo usas.
 
 ## Desarrollo del proyecto
 

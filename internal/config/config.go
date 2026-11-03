@@ -142,11 +142,13 @@ var defaultDenyPaths = []string{
 
 // Config canónica. Un solo camino, nada legacy.
 type Config struct {
-	ListenHTTP          string          `yaml:"listen_http" json:"listen_http"`
-	ListenHTTPS         string          `yaml:"listen_https" json:"listen_https"`
-	ACMEEmail           string          `yaml:"acme_email" json:"acme_email"`
-	ACMEStaging         bool            `yaml:"acme_staging" json:"acme_staging"`
-	ACMECacheDir        string          `yaml:"acme_cache_dir" json:"acme_cache_dir"`
+	ListenHTTP   string `yaml:"listen_http" json:"listen_http"`
+	ListenHTTPS  string `yaml:"listen_https" json:"listen_https"`
+	ACMEEmail    string `yaml:"acme_email" json:"acme_email"`
+	ACMEStaging  bool   `yaml:"acme_staging" json:"acme_staging"`
+	ACMECacheDir string `yaml:"acme_cache_dir" json:"acme_cache_dir"`
+	// LocalCA firma TLS con la CA propia de rkt (dev). Sin ACME.
+	LocalCA             bool            `yaml:"local_ca" json:"local_ca,omitempty"`
 	RedirectHTTPToHTTPS bool            `yaml:"redirect_http_to_https" json:"redirect_http_to_https"`
 	Healthz             HealthzConfig   `yaml:"healthz" json:"healthz"`
 	RateLimit           RateLimitConfig `yaml:"rate_limit" json:"rate_limit"`

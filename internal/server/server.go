@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"golang.org/x/crypto/acme"
-	"golang.org/x/crypto/acme/autocert"
 
 	"rkt-proxy/internal/config"
 )
@@ -33,6 +32,10 @@ func NewHTTP(cfg *config.Config, live *config.Live, challenge http.Handler, back
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
+			if challenge == nil {
+				http.NotFound(w, r)
+				return
+			}
 			challenge.ServeHTTP(w, r)
 			return
 		}
@@ -52,11 +55,12 @@ func NewHTTP(cfg *config.Config, live *config.Live, challenge http.Handler, back
 	}
 }
 
-// NewHTTPS sirve el backend con TLS y certs del Manager.
+// NewHTTPS sirve el backend con TLS. getCert elige el certificado en cada
+// handshake: autocert (producción) o CA local de desarrollo.
 // NextProtos incluye acme.ALPNProto: sin él Go rechaza el handshake
 // tls-alpn-01 antes de que GetCertificate pueda responder.
 // control (puede ser nil) atiende /_rkt/* antes que el backend.
-func NewHTTPS(cfg *config.Config, mgr *autocert.Manager, backend http.Handler, control http.Handler, errLog *log.Logger) *http.Server {
+func NewHTTPS(cfg *config.Config, getCert func(*tls.ClientHelloInfo) (*tls.Certificate, error), backend http.Handler, control http.Handler, errLog *log.Logger) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/_rkt/") {
@@ -77,7 +81,7 @@ func NewHTTPS(cfg *config.Config, mgr *autocert.Manager, backend http.Handler, c
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  120 * time.Second,
 		TLSConfig: &tls.Config{
-			GetCertificate: mgr.GetCertificate,
+			GetCertificate: getCert,
 			MinVersion:     tls.VersionTLS12,
 			NextProtos:     []string{"h2", "http/1.1", acme.ALPNProto},
 		},

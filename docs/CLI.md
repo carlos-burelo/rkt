@@ -14,7 +14,7 @@ Sintaxis: `rkt [-config <ruta>] [--json] <comando> [args]`.
 | `uninstall` | Detiene y elimina el servicio |
 | `start` / `stop` | Arranca / detiene el servicio |
 | `run` | Foreground con Ctrl+C limpio (apaga servidores + apps) |
-| `dev [--port 8080]` | Foreground local: genera `rkt.dev.yaml` (HTTP alto, sin TLS) si falta y corre |
+| `dev [--http a:80] [--https a:443]` | Foreground local con puertos de prod y TLS de CA propia (`.localhost` funciona sin hosts); `--https ""` desactiva TLS |
 | `version` | Versión del binario (`dev` en builds locales) |
 | `mcp` | Servidor MCP stdio para agentes (ver abajo) |
 | `hosts list\|add\|rm <host>` | DNS local en el archivo hosts (admin) |

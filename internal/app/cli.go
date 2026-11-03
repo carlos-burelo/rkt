@@ -186,7 +186,9 @@ func usage(code int) {
 Servicio:
   install | uninstall | start | stop     servicio Windows
   run                                    foreground (Ctrl+C limpio)
-  dev [--port 8080]                      foreground local (HTTP alto, sin TLS)
+  dev [--http 127.0.0.1:80] [--https 127.0.0.1:443]
+                                         foreground local con puertos de prod
+                                         y TLS de CA propia (CA en logs/devca)
   mcp                                    servidor MCP stdio (para agentes)
   hosts list|add|rm <host>               DNS local (hosts del sistema, admin)
   version                                versión del binario
@@ -227,12 +229,17 @@ func printDashboardURL(cfgPath string) {
 	fmt.Printf("dashboard: http://%s/ (crea tu admin ahí la primera vez)\n", cfg.Healthz.Listen)
 }
 
-// cmdDev levanta entorno local: siembra infra en DB (sin YAML) y corre.
+// cmdDev levanta entorno local con los mismos puertos que producción
+// (80/443) y TLS con CA propia, para que las URLs no cambien entre entornos.
 func cmdDev(args []string, cfgPath string) {
 	fs := flag.NewFlagSet("dev", flag.ContinueOnError)
-	port := fs.String("port", "8080", "puerto HTTP local")
+	httpAddr := fs.String("http", "127.0.0.1:80", "dirección HTTP local")
+	httpsAddr := fs.String("https", "127.0.0.1:443", "dirección HTTPS local con CA propia (vacío = sin TLS)")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+	if *httpAddr == "" {
+		log.Fatal("dev: --http no puede estar vacío")
 	}
 	path := cfgPath
 	if path == "" || path == "config.yaml" {
@@ -247,13 +254,15 @@ func cmdDev(args []string, cfgPath string) {
 		if _, err := cfgfile.LoadBase(db, path); err != nil {
 			log.Fatalf("dev: migrar config: %v", err)
 		}
-	} else if err := cfgfile.SeedDev(db, *port); err != nil {
+	}
+	if err := cfgfile.ApplyDev(db, *httpAddr, *httpsAddr); err != nil {
 		log.Fatalf("dev: %v", err)
 	}
 	_ = db.Close()
 	fmt.Println("Datos en", logx.DirFor(path), "(config en SQLite, sin YAML)")
 	fmt.Println("Dominios locales: usa *.localhost (resuelve solo) o `rkt hosts add <host>` como admin.")
-	fmt.Println("Sin TLS ni puerto 80: no pide admin. Polling GitHub sí funciona; webhooks no (sin inbound).")
+	fmt.Printf("HTTP %s · HTTPS %s\n", *httpAddr, *httpsAddr)
+	fmt.Println("TLS de desarrollo: CA propia en logs/devca/ca.crt (se instala en Root del usuario).")
 	RunForeground(path)
 }
 

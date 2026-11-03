@@ -31,6 +31,7 @@ import (
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/dashboard"
 	"rkt-proxy/internal/deploy"
+	"rkt-proxy/internal/devca"
 	"rkt-proxy/internal/discover"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
@@ -64,6 +65,7 @@ type Program struct {
 	alog         *accesslog.Logger
 	sup          *supervisor.Manager
 	mgr          *autocert.Manager
+	devca        *devca.CA
 	probeMu      sync.Mutex
 	probes       map[string]probeResult
 }
@@ -158,8 +160,24 @@ func (p *Program) Run() {
 		p.alog = alog
 		handler = alog.Middleware(backend)
 	}
-	p.mgr = acme.NewManager(live, p.log)
-	challenge := p.mgr.HTTPHandler(nil) // eager: activa http-01 como fallback
+	p.mgr = nil
+	var challenge http.Handler
+	if cfg.LocalCA {
+		ca, err := devca.Load(filepath.Join(logx.DirFor(p.cfgPath), "devca"))
+		if err != nil {
+			p.log.Error("CA local inválida", "err", err)
+			os.Exit(1)
+		}
+		p.devca = ca
+		if err := ca.EnsureTrusted(); err != nil {
+			p.log.Warn("CA local sin confiar: el navegador avisará; importa el PEM a mano", "ca", ca.CertPath(), "err", err)
+		} else {
+			p.log.Info("CA local confiada (Root del usuario)", "ca", ca.CertPath())
+		}
+	} else {
+		p.mgr = acme.NewManager(live, p.log)
+		challenge = p.mgr.HTTPHandler(nil) // eager: activa http-01 como fallback
+	}
 	errLog := slog.NewLogLogger(p.log.Handler(), slog.LevelError)
 	var control http.Handler
 	{
@@ -193,9 +211,13 @@ func (p *Program) Run() {
 		control = mux
 	}
 	p.srvHTTP = server.NewHTTP(cfg, live, challenge, handler, control, errLog)
-	if cfg.ListenHTTPS != "" {
-		p.srvTLS = server.NewHTTPS(cfg, p.mgr, handler, control, errLog)
-	} else {
+	switch {
+	case cfg.LocalCA:
+		p.srvTLS = server.NewHTTPS(cfg, p.devca.GetCertificate, handler, control, errLog)
+		p.log.Info("TLS de desarrollo con CA local", "ca", p.devca.CertPath())
+	case cfg.ListenHTTPS != "":
+		p.srvTLS = server.NewHTTPS(cfg, p.mgr.GetCertificate, handler, control, errLog)
+	default:
 		p.log.Warn("TLS desactivado (listen_https vacío): solo HTTP")
 	}
 
@@ -628,6 +650,9 @@ func (p *Program) appToken(app *config.App) (string, error) {
 
 // tlsStatus interroga la cache ACME (existe/expira). Sin manager/TLS: off.
 func (p *Program) tlsStatus(host string) (bool, string) {
+	if p.devca != nil {
+		return true, ""
+	}
 	if p.mgr == nil {
 		return false, ""
 	}
