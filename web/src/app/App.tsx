@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import {
   LayoutGrid, Network, Rocket, Hammer, Terminal, BarChart3, Activity,
   Bell, Globe, FlaskConical, Settings as SettingsIcon, Users as UsersIcon,
-  Plus, ChevronUp,
+  Plus, ChevronUp, Search,
 } from "lucide-react";
 import { api } from "../shared/lib/http";
 import { Me, Status, Deployment, RktEvent, AppMeta, User } from "../shared/lib/types";
@@ -222,7 +222,7 @@ export function App() {
                 <Avatar className="h-8 w-8 rounded-lg text-sm">
                   <AvatarFallback className="rounded-lg">{(brand.trim()[0] ?? "R").toUpperCase()}</AvatarFallback>
                 </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
+                <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                   <span className="truncate font-semibold">{brand}</span>
                   <span className="truncate text-xs text-muted-foreground">local</span>
                 </div>
@@ -231,15 +231,18 @@ export function App() {
           </SidebarMenu>
           {canWrite && (
             <Button className="mt-1 w-full" size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus /> Create New
+              <Plus /> <span className="group-data-[collapsible=icon]:hidden">Create New</span>
             </Button>
           )}
           <button
             onClick={() => setPalette(true)}
             className="mt-2 flex w-full items-center justify-between rounded-md border border-input bg-transparent px-2 py-1.5 text-xs text-muted-foreground hover:border-ring"
           >
-            <span>Buscar o accionar…</span>
-            <kbd className="rounded border px-1 font-mono text-[10px]">⌘K</kbd>
+            <span className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
+              <Search className="h-3.5 w-3.5" /> Buscar o accionar…
+            </span>
+            <Search className="hidden h-3.5 w-3.5 group-data-[collapsible=icon]:block" />
+            <kbd className="rounded border px-1 font-mono text-[10px] group-data-[collapsible=icon]:hidden">⌘K</kbd>
           </button>
         </SidebarHeader>
         <SidebarContent>
@@ -293,11 +296,13 @@ export function App() {
         </SidebarContent>
         <SidebarFooter>
           {!online && (
-            <p className="rounded-md bg-amber-500/15 px-2.5 py-1.5 text-xs text-amber-300">
+            <p className="rounded-md bg-amber-500/15 px-2.5 py-1.5 text-xs text-amber-300 group-data-[collapsible=icon]:hidden">
               Sin conexión
             </p>
           )}
-          <InstallButton />
+          <div className="group-data-[collapsible=icon]:hidden">
+            <InstallButton />
+          </div>
           <SidebarMenu>
             <SidebarMenuItem>
               <DropdownMenu>
@@ -305,7 +310,7 @@ export function App() {
                   <Avatar className="h-6 w-6 text-[11px]">
                     <AvatarFallback>{(who?.user.trim()[0] ?? "?").toUpperCase()}</AvatarFallback>
                   </Avatar>
-                  <div className="grid min-w-0 flex-1 text-left text-xs leading-tight">
+                  <div className="grid min-w-0 flex-1 text-left text-xs leading-tight group-data-[collapsible=icon]:hidden">
                     <span className="truncate font-medium">{who?.user}</span>
                     <span className="truncate font-mono text-[10px] text-muted-foreground">
                       {who?.role} · v{status?.version ?? "…"}
