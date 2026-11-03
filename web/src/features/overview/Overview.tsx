@@ -9,6 +9,7 @@ import { UsageStrip } from "./UsageStrip";
 import { useUI } from "../../app/ui";
 import { useFleet } from "./hooks";
 import { PageHeader, Section, Stat } from "../../shared/components/patterns";
+import { publicUrl, publicHost } from "../../shared/lib/url";
 
 function FirstRun({ apps, metas, deps }: { apps: AppStatus[]; metas: AppMeta[]; deps: Deployment[] }) {
   const setCreateOpen = useUI((u) => u.setCreateOpen);
@@ -186,13 +187,13 @@ export function Overview() {
                     <span className="hidden min-w-0 md:block">
                       {domain ? (
                         <a
-                          href={`https://${domain}`}
+                          href={publicUrl(domain, status)}
                           target="_blank"
                           rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
                           className="truncate font-mono text-[10px] text-foreground/75 underline-offset-4 hover:text-signal hover:underline"
                         >
-                          {domain}
+                          {publicHost(domain, status)}
                         </a>
                       ) : (
                         <span className="font-mono text-[10px] text-muted-foreground">sin dominio</span>
