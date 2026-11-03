@@ -114,12 +114,25 @@ export function Settings() {
               </div>
               <div className="bg-card/45 px-3 py-2">
                 <p className="micro">alcance</p>
-                <p className={`mt-1 font-mono text-[11px] ${gh.repository_selection === "all" ? "text-ok" : "text-warn"}`}>
-                  {gh.repository_selection === "all" ? "todos" : gh.repository_selection === "selected" ? "seleccionados" : "desconocido"}
+                <p className={`mt-1 font-mono text-[11px] ${gh.repository_selection === "all" ? "text-ok" : gh.repository_selection ? "text-warn" : "text-muted-foreground"}`}>
+                  {gh.repository_selection === "all" ? "todos" : gh.repository_selection === "selected" ? "seleccionados" : "falta instalar"}
                 </p>
               </div>
             </div>
-            {gh.repository_selection !== "all" ? (
+            {!gh.repository_selection ? (
+              <div className="border border-border bg-card/30 px-3 py-2 text-[12px]">
+                <p className="text-muted-foreground">
+                  App creada. Falta instalarla en tu cuenta y elegir <b className="text-foreground">All repositories</b>.
+                </p>
+                {gh.install_url && (
+                  <a href={gh.install_url} target="_blank" rel="noreferrer" className="mt-2 inline-block">
+                    <Button size="sm" variant="outline">
+                      instalar con todos los repos ↗
+                    </Button>
+                  </a>
+                )}
+              </div>
+            ) : gh.repository_selection !== "all" ? (
               <div className="border border-warn/35 bg-warn/5 px-3 py-2 text-[12px]">
                 <p className="font-mono text-[10px] tracking-[0.08em] text-warn uppercase">acceso parcial</p>
                 <p className="mt-1 text-muted-foreground">

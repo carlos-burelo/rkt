@@ -491,6 +491,9 @@ func (p *Program) githubStatus() (map[string]any, error) {
 	out["account"] = p.db.GetSetting("github_account")
 	out["repository_selection"] = p.db.GetSetting("github_repo_selection")
 	out["install_url"] = p.db.GetSetting("github_install_url")
+	if out["install_url"] == "" && cfg.Github.AppSlug != "" {
+		out["install_url"] = "https://github.com/apps/" + cfg.Github.AppSlug + "/installations/new"
+	}
 	out["repositories"] = p.db.GetSetting("github_repo_count")
 	if p.gh() == nil {
 		return out, nil
@@ -971,17 +974,22 @@ func (p *Program) runDiscovery() {
 
 // autoDeploy sondea GitHub por cambios y despliega (push-to-deploy con
 // delay de poll). El git local es el estado: si HEAD != remoto, deploy.
+// El intervalo se recalcula: tras crear la App la config llega por hot-reload.
 func (p *Program) autoDeploy(live *config.Live) {
-	t := time.NewTicker(live.Get().Github.Poll())
-	defer t.Stop()
 	for {
+		wait := time.Minute
+		if gh := live.Get().Github; gh != nil && gh.Poll() > 0 {
+			wait = gh.Poll()
+		} else if gh == nil {
+			wait = 2 * time.Second // recién creada: espera al hot-reload
+		}
 		select {
-		case <-t.C:
+		case <-time.After(wait):
 		case <-p.discoverKick:
 		}
 		cfg := live.Get()
 		if cfg.Github == nil || p.gh() == nil {
-			return
+			continue
 		}
 		p.runDiscovery()
 		cfg = live.Get()
