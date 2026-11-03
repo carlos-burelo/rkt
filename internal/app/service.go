@@ -190,7 +190,7 @@ func (p *Program) Run() {
 	}()
 	if cfg.Healthz.Enabled {
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp})
-		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp})
+		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment})
 		sub, err := fs.Sub(web.Dist, "dist")
 		if err != nil {
 			p.log.Error("dashboard sin dist", "err", err)
@@ -349,7 +349,43 @@ func (p *Program) deployApp(name, actor string) (string, error) {
 	if app.Deploy == nil {
 		return "", fmt.Errorf("app %q sin bloque deploy", name)
 	}
-	token, err := p.appToken(app)
+	return p.runDeploy(*app, actor)
+}
+
+// retryDeployment re-corre el rev exacto de un deploy previo
+// (override de ref al SHA; hereda env actual + actor).
+func (p *Program) retryDeployment(id int64, actor string) (string, error) {
+	deps, err := p.db.ListDeployments("", 500)
+	if err != nil {
+		return "", err
+	}
+	var rev, appName string
+	for _, d := range deps {
+		if d.ID == id {
+			rev, appName = d.Rev, d.App
+		}
+	}
+	if rev == "" || appName == "" {
+		return "", fmt.Errorf("deploy #%d sin rev repetible", id)
+	}
+	cfg := p.live.Get()
+	for i := range cfg.Apps {
+		if cfg.Apps[i].Name != appName {
+			continue
+		}
+		app := cfg.Apps[i]
+		if app.Deploy == nil {
+			return "", fmt.Errorf("app %q sin bloque deploy", appName)
+		}
+		app.Deploy.Ref = rev
+		return p.runDeploy(app, actor+" (retry #"+strconv.FormatInt(id, 10)+")")
+	}
+	return "", fmt.Errorf("app %q inexistente", appName)
+}
+
+// runDeploy pipeline común deploy/retry (único hogar).
+func (p *Program) runDeploy(app config.App, actor string) (string, error) {
+	token, err := p.appToken(&app)
 	if err != nil {
 		return "", err
 	}
@@ -358,7 +394,7 @@ func (p *Program) deployApp(name, actor string) (string, error) {
 		return "", err
 	}
 	out, err := os.OpenFile(
-		filepath.Join(dir, "deploys", name+"-"+time.Now().Format("20060102-150405")+".log"),
+		filepath.Join(dir, "deploys", app.Name+"-"+time.Now().Format("20060102-150405")+".log"),
 		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return "", err
@@ -369,7 +405,7 @@ func (p *Program) deployApp(name, actor string) (string, error) {
 	if p.db != nil {
 		depID, _ = p.db.InsertDeployment(app.Name, "", out.Name(), actor, app.Env)
 	}
-	rev, err := deploy.Run(*app, token, &supCtl{sup: p.sup}, out, p.log)
+	rev, err := deploy.Run(app, token, &supCtl{sup: p.sup}, out, p.log)
 	if p.db != nil && depID > 0 {
 		status := "ok"
 		if err != nil {

@@ -62,6 +62,12 @@ func testDeps(t *testing.T) (Deps, *store.DB, func()) {
 			}
 			return nil
 		},
+		Retry: func(id int64, actor string) (string, error) {
+			if id != 7 || actor == "" {
+				return "", fmt.Errorf("no repetible")
+			}
+			return "rev7", nil
+		},
 	}
 	return d, db, func() { db.Close() }
 }
@@ -496,6 +502,32 @@ func TestDeploymentLog(t *testing.T) {
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/deployments/99999/log", opTok))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("fantasma: quiere 404, got %d", rec.Code)
+	}
+}
+
+func TestDeployRetry(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	opTok := loginAs(t, h, db, "op", store.RoleOperator)
+	visTok := loginAs(t, h, db, "vis", store.RoleViewer)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodPost, "/api/v1/deployments/7/retry", opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "rev7") {
+		t.Fatalf("retry: %d %s", rec.Code, rec.Body.String())
+	}
+	// viewer no puede
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodPost, "/api/v1/deployments/7/retry", visTok))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer retry: quiere 403, got %d", rec.Code)
+	}
+	// id malo
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodPost, "/api/v1/deployments/8/retry", opTok))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("retry malo: quiere 400, got %d", rec.Code)
 	}
 }
 

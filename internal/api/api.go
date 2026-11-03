@@ -35,6 +35,7 @@ type Deps struct {
 	Restart  func(name string) bool
 	Deploy   func(name, actor string) (string, error)
 	Rollback func(name, actor string) error
+	Retry    func(id int64, actor string) (string, error)
 }
 
 // cloneFleet copia editable de la flota viva (Live se lee sin lock;
@@ -851,16 +852,29 @@ func NewHandler(d Deps) http.Handler {
 		_, _ = w.Write(b)
 	})
 
-	// Build log de un deploy (para vista detalle).
+	// Build log de un deploy (para vista detalle) + retry mismo rev.
 	mux.HandleFunc("/api/v1/deployments/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
-			return
-		}
 		rest := strings.TrimPrefix(r.URL.Path, "/api/v1/deployments/")
 		parts := strings.Split(rest, "/")
-		if len(parts) != 2 || parts[1] != "log" {
-			writeErr(w, http.StatusNotFound, "ruta inválida (…/ID/log)")
+		if len(parts) == 2 && parts[1] == "retry" && r.Method == http.MethodPost {
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			id, err := strconv.ParseInt(parts[0], 10, 64)
+			if err != nil || id <= 0 || d.Retry == nil {
+				writeErr(w, http.StatusBadRequest, "id inválido o retry deshabilitado")
+				return
+			}
+			rev, err := d.Retry(id, mustUser(r))
+			if err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			writeJSON(w, map[string]string{"rev": rev})
+			return
+		}
+		if len(parts) != 2 || parts[1] != "log" || r.Method != http.MethodGet {
+			writeErr(w, http.StatusNotFound, "ruta inválida (…/ID/log|…/ID/retry)")
 			return
 		}
 		id, err := strconv.ParseInt(parts[0], 10, 64)
