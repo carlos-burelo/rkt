@@ -1,10 +1,11 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-  Instala rkt-proxy en Windows Server (prod): binario + config + firewall + servicio.
+  Instala rkt-proxy en Windows Server (prod): binario + SQLite + firewall + servicio.
 .DESCRIPTION
   Pensado para: irm <url> | iex. Descarga el .exe del último GitHub release,
-  deja config.yaml si no existe, abre 80/443 y registra/arranca el servicio.
+  abre 80/443 y registra/arranca el servicio. La config se siembra sola en
+  SQLite (`<dir>/logs/rkt.db`) y se edita por dashboard/CLI.
 .EXAMPLE
   # Actualizar a último release (idempotente, con backup + rollback auto):
   irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1 | iex
@@ -36,7 +37,7 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 if (-not $isAdmin) { throw "Ejecuta como Administrador." }
 
 $exe = Join-Path $InstallDir "rkt.exe"
-$cfg = Join-Path $InstallDir "config.yaml"
+$cfg = Join-Path $InstallDir "rkt.db"
 $bak = "$exe.bak"
 $verFile = Join-Path $InstallDir "VERSION.txt"
 New-Item -ItemType Directory -Force $InstallDir | Out-Null
@@ -99,13 +100,6 @@ if ($LocalExe -ne "") {
   }
 }
 
-# 3b. migración legacy: servicio RktProxy (nombre anterior) fuera
-if (Get-Service RktProxy -ErrorAction SilentlyContinue) {
-  Write-Host "Migrando servicio legacy RktProxy -> Rkt..."
-  Stop-Service RktProxy -Force -ErrorAction SilentlyContinue
-  sc.exe delete RktProxy | Out-Null
-  Remove-Item (Join-Path $InstallDir "rkt-proxy.exe") -Force -ErrorAction SilentlyContinue
-}
 Remove-NetFirewallRule -DisplayName "RKT Proxy HTTP/HTTPS" -ErrorAction SilentlyContinue | Out-Null
 
 # 4. parar servicio previo para liberar el .exe + backup para rollback
@@ -121,31 +115,12 @@ if (Test-Path $exe) {
 Copy-Item $tmp $exe -Force
 Write-Host "Binario en $exe"
 
-# 5. config por defecto si no existe (dashboard local incluido desde día 1)
-if (-not (Test-Path $cfg)) {
-  @'
-listen_http: ":80"
-listen_https: ":443"
-acme_email: "admin@TU-DOMINIO.com"
-acme_staging: false
-acme_cache_dir: "C:\\ProgramData\\rkt-proxy\\certs"
-redirect_http_to_https: true
-healthz:
-  enabled: true
-  listen: "127.0.0.1:8090"
-rate_limit:
-  enabled: true
-routes:
-  - hosts: ["app.TU-DOMINIO.com"]
-    target: "http://127.0.0.1:3000"
-'@ | Out-File $cfg -Encoding utf8
-  Write-Host "Config creada en $cfg — EDÍTALA (email + routes) y reinicia el servicio."
-}
+# 5. la configuración vive en SQLite: el primer arranque siembra defaults.
+#    Edítala desde el dashboard (loopback) o con `rkt settings/routes/apps`.
+New-Item -ItemType Directory -Force (Join-Path $InstallDir "logs") | Out-Null
 
-# 5b. ACL config (webhook secret): solo SYSTEM + Administradores
-if (Test-Path $cfg) {
-  icacls $cfg /inheritance:r /grant:r "SYSTEM:(F)" "Administradores:(F)" | Out-Null
-}
+# 5b. ACL de datos (DB + logs): solo SYSTEM + Administradores
+icacls (Join-Path $InstallDir "logs") /inheritance:r /grant:r "SYSTEM:(F)" "Administradores:(F)" | Out-Null
 
 # 6. firewall 80/443
 if (-not $SkipFirewall) {
