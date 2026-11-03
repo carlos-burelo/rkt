@@ -25,6 +25,10 @@ export interface AppPatch {
   command?: string;
   args?: string[];
   dir?: string;
+  env_file?: string;
+  static?: string;
+  port?: number;
+  domain?: string;
   restart_delay?: string;
   min_uptime?: string;
   memory_mb?: number;

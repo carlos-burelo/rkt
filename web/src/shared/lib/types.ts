@@ -47,6 +47,8 @@ export interface AppMeta {
   command: string;
   args: string[];
   dir: string;
+  /** env_file adicional (dotenv) */
+  env_file?: string;
   /** dir servido como estático (astro/vite/export); vacío = proceso */
   static?: string;
   restart_delay: string;

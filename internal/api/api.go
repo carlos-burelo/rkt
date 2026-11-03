@@ -551,6 +551,10 @@ func NewHandler(d Deps) http.Handler {
 				Command      *string   `json:"command"`
 				Args         *[]string `json:"args"`
 				Dir          *string   `json:"dir"`
+				EnvFile      *string   `json:"env_file"`
+				Static       *string   `json:"static"`
+				Port         *int      `json:"port"`
+				Domain       *string   `json:"domain"`
 				RestartDelay *string   `json:"restart_delay"`
 				MinUptime    *string   `json:"min_uptime"`
 				MemoryMB     *uint64   `json:"memory_mb"`
@@ -576,6 +580,12 @@ func NewHandler(d Deps) http.Handler {
 			if in.Dir != nil {
 				t.Dir = *in.Dir
 			}
+			if in.EnvFile != nil {
+				t.EnvFile = *in.EnvFile
+			}
+			if in.Static != nil {
+				t.Static = *in.Static
+			}
 			if in.RestartDelay != nil {
 				t.RestartDelay = *in.RestartDelay
 			}
@@ -594,6 +604,18 @@ func NewHandler(d Deps) http.Handler {
 			if err := t.ValidateApp(0); err != nil {
 				writeErr(w, http.StatusBadRequest, err.Error())
 				return
+			}
+			if in.Port != nil {
+				if err := cfgfile.SetAppPort(cp, name, *in.Port); err != nil {
+					writeErr(w, http.StatusBadRequest, err.Error())
+					return
+				}
+			}
+			if in.Domain != nil {
+				if err := cfgfile.SetAppDomain(cp, name, *in.Domain); err != nil {
+					writeErr(w, http.StatusBadRequest, err.Error())
+					return
+				}
 			}
 			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
 				writeErr(w, http.StatusBadRequest, err.Error())
@@ -1248,7 +1270,7 @@ func sanitizeApp(a config.App, routes []config.Route) map[string]any {
 	}
 	return map[string]any{
 		"name": a.Name, "command": a.Command, "args": a.Args,
-		"dir": a.Dir, "static": static, "restart_delay": a.RestartDelay,
+		"dir": a.Dir, "static": static, "env_file": a.EnvFile, "restart_delay": a.RestartDelay,
 		"min_uptime": a.MinUptime, "memory_mb": a.MemoryMB,
 		"port": port, "deploy": deploy, "domains": domains,
 	}
