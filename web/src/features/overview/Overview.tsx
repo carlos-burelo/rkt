@@ -1,4 +1,4 @@
-import { AppStatus, RktEvent, Deployment } from "../../shared/lib/types";
+import { AppStatus, RktEvent, Deployment, AppMeta } from "../../shared/lib/types";
 import { rel } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
 import { Metrics } from "./Metrics";
@@ -8,11 +8,13 @@ export function Overview({
   apps,
   evs,
   deps,
+  metas,
   openApp,
 }: {
   apps: AppStatus[];
   evs: RktEvent[];
   deps: Deployment[];
+  metas: AppMeta[];
   openApp: (name: string) => void;
 }) {
   return (
@@ -43,21 +45,25 @@ export function Overview({
         </div>
       ))}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-      {apps.map((a) => (
-        <button
-          key={a.name}
-          onClick={() => openApp(a.name)}
-          className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 text-left hover:border-zinc-600"
-        >
-          <div className="flex items-center justify-between">
-            <span className="font-mono font-medium">{a.name}</span>
-            <Dot status={a.failed ? "failed" : a.running ? "running" : "stopped"} />
-          </div>
-          <p className="mt-2 text-xs text-zinc-500">
-            {a.failed ? "failed" : a.running ? "running" : "stopped"} · {a.restarts} restarts
-          </p>
-        </button>
-      ))}
+      {apps.map((a) => {
+        const domain = metas.find((m) => m.name === a.name)?.domains[0];
+        return (
+          <button
+            key={a.name}
+            onClick={() => openApp(a.name)}
+            className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 text-left hover:border-zinc-600"
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-mono font-medium">{a.name}</span>
+              <Dot status={a.failed ? "failed" : a.running ? "running" : "stopped"} />
+            </div>
+            <p className="mt-1 font-mono text-xs text-zinc-500">{domain ?? "sin dominio"}</p>
+            <p className="mt-2 text-xs text-zinc-500">
+              {a.failed ? "failed" : a.running ? "running" : "stopped"} · {a.restarts} restarts
+            </p>
+          </button>
+        );
+      })}
       {apps.length === 0 && <p className="text-sm text-zinc-500">Sin apps. Registra con <span className="font-mono">apps add</span>.</p>}
       {evs.length > 0 && (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 md:col-span-2">

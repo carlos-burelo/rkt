@@ -303,12 +303,28 @@ export function App() {
 
       <main className="min-w-0 flex-1 p-4 pt-16 md:p-6 md:pt-6">
         <div className="mx-auto max-w-4xl">
+          <div className="mb-4 hidden items-center gap-2 text-sm md:flex">
+            <span className="text-zinc-500">▲ {brand}</span>
+            <span className="text-zinc-700">/</span>
+            <span className="capitalize">{page === "app" ? appFilter || "app" : page}</span>
+            <span className="flex-1" />
+            {!online && <span className="text-xs text-amber-300">offline</span>}
+            {canWrite && (
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="rounded-md bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-900 hover:bg-white"
+              >
+                + Create New
+              </button>
+            )}
+            <span className="font-mono text-[11px] text-zinc-600">{who?.user} · {who?.role}</span>
+          </div>
           <Err msg={err} />
           {boot ? (
             <Skeleton rows={6} />
           ) : (
             <>
-          {page === "overview" && <Overview apps={apps} evs={evs} deps={deps} openApp={openApp} />}
+          {page === "overview" && <Overview apps={apps} evs={evs} deps={deps} metas={metas} openApp={openApp} />}
           {page === "deployments" && (
             <Deployments deps={vis} filtered={filter !== "" || appFilter !== ""} onSelect={setSel} />
           )}
