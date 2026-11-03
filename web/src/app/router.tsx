@@ -23,17 +23,20 @@ import { Settings } from "../features/settings/Settings";
 import { Users } from "../features/users/Users";
 
 // Puerta auth: setup primero, luego login. Solo guarda, no pinta.
+// Espera boot completo (ready): sin esto, recargar un deep link
+// rebotaba /ruta → /login → /overview (me() asentaba tarde).
 function RequireAuth() {
-  const { authed, setupRequired } = useAuth();
-  if (setupRequired === null) return null;
+  const { ready, authed, setupRequired } = useAuth();
+  if (!ready) return null;
   if (setupRequired) return <Navigate to="/setup" replace />;
   if (!authed) return <Navigate to="/login" replace />;
   return <Outlet />;
 }
 
 function LoginRoute() {
-  const { authed, setupRequired, setWho } = useAuth();
+  const { ready, authed, setupRequired, setWho } = useAuth();
   const navigate = useNavigate();
+  if (!ready) return null;
   if (setupRequired) return <Navigate to="/setup" replace />;
   if (authed) return <Navigate to="/overview" replace />;
   return (
@@ -47,10 +50,10 @@ function LoginRoute() {
 }
 
 function SetupRoute() {
-  const { setupRequired, setWho } = useAuth();
+  const { ready, setupRequired, setWho } = useAuth();
   const navigate = useNavigate();
+  if (!ready) return null;
   if (setupRequired === false) return <Navigate to="/login" replace />;
-  if (setupRequired === null) return null;
   return (
     <Setup
       onOk={(m) => {

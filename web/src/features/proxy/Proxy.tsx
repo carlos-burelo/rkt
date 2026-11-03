@@ -7,7 +7,7 @@ import { RadialMap } from "./ProxyMap";
 import { StateRail } from "../../shared/components/ui";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select, SelectValue, SelectTrigger, SelectContent, SelectItem,
+  Select, SelectTrigger, SelectContent, SelectItem,
 } from "@/components/ui/select";
 import { PageHeader, EmptyState } from "../../shared/components/patterns";
 import { useUI } from "../../app/ui";

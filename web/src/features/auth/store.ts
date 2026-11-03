@@ -10,6 +10,8 @@ interface AuthState {
   authed: boolean;
   isAdmin: boolean;
   canWrite: boolean;
+  /** boot terminó (status + me asentados): la puerta puede decidir sin rebote */
+  ready: boolean;
   boot: () => Promise<void>;
   setWho: (m: Me | null) => void;
   doLogout: () => void;
@@ -23,11 +25,15 @@ export const useAuth = create<AuthState>()((set) => ({
   authed: false,
   isAdmin: false,
   canWrite: false,
+  ready: false,
   boot: async () => {
     try {
       const s = await authStatus();
       set({ setupRequired: s.setup_required });
-      if (s.setup_required) return;
+      if (s.setup_required) {
+        set({ ready: true });
+        return;
+      }
       try {
         const m = await me();
         set({ who: m, authed: true, isAdmin: m.role === "admin", canWrite: m.role !== "viewer" });
@@ -42,6 +48,7 @@ export const useAuth = create<AuthState>()((set) => ({
     } catch {
       set({ setupRequired: false, who: null, authed: false });
     }
+    set({ ready: true });
   },
   setWho: (m) =>
     set({

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
+import { PageHeader } from "../../shared/components/patterns";
 
 export type DepStatus = "all" | "ok" | "running" | "failed";
 
@@ -31,6 +32,12 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
   if (max !== undefined) vis = vis.slice(0, max);
   return (
     <div className="space-y-3">
+      {!bare && (
+        <PageHeader
+          title="Deployments"
+          description="Tablero de salidas. La fila en curso late; duraciones a la derecha."
+        />
+      )}
       {!bare && (
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-52 flex-1">
