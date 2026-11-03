@@ -976,12 +976,12 @@ func (p *Program) runDiscovery() {
 // delay de poll). El git local es el estado: si HEAD != remoto, deploy.
 // El intervalo se recalcula: tras crear la App la config llega por hot-reload.
 func (p *Program) autoDeploy(live *config.Live) {
+	next := 2 * time.Second
+	var lastPoll time.Time
 	for {
-		wait := time.Minute
-		if gh := live.Get().Github; gh != nil && gh.Poll() > 0 {
+		wait := next
+		if gh := live.Get().Github; gh != nil && gh.Poll() > 0 && !lastPoll.IsZero() {
 			wait = gh.Poll()
-		} else if gh == nil {
-			wait = 2 * time.Second // recién creada: espera al hot-reload
 		}
 		select {
 		case <-time.After(wait):
@@ -989,6 +989,7 @@ func (p *Program) autoDeploy(live *config.Live) {
 		}
 		cfg := live.Get()
 		if cfg.Github == nil || p.gh() == nil {
+			next = 2 * time.Second
 			continue
 		}
 		p.runDiscovery()
@@ -1023,6 +1024,12 @@ func (p *Program) autoDeploy(live *config.Live) {
 				p.log.Info("auto-deploy ok", "app", a.Name, "rev", rev)
 			}
 		}
+		lastPoll = time.Now()
+		if cfg.Github.Poll() > 0 {
+			next = cfg.Github.Poll()
+		} else {
+			next = time.Minute
+		}
 	}
 }
 
@@ -1055,11 +1062,23 @@ func (p *Program) watchMerged(live *config.Live, db *store.DB) {
 			p.log.Warn("snapshot inválido, conservo anterior", "err", err)
 			continue
 		}
+		if err := cfgfile.OverlayGithub(next, db); err != nil {
+			p.log.Warn("github en DB inválido, conservo anterior", "err", err)
+			continue
+		}
 		old := live.Get()
 		live.Swap(next)
 		if p.sup != nil {
 			// manifiesto en caliente: nuevas/actualizadas arrancan solas
 			p.sup.Apply(next.Apps, next.GlobalEnv)
+		}
+		if next.Github != nil && p.gh() == nil {
+			if gh, err := github.New(next.Github.AppID, next.Github.KeyFile, ""); err == nil {
+				p.ghm.Store(gh)
+			}
+		}
+		if next.Github != nil && p.autoStarted.CompareAndSwap(false, true) {
+			go p.autoDeploy(live)
 		}
 		p.log.Info("config recargada",
 			"routes", len(next.Routes),
