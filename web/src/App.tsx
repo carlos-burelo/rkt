@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Root, Backdrop, Popup, Title, Close } from "@base_ui/react/dialog";
-import { api, getToken, clearToken, Status, Deployment, RktEvent } from "./api";
+import { api, logout, me, Me, Status, Deployment, RktEvent } from "./api";
 import { Login } from "./Login";
 import { rel, dur } from "./time";
 
@@ -18,7 +18,8 @@ function Dot({ status }: { status: string }) {
 }
 
 export function App() {
-  const [authed, setAuthed] = useState(getToken() !== "");
+  const [who, setWho] = useState<Me | null>(null);
+  const authed = who !== null;
   const [page, setPage] = useState<Page>("deployments");
   const [filter, setFilter] = useState("");
   const [appFilter, setAppFilter] = useState("");
@@ -48,12 +49,18 @@ export function App() {
       }
     } catch (e) {
       if (e instanceof Error && e.message.startsWith("no autorizado")) {
-        setAuthed(false);
+        setWho(null);
         return;
       }
       setErr(e instanceof Error ? e.message : "error");
     }
   }
+
+  useEffect(() => {
+    me()
+      .then(setWho)
+      .catch(() => setWho(null));
+  }, []);
 
   useEffect(() => {
     if (!authed) return;
@@ -67,7 +74,7 @@ export function App() {
     if (follow && logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [log, follow]);
 
-  if (!authed) return <Login onOk={() => setAuthed(true)} />;
+  if (!authed) return <Login onOk={setWho} />;
 
   const apps = status?.apps ?? [];
   const f = filter.toLowerCase();
@@ -129,11 +136,12 @@ export function App() {
         </div>
         <div className="flex-1" />
         <div className="border-t border-zinc-800 p-3">
-          <p className="px-2.5 font-mono text-[11px] text-zinc-600">v{status?.version ?? "…"}</p>
+          <p className="px-2.5 font-mono text-[11px] text-zinc-600">
+            {who?.user} · {who?.role} · v{status?.version ?? "…"}
+          </p>
           <button
             onClick={() => {
-              clearToken();
-              setAuthed(false);
+              logout().finally(() => setWho(null));
             }}
             className="mt-1 block w-full rounded-md px-2.5 py-1.5 text-left text-xs text-zinc-500 hover:text-zinc-200"
           >

@@ -1,31 +1,43 @@
-// Cliente api/v1. Token en localStorage (fase 1; sesiones fase 2).
-const KEY = "rkt_token";
-
-export function getToken(): string {
-  return localStorage.getItem(KEY) ?? "";
-}
-
-export function setToken(t: string) {
-  localStorage.setItem(KEY, t);
-}
-
-export function clearToken() {
-  localStorage.removeItem(KEY);
-}
-
-export async function api<T>(path: string): Promise<T> {
+// Cliente api/v1. Sesión por cookie httpOnly (credenciales en cada fetch).
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
-    headers: { Authorization: `Bearer ${getToken()}` },
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    ...init,
   });
   if (res.status === 401) {
-    clearToken();
-    throw new Error("no autorizado (revisa dashboard_token)");
+    throw new Error("no autorizado (login)");
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { error?: string }).error ?? `http ${res.status}`);
   }
   return (await res.json()) as T;
+}
+
+export interface Me {
+  user: string;
+  role: string;
+}
+
+export async function login(user: string, password: string): Promise<Me> {
+  const me = await api<Me>("/api/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ user, password }),
+  });
+  return me;
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await api<{ ok: string }>("/api/v1/auth/logout", { method: "POST" });
+  } catch {
+    // sesión ya inválida: igual se sale
+  }
+}
+
+export async function me(): Promise<Me> {
+  return api<Me>("/api/v1/auth/me");
 }
 
 export interface AppStatus {
@@ -56,4 +68,10 @@ export interface RktEvent {
   kind: string;
   app: string;
   msg: string;
+}
+
+export interface User {
+  name: string;
+  role: string;
+  created_at: string;
 }
