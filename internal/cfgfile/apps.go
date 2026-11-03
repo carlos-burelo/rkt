@@ -121,6 +121,9 @@ func UnsetGlobalEnv(db *store.DB, cfg *config.Config, key string) error {
 	return SaveInfra(db, cfg)
 }
 
+// execOwn inyectable (test de fallo al resolver el binario).
+var execOwn = os.Executable
+
 // CreateApp arma App+domains+port con inferencia (Suggest+PresetBuild).
 // Unico hogar (CLI wizard pregunta aparte; MCP y API la usan).
 // Crea el dir. No escribe en DB (eso es AddApp).
@@ -175,7 +178,7 @@ func CreateApp(db *store.DB, repo, name, domain string, port int, command, dir s
 	args := []string{}
 	staticDir := ""
 	if command == "" && plan.IsStatic() {
-		exe, err := os.Executable()
+		exe, err := execOwn()
 		if err != nil {
 			return config.App{}, nil, "", fmt.Errorf("binario propio: %w", err)
 		}

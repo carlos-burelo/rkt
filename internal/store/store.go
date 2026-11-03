@@ -114,12 +114,15 @@ type DB struct {
 	sql *sql.DB
 }
 
+// sqlOpen inyectable (test de fallo al abrir).
+var sqlOpen = sql.Open
+
 // Open abre (creando dir) y migra. WAL + busy_timeout (locks Windows).
 func Open(path string) (*DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
-	sqlDB, err := sql.Open("sqlite", path)
+	sqlDB, err := sqlOpen("sqlite", path)
 	if err != nil {
 		return nil, err
 	}

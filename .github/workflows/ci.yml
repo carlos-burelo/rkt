@@ -57,7 +57,7 @@ jobs:
 
       - name: Cobertura 100% en paquetes blindados
         run: |
-          $locked = @("accesslog","alerts","appview","dotenv","hosts","logx","proxy","ratelimit","server","staticweb","weblog")
+          $locked = @("accesslog","alerts","appview","dotenv","hosts","logx","proxy","ratelimit","server","staticweb","store","weblog")
           $fail = @()
           foreach ($p in $locked) {
             $out = go test "./internal/$p" -count=1 -cover 2>&1

@@ -6,13 +6,15 @@ package store
 import (
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+// randRead inyectable (test de fallo de entropía).
+var randRead = rand.Read
 
 const (
 	RoleAdmin    = "admin"
@@ -109,17 +111,14 @@ func (d *DB) ListUsers() ([]User, error) {
 // DeleteUser borra; rechaza si es el último admin.
 func (d *DB) DeleteUser(name string) error {
 	var role string
-	if err := d.sql.QueryRow(`SELECT role FROM users WHERE name=?`, name).Scan(&role); err != nil {
+	var admins int
+	if err := d.sql.QueryRow(
+		`SELECT role, (SELECT COUNT(*) FROM users WHERE role='admin') FROM users WHERE name=?`, name).
+		Scan(&role, &admins); err != nil {
 		return fmt.Errorf("usuario %q inexistente", name)
 	}
-	if role == RoleAdmin {
-		var n int
-		if err := d.sql.QueryRow(`SELECT COUNT(*) FROM users WHERE role='admin'`).Scan(&n); err != nil {
-			return err
-		}
-		if n <= 1 {
-			return fmt.Errorf("no se puede borrar el último admin")
-		}
+	if role == RoleAdmin && admins <= 1 {
+		return fmt.Errorf("no se puede borrar el último admin")
 	}
 	if _, err := d.sql.Exec(`DELETE FROM users WHERE name=?`, name); err != nil {
 		return err
@@ -163,7 +162,7 @@ func (d *DB) CheckPassword(name, password string) (string, error) {
 // NewSession crea bearer para usuario (raw solo se devuelve una vez).
 func (d *DB) NewSession(user string, ttl time.Duration) (string, error) {
 	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
+	if _, err := randRead(raw); err != nil {
 		return "", err
 	}
 	token := hex.EncodeToString(raw)
@@ -183,13 +182,10 @@ func (d *DB) NewSession(user string, ttl time.Duration) (string, error) {
 func (d *DB) SessionUser(token string) (string, string, bool) {
 	sum := sha256.Sum256([]byte(token))
 	want := hex.EncodeToString(sum[:])
-	var hash, user, exp string
+	var user, exp string
 	if err := d.sql.QueryRow(
-		`SELECT token_hash, user, expires_at FROM sessions WHERE token_hash=?`, want).
-		Scan(&hash, &user, &exp); err != nil {
-		return "", "", false
-	}
-	if subtle.ConstantTimeCompare([]byte(hash), []byte(want)) != 1 {
+		`SELECT user, expires_at FROM sessions WHERE token_hash=?`, want).
+		Scan(&user, &exp); err != nil {
 		return "", "", false
 	}
 	if t, err := time.Parse(time.RFC3339, exp); err != nil || time.Now().UTC().After(t) {

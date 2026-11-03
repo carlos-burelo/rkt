@@ -1,8 +1,14 @@
 package cfgfile
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"rkt-proxy/internal/config"
@@ -259,5 +265,280 @@ func TestLoadBaseCorruptaYApplyDev(t *testing.T) {
 	base, err := LoadBase(db2, cfgPath)
 	if err != nil || !base.LocalCA || base.ListenHTTPS != "127.0.0.1:443" {
 		t.Fatalf("ApplyDev = %+v %v", base, err)
+	}
+}
+
+func TestLoadErrores(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "archivo")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// store.Open falla si el padre es un archivo
+	if _, err := Load(filepath.Join(file, "cfg.yaml")); err == nil {
+		t.Fatal("Load debía fallar al abrir DB")
+	}
+	if _, _, err := LoadMerged(filepath.Join(file, "cfg.yaml")); err == nil {
+		t.Fatal("LoadMerged debía fallar al abrir DB")
+	}
+
+	// infra corrupta: Load y LoadMerged
+	cfgPath := filepath.Join(dir, "cfg.yaml")
+	db, err := store.Open(logx.DBPath(cfgPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SaveInfra([]byte("{bad")); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if _, err := Load(cfgPath); err == nil {
+		t.Fatal("Load con infra corrupta debía fallar")
+	}
+	if _, _, err := LoadMerged(cfgPath); err == nil {
+		t.Fatal("LoadMerged con infra corrupta debía fallar")
+	}
+}
+
+func TestLoadMergedSnapshotYOverlayErrores(t *testing.T) {
+	cfgPath, db := testCfg(t)
+	// Snapshot con DB viva y vacía
+	if _, err := Snapshot(db, config.Default()); err != nil {
+		t.Fatal(err)
+	}
+	// Snapshot falla con rutas inválidas en DB
+	if err := db.ImportFleet(&config.Config{Routes: []config.Route{{Hosts: []string{""}, Target: "mal"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := LoadMerged(cfgPath); err == nil {
+		t.Fatal("LoadMerged con rutas inválidas debía fallar")
+	}
+	closed, _ := store.Open(logx.DBPath(filepath.Join(t.TempDir(), "x.yaml")))
+	closed.Close()
+	if _, err := Snapshot(closed, config.Default()); err == nil {
+		t.Fatal("Snapshot con DB cerrada debía fallar")
+	}
+	// LoadBase con DB cerrada
+	if _, err := LoadBase(closed, cfgPath); err == nil {
+		t.Fatal("LoadBase con DB cerrada debía fallar")
+	}
+	// ApplyDev con DB cerrada
+	if err := ApplyDev(closed, "127.0.0.1:80", ""); err == nil {
+		t.Fatal("ApplyDev con DB cerrada debía fallar")
+	}
+	// SetGlobalEnv con DB cerrada
+	if err := SetGlobalEnv(closed, config.Default(), "K", "v"); err == nil {
+		t.Fatal("SetGlobalEnv con DB cerrada debía fallar")
+	}
+}
+
+func TestAddAppValidateRoutesYSetEnvFile(t *testing.T) {
+	cfgPath, db := testCfg(t)
+	dir := filepath.Join(filepath.Dir(cfgPath), "app")
+	if err := AddApp(db, validApp(t, "w", dir, "3001"), []string{"dup.test"}, "3001"); err != nil {
+		t.Fatal(err)
+	}
+	// ruta duplicada => ValidateRoutes falla
+	if err := AddApp(db, validApp(t, "x", dir, "3002"), []string{"dup.test"}, "3002"); err == nil {
+		t.Fatal("ruta duplicada debía fallar")
+	}
+	// env_file inexistente => SetEnv falla
+	cfg, db2, err := LoadMerged(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db2.Close()
+	app := FindApp(cfg, "w")
+	app.EnvFile = filepath.Join(dir, "no.env")
+	if err := SetEnv(db2, cfg, "w", "K", "v"); err == nil {
+		t.Fatal("env_file inexistente debía fallar")
+	}
+	// env_file válido: las claves entran al scope de expansión
+	envFile := filepath.Join(dir, ".env")
+	if err := os.WriteFile(envFile, []byte("FILEVAR=hola\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app.EnvFile = envFile
+	if err := SetEnv(db2, cfg, "w", "K", "${FILEVAR}-mundo"); err != nil {
+		t.Fatal(err)
+	}
+	if app.Env["K"] != "hola-mundo" {
+		t.Fatalf("expansión env_file = %q", app.Env["K"])
+	}
+}
+
+func TestCreateAppBranches(t *testing.T) {
+	_, db := testCfg(t)
+	dir := t.TempDir()
+	// repo inexistente => Suggest falla
+	if _, _, _, err := CreateApp(db, "no-es-un-repo :::", "", "", 0, "", "", false); err == nil {
+		t.Fatal("repo inválido debía fallar")
+	}
+	// dir inexistente
+	if _, _, _, err := CreateApp(db, "", "w", "", 0, "", filepath.Join(dir, "nope"), false); err == nil {
+		t.Fatal("dir inexistente debía fallar")
+	}
+	// sin nombre ni inferencia
+	if _, _, _, err := CreateApp(db, "", "", "", 0, "", "", false); err == nil {
+		t.Fatal("sin nombre debía fallar")
+	}
+	// dir por defecto + sin plan
+	if _, _, _, err := CreateApp(db, "", "soloname", "", 0, "", "", false); err == nil {
+		t.Fatal("sin plan debía fallar")
+	}
+	// sitio estático local: plan static, comando propio y args __static
+	site := filepath.Join(dir, "site")
+	if err := os.MkdirAll(site, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(site, "index.html"), []byte("<html>x</html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app, domains, portS, err := CreateApp(db, "", "sitio", "sitio.localhost", 4321, "", site, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if app.Static == "" || len(app.Args) != 2 || app.Args[0] != "__static" || app.Env["PORT"] != "4321" {
+		t.Fatalf("app estática = %+v", app)
+	}
+	if len(domains) != 1 || domains[0] != "sitio.localhost" || portS != "4321" {
+		t.Fatalf("domains = %v port = %q", domains, portS)
+	}
+	// comando explícito y sin repo: no crea Deploy
+	app2, _, _, err := CreateApp(db, "", "manual", "", 0, "cmd.exe", site, false)
+	if err != nil || app2.Deploy != nil {
+		t.Fatalf("manual = %+v %v", app2, err)
+	}
+}
+
+func TestCreateAppRepoDominioYExec(t *testing.T) {
+	_, db := testCfg(t)
+	// base_domain: la sugerencia trae dominio
+	if err := db.SetSetting(store.KeyBaseDomain, "rkt.test"); err != nil {
+		t.Fatal(err)
+	}
+	repo := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repo, "package.json"), []byte(`{"dependencies":{"next":"14.0.0"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetSetting(store.KeyNodeBin, "node"); err != nil {
+		t.Fatal(err)
+	}
+	app, domains, portS, err := CreateApp(db, repo, "", "", 0, "", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if app.Deploy == nil || app.Deploy.Repo != repo {
+		t.Fatalf("deploy = %+v", app.Deploy)
+	}
+	if len(domains) != 1 || !strings.Contains(domains[0], "rkt.test") {
+		t.Fatalf("dominio sugerido = %v", domains)
+	}
+	if portS == "" {
+		t.Fatal("puerto inferido vacío")
+	}
+	// fallo al resolver el binario propio en un plan estático
+	site := filepath.Join(t.TempDir(), "site")
+	_ = os.MkdirAll(site, 0o755)
+	_ = os.WriteFile(filepath.Join(site, "index.html"), []byte("x"), 0o644)
+	old := execOwn
+	execOwn = func() (string, error) { return "", errors.New("sin exe") }
+	t.Cleanup(func() { execOwn = old })
+	if _, _, _, err := CreateApp(db, "", "s", "", 0, "", site, false); err == nil {
+		t.Fatal("CreateApp debía fallar al resolver el ejecutable")
+	}
+	// MkdirAll falla con un nombre de dir inválido en Windows
+	execOwn = old
+	if _, _, _, err := CreateApp(db, "", "bad:name", "", 0, "cmd.exe", "", false); err == nil {
+		t.Fatal("CreateApp debía fallar al crear el directorio")
+	}
+}
+
+func TestOverlayGithubPollInvalido(t *testing.T) {
+	_, db := testCfg(t)
+	if err := db.SetSetting("github_app_id", "5"); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Github: &config.Github{PollInterval: "1s"}}
+	if err := OverlayGithub(cfg, db); err == nil {
+		t.Fatal("poll_interval inválido debía fallar en overlay")
+	}
+}
+
+func TestRamasCfgfileRestantes(t *testing.T) {
+	cfgPath, db := testCfg(t)
+	closed, err := store.Open(logx.DBPath(filepath.Join(t.TempDir(), "c.yaml")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed.Close()
+	// AddApp con DB cerrada
+	if err := AddApp(closed, validApp(t, "a", filepath.Join(filepath.Dir(cfgPath), "a"), "3001"), nil, ""); err == nil {
+		t.Fatal("AddApp con DB cerrada debía fallar")
+	}
+	// SetEnv con Env nil y DB cerrada (cubre init + ImportFleet)
+	cfg := &config.Config{Apps: []config.App{{Name: "a", Command: "x", Dir: t.TempDir(), RestartDelay: "5s", MinUptime: "10s"}}}
+	if err := SetEnv(closed, cfg, "a", "K", "v"); err == nil {
+		t.Fatal("SetEnv con DB cerrada debía fallar")
+	}
+	// SetEnv con app inválida
+	bad := &config.Config{Apps: []config.App{{Name: "b", Dir: t.TempDir()}}}
+	if err := SetEnv(db, bad, "b", "K", "v"); err == nil {
+		t.Fatal("SetEnv con app inválida debía fallar")
+	}
+	// SetAppDomain con host que url.Parse no puede normalizar
+	cp := &config.Config{Apps: []config.App{{Name: "w", Env: map[string]string{"PORT": "3001"}}}}
+	if err := SetAppDomain(cp, "w", "a.test#x"); err == nil {
+		t.Fatal("host con fragmento debía fallar")
+	}
+	// LoadBase: infra válida en JSON pero inválida para Finalize
+	if err := db.SaveInfra([]byte(`{"healthz":{"enabled":true,"listen":"0.0.0.0:1"}}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadBase(db, cfgPath); err == nil {
+		t.Fatal("LoadBase con healthz expuesto debía fallar")
+	}
+	// ApplyDev con infra corrupta
+	if err := db.SaveInfra([]byte("{bad")); err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplyDev(db, "127.0.0.1:80", ""); err == nil {
+		t.Fatal("ApplyDev con infra corrupta debía fallar")
+	}
+}
+
+func TestLoadBaseMigraGithubDesdeYAML(t *testing.T) {
+	dir := t.TempDir()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyFile := filepath.Join(dir, "app.pem")
+	pemKey := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	if err := os.WriteFile(keyFile, pemKey, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(dir, "config.yaml")
+	yaml := "routes: []\ngithub:\n  app_id: 99\n  app_slug: demo\n  key_file: " + keyFile + "\n"
+	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	db, err := store.Open(logx.DBPath(cfgPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	base, err := LoadBase(db, cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base.Github == nil || base.Github.AppID != 99 {
+		t.Fatalf("github migrado = %+v", base.Github)
+	}
+	if db.GetSetting("github_app_id") != "99" {
+		t.Fatal("seedGithubSettings no escribió")
+	}
+	if _, err := os.Stat(cfgPath + ".migrated"); err != nil {
+		t.Fatal("YAML debía quedar como .migrated")
 	}
 }
