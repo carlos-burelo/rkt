@@ -121,7 +121,7 @@ if (Test-Path $exe) {
 Copy-Item $tmp $exe -Force
 Write-Host "Binario en $exe"
 
-# 5. config por defecto si no existe (editar email + routes tras instalar)
+# 5. config por defecto si no existe (dashboard local incluido desde día 1)
 if (-not (Test-Path $cfg)) {
   @'
 listen_http: ":80"
@@ -130,6 +130,11 @@ acme_email: "admin@TU-DOMINIO.com"
 acme_staging: false
 acme_cache_dir: "C:\\ProgramData\\rkt-proxy\\certs"
 redirect_http_to_https: true
+healthz:
+  enabled: true
+  listen: "127.0.0.1:8090"
+rate_limit:
+  enabled: true
 routes:
   - hosts: ["app.TU-DOMINIO.com"]
     target: "http://127.0.0.1:3000"
@@ -191,6 +196,22 @@ if ($st -ne "Running") {
 $Version | Out-File $verFile -Encoding ascii -NoNewline
 sc.exe query Rkt
 
+# 9. dashboard listo: espera healthz, imprime URL y abre browser.
+# Tras esto no hay comandos: el admin inicial se crea en el wizard.
+$dashUrl = "http://127.0.0.1:8090/dashboard/"
+$ready = $false
+for ($i = 0; $i -lt 30; $i++) {
+  try {
+    $r = Invoke-WebRequest -Uri "http://127.0.0.1:8090/api/v1/auth/status" -UseBasicParsing -TimeoutSec 3
+    if ($r.StatusCode -eq 200) { $ready = $true; break }
+  } catch { Start-Sleep 2 }
+}
 Write-Host ""
-Write-Host "OK. Siguiente: edita $cfg y luego: sc.exe stop Rkt; sc.exe start Rkt"
+if ($ready) {
+  Write-Host "Dashboard listo: $dashUrl"
+  try { Start-Process $dashUrl } catch { Write-Warning "No pude abrir el browser: abre $dashUrl a mano." }
+  Write-Host "Crea tu admin en el wizard (solo pasa una vez). Sin comandos."
+} else {
+  Write-Warning "Servicio arriba pero healthz no responde. Revisa config y logs, luego abre $dashUrl"
+}
 Write-Host "Requiere: DNS A de tus dominios -> IP del VPS, puertos 80/443 públicos."
