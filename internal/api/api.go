@@ -528,6 +528,22 @@ func NewHandler(d Deps) http.Handler {
 		}
 		writeJSON(w, map[string]any{"log": out})
 	})
+	// Mismo log, pero en vivo (SSE): init + chunks mientras el cliente escuche.
+	mux.HandleFunc("/api/v1/logs/stream", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+			return
+		}
+		path := filepath.Join(d.LogsDir, "rkt.log")
+		if app := r.URL.Query().Get("app"); app != "" {
+			if !validAppName(app) {
+				writeErr(w, http.StatusBadRequest, "app inválida [a-z0-9-]")
+				return
+			}
+			path = filepath.Join(d.LogsDir, "apps", app+".log")
+		}
+		streamLog(w, r, path, queryInt(r, "n", 200), nil)
+	})
 	mux.HandleFunc("/api/v1/apps", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			live := d.Live.Get()
@@ -1370,6 +1386,13 @@ func NewHandler(d Deps) http.Handler {
 		_, lp, ok := d.DB.DeploymentLogPath(id)
 		if !ok {
 			writeErr(w, http.StatusNotFound, "sin log para ese deploy")
+			return
+		}
+		if r.URL.Query().Get("stream") == "1" {
+			streamLog(w, r, lp, queryInt(r, "n", 200), func() bool {
+				st, ok := d.DB.DeploymentStatus(id)
+				return !ok || st != "running"
+			})
 			return
 		}
 		out, err := logx.Tail(lp, queryInt(r, "n", 200))

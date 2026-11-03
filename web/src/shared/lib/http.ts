@@ -42,3 +42,23 @@ export function bust(prefix: string) {
     if (k.startsWith(prefix)) memo.delete(k);
   }
 }
+
+// streamLog sigue un log por SSE. onLog recibe el tail inicial
+// (append=false) y luego solo los bytes nuevos (append=true).
+// Devuelve close; EventSource usa la cookie de sesión.
+export function streamLog(
+  url: string,
+  onLog: (text: string, append: boolean) => void,
+  onEnd?: (status: string) => void,
+): () => void {
+  const es = new EventSource(url);
+  const read = (e: MessageEvent) => JSON.parse(e.data) as { log?: string; chunk?: string; status?: string };
+  es.addEventListener("init", (e) => onLog(read(e as MessageEvent).log ?? "", false));
+  es.addEventListener("chunk", (e) => onLog(read(e as MessageEvent).chunk ?? "", true));
+  es.addEventListener("end", (e) => {
+    onEnd?.(read(e as MessageEvent).status ?? "");
+    es.close();
+  });
+  es.onerror = () => es.close();
+  return () => es.close();
+}

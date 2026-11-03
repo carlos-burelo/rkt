@@ -1,13 +1,15 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { rel, dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
 import { stateLabel } from "../../shared/lib/labels";
 import { CopyButton } from "../../shared/components/feedback";
 import { Button } from "@/components/ui/button";
+import { streamLog, bust } from "../../shared/lib/http";
 import { Timeline } from "./Timeline";
 import { useUI } from "../../app/ui";
+import { useFleet } from "../overview/hooks";
 import { useAuth } from "../auth/store";
 
 const { Root, Portal, Backdrop, Popup, Title, Close } = DialogPrimitive;
@@ -73,7 +75,22 @@ export function DeployDrawer() {
   const setSel = useUI((u) => u.setSel);
   const canWrite = useAuth((a) => a.canWrite);
   const navigate = useNavigate();
-  const dep = sel;
+  const { deps } = useFleet();
+  const dep = sel ? (deps.find((d) => d.id === sel.id) ?? sel) : null;
+
+  // Deploy en curso: SSE del build log. Al terminar, refresca la flota.
+  useEffect(() => {
+    if (!dep || dep.status !== "running") return;
+    let acc = "";
+    return streamLog(
+      `/api/v1/deployments/${dep.id}/log?stream=1&n=400`,
+      (text, append) => {
+        acc = append ? acc + text : text;
+        useUI.setState({ buildLog: acc });
+      },
+      () => bust("fleet:"),
+    );
+  }, [dep?.id, dep?.status]);
   return (
     <Root
       open={dep !== null}

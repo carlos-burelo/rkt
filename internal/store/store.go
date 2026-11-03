@@ -248,6 +248,15 @@ func (d *DB) DeploymentLogPath(id int64) (string, string, bool) {
 	return app, lp, true
 }
 
+// DeploymentStatus estado actual (running/ok/failed) para cortar el stream.
+func (d *DB) DeploymentStatus(id int64) (string, bool) {
+	var s string
+	if err := d.sql.QueryRow(`SELECT status FROM deployments WHERE id=?`, id).Scan(&s); err != nil {
+		return "", false
+	}
+	return s, true
+}
+
 // InsertEvent suceso auditable (died/restarted/failed/deploy...).
 func (d *DB) InsertEvent(kind, app, msg string) error {
 	_, err := d.sql.Exec(

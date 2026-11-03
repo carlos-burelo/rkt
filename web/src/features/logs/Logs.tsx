@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Pause, Play, Search } from "lucide-react";
 import { AppStatus, Deployment } from "../../shared/lib/types";
 import { deploymentLog } from "../deployments/api";
+import { streamLog } from "../../shared/lib/http";
 import { fetchLog } from "./api";
 import { Bars } from "../../shared/components/feedback";
 import { Dot, Avatar } from "../../shared/components/ui";
@@ -101,10 +102,11 @@ export function Logs() {
 
   useEffect(() => {
     if (!live || tab !== "runtime" || !online) return;
-    const t = setInterval(() => {
-      fetchLog(appFilter).then(setLog).catch(() => {});
-    }, 2000);
-    return () => clearInterval(t);
+    const q = `n=200${appFilter !== "" ? `&app=${encodeURIComponent(appFilter)}` : ""}`;
+    return streamLog(`/api/v1/logs/stream?${q}`, (text, append) => {
+      if (append) setLog((prev) => prev + text);
+      else setLog(text);
+    });
   }, [live, tab, appFilter, online]);
 
   useEffect(() => {

@@ -129,6 +129,15 @@ func TestPruneYDeployments(t *testing.T) {
 	if err := db.FinishDeployment(oldID, "ok", "prev", "rev1"); err != nil {
 		t.Fatal(err)
 	}
+	if st, ok := db.DeploymentStatus(newID); !ok || st != "running" {
+		t.Fatalf("status running = %q %v", st, ok)
+	}
+	if st, ok := db.DeploymentStatus(oldID); !ok || st != "ok" {
+		t.Fatalf("status ok = %q %v", st, ok)
+	}
+	if _, ok := db.DeploymentStatus(999999); ok {
+		t.Fatal("id inexistente no debe existir")
+	}
 	// emvejecer la fila vieja
 	if _, err := db.sql.Exec(`UPDATE deployments SET finished_at=? WHERE id=?`,
 		time.Now().Add(-48*time.Hour).UTC().Format(time.RFC3339), oldID); err != nil {
