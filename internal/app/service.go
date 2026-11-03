@@ -217,7 +217,7 @@ func (p *Program) Run() {
 	}()
 	if cfg.Healthz.Enabled {
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal})
-		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Apply: p.sup.Apply, Build: p.buildLocal, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus})
+		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Apply: p.sup.Apply, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus})
 		sub, err := fs.Sub(web.Dist, "dist")
 		if err != nil {
 			p.log.Error("dashboard sin dist", "err", err)
@@ -524,42 +524,79 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 	return depID, nil
 }
 
-// runDeploy pipeline común deploy/retry (único hogar).
+// runDeploy pipeline común deploy/retry (único hogar, síncrono).
 func (p *Program) runDeploy(app config.App, actor string) (string, error) {
+	_, rev, err := p.startDeploy(app, actor, false)
+	return rev, err
+}
+
+// deployAppAsync arranca el deploy en segundo plano y devuelve el id de la
+// salida para seguirlo en vivo (creación de apps estilo Vercel).
+func (p *Program) deployAppAsync(name, actor string) (int64, error) {
+	cfg := p.live.Get()
+	var app *config.App
+	for i := range cfg.Apps {
+		if cfg.Apps[i].Name == name {
+			app = &cfg.Apps[i]
+		}
+	}
+	if app == nil {
+		return 0, fmt.Errorf("app %q inexistente", name)
+	}
+	if app.Deploy == nil {
+		return 0, fmt.Errorf("app %q sin bloque deploy", name)
+	}
+	id, _, err := p.startDeploy(*app, actor, true)
+	return id, err
+}
+
+// startDeploy prepara log + registro y ejecuta (async o no) el pipeline.
+func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, string, error) {
 	token, err := p.appToken(&app)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	dir := logx.DirFor(p.cfgPath)
 	if err := os.MkdirAll(filepath.Join(dir, "deploys"), 0o755); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	out, err := os.OpenFile(
 		filepath.Join(dir, "deploys", app.Name+"-"+time.Now().Format("20060102-150405")+".log"),
 		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
-	defer out.Close()
 	var depID int64
 	prevRev := deploy.HeadRev(app.Dir)
 	if p.db != nil {
 		depID, _ = p.db.InsertDeployment(app.Name, "", out.Name(), actor, app.Env)
 	}
+	finish := func(rev string, runErr error) {
+		if p.db != nil && depID > 0 {
+			status := "ok"
+			if runErr != nil {
+				status = "failed"
+			}
+			if ferr := p.db.FinishDeployment(depID, status, prevRev, rev); ferr != nil {
+				p.log.Warn("historial no actualizado", "err", ferr)
+			}
+		}
+	}
+	if async {
+		go func() {
+			defer out.Close()
+			rev, runErr := deploy.Run(app, token, &supCtl{sup: p.sup}, out, p.log)
+			finish(rev, runErr)
+		}()
+		return depID, "", nil
+	}
+	defer out.Close()
 	rev, err := deploy.Run(app, token, &supCtl{sup: p.sup}, out, p.log)
-	if p.db != nil && depID > 0 {
-		status := "ok"
-		if err != nil {
-			status = "failed"
-		}
-		if ferr := p.db.FinishDeployment(depID, status, prevRev, rev); ferr != nil {
-			p.log.Warn("historial no actualizado", "err", ferr)
-		}
-	}
+	finish(rev, err)
 	if err != nil {
-		return "", err
+		return depID, "", err
 	}
-	return rev, nil
+	return depID, rev, nil
 }
 
 // appToken resuelve token para el repo: GitHub App (instalación que cubre

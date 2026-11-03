@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PathInput } from "../../shared/components/PathPicker";
 import { DomainSuggest } from "../../shared/components/DomainSuggest";
-import { createApp, CreateAppIn, detectApp, buildApp, DetectOut } from "./api";
-import { appAction } from "./api";
+import { createApp, CreateAppIn, detectApp, buildApp, deployAppAsync, DetectOut } from "./api";
+import { deploymentLog, getDeployment } from "../deployments/api";
 
 type Origin = "git" | "local" | "manual";
 type Step = 1 | 2 | 3;
@@ -64,12 +64,14 @@ export function CreateDialog({
   open,
   setOpen,
   onCreated,
+  onOpen,
   goDomains,
   fail,
 }: {
   open: boolean;
   setOpen: (b: boolean) => void;
   onCreated: (name: string) => void;
+  onOpen: (name: string) => void;
   goDomains: () => void;
   fail: (e: unknown) => void;
 }) {
@@ -89,12 +91,37 @@ export function CreateDialog({
   const [plan, setPlan] = useState<DetectOut | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
   const [buildNow, setBuildNow] = useState(true);
+  // seguimiento en vivo post-creación (estilo Vercel)
+  const [track, setTrack] = useState<{ id: number; app: string; kind: "build" | "deploy" } | null>(null);
+  const [trackLog, setTrackLog] = useState("");
+  const [trackStatus, setTrackStatus] = useState("running");
 
   // nombre derivado mientras el usuario no lo escriba
   const suggested = useMemo(() => slugOf(origin === "git" ? repo : dir), [origin, repo, dir]);
   useEffect(() => {
     if (!nameTouched) setName(suggested);
   }, [suggested, nameTouched]);
+
+  // polling de estado + log mientras la salida está en curso
+  useEffect(() => {
+    if (!track) return;
+    let alive = true;
+    const tick = () => {
+      Promise.all([getDeployment(track.id), deploymentLog(track.id, 500)])
+        .then(([dep, log]) => {
+          if (!alive) return;
+          setTrackLog(log);
+          setTrackStatus(dep.status);
+        })
+        .catch(() => {});
+    };
+    tick();
+    const t = window.setInterval(tick, 1000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [track]);
 
   function reset() {
     setStep(1);
@@ -110,6 +137,9 @@ export function CreateDialog({
     setAdvanced(false);
     setTried(false);
     setBusy(false);
+    setTrack(null);
+    setTrackLog("");
+    setTrackStatus("running");
   }
 
   const errs = {
@@ -158,14 +188,27 @@ export function CreateDialog({
     createApp(input)
       .then((app) => {
         setBusy(false);
-        setOpen(false);
-        reset();
         onCreated(app);
-        if (wantBuild) {
-          // compilación en segundo plano: la salida queda en Despliegues
-          if (origin === "local") buildApp(app).catch(fail);
-          else appAction(app, "deploy").catch(fail);
+        if (!wantBuild) {
+          setOpen(false);
+          reset();
+          onOpen(app);
+          return;
         }
+        // seguimiento en vivo: guarda el id y muestra el log en el diálogo
+        const job = origin === "local" ? buildApp(app) : deployAppAsync(app);
+        job
+          .then((id) => {
+            setTrackLog("");
+            setTrackStatus("running");
+            setTrack({ id, app, kind: origin === "local" ? "build" : "deploy" });
+          })
+          .catch((e) => {
+            setOpen(false);
+            reset();
+            onOpen(app);
+            fail(e);
+          });
       })
       .catch((e) => {
         setBusy(false);
@@ -184,6 +227,63 @@ export function CreateDialog({
       }}
     >
       <DialogContent className="gap-4 sm:max-w-lg">
+        {track ? (
+          <div className="space-y-3">
+            <DialogHeader>
+              <div className="flex items-center gap-2 pr-8">
+                <span
+                  aria-hidden
+                  className={`h-1.5 w-1.5 ${
+                    trackStatus === "running" ? "animate-pulse bg-signal" : trackStatus === "ok" ? "bg-ok" : "bg-bad"
+                  }`}
+                />
+                <span className="micro">{track.kind === "build" ? "compilando" : "desplegando"}</span>
+                <span className="flex-1" />
+                <span className="tnum font-mono text-[9px] text-muted-foreground">
+                  {trackStatus === "running" ? "en curso" : trackStatus === "ok" ? "ok" : "fallido"}
+                </span>
+              </div>
+              <DialogTitle className="mt-1 font-mono text-[18px]">{track.app}</DialogTitle>
+              <DialogDescription className="font-mono text-[10px] leading-relaxed">
+                {trackStatus === "running"
+                  ? "log en vivo · puedes cerrar y seguir en Despliegues"
+                  : trackStatus === "ok"
+                    ? "listo · la app quedó publicada y respondiendo"
+                    : "falló · revisa el log; no se publicó"}
+              </DialogDescription>
+            </DialogHeader>
+            <pre className="max-h-64 overflow-auto border border-border bg-background p-3 font-mono text-[10px] leading-relaxed whitespace-pre-wrap">
+              {trackLog || "esperando salida…"}
+            </pre>
+            <div className="flex items-center gap-2 border-t border-border pt-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setOpen(false);
+                  reset();
+                }}
+              >
+                {trackStatus === "running" ? "cerrar (sigue)" : "cerrar"}
+              </Button>
+              <span className="flex-1" />
+              {trackStatus === "ok" && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const app = track.app;
+                    setOpen(false);
+                    reset();
+                    onOpen(app);
+                  }}
+                >
+                  abrir app <ArrowRight className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
         <DialogHeader>
           <div className="flex items-center gap-2 pr-8">
             <span aria-hidden className="h-1 w-4 bg-signal" />
@@ -457,6 +557,8 @@ export function CreateDialog({
             </Button>
           )}
         </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

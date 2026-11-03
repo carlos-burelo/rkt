@@ -398,8 +398,8 @@ function CreateDialogShell({ navigate, openApp }: { navigate: (p: string) => voi
       setOpen={setCreateOpen}
       onCreated={(name) => {
         toast.success(`app ${name} creada`);
-        openApp(name);
       }}
+      onOpen={(name) => openApp(name)}
       goDomains={() => navigate("/routes")}
       fail={fail}
     />

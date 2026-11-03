@@ -36,10 +36,12 @@ type Deps struct {
 	Apps    func() []health.AppStatus
 	Restart func(name string) bool
 	// Apply aplica el manifiesto al supervisor (arranca/reinicia/detiene).
-	Apply    func([]config.App)
-	Deploy   func(name, actor string) (string, error)
-	Rollback func(name, actor string) error
-	Retry    func(id int64, actor string) (string, error)
+	Apply  func([]config.App)
+	Deploy func(name, actor string) (string, error)
+	// DeployAsync arranca el deploy y devuelve el id para seguirlo en vivo.
+	DeployAsync func(name, actor string) (int64, error)
+	Rollback    func(name, actor string) error
+	Retry       func(id int64, actor string) (string, error)
 	// Build compila una app local con su plan y devuelve el id de la salida.
 	Build func(name, actor string) (int64, error)
 	// TLS interroga cache de certs (nil = sin TLS).
@@ -675,6 +677,16 @@ func NewHandler(d Deps) http.Handler {
 			if !requireOperator(w, r, d.DB) {
 				return
 			}
+			if r.URL.Query().Get("async") == "1" && d.DeployAsync != nil {
+				id, err := d.DeployAsync(name, mustUser(r))
+				if err != nil {
+					writeErr(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+				w.WriteHeader(http.StatusAccepted)
+				writeJSON(w, map[string]any{"deployment": id})
+				return
+			}
 			if d.Deploy == nil {
 				writeErr(w, http.StatusServiceUnavailable, "deploy deshabilitado")
 				return
@@ -1175,6 +1187,26 @@ func NewHandler(d Deps) http.Handler {
 				return
 			}
 			writeJSON(w, map[string]string{"rev": rev})
+			return
+		}
+		if len(parts) == 1 && r.Method == http.MethodGet {
+			id, err := strconv.ParseInt(parts[0], 10, 64)
+			if err != nil || id <= 0 {
+				writeErr(w, http.StatusBadRequest, "id inválido")
+				return
+			}
+			deps, err := d.DB.ListDeployments("", 2000)
+			if err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			for _, dep := range deps {
+				if dep.ID == id {
+					writeJSON(w, dep)
+					return
+				}
+			}
+			writeErr(w, http.StatusNotFound, "deployment inexistente")
 			return
 		}
 		if len(parts) != 2 || parts[1] != "log" || r.Method != http.MethodGet {

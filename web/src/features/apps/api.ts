@@ -75,6 +75,12 @@ export async function buildApp(name: string): Promise<number> {
   return res.deployment;
 }
 
+// deployAppAsync lanza deploy git en segundo plano y devuelve su id.
+export async function deployAppAsync(name: string): Promise<number> {
+  const res = await api<{ deployment: number }>(`/api/v1/apps/${name}/deploy?async=1`, { method: "POST" });
+  return res.deployment;
+}
+
 export async function createApp(input: CreateAppIn): Promise<string> {
   const res = await api<{ app: string }>("/api/v1/apps", { method: "POST", body: JSON.stringify(input) });
   return res.app;
