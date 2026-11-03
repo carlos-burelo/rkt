@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PathInput } from "../../shared/components/PathPicker";
+import { DomainSuggest } from "../../shared/components/DomainSuggest";
 import { createApp, CreateAppIn, detectApp, buildApp, DetectOut } from "./api";
 import { appAction } from "./api";
 
@@ -286,6 +287,8 @@ export function CreateDialog({
                 />
               </Field>
             </div>
+
+            <DomainSuggest name={name} onPick={setDomain} />
 
             {origin === "manual" && (
               <Field label="comando" hint="binario absoluto" error={tried ? errs.command : ""}>

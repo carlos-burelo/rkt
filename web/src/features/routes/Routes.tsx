@@ -12,6 +12,8 @@ import { Avatar } from "../../shared/components/ui";
 import { PageHeader, EmptyState, Section } from "../../shared/components/patterns";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
+import { useFleet } from "../overview/hooks";
+import { DomainSuggest } from "../../shared/components/DomainSuggest";
 
 function TLSBadge({ host }: { host: string }) {
   const [txt, setTxt] = useState("…");
@@ -110,6 +112,7 @@ function RouteRow({ r, onChanged }: { r: Route; onChanged: () => void }) {
 export function Routes() {
   const canWrite = useAuth((a) => a.canWrite);
   const fail = useUI((u) => u.fail);
+  const { metas } = useFleet();
   const [routes, setRoutes] = useState<Route[]>([]);
   const [hosts, setHosts] = useState("");
   const [target, setTarget] = useState("");
@@ -148,6 +151,8 @@ export function Routes() {
   }, []);
 
   const hostCount = routes.reduce((n, r) => n + r.hosts.length, 0);
+  // sugerencias locales para la unidad que aún no tiene dominio
+  const noDomain = metas.find((m) => (m.domains ?? []).length === 0);
 
   return (
     <div className="space-y-4">
@@ -185,6 +190,18 @@ export function Routes() {
           title="Nueva ruta"
           description="alta inmediata · el proxy recarga al instante · TLS se emite al primer request"
         >
+          {noDomain && (
+            <div className="mb-2">
+              <DomainSuggest
+                name={noDomain.name}
+                onPick={(h) => {
+                  setHosts(h);
+                  if (target === "" && noDomain.port) setTarget(`http://127.0.0.1:${noDomain.port}`);
+                  newHostRef.current?.focus();
+                }}
+              />
+            </div>
+          )}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <label className="field-label min-w-0 flex-1">
               hosts

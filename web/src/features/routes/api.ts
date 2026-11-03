@@ -20,3 +20,17 @@ export async function putRoute(host: string, target: string): Promise<void> {
 export async function tlsStatus(host: string): Promise<{ managed: boolean; expires: string }> {
   return api<{ managed: boolean; expires: string }>(`/api/v1/domains/${encodeURIComponent(host)}/tls`);
 }
+
+export interface DomainSuggestion {
+  host: string;
+  kind: "local" | "test" | "base";
+  note: string;
+}
+
+// suggestDomains: dominios libres para un nombre (localhost/test/base).
+export async function suggestDomains(name: string): Promise<DomainSuggestion[]> {
+  const res = await api<{ suggestions: DomainSuggestion[] }>(
+    `/api/v1/domains/suggest?name=${encodeURIComponent(name)}`,
+  );
+  return res.suggestions ?? [];
+}
