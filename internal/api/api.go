@@ -20,6 +20,7 @@ import (
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/store"
+	"rkt-proxy/internal/weblog"
 )
 
 // Deps dependencias inyectables. LogsDir = logx.DirFor(cfgPath).
@@ -134,7 +135,67 @@ func RequireRole(db *store.DB, minRole string, next http.Handler) http.Handler {
 	}))
 }
 
-// loginThrottle frena fuerza bruta por IP (5 fallos -> 60s).
+// memo caché TTL para agregados costosos (weblog). Clave = ruta+query.
+type memo struct {
+	mu sync.Mutex
+	m  map[string]memoVal
+}
+
+type memoVal struct {
+	exp  time.Time
+	body []byte
+}
+
+func newMemo() *memo { return &memo{m: map[string]memoVal{}} }
+
+func (c *memo) get(key string, ttl time.Duration, fn func() (any, error)) ([]byte, error) {
+	c.mu.Lock()
+	if v, ok := c.m[key]; ok && time.Now().Before(v.exp) {
+		b := v.body
+		c.mu.Unlock()
+		return b, nil
+	}
+	c.mu.Unlock()
+	v, err := fn()
+	if err != nil {
+		return nil, err
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	c.m[key] = memoVal{exp: time.Now().Add(ttl), body: b}
+	if len(c.m) > 32 {
+		for k, x := range c.m {
+			if time.Now().After(x.exp) {
+				delete(c.m, k)
+			}
+		}
+	}
+	c.mu.Unlock()
+	return b, nil
+}
+
+// entries lee access.log filtrado por ventana (cero = todo).
+func entries(logsDir string, since time.Time, host string) []weblog.Entry {
+	all := weblog.ParseFile(filepath.Join(logsDir, "access.log"))
+	if since.IsZero() && host == "" {
+		return all
+	}
+	out := all[:0]
+	for _, e := range all {
+		if !since.IsZero() && e.Time.Before(since) {
+			continue
+		}
+		if host != "" && e.Host != host {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
 type loginThrottle struct {
 	mu   sync.Mutex
 	hits map[string]*attempt
@@ -200,6 +261,7 @@ func clientIP(r *http.Request) string {
 // /users solo admin.
 func NewHandler(d Deps) http.Handler {
 	th := &loginThrottle{}
+	cache := newMemo()
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/v1/auth/login", func(w http.ResponseWriter, r *http.Request) {
@@ -591,6 +653,121 @@ func NewHandler(d Deps) http.Handler {
 		default:
 			writeErr(w, http.StatusMethodNotAllowed, "GET|PUT")
 		}
+	})
+
+	// Usage 30d (rollup access.log, caché 5min). Sin cobro: solo uso.
+	mux.HandleFunc("/api/v1/usage", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+			return
+		}
+		days := queryInt(r, "days", 30)
+		b, err := cache.get("usage:"+strconv.Itoa(days), 5*time.Minute, func() (any, error) {
+			es := entries(d.LogsDir, time.Now().AddDate(0, 0, -days), "")
+			s := weblog.Summarize(es)
+			errs := s.ByClass["5xx"]
+			rate := 0.0
+			if s.Total > 0 {
+				rate = float64(errs) / float64(s.Total)
+			}
+			return map[string]any{
+				"days": days, "total": s.Total, "bytes": s.Bytes,
+				"err_rate": rate, "p95": s.P95, "by_day": s.ByDay,
+			}, nil
+		})
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(b)
+	})
+
+	// Analytics por host (o global): requests, bytes, errores, p50/p95,
+	// top rutas/referers, serie diaria. Sin visitors/bounce inventados.
+	mux.HandleFunc("/api/v1/analytics", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+			return
+		}
+		host := r.URL.Query().Get("host")
+		days := queryInt(r, "days", 7)
+		key := "analytics:" + host + ":" + strconv.Itoa(days)
+		b, err := cache.get(key, 5*time.Minute, func() (any, error) {
+			es := entries(d.LogsDir, time.Now().AddDate(0, 0, -days), host)
+			return weblog.Summarize(es), nil
+		})
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(b)
+	})
+
+	// Observability flota: serie req/errores por hora + restarts + caídas.
+	mux.HandleFunc("/api/v1/observability", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+			return
+		}
+		hours := queryInt(r, "hours", 6)
+		if hours > 168 {
+			hours = 168
+		}
+		b, err := cache.get("obs:"+strconv.Itoa(hours), time.Minute, func() (any, error) {
+			since := time.Now().Add(-time.Duration(hours) * time.Hour)
+			es := entries(d.LogsDir, since, "")
+			type bucket struct {
+				Ts  string `json:"ts"`
+				Req int    `json:"req"`
+				Err int    `json:"err"`
+			}
+			buckets := make([]bucket, hours)
+			for i := range buckets {
+				buckets[i].Ts = since.Add(time.Duration(i+1) * time.Hour).Format("15:04")
+			}
+			for _, e := range es {
+				i := int(e.Time.Sub(since).Hours())
+				if i < 0 || i >= hours {
+					continue
+				}
+				buckets[i].Req++
+				if e.Status >= 500 {
+					buckets[i].Err++
+				}
+			}
+			restarts := 0
+			if evs, err := d.DB.ListEvents(500, "", ""); err == nil {
+				for _, e := range evs {
+					t, err := time.Parse(time.RFC3339, e.Ts)
+					if err != nil || t.Before(since) {
+						continue
+					}
+					if e.Kind == "died" || e.Kind == "restarted" || e.Kind == "failed" {
+						restarts++
+					}
+				}
+			}
+			down := []string{}
+			if d.Apps != nil {
+				for _, a := range d.Apps() {
+					if !a.Running || a.Failed {
+						down = append(down, a.Name)
+					}
+				}
+			}
+			return map[string]any{
+				"hours": hours, "buckets": buckets,
+				"restarts": restarts, "down": down,
+			}, nil
+		})
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(b)
 	})
 
 	// Build log de un deploy (para vista detalle).

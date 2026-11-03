@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/health"
@@ -25,6 +26,10 @@ func testDeps(t *testing.T) (Deps, *store.DB, func()) {
 	logsDir := filepath.Join(dir, "logs")
 	os.MkdirAll(filepath.Join(logsDir, "apps"), 0o755)
 	os.WriteFile(filepath.Join(logsDir, "rkt.log"), []byte("l1\nl2\nl3\n"), 0o644)
+	now := time.Now().Format("02/Jan/2006:15:04:05 -0700")
+	access := "127.0.0.1:1 - - [" + now + "] \"GET /a HTTP/1.1\" 200 100 \"-\" \"T/1\" host=a.test dur=2ms\n" +
+		"127.0.0.1:2 - - [" + now + "] \"GET /b HTTP/1.1\" 500 50 \"-\" \"T/1\" host=a.test dur=9ms\n"
+	os.WriteFile(filepath.Join(logsDir, "access.log"), []byte(access), 0o644)
 	cfg := &config.Config{
 		Apps: []config.App{
 			{Name: "w", Command: "c", Dir: dir, Env: map[string]string{"K": "v"}, RestartDelay: "5s"},
@@ -393,6 +398,79 @@ func TestSettingsRW(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("desconocido: quiere 400, got %d", rec.Code)
+	}
+}
+
+func TestUsageAnalyticsObs(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	if err := db.CreateUser("op", "password-larga-1", store.RoleOperator); err != nil {
+		t.Fatal(err)
+	}
+	h := NewHandler(d)
+	tok := login(t, h, "op", "password-larga-1")
+
+	// usage
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/usage?days=30", tok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("usage: %d %s", rec.Code, rec.Body.String())
+	}
+	var u struct {
+		Total   int     `json:"total"`
+		ErrRate float64 `json:"err_rate"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &u); err != nil || u.Total != 2 || u.ErrRate != 0.5 {
+		t.Fatalf("usage mal: %+v %v", u, err)
+	}
+	// caché: segunda idéntica
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, authed(http.MethodGet, "/api/v1/usage?days=30", tok))
+	if rec2.Body.String() != rec.Body.String() {
+		t.Fatal("caché inconsistente")
+	}
+
+	// analytics global + por host
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/analytics?days=30", tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"/a"`) {
+		t.Fatalf("analytics: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/analytics?host=nadie&days=30", tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"total":0`) {
+		t.Fatalf("analytics host vacío: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// observability
+	if err := db.InsertEvent("died", "w", "exit 1"); err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/observability?hours=6", tok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("obs: %d %s", rec.Code, rec.Body.String())
+	}
+	var o struct {
+		Restarts int      `json:"restarts"`
+		Down     []string `json:"down"`
+		Buckets  []struct {
+			Req int `json:"req"`
+			Err int `json:"err"`
+		} `json:"buckets"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &o); err != nil {
+		t.Fatal(err)
+	}
+	if o.Restarts != 1 || len(o.Down) != 0 || len(o.Buckets) != 6 {
+		t.Fatalf("obs mal: %+v", o)
+	}
+	reqs := 0
+	for _, b := range o.Buckets {
+		reqs += b.Req
+	}
+	if reqs != 2 {
+		t.Fatalf("obs buckets suman %d, quieren 2", reqs)
 	}
 }
 

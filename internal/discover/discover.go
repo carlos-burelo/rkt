@@ -210,6 +210,7 @@ func register(d Deps, owner, repo, branch, tok string) error {
 		return err
 	}
 	d.Log.Info("app auto-registrada", "app", name, "domain", domain, "port", port)
+	_ = d.DB.InsertEvent("discover", name, domain)
 	if d.DeployFn != nil {
 		if rev, err := d.DeployFn(name, "discover"); err != nil {
 			d.Log.Error("auto-deploy inicial fallido", "app", name, "err", err)

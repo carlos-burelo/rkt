@@ -118,6 +118,10 @@ func TestDiscoverNext(t *testing.T) {
 	if len(*deployed) != 1 || (*deployed)[0] != "mi-app" {
 		t.Fatalf("deploy no disparado: %v", *deployed)
 	}
+	evs, err := db.ListEvents(10, "discover", "")
+	if err != nil || len(evs) != 1 || evs[0].App != "mi-app" {
+		t.Fatalf("evento discover mal: %+v %v", evs, err)
+	}
 
 	// idempotente: segunda vuelta no duplica ni redespliega
 	if _, err := Run(d); err != nil {
