@@ -50,11 +50,13 @@ type app struct {
 	restarts int
 	consec   int
 	failed   bool
-	lastExit string
-	crashes  []time.Time
-	stopCh   chan struct{}
-	restartC chan struct{}
-	resumeC  chan struct{}
+	// intentional: la muerte actual fue pedida (restart/swap), no crash.
+	intentional bool
+	lastExit    string
+	crashes     []time.Time
+	stopCh      chan struct{}
+	restartC    chan struct{}
+	resumeC     chan struct{}
 }
 
 func (a *app) startedAt() time.Time {
@@ -217,6 +219,7 @@ func (m *Manager) Restart(name string) bool {
 		a.failed = false
 		a.crashes = nil
 		a.consec = 0
+		a.intentional = true
 		alive := a.alive
 		a.mu.Unlock()
 		a.log.Info("restart manual")
@@ -273,6 +276,7 @@ func (m *Manager) SwapAndRestart(name string, swap func() error) error {
 	a.crashes = nil
 	a.consec = 0
 	a.held = true
+	a.intentional = true
 	alive := a.alive
 	a.mu.Unlock()
 
@@ -371,19 +375,23 @@ func (a *app) loop() {
 		a.running = false
 		a.pid = 0
 		a.lastExit = exitString(err)
+		intentional := a.intentional
+		a.intentional = false
 		prev := a.consec
-		if fast {
-			now := time.Now()
-			kept := a.crashes[:0]
-			for _, t := range a.crashes {
-				if now.Sub(t) < crashWindow {
-					kept = append(kept, t)
+		if !intentional {
+			if fast {
+				now := time.Now()
+				kept := a.crashes[:0]
+				for _, t := range a.crashes {
+					if now.Sub(t) < crashWindow {
+						kept = append(kept, t)
+					}
 				}
+				a.crashes = append(kept, now)
+				a.consec++
+			} else {
+				a.consec = 0 // vivió lo suficiente: no es crash
 			}
-			a.crashes = append(kept, now)
-			a.consec++
-		} else {
-			a.consec = 0 // vivió lo suficiente: no es crash
 		}
 		crashes := len(a.crashes)
 		a.mu.Unlock()
@@ -392,6 +400,24 @@ func (a *app) loop() {
 		case <-a.stopCh:
 			return
 		default:
+		}
+		if intentional {
+			// restart/swap pedido: ni evento died ni contador de reinicios
+			a.mu.Lock()
+			held := a.held
+			a.mu.Unlock()
+			if held {
+				select {
+				case <-a.stopCh:
+					return
+				case <-a.resumeC:
+				}
+			}
+			select {
+			case <-a.restartC:
+			default:
+			}
+			continue
 		}
 		if a.onEvent != nil {
 			a.onEvent("died", a.cfg.Name, "exit="+a.lastExit+" uptime="+uptime.String())

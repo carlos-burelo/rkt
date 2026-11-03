@@ -255,8 +255,11 @@ func TestRestartImmediate(t *testing.T) {
 	}
 	waitFor(t, 5*time.Second, func() bool {
 		s := m.Snapshot()[0]
-		return s.Restarts >= 1 && s.Pid != pid1 && s.Pid > 0
+		return s.Pid != pid1 && s.Pid > 0
 	}, "restart inmediato con otro pid (sin esperar 30s)")
+	if s := m.Snapshot()[0]; s.Restarts != 0 {
+		t.Fatalf("restart manual no debe contar como crash: %d", s.Restarts)
+	}
 }
 
 func TestRestartRevivesFailed(t *testing.T) {
