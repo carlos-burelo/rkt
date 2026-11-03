@@ -286,11 +286,17 @@ export function App() {
             <AppDetail
               app={appFilter}
               meta={appMeta}
+              status={apps.find((a) => a.name === appFilter)}
               env={env}
               deployments={deps.filter((d) => d.app === appFilter)}
               canWrite={canWrite}
               onAction={act}
               onOpenDeploy={setSel}
+              onDeleted={() => {
+                setAppFilter("");
+                setPage("deployments");
+                refresh();
+              }}
               refresh={refresh}
               fail={fail}
             />

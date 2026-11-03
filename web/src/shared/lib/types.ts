@@ -24,6 +24,8 @@ export interface Deployment {
   status: string;
   started_at: string;
   finished_at: string;
+  triggered_by: string;
+  env_snapshot: string;
 }
 
 export interface RktEvent {
@@ -47,6 +49,8 @@ export interface AppMeta {
   dir: string;
   restart_delay: string;
   min_uptime: string;
+  memory_mb: number;
+  domains: string[];
   deploy: { repo: string; ref: string; build: string[]; auto: boolean } | null;
 }
 
