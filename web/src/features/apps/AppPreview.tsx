@@ -69,7 +69,7 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
             key={nonce}
             src={src}
             title={`vista previa de ${domain}`}
-            className="block h-[360px] w-full bg-background"
+            className="block h-56 w-full bg-background"
             onLoad={() => setState("ok")}
           />
           {state === "loading" && (
