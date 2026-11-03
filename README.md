@@ -223,9 +223,12 @@ rkt github init --name rkt-deployer --domain tu-dominio.coatl.in --org dacyti-gs
 
 Abre la URL que imprime (form con manifest oficial ya rellenado: permisos
 mínimos + webhook + setup). Pulsa Create en GitHub; al aprobar, GitHub vuelve
-a `/_rkt/setup`, rkt canjea el code, guarda PEM + settings y te da el link de
-instalación. **Instala eligiendo All repositories**: GitHub no permite forzar
-la selección desde el manifest, y sin acceso total los repos privados fallan.
+a `/_rkt/setup`, rkt canjea el code, guarda PEM + settings y redirige directo
+a la instalación. **Instala eligiendo All repositories**: GitHub no permite
+forzar la selección desde el manifest. La App se crea pública (`public: true`)
+porque una App privada solo puede instalarse en la cuenta dueña; así puedes
+elegir tu cuenta personal o una organización donde seas admin. Al terminar,
+setup te devuelve al panel (`/settings?github=ok`).
 Ajustes → GitHub App muestra el alcance y el botón para cambiarlo. Repo nuevo
 = app + deploy solos. (Sin `--org` = App personal.) En desarrollo local no
 hace falta dominio: el manifest usa `https://localhost` (CA local) o
