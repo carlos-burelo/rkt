@@ -5,6 +5,7 @@ import { logout, me } from "../features/auth/api";
 import { Login } from "../features/auth/Login";
 import { Dot, Err, Note } from "../shared/components/ui";
 import { InstallButton } from "../shared/components/InstallButton";
+import { CommandPalette } from "../shared/components/CommandPalette";
 import { useOnline } from "../shared/hooks/useOnline";
 import { DeployDrawer } from "../features/deployments/DeployDrawer";
 import { Overview } from "../features/overview/Overview";
@@ -47,6 +48,7 @@ export function App() {
   const [routes, setRoutes] = useState<{ hosts: string[]; target: string }[]>([]);
   const [settings, setSettingsMap] = useState<Record<string, string>>({});
   const [users, setUsers] = useState<User[]>([]);
+  const [palette, setPalette] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
 
   function fail(e: unknown) {
@@ -84,6 +86,17 @@ export function App() {
     me()
       .then(setWho)
       .catch(() => setWho(null));
+  }, []);
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPalette((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
   }, []);
 
   useEffect(() => {
@@ -147,6 +160,15 @@ export function App() {
     <div className="flex min-h-screen bg-zinc-950 text-sm text-zinc-100">
       <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-800 bg-zinc-900/40">
         <div className="border-b border-zinc-800 px-4 py-3 text-base font-bold tracking-tight">▲ rkt</div>
+        <div className="px-3 pt-3">
+          <button
+            onClick={() => setPalette(true)}
+            className="flex w-full items-center justify-between rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
+          >
+            Buscar o accionar…
+            <kbd className="rounded border border-zinc-700 px-1 font-mono text-[10px]">⌘K</kbd>
+          </button>
+        </div>
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
@@ -255,6 +277,17 @@ export function App() {
       </main>
 
       <DeployDrawer dep={sel} buildLog={buildLog} canWrite={canWrite} onAction={act} onClose={() => setSel(null)} />
+      <CommandPalette
+        open={palette}
+        setOpen={setPalette}
+        apps={apps}
+        metas={metas}
+        deps={deps}
+        goPage={(p) => setPage(p)}
+        openApp={openApp}
+        openDeploy={setSel}
+        onAction={act}
+      />
     </div>
   );
 }
