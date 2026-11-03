@@ -22,6 +22,7 @@ AGENTS.md
 web/node_modules/
 web/dist/*
 !web/dist/.gitkeep
+scripts/shots/node_modules/
 
 # estado local de skill de diseño (no se comitea)
 .impeccable/
