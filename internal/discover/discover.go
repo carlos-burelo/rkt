@@ -107,7 +107,7 @@ func splitFull(full string) (string, string, bool) {
 }
 
 func register(d Deps, owner, repo, branch, tok string) error {
-	plan, err := detectPlanRemote(d.GH, owner, repo)
+	plan, err := detectPlanRemote(d.GH, owner, repo, branch, tok)
 	if err != nil {
 		return err
 	}
@@ -197,18 +197,22 @@ func register(d Deps, owner, repo, branch, tok string) error {
 	return nil
 }
 
-// detectPlanRemote clasifica un repo por package.json (público o token).
-func detectPlanRemote(gh *github.Manager, owner, repo string) (buildpack.Plan, error) {
-	branch := "main"
-	content, ok, err := gh.FileContent(owner, repo, "package.json", branch, "")
+// detectPlanRemote clasifica un repo por package.json/requirements.
+// token = installation token: los repos privados de la App lo exigen y
+// además evita el límite anónimo (60 req/h). branch vacío = main.
+func detectPlanRemote(gh *github.Manager, owner, repo, branch, token string) (buildpack.Plan, error) {
+	if branch == "" {
+		branch = "main"
+	}
+	content, ok, err := gh.FileContent(owner, repo, "package.json", branch, token)
 	if err != nil {
 		return buildpack.Plan{}, err
 	}
 	if ok {
-		_, hasReq, _ := gh.FileContent(owner, repo, "requirements.txt", branch, "")
+		_, hasReq, _ := gh.FileContent(owner, repo, "requirements.txt", branch, token)
 		return buildpack.FromPackageJSON(content, hasReq), nil
 	}
-	if _, hasReq, err := gh.FileContent(owner, repo, "requirements.txt", branch, ""); err == nil && hasReq {
+	if _, hasReq, err := gh.FileContent(owner, repo, "requirements.txt", branch, token); err == nil && hasReq {
 		return buildpack.FromPackageJSON("", true), nil
 	}
 	return buildpack.Plan{}, nil
@@ -341,8 +345,8 @@ func Suggest(db *store.DB, gh *github.Manager, repoURL string) (*Suggestion, err
 		}
 		s.Name = slug(repo)
 		if gh != nil {
-			// público sin token; privado sin App -> plan vacío
-			if p, err := detectPlanRemote(gh, owner, repo); err == nil {
+			// manual: sin instalación no hay token; público funciona anónimo
+			if p, err := detectPlanRemote(gh, owner, repo, "", ""); err == nil {
 				s.Plan = p
 				s.Preset = p.Kind
 			}
