@@ -90,7 +90,7 @@ export function CommandPalette({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 pt-24" onClick={() => setOpen(false)}>
       <div
-        className="w-full max-w-lg overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl"
+        className="w-full max-w-lg overflow-hidden rounded-lg border bg-popover shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown") {
@@ -124,7 +124,7 @@ export function CommandPalette({
                 t.run();
               }}
               className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm ${
-                i === idx ? "bg-zinc-700/60" : ""
+                i === idx ? "bg-accent" : ""
               }`}
             >
               {t.kind === "app" && (
@@ -133,12 +133,12 @@ export function CommandPalette({
               {t.kind === "deployment" && <Dot status={t.hint} />}
               <span className={t.kind === "app" || t.kind === "deployment" ? "font-mono" : ""}>{t.label}</span>
               <span className="flex-1" />
-              <span className="text-[11px] text-zinc-500">{t.hint}</span>
+              <span className="text-[11px] text-muted-foreground">{t.hint}</span>
             </button>
           ))}
-          {targets.length === 0 && <p className="p-4 text-sm text-zinc-500">Sin resultados.</p>}
+          {targets.length === 0 && <p className="p-4 text-sm text-muted-foreground">Sin resultados.</p>}
         </div>
-        <p className="border-t border-zinc-800 px-4 py-1.5 font-mono text-[11px] text-zinc-600">↑↓ navegar · enter abrir · esc cerrar</p>
+        <p className="border-t px-4 py-1.5 font-mono text-[11px] text-muted-foreground">↑↓ navegar · enter abrir · esc cerrar</p>
       </div>
     </div>
   );

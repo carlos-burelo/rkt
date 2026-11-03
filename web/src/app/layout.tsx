@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
@@ -17,8 +18,9 @@ import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu,
   SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger,
+  SidebarSeparator,
 } from "@/components/ui/sidebar";
-import { Dot, Err } from "../shared/components/ui";
+import { Dot, Err, stateOf } from "../shared/components/ui";
 import { InstallButton } from "../shared/components/InstallButton";
 import { CommandPalette } from "../shared/components/CommandPalette";
 import { useAuth } from "../features/auth/store";
@@ -27,30 +29,51 @@ import { useFleet } from "../features/overview/hooks";
 import { CreateDialog } from "../features/apps/CreateDialog";
 import { DeployDrawer } from "../features/deployments/DeployDrawer";
 
-const NAV = [
-  { to: "/overview", label: "Overview", icon: LayoutGrid },
-  { to: "/proxy", label: "Proxy", icon: Network },
-  { to: "/deployments", label: "Deployments", icon: Rocket },
-  { to: "/ci", label: "CI", icon: Hammer },
-  { to: "/logs", label: "Logs", icon: Terminal },
-  { to: "/analytics", label: "Analytics", icon: BarChart3 },
-  { to: "/observability", label: "Observability", icon: Activity },
-  { to: "/alerts", label: "Alerts", icon: Bell },
-  { to: "/routes", label: "Domains", icon: Globe },
-  { to: "/environment", label: "Environment", icon: FlaskConical },
-  { to: "/settings", label: "Settings", icon: SettingsIcon },
-  { to: "/users", label: "Users", icon: UsersIcon, admin: true },
+// Nav agrupada por trabajo PaaS: operar la flota, servirla al mundo,
+// observarla y administrar el sistema. El orden sigue la frecuencia.
+const GROUPS = [
+  {
+    label: "Operar",
+    items: [
+      { to: "/overview", label: "Overview", icon: LayoutGrid },
+      { to: "/deployments", label: "Deployments", icon: Rocket },
+      { to: "/ci", label: "CI", icon: Hammer },
+      { to: "/logs", label: "Logs", icon: Terminal },
+    ],
+  },
+  {
+    label: "Servir",
+    items: [
+      { to: "/routes", label: "Domains", icon: Globe },
+      { to: "/proxy", label: "Proxy", icon: Network },
+      { to: "/environment", label: "Environment", icon: FlaskConical },
+    ],
+  },
+  {
+    label: "Observar",
+    items: [
+      { to: "/analytics", label: "Analytics", icon: BarChart3 },
+      { to: "/observability", label: "Observability", icon: Activity },
+      { to: "/alerts", label: "Alerts", icon: Bell },
+    ],
+  },
+  {
+    label: "Sistema",
+    items: [
+      { to: "/settings", label: "Settings", icon: SettingsIcon },
+      { to: "/users", label: "Users", icon: UsersIcon, admin: true },
+    ],
+  },
 ] as const;
 
-// ShellLayout armazón (sidebar/topbar/drawers) + <Outlet/> por ruta.
-// Datos: cada ruta carga lo suyo (useFleet); aquí solo chrome + UI.
+// ShellLayout: terminal portuaria. Rail tinta con manifiesto de la flota
+// (apps = contenedores con bahía y destino) + <Outlet/> por ruta.
 export function ShellLayout() {
   const { who, isAdmin, canWrite, brand, doLogout } = useAuth();
   const online = useUI((u) => u.online);
   const setOnline = useUI((u) => u.setOnline);
   const palette = useUI((u) => u.palette);
   const setPalette = useUI((u) => u.setPalette);
-  const createOpen = useUI((u) => u.setCreateOpen);
   const setCreateOpen = useUI((u) => u.setCreateOpen);
   const appFilter = useUI((u) => u.appFilter);
   const setAppFilter = useUI((u) => u.setAppFilter);
@@ -58,7 +81,12 @@ export function ShellLayout() {
   const { status, deps, metas, loading } = useFleet();
   const location = useLocation();
   const navigate = useNavigate();
-  const title = location.pathname.split("/")[1] || "overview";
+  const crumbs = location.pathname.split("/").filter(Boolean);
+  const title = crumbs[0] ?? "overview";
+  const apps = status?.apps ?? [];
+  const running = apps.filter((a) => a.running && !a.failed).length;
+  const failed = apps.filter((a) => a.failed).length;
+  const runningDeps = deps.filter((d) => d.status === "running").length;
 
   useEffect(() => {
     document.title = `rkt · ${title[0].toUpperCase() + title.slice(1)}`;
@@ -109,11 +137,15 @@ export function ShellLayout() {
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" onClick={() => navigate("/overview")}>
                 <Avatar className="h-8 w-8 rounded-lg text-sm">
-                  <AvatarFallback className="rounded-lg">{(brand.trim()[0] ?? "R").toUpperCase()}</AvatarFallback>
+                  <AvatarFallback className="rounded-lg bg-signal/15 font-semibold text-signal">
+                    {(brand.trim()[0] ?? "R").toUpperCase()}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                   <span className="truncate font-semibold">{brand}</span>
-                  <span className="truncate text-xs text-muted-foreground">local</span>
+                  <span className="tnum truncate font-mono text-[11px] text-muted-foreground">
+                    {apps.length === 0 ? "terminal vacía" : `${running}/${apps.length} en ruta${failed > 0 ? ` · ${failed} varado${failed > 1 ? "s" : ""}` : ""}`}
+                  </span>
                 </div>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -125,7 +157,7 @@ export function ShellLayout() {
           )}
           <button
             onClick={() => setPalette(true)}
-            className="mt-2 flex w-full items-center justify-between rounded-md border border-input bg-transparent px-2 py-1.5 text-xs text-muted-foreground hover:border-ring"
+            className="mt-2 flex w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-2 py-1.5 text-xs text-muted-foreground hover:border-ring hover:text-foreground"
           >
             <span className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
               <Search className="h-3.5 w-3.5" /> Buscar o accionar…
@@ -135,26 +167,47 @@ export function ShellLayout() {
           </button>
         </SidebarHeader>
         <SidebarContent>
+          {GROUPS.map((g) => {
+            const items = g.items.filter((n) => !("admin" in n && n.admin) || isAdmin);
+            if (items.length === 0) return null;
+            return (
+              <SidebarGroup key={g.label} className="py-1">
+                <SidebarGroupLabel>{g.label}</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {items.map((n) => (
+                      <SidebarMenuItem key={n.to}>
+                        <NavLink to={n.to} className="w-full">
+                          {({ isActive }) => (
+                            <SidebarMenuButton isActive={isActive} tooltip={n.label}>
+                              <n.icon />
+                              <span>{n.label}</span>
+                              {n.to === "/deployments" && runningDeps > 0 && (
+                                <Badge variant="secondary" className="tnum ml-auto font-mono text-[10px]">
+                                  {runningDeps}
+                                </Badge>
+                              )}
+                              {n.to === "/alerts" && failed > 0 && (
+                                <Badge variant="destructive" className="tnum ml-auto font-mono text-[10px]">
+                                  {failed}
+                                </Badge>
+                              )}
+                            </SidebarMenuButton>
+                          )}
+                        </NavLink>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            );
+          })}
+          <SidebarSeparator className="mx-0" />
           <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {NAV.filter((n) => !("admin" in n && n.admin) || isAdmin).map((n) => (
-                  <SidebarMenuItem key={n.to}>
-                    <NavLink to={n.to} className="w-full">
-                      {({ isActive }) => (
-                        <SidebarMenuButton isActive={isActive} tooltip={n.label}>
-                          <n.icon />
-                          <span>{n.label}</span>
-                        </SidebarMenuButton>
-                      )}
-                    </NavLink>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-          <SidebarGroup>
-            <SidebarGroupLabel>Apps</SidebarGroupLabel>
+            <SidebarGroupLabel className="flex items-center justify-between">
+              <span>Terminal</span>
+              <span className="tnum font-mono text-[10px]">{apps.length}</span>
+            </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -166,19 +219,26 @@ export function ShellLayout() {
                     <span>todas</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                {(status?.apps ?? []).map((a) => (
-                  <SidebarMenuItem key={a.name}>
-                    <SidebarMenuButton
-                      isActive={appFilter === a.name}
-                      onClick={() => openApp(a.name)}
-                      className="font-mono text-xs"
-                      tooltip={a.name}
-                    >
-                      <Dot status={a.failed ? "failed" : a.running ? "running" : "stopped"} />
-                      <span>{a.name}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {apps.map((a) => {
+                  const st = stateOf(a);
+                  const domain = metas.find((m) => m.name === a.name)?.domains[0];
+                  return (
+                    <SidebarMenuItem key={a.name}>
+                      <SidebarMenuButton
+                        isActive={appFilter === a.name}
+                        onClick={() => openApp(a.name)}
+                        className="font-mono text-xs"
+                        tooltip={domain ? `${a.name} → ${domain}` : a.name}
+                      >
+                        <Dot status={st} />
+                        <span className="min-w-0 flex-1 truncate">{a.name}</span>
+                        {st === "failed" && (
+                          <span className="tnum text-[10px] text-red-300">!{a.restarts}</span>
+                        )}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -186,7 +246,7 @@ export function ShellLayout() {
         <SidebarFooter>
           {!online && (
             <p className="rounded-md bg-amber-500/15 px-2.5 py-1.5 text-xs text-amber-300 group-data-[collapsible=icon]:hidden">
-              Sin conexión
+              Sin conexión — lectura local
             </p>
           )}
           <div className="group-data-[collapsible=icon]:hidden">
@@ -201,7 +261,7 @@ export function ShellLayout() {
                   </Avatar>
                   <div className="grid min-w-0 flex-1 text-left text-xs leading-tight group-data-[collapsible=icon]:hidden">
                     <span className="truncate font-medium">{who?.user}</span>
-                    <span className="truncate font-mono text-[10px] text-muted-foreground">
+                    <span className="tnum truncate font-mono text-[10px] text-muted-foreground">
                       {who?.role} · v{status?.version ?? "…"}
                     </span>
                   </div>
@@ -220,9 +280,28 @@ export function ShellLayout() {
       <SidebarInset>
         <header className="flex items-center gap-2 border-b px-4 py-2.5">
           <SidebarTrigger />
-          <span className="text-xs text-muted-foreground">▲ {brand}</span>
-          <span className="flex-1 text-center text-sm font-medium capitalize">{title}</span>
+          <nav aria-label="ruta" className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="shrink-0 font-medium text-foreground">{brand}</span>
+            <span aria-hidden>/</span>
+            <span className="truncate capitalize text-foreground">{title}</span>
+            {crumbs[1] && (
+              <>
+                <span aria-hidden>/</span>
+                <span className="tnum truncate font-mono">{decodeURIComponent(crumbs[1])}</span>
+              </>
+            )}
+          </nav>
+          <span className="flex-1" />
           {!online && <span className="text-xs text-amber-300">offline</span>}
+          {failed > 0 ? (
+            <Badge variant="destructive" className="tnum font-mono text-[11px] font-normal">
+              {failed} varado{failed > 1 ? "s" : ""}
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="tnum font-mono text-[11px] font-normal">
+              {running}/{apps.length} en ruta
+            </Badge>
+          )}
           {canWrite && (
             <Button size="sm" onClick={() => setCreateOpen(true)}>
               <Plus /> Create New
@@ -233,10 +312,10 @@ export function ShellLayout() {
           </Avatar>
         </header>
         <main className="min-w-0 flex-1 p-4 md:p-6">
-          <div className="mx-auto max-w-5xl">
+          <div className="mx-auto max-w-6xl">
             <Err msg={err} />
             {loading ? (
-              <div className="space-y-2">
+              <div className="space-y-2" aria-label="cargando flota">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <Skeleton key={i} className="h-12 w-full" />
                 ))}

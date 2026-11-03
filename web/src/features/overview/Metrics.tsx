@@ -1,6 +1,8 @@
 import { AppStatus, Deployment } from "../../shared/lib/types";
+import { Stat } from "../../shared/components/patterns";
 
-// Metrics tarjetas overview (cómputo local, sin backend).
+// Placas de flota a escala fija: mismo tamaño, número tabular arriba,
+// etiqueta abajo, sub honesto con ventana de medición.
 export function Metrics({ apps, deps }: { apps: AppStatus[]; deps: Deployment[] }) {
   const running = apps.filter((a) => a.running && !a.failed).length;
   const failed = apps.filter((a) => a.failed).length;
@@ -10,20 +12,17 @@ export function Metrics({ apps, deps }: { apps: AppStatus[]; deps: Deployment[] 
   const ok = done.filter((d) => d.status === "ok").length;
   const rate = done.length === 0 ? "—" : `${Math.round((ok / done.length) * 100)}%`;
 
-  const cards: [string, string][] = [
-    [`${running}/${apps.length}`, "apps running"],
-    [failed === 0 ? "0" : `${failed}`, "failed"],
-    [`${recent.length}`, "deploys 24h"],
-    [rate, "tasa ok 24h"],
-  ];
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      {cards.map(([v, label]) => (
-        <div key={label} className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-          <p className="font-mono text-xl">{v}</p>
-          <p className="mt-1 text-xs text-zinc-500">{label}</p>
-        </div>
-      ))}
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4" role="group" aria-label="estado de la flota">
+      <Stat value={`${running}/${apps.length}`} label="apps en ruta" sub="supervisor · ahora" tone={failed > 0 ? "warn" : "ok"} />
+      <Stat
+        value={failed === 0 ? "0" : `${failed}`}
+        label="varadas"
+        sub={failed === 0 ? "sin fallos" : "requieren acción"}
+        tone={failed === 0 ? undefined : "bad"}
+      />
+      <Stat value={`${recent.length}`} label="deploys 24h" sub="flota · ventana 24h" tone="signal" />
+      <Stat value={rate} label="tasa ok 24h" sub={done.length === 0 ? "sin deploys" : `${ok}/${done.length} ok`} />
     </div>
   );
 }

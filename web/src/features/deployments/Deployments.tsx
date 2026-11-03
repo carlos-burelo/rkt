@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Search } from "lucide-react";
-import { rel } from "../../shared/lib/time";
+import { ArrowRight, Search } from "lucide-react";
+import { dur, rel } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
 import { CopyButton } from "../../shared/components/feedback";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,9 @@ import { useFleet } from "../overview/hooks";
 
 export type DepStatus = "all" | "ok" | "running" | "failed";
 
+// Deployments: tablero de salidas. Columnas fijas (estado · salida ·
+// revisión · duración · hora), filas ordenadas por tiempo, la fila en
+// curso late. Duraciones tabulares alineadas a la derecha.
 export function Deployments({ bare = false, status, max }: { bare?: boolean; status?: DepStatus; max?: number }) {
   const { deps } = useFleet();
   const appFilter = useUI((u) => u.appFilter);
@@ -35,16 +38,17 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search deployments…"
-              className="pl-8"
+              placeholder="Filtrar por app o rev…"
+              className="pl-8 font-mono text-xs"
+              aria-label="filtrar deployments"
             />
           </div>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5" role="group" aria-label="filtrar por estado">
             {(["all", "ok", "running", "failed"] as const).map((s) => (
               <Badge
                 key={s}
                 variant={st === s ? "default" : "outline"}
-                className="cursor-pointer"
+                className="cursor-pointer font-mono text-[11px] font-normal"
                 onClick={() => setSt(s)}
               >
                 {s === "all" ? "todos" : s}
@@ -53,40 +57,57 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
           </div>
         </div>
       )}
-      <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-hidden rounded-lg border" role="table" aria-label="tablero de deployments">
+        <div className="tnum hidden grid-cols-[2rem_1fr_10rem_5rem_7rem] items-center gap-3 border-b bg-muted/40 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground sm:grid" aria-hidden>
+          <span>est</span>
+          <span>salida</span>
+          <span>rev</span>
+          <span className="text-right">dur</span>
+          <span className="text-right">hora</span>
+        </div>
         {vis.map((d) => (
           <div
             key={d.id}
             onClick={() => setSel(d)}
-            className="flex w-full cursor-pointer items-center gap-3 border-b bg-card/40 px-4 py-3 text-left last:border-0 hover:bg-accent/40"
+            className={`grid w-full cursor-pointer grid-cols-[2rem_1fr_auto] items-center gap-3 border-b bg-card/40 px-4 py-2.5 text-left last:border-0 hover:bg-accent/40 sm:grid-cols-[2rem_1fr_10rem_5rem_7rem] ${d.status === "running" ? "animate-row-arrive" : ""}`}
+            role="row"
           >
             <Dot status={d.status} />
             <div className="min-w-0">
-              <p className="font-mono text-sm">
+              <p className="truncate font-mono text-xs">
                 {d.app} <span className="text-muted-foreground">· #{d.id}</span>
               </p>
-              <p className="truncate font-mono text-xs text-muted-foreground">
-                {d.rev.slice(0, 8)} · {d.triggered_by ? `por ${d.triggered_by}` : "rev"}
+              <p className="tnum truncate font-mono text-[11px] text-muted-foreground sm:hidden">
+                {d.rev.slice(0, 8)} · {d.status === "running" ? "en curso…" : rel(d.finished_at || d.started_at)}
               </p>
+              {d.triggered_by && (
+                <p className="hidden truncate font-mono text-[11px] text-muted-foreground sm:block">por {d.triggered_by}</p>
+              )}
             </div>
-            <CopyButton text={d.rev} />
-            <span className="flex-1" />
-            <span className="hidden text-xs text-muted-foreground sm:block">
-              {d.status === "running" ? "building…" : rel(d.finished_at || d.started_at)}
+            <span className="tnum hidden items-center gap-1 font-mono text-[11px] text-muted-foreground sm:flex">
+              {d.rev.slice(0, 8)}
+              <CopyButton text={d.rev} />
+            </span>
+            <span className="tnum hidden text-right font-mono text-[11px] text-muted-foreground sm:block">
+              {dur(d.started_at, d.finished_at)}
+            </span>
+            <span className="tnum hidden text-right font-mono text-[11px] text-muted-foreground sm:block">
+              {d.status === "running" ? "en curso…" : rel(d.finished_at || d.started_at)}
             </span>
             <button
-              className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="inline-flex items-center gap-1 rounded px-2 py-1 font-mono text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground sm:hidden"
               onClick={(e) => {
                 e.stopPropagation();
                 navigate(`/app/${d.app}`);
               }}
+              aria-label={`abrir app ${d.app}`}
             >
-              app →
+              app <ArrowRight className="h-3 w-3 inline" />
             </button>
           </div>
         ))}
         {vis.length === 0 && (
-          <p className="p-6 text-sm text-muted-foreground">Sin deployments para este filtro.</p>
+          <p className="p-6 font-mono text-xs text-muted-foreground">Sin salidas para este filtro. Production-only: no hay environments que filtrar.</p>
         )}
       </div>
     </div>

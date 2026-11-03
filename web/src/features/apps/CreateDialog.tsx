@@ -1,3 +1,4 @@
+import { ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -82,7 +83,7 @@ export function CreateDialog({
               goDomains();
             }}
           >
-            Conectar dominio →
+            Conectar dominio <ArrowRight className="h-3.5 w-3.5" />
           </Button>
         </div>
       </DialogContent>

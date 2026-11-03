@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchProxy, ProxyRoute } from "./api";
 import { Dot } from "../../shared/components/ui";
+import { Badge } from "@/components/ui/badge";
 import { PageHeader, EmptyState } from "../../shared/components/patterns";
 import { useUI } from "../../app/ui";
 
@@ -23,28 +24,27 @@ export function Proxy() {
       />
       {!rows && <p className="text-sm text-muted-foreground">cargando…</p>}
       {rows && (
-        <div className="overflow-hidden rounded-lg border">
+        <div className="overflow-hidden rounded-lg border" role="table" aria-label="rutas del proxy">
           {rows.map((r) => (
             <div
               key={r.hosts.join(",") + r.target}
               className="flex items-center gap-3 border-b bg-card/40 px-4 py-3 last:border-0"
+              role="row"
             >
               <Dot status={r.ok ? "ok" : "failed"} />
-              <div className="min-w-0">
-                <p className="font-mono text-xs">{r.hosts.join(", ")}</p>
-                <p className="truncate font-mono text-[11px] text-muted-foreground">→ {r.target}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-mono text-xs">{r.hosts.join(", ")}</p>
+                <p className="tnum truncate font-mono text-[11px] text-muted-foreground">→ {r.target}</p>
               </div>
-              <span className="flex-1" />
-              <span className="font-mono text-[11px] text-muted-foreground">{r.ok ? "backend ok" : "backend caído"}</span>
+              <span className="tnum hidden font-mono text-[11px] text-muted-foreground sm:block">{r.ok ? "backend ok" : "backend caído"}</span>
               {r.tls.map((t, i) => (
-                <span
+                <Badge
                   key={i}
-                  className={`rounded-full px-2 py-0.5 font-mono text-[11px] ${
-                    t === "off" ? "bg-secondary text-muted-foreground" : "bg-emerald-500/15 text-emerald-300"
-                  }`}
+                  variant={t === "off" ? "outline" : "secondary"}
+                  className="tnum font-mono text-[11px] font-normal"
                 >
                   {t === "off" ? "sin TLS" : `TLS ${t}`}
-                </span>
+                </Badge>
               ))}
             </div>
           ))}

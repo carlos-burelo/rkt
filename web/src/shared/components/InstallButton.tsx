@@ -20,7 +20,7 @@ export function InstallButton() {
         (deferred as unknown as { prompt: () => void }).prompt();
         setDeferred(null);
       }}
-      className="block w-full rounded-md bg-zinc-100 px-2.5 py-1.5 text-left text-xs font-medium text-zinc-900 hover:bg-white"
+      className="block w-full rounded-md bg-primary px-2.5 py-1.5 text-left text-xs font-medium text-primary-foreground hover:bg-primary/90"
     >
       Instalar app
     </button>

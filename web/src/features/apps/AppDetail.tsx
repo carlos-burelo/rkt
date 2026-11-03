@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ExternalLink } from "lucide-react";
 import { dur } from "../../shared/lib/time";
-import { Dot } from "../../shared/components/ui";
+import { Dot, StatusBadge, stateOf } from "../../shared/components/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,8 +17,8 @@ import { useAuth } from "../auth/store";
 function Check({ ok, label }: { ok: boolean; label: string }) {
   return (
     <p className="flex items-center gap-2 py-1 text-xs">
-      <span className={`inline-block h-2 w-2 rounded-full ${ok ? "bg-emerald-400" : "bg-zinc-700"}`} />
-      <span className={ok ? "text-zinc-300" : "text-zinc-500"}>{label}</span>
+      <Dot status={ok ? "ok" : "stopped"} />
+      <span className={ok ? "text-foreground" : "text-muted-foreground"}>{label}</span>
     </p>
   );
 }
@@ -44,7 +44,7 @@ export function AppDetail() {
   const appDeps = deps.filter((d) => d.app === app);
   const prod = appDeps.find((d) => d.status === "ok");
   const domains = meta?.domains ?? [];
-  const running = st ? st.running && !st.failed : false;
+  const fleetState = st ? stateOf(st) : "stopped";
 
   useEffect(() => {
     setForm({
@@ -89,18 +89,18 @@ export function AppDetail() {
         title={app || "(sin app)"}
         description={
           st
-            ? `${st.failed ? "failed" : st.running ? "running" : "stopped"} · ${st.restarts} restarts${meta ? ` · ${meta.command}` : ""}`
+            ? `${fleetState} · ${st.restarts} restarts${meta ? ` · ${meta.command}` : ""}`
             : undefined
         }
         actions={
           <>
-            <Dot status={running ? "running" : "stopped"} />
+            <StatusBadge status={fleetState} />
             {domains[0] && (
               <a
                 href={`https://${domains[0]}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 text-xs font-medium shadow-xs hover:bg-accent hover:text-accent-foreground"
+                className="inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
               >
                 <ExternalLink className="h-3.5 w-3.5" /> Visit
               </a>
@@ -127,11 +127,11 @@ export function AppDetail() {
             {domains.map((h) => (
               <p key={h} className="font-mono text-xs">
                 <a href={`https://${h}`} target="_blank" rel="noreferrer" className="hover:underline">
-                  https://{h} ⧉
+                  https://{h}
                 </a>
               </p>
             ))}
-            <p className="font-mono text-[11px] text-muted-foreground">
+            <p className="tnum font-mono text-[11px] text-muted-foreground">
               {prod.triggered_by ? `por ${prod.triggered_by} · ` : ""}<Time iso={prod.finished_at} />
             </p>
           </div>
@@ -144,16 +144,16 @@ export function AppDetail() {
           <Check ok={domains.length > 0} label="Dominio asignado" />
           <Check ok={!!prod} label="Primer deploy ok" />
           <Check ok={Object.keys(env).length > 0} label="Env configurado" />
-          <Check ok={running} label="App corriendo" />
+          <Check ok={fleetState === "running"} label="App corriendo" />
         </Section>
         <Section title="Tráfico 7d" description={domains[0]}>
           {!stats && <p className="text-xs text-muted-foreground">Sin datos (¿tráfico hacia {domains[0] ?? "…"}?).</p>}
           {stats && (
-            <div className="grid grid-cols-2 gap-3 font-mono">
-              <div><p className="text-xl tabular-nums">{stats.total}</p><p className="text-[11px] text-muted-foreground">reqs</p></div>
-              <div><p className="text-xl tabular-nums">{(stats.bytes / 1048576).toFixed(1)}M</p><p className="text-[11px] text-muted-foreground">bytes</p></div>
-              <div><p className="text-xl tabular-nums">{stats.p95 || "—"}</p><p className="text-[11px] text-muted-foreground">p95</p></div>
-              <div><p className="text-xl tabular-nums">{stats.by_class["5xx"] ?? 0}</p><p className="text-[11px] text-muted-foreground">5xx</p></div>
+            <div className="tnum grid grid-cols-2 gap-3 font-mono">
+              <div><p className="text-xl tabular-nums">{stats.total}</p><p className="font-sans text-[11px] text-muted-foreground">reqs</p></div>
+              <div><p className="text-xl tabular-nums">{(stats.bytes / 1048576).toFixed(1)}M</p><p className="font-sans text-[11px] text-muted-foreground">bytes</p></div>
+              <div><p className="text-xl tabular-nums">{stats.p95 || "—"}</p><p className="font-sans text-[11px] text-muted-foreground">p95</p></div>
+              <div><p className="text-xl tabular-nums">{stats.by_class["5xx"] ?? 0}</p><p className="font-sans text-[11px] text-muted-foreground">5xx</p></div>
             </div>
           )}
         </Section>
@@ -183,7 +183,7 @@ export function AppDetail() {
           ).map(([label, v, set]) => (
             <label key={label} className="block">
               <span className="font-mono text-[11px] text-muted-foreground">{label}</span>
-              <Input value={v} onChange={(e) => set(e.target.value)} disabled={!canWrite} className="mt-1 font-mono text-xs" />
+              <Input value={v} onChange={(e) => set(e.target.value)} disabled={!canWrite} className="tnum mt-1 font-mono text-xs" />
             </label>
           ))}
           {canWrite && (
@@ -204,7 +204,7 @@ export function AppDetail() {
             <span className="w-48 shrink-0 truncate font-mono text-xs">{k}</span>
             <EnvSecret value={env[k]} />
             {canWrite && (
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-red-300"
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-destructive"
                 onClick={() => delEnv(app, k).then(reloadEnv).catch(fail)}>
                 borrar
               </Button>
@@ -217,7 +217,7 @@ export function AppDetail() {
             <Input value={key} onChange={(e) => setKey(e.target.value)} placeholder="CLAVE"
               className="w-40 font-mono text-xs" />
             <Input value={val} onChange={(e) => setVal(e.target.value)} placeholder="valor (admite ${VAR})"
-              className="flex-1 font-mono text-xs" />
+              className="tnum flex-1 font-mono text-xs" />
             <Button
               variant="outline" size="sm"
               onClick={() => {
@@ -240,11 +240,11 @@ export function AppDetail() {
             <button key={d.id} onClick={() => setSel(d)}
               className="flex w-full items-center gap-3 border-b bg-card/40 px-4 py-2.5 text-left last:border-0 hover:bg-accent/40">
               <Dot status={d.status} />
-              <span className="font-mono text-xs text-muted-foreground">{d.rev.slice(0, 8)}</span>
-              {d.triggered_by ? <span className="hidden font-mono text-[11px] text-muted-foreground sm:block">por {d.triggered_by}</span> : null}
+              <span className="tnum font-mono text-xs text-muted-foreground">{d.rev.slice(0, 8)}</span>
+              {d.triggered_by ? <span className="tnum hidden font-mono text-[11px] text-muted-foreground sm:block">por {d.triggered_by}</span> : null}
               <span className="flex-1" />
-              <span className="text-xs text-muted-foreground"><Time iso={d.finished_at || d.started_at} /></span>
-              <span className="font-mono text-xs text-muted-foreground">#{d.id}</span>
+              <span className="tnum text-xs text-muted-foreground"><Time iso={d.finished_at || d.started_at} /></span>
+              <span className="tnum font-mono text-xs text-muted-foreground">#{d.id}</span>
             </button>
           ))}
           {appDeps.length === 0 && <p className="p-4 text-xs text-muted-foreground">Sin deployments.</p>}
@@ -252,22 +252,24 @@ export function AppDetail() {
       </Section>
 
       {canWrite && (
-        <Section title="Danger zone" description="Borrar quita la app de la flota. Las routes quedan huérfanas: revísalas en Domains.">
-          <div className="flex gap-2">
-            <Input value={confirmDel} onChange={(e) => setConfirmDel(e.target.value)}
-              placeholder={`escribe ${app} para borrar`}
-              className="flex-1 border-destructive/50 font-mono text-xs" />
-            <Button
-              variant="destructive" size="sm"
-              disabled={confirmDel !== app}
-              onClick={() => {
-                deleteApp(app).then(() => navigate("/deployments")).catch(fail);
-              }}
-            >
-              borrar app
-            </Button>
-          </div>
-        </Section>
+        <div className="pt-4" aria-label="zona de peligro">
+          <Section title="Danger zone" description="Borrar quita la app de la flota. Las routes quedan huérfanas: revísalas en Domains.">
+            <div className="flex gap-2">
+              <Input value={confirmDel} onChange={(e) => setConfirmDel(e.target.value)}
+                placeholder={`escribe ${app} para borrar`}
+                className="flex-1 border-destructive/50 font-mono text-xs" />
+              <Button
+                variant="destructive" size="sm"
+                disabled={confirmDel !== app}
+                onClick={() => {
+                  deleteApp(app).then(() => navigate("/deployments")).catch(fail);
+                }}
+              >
+                borrar app
+              </Button>
+            </div>
+          </Section>
+        </div>
       )}
     </div>
   );

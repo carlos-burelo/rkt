@@ -61,25 +61,25 @@ export function DeployDrawer() {
       }}
     >
       <Backdrop className="fixed inset-0 bg-black/70" />
-      <Popup className="fixed right-0 top-0 flex h-full w-full max-w-xl flex-col border-l border-zinc-800 bg-zinc-950">
+      <Popup className="fixed right-0 top-0 flex h-full w-full max-w-xl flex-col border-l bg-card">
         {dep && (
           <div className="flex h-full flex-col space-y-4 overflow-hidden p-6">
             <div className="flex items-center gap-2">
               <Dot status={dep.status} />
-              <Title className="font-mono text-base">
-                {dep.app} <span className="text-zinc-500">#{dep.id}</span>
+              <Title className="tnum font-mono text-base">
+                {dep.app} <span className="text-muted-foreground">#{dep.id}</span>
               </Title>
               <span className="flex-1" />
-              <Close className="rounded border border-zinc-800 px-2 py-0.5 text-xs text-zinc-400 hover:text-zinc-100">
+              <Close className="rounded border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground">
                 cerrar
               </Close>
             </div>
-            <dl className="grid grid-cols-2 gap-1.5 font-mono text-xs">
-              <dt className="text-zinc-500">status</dt><dd>{dep.status}</dd>
-              <dt className="text-zinc-500">rev</dt><dd className="truncate">{dep.rev} <CopyButton text={dep.rev} /></dd>
-              <dt className="text-zinc-500">inicio</dt><dd>{rel(dep.started_at)}</dd>
-              <dt className="text-zinc-500">duración</dt><dd>{dur(dep.started_at, dep.finished_at)}</dd>
-              <dt className="text-zinc-500">actor</dt><dd>{dep.triggered_by || "—"}</dd>
+            <dl className="tnum grid grid-cols-2 gap-1.5 font-mono text-xs">
+              <dt className="text-muted-foreground">status</dt><dd>{dep.status}</dd>
+              <dt className="text-muted-foreground">rev</dt><dd className="truncate">{dep.rev} <CopyButton text={dep.rev} /></dd>
+              <dt className="text-muted-foreground">inicio</dt><dd>{rel(dep.started_at)}</dd>
+              <dt className="text-muted-foreground">duración</dt><dd>{dur(dep.started_at, dep.finished_at)}</dd>
+              <dt className="text-muted-foreground">actor</dt><dd>{dep.triggered_by || "—"}</dd>
             </dl>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => { setSel(null); navigate(`/app/${dep.app}`); }}>
@@ -98,11 +98,11 @@ export function DeployDrawer() {
                 </>
               )}
             </div>
-            <p className="text-xs uppercase tracking-wider text-zinc-500">timeline</p>
+            <p className="text-sm font-medium">Timeline</p>
             <Timeline dep={dep} />
             <Steps log={buildLog} />
-            <p className="text-xs uppercase tracking-wider text-zinc-500">build log</p>
-            <pre className="min-h-0 flex-1 overflow-auto rounded-lg border border-zinc-800 bg-black p-3 font-mono text-xs leading-relaxed text-zinc-300">
+            <p className="text-sm font-medium">Build log</p>
+            <pre className="min-h-0 flex-1 overflow-auto rounded-lg border bg-black p-3 font-mono text-xs leading-relaxed text-foreground">
               {buildLog}
             </pre>
           </div>

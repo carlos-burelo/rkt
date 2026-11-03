@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Pause, Play } from "lucide-react";
 import { AppStatus, Deployment } from "../../shared/lib/types";
 import { deploymentLog } from "../deployments/api";
 import { fetchLog } from "./api";
@@ -124,7 +125,7 @@ export function Logs() {
                   checked={levels[l]}
                   onCheckedChange={() => setLevels({ ...levels, [l]: !levels[l] })}
                 />
-                {l} <span className="font-mono text-zinc-600">{lines.counts[l]}</span>
+                {l} <span className="tnum font-mono text-muted-foreground">{lines.counts[l]}</span>
               </label>
             ))}
             <Button
@@ -132,7 +133,7 @@ export function Logs() {
               size="sm"
               onClick={() => setLive(!live)}
             >
-              {live ? "❚❚ Live" : "▶ Live"}
+              {live ? <><Pause className="h-3.5 w-3.5" /> Live</> : <><Play className="h-3.5 w-3.5" /> Live</>}
             </Button>
             <Button variant="outline" size="sm" onClick={load}>
               recargar
@@ -165,17 +166,18 @@ export function Logs() {
               <Bars data={lines.buckets} height={48} />
             </div>
           )}
-          <pre ref={logRef} className="h-[60vh] overflow-auto rounded-lg border bg-black p-3 font-mono text-xs leading-relaxed text-zinc-300">
+          <pre ref={logRef} className="h-[60vh] overflow-auto rounded-lg border bg-black p-3 font-mono text-xs leading-relaxed text-foreground">
             {lines.vis.map((l, i) => {
               const lv = levelOf(l);
               return (
-                <div
-                  key={i}
-                  className={`border-l-2 pl-2 ${
-                    lv === "error" ? "border-red-500" : lv === "warning" ? "border-amber-500" : "border-transparent"
-                  }`}
-                >
-                  {l}
+                <div key={i} className="flex items-baseline gap-2">
+                  <span
+                    aria-label={`nivel ${lv}`}
+                    className={`inline-block h-1.5 w-1.5 shrink-0 translate-y-[-1px] rounded-full ${
+                      lv === "error" ? "bg-red-400" : lv === "warning" ? "bg-amber-400" : "bg-muted-foreground/40"
+                    }`}
+                  />
+                  <span className="min-w-0 flex-1 break-words">{l}</span>
                 </div>
               );
             })}
@@ -207,7 +209,7 @@ export function Logs() {
               <span>Sin deployments{appFilter ? ` para ${appFilter}` : ""}.</span>
             )}
           </div>
-          <pre className="h-[60vh] overflow-auto rounded-lg border bg-black p-3 font-mono text-xs leading-relaxed text-zinc-300">
+          <pre className="h-[60vh] overflow-auto rounded-lg border bg-black p-3 font-mono text-xs leading-relaxed text-foreground">
             {build}
           </pre>
         </div>

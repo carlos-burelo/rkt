@@ -7,11 +7,11 @@ export function CI() {
     <div className="space-y-4">
       <PageHeader title="CI" description="Pipeline vivo: en curso primero, luego últimos. Click abre build log." />
       <div>
-        <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">En curso</p>
+        <p className="mb-2 text-sm font-medium">En curso</p>
         <Deployments bare status="running" />
       </div>
       <div>
-        <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Últimos</p>
+        <p className="mb-2 text-sm font-medium">Últimos</p>
         <Deployments bare max={20} />
       </div>
     </div>
