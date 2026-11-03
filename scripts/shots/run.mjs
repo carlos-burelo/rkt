@@ -39,7 +39,7 @@ const main = async () => {
   // login por UI (como un humano: la cookie la pone el browser)
   await page.goto(BASE + "/login", { waitUntil: "networkidle" });
   await page.getByLabel(/usuario/i).fill(USER);
-  await page.getByLabel(/password/i).fill(PASS);
+  await page.getByLabel(/contraseña|password/i).fill(PASS);
   await page.getByRole("button", { name: /Entrar/ }).click();
   await page.waitForURL("**/overview", { timeout: 15000 });
 

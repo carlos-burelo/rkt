@@ -24,14 +24,14 @@ export function Login({ onOk }: { onOk: (me: Me) => void }) {
 
   return (
     <AccessShell
-      kicker="terminal · acceso"
-      title="Entrar al manifiesto"
-      description="Sesión de operador. Usa la cuenta creada por CLI; rkt no abre registro público."
+      kicker="acceso"
+      title="Inicia sesión"
+      description="Entra con tu cuenta de rkt. Las cuentas se crean desde la terminal; aquí no hay registro."
       footer={
         <p className="font-mono text-[9px] leading-relaxed text-muted-foreground/70">
-          alta de usuarios: <span className="text-foreground/80">rkt users add</span>
+          ¿Sin cuenta? Créala con <span className="text-foreground/80">rkt users add</span>
           <br />
-          roles: viewer · operator · admin
+          permisos: lectura · operador · administrador
         </p>
       }
     >
@@ -42,18 +42,18 @@ export function Login({ onOk }: { onOk: (me: Me) => void }) {
           <Input
             value={user}
             onChange={(e) => setUser(e.target.value)}
-            placeholder="operador"
+            placeholder="tu usuario"
             autoComplete="username"
             className="h-8 font-mono text-[12px]"
           />
         </label>
         <label className="field-label">
-          password
+          contraseña
           <Input
             type="password"
             value={pass}
             onChange={(e) => setPass(e.target.value)}
-            placeholder="••••••••••••"
+            placeholder="tu contraseña"
             autoComplete="current-password"
             className="tnum h-8 font-mono text-[12px]"
           />

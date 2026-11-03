@@ -97,14 +97,14 @@ export function Users() {
         {users.length === 0 && <EmptyState title="Sin usuarios" hint="Crea el primero abajo." />}
       </div>
 
-      <Section title="Nuevo usuario" description="lectura lee · operador muta · administrador gestiona · password mín 12">
+      <Section title="Nuevo usuario" description="lectura lee · operador muta · administrador gestiona · contraseña mín. 12">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <label className="field-label w-32 shrink-0">
             usuario
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="usuario" className="h-7 font-mono text-[11px]" />
           </label>
           <label className="field-label min-w-0 flex-1">
-            password
+            contraseña
             <Input
               value={password}
               onChange={(e) => setPassword(e.target.value)}

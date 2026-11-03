@@ -26,22 +26,22 @@ export function AccessShell({
             </span>
             <div>
               <p className="text-[15px] leading-none font-semibold tracking-tight">rkt</p>
-              <p className="micro mt-1">terminal de flota</p>
+              <p className="micro mt-1">panel de control</p>
             </div>
           </div>
           <div className="mt-16 max-w-sm">
-            <p className="folio">manifiesto · production-only</p>
+            <p className="folio">tus apps, en un solo sitio</p>
             <h2 className="mt-3 text-[32px] leading-[1.05] font-semibold tracking-[-0.04em] text-balance">
-              Cada app es una unidad con bahía, destino y estado de grúa.
+              Cada app con su puerto, su dominio y un supervisor que la mantiene en marcha.
             </h2>
             <p className="mt-4 max-w-[36ch] text-[12px] leading-relaxed text-muted-foreground">
-              Publica, revierte y expone sin editar YAML. Lo que no se mide no se pinta; lo aproximado se declara.
+              Despliega, revierte y publica sin editar YAML. Solo mostramos lo que medimos de verdad.
             </p>
           </div>
           <div className="mt-10 max-w-sm border border-border/80">
             {[
-              ["01", "operar", "salidas · logs · ci"],
-              ["02", "servir", "dominios · proxy · env"],
+              ["01", "operar", "despliegues · registros · CI"],
+              ["02", "servir", "dominios · proxy · entorno"],
               ["03", "observar", "tráfico · alertas"],
             ].map(([n, k, d]) => (
               <div key={k} className="flex items-baseline gap-3 border-b border-border/60 px-3 py-2 last:border-0">
@@ -55,9 +55,9 @@ export function AccessShell({
         </div>
         <div className="relative flex items-end justify-between gap-4 border-t border-border/70 pt-4">
           <p className="font-mono text-[9px] leading-relaxed text-muted-foreground/70">
-            acceso restringido · sesión bearer
+            acceso restringido · sesión con cookie segura
             <br />
-            sin usuarios no hay operación
+            sin usuarios, rkt no opera
           </p>
           <span className="tnum font-mono text-[9px] text-muted-foreground/50">rkt / v1</span>
         </div>
@@ -70,7 +70,7 @@ export function AccessShell({
               <BrandMark className="h-4 w-4" />
             </span>
             <span className="text-[13px] font-semibold tracking-tight">rkt</span>
-            <span className="micro">terminal</span>
+            <span className="micro">panel</span>
           </div>
           <header className="border-b border-border pb-4">
             <div className="flex items-center gap-2.5">

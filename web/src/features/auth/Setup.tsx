@@ -18,7 +18,7 @@ export function Setup({ onOk }: { onOk: (me: Me) => void }) {
     e.preventDefault();
     setErr("");
     if (p1 !== p2) {
-      setErr("passwords no coinciden");
+      setErr("las contraseñas no coinciden");
       return;
     }
     try {
@@ -31,14 +31,14 @@ export function Setup({ onOk }: { onOk: (me: Me) => void }) {
 
   return (
     <AccessShell
-      kicker="terminal · alta inicial"
-      title="Crear administrador"
-      description="Primer arranque. Esta puerta se cierra sola cuando existe un usuario; después solo CLI o Users."
+      kicker="primer arranque"
+      title="Crea la cuenta de administrador"
+      description="Solo se muestra una vez, mientras no exista ningún usuario. Después podrás añadir más desde Usuarios."
       footer={
         <p className="font-mono text-[9px] leading-relaxed text-muted-foreground/70">
-          one-shot · sin usuarios previos
+          cuenta única de arranque
           <br />
-          password mínimo 12 caracteres
+          contraseña de 12 caracteres como mínimo
         </p>
       }
     >
@@ -55,29 +55,29 @@ export function Setup({ onOk }: { onOk: (me: Me) => void }) {
           />
         </label>
         <label className="field-label">
-          password
+          contraseña
           <Input
             type="password"
             value={p1}
             onChange={(e) => setP1(e.target.value)}
-            placeholder="mín 12 caracteres"
+            placeholder="12 caracteres como mínimo"
             autoComplete="new-password"
             className="tnum h-8 font-mono text-[12px]"
           />
         </label>
         <label className="field-label">
-          repetir password
+          repite la contraseña
           <Input
             type="password"
             value={p2}
             onChange={(e) => setP2(e.target.value)}
-            placeholder="repite password"
+            placeholder="escríbela otra vez"
             autoComplete="new-password"
             className="tnum h-8 font-mono text-[12px]"
           />
         </label>
         <Button type="submit" className="mt-1 h-8 w-full justify-between">
-          <span>Crear admin y entrar</span>
+          <span>Crear cuenta y entrar</span>
           <span aria-hidden className="font-mono text-[9px] tracking-[0.08em] opacity-60">↵</span>
         </Button>
       </form>
