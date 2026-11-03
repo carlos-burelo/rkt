@@ -960,4 +960,5 @@ func (s *Server) registerMore(srv *mcp.Server) {
 		func(ctx context.Context, req *mcp.CallToolRequest, a pruneArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doPrune(a))
 		})
+	s.registerMonitor(srv)
 }
