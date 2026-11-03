@@ -68,6 +68,30 @@ type Program struct {
 	devca        *devca.CA
 	probeMu      sync.Mutex
 	probes       map[string]probeResult
+	// ops serializa operaciones destructivas por app (deploy/build/rollback).
+	opMu sync.Mutex
+	ops  map[string]bool
+}
+
+// beginOp reclama la app para una operación destructiva. Devuelve error si
+// ya hay otra en curso: dos deploys simultáneos corromperían live/prev.
+func (p *Program) beginOp(name string) error {
+	p.opMu.Lock()
+	defer p.opMu.Unlock()
+	if p.ops == nil {
+		p.ops = map[string]bool{}
+	}
+	if p.ops[name] {
+		return fmt.Errorf("ya hay un deploy/build/rollback en curso para %q", name)
+	}
+	p.ops[name] = true
+	return nil
+}
+
+func (p *Program) endOp(name string) {
+	p.opMu.Lock()
+	delete(p.ops, name)
+	p.opMu.Unlock()
 }
 
 type probeResult struct {
@@ -496,6 +520,15 @@ func (p *Program) retryDeployment(id int64, actor string) (string, error) {
 // registra la salida como deployment en curso, corre install+build y
 // reinicia la unidad al terminar. Devuelve el id para seguir el log.
 func (p *Program) buildLocal(name, actor string) (int64, error) {
+	if err := p.beginOp(name); err != nil {
+		return 0, err
+	}
+	release := true
+	defer func() {
+		if release {
+			p.endOp(name)
+		}
+	}()
 	cfg := p.live.Get()
 	var app *config.App
 	for i := range cfg.Apps {
@@ -529,7 +562,9 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 	if p.db != nil {
 		depID, _ = p.db.InsertDeployment(app.Name, "local", out.Name(), actor, target.Env)
 	}
+	release = false
 	go func() {
+		defer p.endOp(target.Name)
 		defer out.Close()
 		err := deploy.RunSteps(steps, target.Dir, target.Env, out)
 		if err == nil && p.sup != nil {
@@ -581,6 +616,15 @@ func (p *Program) deployAppAsync(name, actor string) (int64, error) {
 
 // startDeploy prepara log + registro y ejecuta (async o no) el pipeline.
 func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, string, error) {
+	if err := p.beginOp(app.Name); err != nil {
+		return 0, "", err
+	}
+	release := true
+	defer func() {
+		if release {
+			p.endOp(app.Name)
+		}
+	}()
 	token, err := p.appToken(&app)
 	if err != nil {
 		return 0, "", err
@@ -612,7 +656,9 @@ func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, 
 		}
 	}
 	if async {
+		release = false
 		go func() {
+			defer p.endOp(app.Name)
 			defer out.Close()
 			rev, runErr := deploy.Run(app, token, &supCtl{sup: p.sup}, out, p.log)
 			finish(rev, runErr)
@@ -683,6 +729,10 @@ func (p *Program) tlsStatus(host string) (bool, string) {
 // rollbackApp devuelve live.prev a live (rollback manual).
 // También deja fila en historial (hereda env actual + actor).
 func (p *Program) rollbackApp(name, actor string) error {
+	if err := p.beginOp(name); err != nil {
+		return err
+	}
+	defer p.endOp(name)
 	cfg := p.live.Get()
 	var app *config.App
 	for i := range cfg.Apps {
