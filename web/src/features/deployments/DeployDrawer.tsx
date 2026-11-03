@@ -10,12 +10,14 @@ export function DeployDrawer({
   buildLog,
   canWrite,
   onAction,
+  onRetry,
   onClose,
 }: {
   dep: Deployment | null;
   buildLog: string;
   canWrite: boolean;
   onAction: (app: string, a: "restart" | "deploy" | "rollback") => void;
+  onRetry: (id: number) => void;
   onClose: () => void;
 }) {
   return (
@@ -53,6 +55,10 @@ export function DeployDrawer({
                     {a} {dep.app}
                   </button>
                 ))}
+                <button onClick={() => onRetry(dep.id)}
+                  className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs hover:bg-zinc-800">
+                  retry #{dep.id}
+                </button>
               </div>
             )}
             <p className="text-xs uppercase tracking-wider text-zinc-500">timeline</p>

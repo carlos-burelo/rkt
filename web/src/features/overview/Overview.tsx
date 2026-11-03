@@ -17,6 +17,20 @@ export function Overview({
   return (
     <div className="space-y-3">
       <Metrics apps={apps} deps={deps} />
+      {evs.filter((e) => e.kind === "discover").slice(0, 3).map((e) => (
+        <div key={e.id} className="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3">
+          <div className="flex-1">
+            <p className="text-sm font-medium">New repository detected</p>
+            <p className="font-mono text-xs text-zinc-500">{e.msg}</p>
+          </div>
+          <button
+            onClick={() => openApp(e.app)}
+            className="rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white"
+          >
+            Import
+          </button>
+        </div>
+      ))}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       {apps.map((a) => (
         <button

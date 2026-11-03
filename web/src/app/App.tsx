@@ -17,7 +17,7 @@ import { Routes } from "../features/routes/Routes";
 import { Settings } from "../features/settings/Settings";
 import { Users } from "../features/users/Users";
 import { fetchStatus, fetchDeployments, fetchEvents } from "../features/overview/api";
-import { deploymentLog } from "../features/deployments/api";
+import { deploymentLog, retryDeployment } from "../features/deployments/api";
 import { listApps, appAction, getEnv } from "../features/apps/api";
 import { fetchLog } from "../features/logs/api";
 import { listRoutes } from "../features/routes/api";
@@ -322,7 +322,22 @@ export function App() {
         </div>
       </main>
 
-      <DeployDrawer dep={sel} buildLog={buildLog} canWrite={canWrite} onAction={act} onClose={() => setSel(null)} />
+      <DeployDrawer
+        dep={sel}
+        buildLog={buildLog}
+        canWrite={canWrite}
+        onAction={act}
+        onRetry={(id) => {
+          retryDeployment(id)
+            .then((rev) => {
+              toast("ok", `retry ok ${rev.slice(0, 8)}`);
+              setSel(null);
+              refresh();
+            })
+            .catch((e) => toast("err", e instanceof Error ? e.message : "error"));
+        }}
+        onClose={() => setSel(null)}
+      />
       <CommandPalette
         open={palette}
         setOpen={setPalette}
