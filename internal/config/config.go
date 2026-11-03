@@ -269,6 +269,7 @@ func (cfg *Config) ApplyDefaults() {
 		if a.MinUptime == "" {
 			a.MinUptime = "10s"
 		}
+		normalizeNodePM(a)
 		if a.Deploy != nil {
 			if a.Deploy.Ref == "" {
 				a.Deploy.Ref = "main"
@@ -278,6 +279,42 @@ func (cfg *Config) ApplyDefaults() {
 			}
 		}
 	}
+}
+
+// normalizeNodePM fuerza pnpm en apps Node: comando npm -> pnpm y pasos
+// npm/npx -> pnpm. Se aplica al cargar y al guardar: nunca ejecutamos npm.
+func normalizeNodePM(a *App) {
+	base := strings.ToLower(a.Command)
+	if i := strings.LastIndexAny(base, `\/`); i >= 0 {
+		base = base[i+1:]
+	}
+	base = strings.TrimSuffix(strings.TrimSuffix(base, ".cmd"), ".exe")
+	if base == "npm" {
+		a.Command = "pnpm"
+	}
+	if a.Deploy == nil {
+		return
+	}
+	for i, step := range a.Deploy.Build {
+		a.Deploy.Build[i] = pnpmStep(step)
+	}
+}
+
+func pnpmStep(step string) string {
+	t := strings.TrimSpace(step)
+	low := strings.ToLower(t)
+	switch {
+	case low == "npm ci" || low == "npm i" || low == "npm install",
+		strings.HasPrefix(low, "npm ci "), strings.HasPrefix(low, "npm i "), strings.HasPrefix(low, "npm install "):
+		return "pnpm install"
+	case strings.HasPrefix(low, "npm run "):
+		return "pnpm run " + t[len("npm run "):]
+	case strings.HasPrefix(low, "npx "):
+		return "pnpm exec " + t[len("npx "):]
+	case strings.HasPrefix(low, "npm "):
+		return "pnpm " + t[len("npm "):]
+	}
+	return step
 }
 
 // ResolveEnv fusiona env_file + inline con expansión. Una sola vez por

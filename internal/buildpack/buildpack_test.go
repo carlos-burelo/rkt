@@ -52,8 +52,26 @@ func TestDetectNextArranca(t *testing.T) {
 	if p.Kind != "next" || p.IsStatic() {
 		t.Fatalf("plan = %+v, quiero next con proceso", p)
 	}
-	if strings.Join(p.Start, " ") != "npm run start" {
+	if strings.Join(p.Start, " ") != "pnpm run start" {
 		t.Fatalf("start = %v", p.Start)
+	}
+	if p.PM != "pnpm" || len(p.Install) != 1 || p.Install[0] != "pnpm install" {
+		t.Fatalf("pnpm obligatorio: %+v", p)
+	}
+}
+
+func TestDetectIgnoraLockfilesAjenos(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "package.json", `{"dependencies":{}}`)
+	write(t, dir, "package-lock.json", "{}")
+	write(t, dir, "yarn.lock", "")
+
+	p, err := DetectDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.PM != "pnpm" || p.Install[0] != "pnpm install" {
+		t.Fatalf("npm/yarn no deben ganar: %+v", p)
 	}
 }
 

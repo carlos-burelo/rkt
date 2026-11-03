@@ -143,6 +143,7 @@ func Snapshot(db *store.DB, base *config.Config) (*config.Config, error) {
 	out := *base
 	out.Apps = fleet.Apps
 	out.Routes = fleet.Routes
+	out.ApplyDefaults()
 	if err := config.ValidateRoutes(out.Routes); err != nil {
 		return nil, fmt.Errorf("db %w", err)
 	}

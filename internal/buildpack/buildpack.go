@@ -16,7 +16,7 @@ type Plan struct {
 	// Kind identidad legible: astro, next, vite, sveltekit, nuxt, remix,
 	// node, go, python, static.
 	Kind string
-	// PM gestor de paquetes cuando aplica: pnpm, npm, yarn, bun.
+	// PM gestor de paquetes: siempre pnpm (nunca npm: lento e inseguro).
 	PM string
 	// Install steps de instalación (shell).
 	Install []string
@@ -125,7 +125,7 @@ func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
 
 	var pj pkgJSON
 	_ = json.Unmarshal([]byte(packageJSON), &pj)
-	pm := packageManager(file)
+	pm := "pnpm"
 	install := []string{pm + " install"}
 	has := func(script string) bool { _, ok := pj.Scripts[script]; return ok }
 
@@ -140,7 +140,7 @@ func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
 		if has("start") {
 			plan.Start = []string{pm, "run", "start"}
 		} else {
-			plan.Start = []string{"npx", "next", "start"}
+			plan.Start = []string{"pnpm", "exec", "next", "start"}
 		}
 	case pj.dep("@sveltejs/kit"):
 		plan.Kind = "sveltekit"
@@ -179,7 +179,7 @@ func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
 			plan.Start = []string{pm, "run", "start"}
 		case pj.dep("serve") && has("build"):
 			plan.Build = []string{pm + " run build"}
-			plan.Start = []string{"npx", "serve", "dist"}
+			plan.Start = []string{"pnpm", "exec", "serve", "dist"}
 		case file("server.js"):
 			plan.Start = []string{"node", "server.js"}
 		case file("server.mjs"):
@@ -198,18 +198,4 @@ func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
 		}
 	}
 	return plan
-}
-
-// packageManager elige por lockfile; npm si no hay señal.
-func packageManager(file func(string) bool) string {
-	switch {
-	case file("pnpm-lock.yaml"):
-		return "pnpm"
-	case file("yarn.lock"):
-		return "yarn"
-	case file("bun.lockb") || file("bun.lock"):
-		return "bun"
-	default:
-		return "npm"
-	}
 }

@@ -187,7 +187,7 @@ apps:
       repo: "https://github.com/tuorg/app1.git"
       ref: "main"                 # rama, tag o SHA (SHA = clon completo)
       token_env: "GITHUB_TOKEN"   # default; solo para URLs http(s)
-      build: ["npm ci --omit=dev", "npm run build"]  # sintaxis cmd.exe
+      build: ["pnpm install", "pnpm run build"]  # sintaxis cmd.exe
 ```
 
 ```powershell

@@ -329,3 +329,21 @@ func FuzzMatch(f *testing.F) {
 		}
 	})
 }
+
+func TestNormalizeNodePM(t *testing.T) {
+	cfg := &Config{Apps: []App{{
+		Name: "node", Command: `C:\Program Files\nodejs\npm.cmd`, Args: []string{"run", "start"},
+		Deploy: &Deploy{Build: []string{"npm ci --omit=dev", "npm run build", "npx next lint", "pnpm run test"}},
+	}}}
+	cfg.ApplyDefaults()
+	a := cfg.Apps[0]
+	if a.Command != "pnpm" {
+		t.Fatalf("command = %q", a.Command)
+	}
+	want := []string{"pnpm install", "pnpm run build", "pnpm exec next lint", "pnpm run test"}
+	for i := range want {
+		if a.Deploy.Build[i] != want[i] {
+			t.Fatalf("build[%d] = %q, quiero %q", i, a.Deploy.Build[i], want[i])
+		}
+	}
+}

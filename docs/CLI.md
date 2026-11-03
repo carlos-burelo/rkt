@@ -70,8 +70,8 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 | `help` | Esta referencia resumida |
 
 `--preset next`: args `.next\standalone\server.js`, build
-`npm ci --omit=dev` + `npm run build`, `PORT=<port>`.
-`--preset node`: `server.js` + `npm ci --omit=dev`.
+`pnpm install` + `pnpm run build`, `PORT=<port>`.
+`--preset node`: `server.js` + `pnpm install`.
 `--preset python`: `-u app.py`.
 
 ## Salidas JSON (schemas)
