@@ -336,12 +336,13 @@ type appUpdateArg struct {
 
 // doAppsAdd registra app con inferencia (igual que `apps add` sin flags).
 func (s *Server) doAppsAdd(a appsAddArg) (string, error) {
-	_, db, err := cfgfile.LoadMerged(s.cfgPath)
+	cfg, db, err := cfgfile.LoadMerged(s.cfgPath)
 	if err != nil {
 		return "", err
 	}
 	defer db.Close()
-	app, domains, port, err := cfgfile.CreateApp(db, a.Repo, a.Name, a.Domain, a.Port, a.Command, a.Dir, a.Auto)
+	gh, _ := githubNew(cfg)
+	app, domains, port, err := cfgfile.CreateApp(db, gh, a.Repo, a.Name, a.Domain, a.Port, a.Command, a.Dir, a.Auto)
 	if err != nil {
 		return "", err
 	}

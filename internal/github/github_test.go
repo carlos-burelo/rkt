@@ -219,3 +219,36 @@ func TestInstallations(t *testing.T) {
 		t.Fatalf("lista mal: %+v %v", list, err)
 	}
 }
+
+func TestDirNamesYRepoInfo(t *testing.T) {
+	_, path := testKey(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/repos/acme/demo/contents":
+			if r.URL.Query().Get("ref") != "master" || r.Header.Get("Authorization") != "Bearer tok" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			fmt.Fprint(w, `[{"name":"go.mod","type":"file"},{"name":"cmd","type":"dir"}]`)
+		case "/repos/acme/demo":
+			fmt.Fprint(w, `{"full_name":"acme/demo","default_branch":"master","private":true,"owner":{"login":"acme"}}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	m, err := New(123, path, srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := m.DirNames("acme", "demo", "", "master", "tok")
+	if err != nil || !files["go.mod"] || !files["cmd"] {
+		t.Fatalf("dirnames = %v %v", files, err)
+	}
+	info, err := m.RepoInfo("acme", "demo", "tok")
+	if err != nil || info.DefaultBranch != "master" || !info.Private || info.Owner.Login != "acme" {
+		t.Fatalf("repoinfo = %+v %v", info, err)
+	}
+}

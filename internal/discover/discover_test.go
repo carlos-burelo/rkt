@@ -53,9 +53,22 @@ func fakeAPI(t *testing.T, reposJSON string, files map[string]string) *httptest.
 		case strings.HasSuffix(r.URL.Path, "/app/installations"):
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `[{"id":999,"account":{"login":"o"}}]`)
-		case strings.Contains(r.URL.Path, "/contents/"):
-			name := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
-			if body, ok := files[name]; ok {
+		case strings.Contains(r.URL.Path, "/contents"):
+			idx := strings.Index(r.URL.Path, "/contents")
+			rest := strings.TrimPrefix(r.URL.Path[idx+len("/contents"):], "/")
+			if rest == "" {
+				// listado de raíz: nombres presentes en files
+				list := []map[string]string{}
+				for name := range files {
+					if !strings.Contains(name, "/") {
+						list = append(list, map[string]string{"name": name, "type": "file"})
+					}
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(list)
+				return
+			}
+			if body, ok := files[rest]; ok {
 				json.NewEncoder(w).Encode(map[string]string{
 					"encoding": "base64",
 					"content":  base64.StdEncoding.EncodeToString([]byte(body)),

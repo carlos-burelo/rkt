@@ -110,3 +110,25 @@ func TestFromPackageJSONRemoto(t *testing.T) {
 		t.Fatalf("plan remoto = %+v, quiero vite/dist", p)
 	}
 }
+
+func TestFromRemoteSinPackageJSON(t *testing.T) {
+	cases := []struct {
+		name  string
+		files map[string]bool
+		kind  string
+	}{
+		{"go", map[string]bool{"go.mod": true}, "go"},
+		{"html raíz", map[string]bool{"index.html": true}, "static"},
+		{"html en public", map[string]bool{"public/index.html": true}, "static"},
+		{"python", map[string]bool{"requirements.txt": true, "app.py": true}, "python"},
+	}
+	for _, c := range cases {
+		p := FromRemote("", c.files)
+		if p.Kind != c.kind {
+			t.Fatalf("%s: plan = %+v, quiero %s", c.name, p, c.kind)
+		}
+	}
+	if p := FromRemote("", map[string]bool{"README.md": true}); p.Kind != "" {
+		t.Fatalf("sin señales debe quedar vacío: %+v", p)
+	}
+}

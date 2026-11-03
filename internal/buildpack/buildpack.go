@@ -59,8 +59,19 @@ func DetectDir(dir string) (Plan, error) {
 // FromPackageJSON clasifica un proyecto remoto del que solo conocemos
 // package.json (y si tiene requirements.txt). Sin árbol no adivina más.
 func FromPackageJSON(pkg string, hasRequirements bool) Plan {
-	return detect(pkg, strings.TrimSpace(pkg) != "", func(name string) bool {
-		return hasRequirements && name == "requirements.txt"
+	files := map[string]bool{}
+	if hasRequirements {
+		files["requirements.txt"] = true
+	}
+	return FromRemote(pkg, files)
+}
+
+// FromRemote clasifica con el package.json (vacío si no hay) y los nombres
+// de archivos conocidos en la raíz del repo (go.mod, requirements.txt,
+// index.html, public/index.html). La lista la trae el caller (API GitHub).
+func FromRemote(packageJSON string, files map[string]bool) Plan {
+	return detect(packageJSON, strings.TrimSpace(packageJSON) != "", func(name string) bool {
+		return files[name]
 	})
 }
 

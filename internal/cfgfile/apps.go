@@ -10,6 +10,7 @@ import (
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/discover"
 	"rkt-proxy/internal/dotenv"
+	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/store"
 )
 
@@ -127,11 +128,11 @@ var execOwn = os.Executable
 // CreateApp arma App+domains+port con inferencia (Suggest+PresetBuild).
 // Unico hogar (CLI wizard pregunta aparte; MCP y API la usan).
 // Crea el dir. No escribe en DB (eso es AddApp).
-func CreateApp(db *store.DB, repo, name, domain string, port int, command, dir string, auto bool) (config.App, []string, string, error) {
+func CreateApp(db *store.DB, gh *github.Manager, repo, name, domain string, port int, command, dir string, auto bool) (config.App, []string, string, error) {
 	var sug *discover.Suggestion
 	if repo != "" {
 		var err error
-		sug, err = discover.Suggest(db, nil, repo)
+		sug, err = discover.Suggest(db, gh, repo)
 		if err != nil {
 			return config.App{}, nil, "", err
 		}
@@ -141,7 +142,7 @@ func CreateApp(db *store.DB, repo, name, domain string, port int, command, dir s
 			return config.App{}, nil, "", fmt.Errorf("directorio no existe: %s", dir)
 		}
 		var err error
-		sug, err = discover.Suggest(db, nil, dir)
+		sug, err = discover.Suggest(db, gh, dir)
 		if err != nil {
 			return config.App{}, nil, "", err
 		}
@@ -208,8 +209,12 @@ func CreateApp(db *store.DB, repo, name, domain string, port int, command, dir s
 		Dir: dir, Env: env, RestartDelay: "5s",
 	}
 	if repo != "" {
+		ref := sug.Branch
+		if ref == "" {
+			ref = "main"
+		}
 		app.Deploy = &config.Deploy{
-			Repo: repo, Ref: "main", Build: build, Auto: auto,
+			Repo: repo, Ref: ref, Build: build, Auto: auto,
 		}
 	}
 	return app, domains, portS, nil

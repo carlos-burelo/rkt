@@ -366,19 +366,19 @@ func TestCreateAppBranches(t *testing.T) {
 	_, db := testCfg(t)
 	dir := t.TempDir()
 	// repo inexistente => Suggest falla
-	if _, _, _, err := CreateApp(db, "no-es-un-repo :::", "", "", 0, "", "", false); err == nil {
+	if _, _, _, err := CreateApp(db, nil, "no-es-un-repo :::", "", "", 0, "", "", false); err == nil {
 		t.Fatal("repo inválido debía fallar")
 	}
 	// dir inexistente
-	if _, _, _, err := CreateApp(db, "", "w", "", 0, "", filepath.Join(dir, "nope"), false); err == nil {
+	if _, _, _, err := CreateApp(db, nil, "", "w", "", 0, "", filepath.Join(dir, "nope"), false); err == nil {
 		t.Fatal("dir inexistente debía fallar")
 	}
 	// sin nombre ni inferencia
-	if _, _, _, err := CreateApp(db, "", "", "", 0, "", "", false); err == nil {
+	if _, _, _, err := CreateApp(db, nil, "", "", "", 0, "", "", false); err == nil {
 		t.Fatal("sin nombre debía fallar")
 	}
 	// dir por defecto + sin plan
-	if _, _, _, err := CreateApp(db, "", "soloname", "", 0, "", "", false); err == nil {
+	if _, _, _, err := CreateApp(db, nil, "", "soloname", "", 0, "", "", false); err == nil {
 		t.Fatal("sin plan debía fallar")
 	}
 	// sitio estático local: plan static, comando propio y args __static
@@ -389,7 +389,7 @@ func TestCreateAppBranches(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(site, "index.html"), []byte("<html>x</html>"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	app, domains, portS, err := CreateApp(db, "", "sitio", "sitio.localhost", 4321, "", site, false)
+	app, domains, portS, err := CreateApp(db, nil, "", "sitio", "sitio.localhost", 4321, "", site, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +400,7 @@ func TestCreateAppBranches(t *testing.T) {
 		t.Fatalf("domains = %v port = %q", domains, portS)
 	}
 	// comando explícito y sin repo: no crea Deploy
-	app2, _, _, err := CreateApp(db, "", "manual", "", 0, "cmd.exe", site, false)
+	app2, _, _, err := CreateApp(db, nil, "", "manual", "", 0, "cmd.exe", site, false)
 	if err != nil || app2.Deploy != nil {
 		t.Fatalf("manual = %+v %v", app2, err)
 	}
@@ -419,7 +419,7 @@ func TestCreateAppRepoDominioYExec(t *testing.T) {
 	if err := db.SetSetting(store.KeyNodeBin, "node"); err != nil {
 		t.Fatal(err)
 	}
-	app, domains, portS, err := CreateApp(db, repo, "", "", 0, "", "", false)
+	app, domains, portS, err := CreateApp(db, nil, repo, "", "", 0, "", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,12 +439,12 @@ func TestCreateAppRepoDominioYExec(t *testing.T) {
 	old := execOwn
 	execOwn = func() (string, error) { return "", errors.New("sin exe") }
 	t.Cleanup(func() { execOwn = old })
-	if _, _, _, err := CreateApp(db, "", "s", "", 0, "", site, false); err == nil {
+	if _, _, _, err := CreateApp(db, nil, "", "s", "", 0, "", site, false); err == nil {
 		t.Fatal("CreateApp debía fallar al resolver el ejecutable")
 	}
 	// MkdirAll falla con un nombre de dir inválido en Windows
 	execOwn = old
-	if _, _, _, err := CreateApp(db, "", "bad:name", "", 0, "cmd.exe", "", false); err == nil {
+	if _, _, _, err := CreateApp(db, nil, "", "bad:name", "", 0, "cmd.exe", "", false); err == nil {
 		t.Fatal("CreateApp debía fallar al crear el directorio")
 	}
 }

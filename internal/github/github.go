@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -78,6 +79,67 @@ func parseKey(data []byte) (*rsa.PrivateKey, error) {
 		return nil, fmt.Errorf("clave no es RSA")
 	}
 	return rsaKey, nil
+}
+
+// DirNames lista nombres (archivos y carpetas) de un directorio del repo.
+// dir vacío = raíz. 404 = directorio inexistente (mapa vacío, sin error).
+func (m *Manager) DirNames(owner, repo, dir, ref, token string) (map[string]bool, error) {
+	p := "contents"
+	if dir != "" {
+		p += "/" + dir
+	}
+	u := fmt.Sprintf("%s/repos/%s/%s/%s?ref=%s", m.apiBase, owner, repo, p, url.QueryEscape(ref))
+	req, _ := http.NewRequest(http.MethodGet, u, nil)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := m.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return map[string]bool{}, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("contents %s: %s %s", p, resp.Status, strings.TrimSpace(string(body)))
+	}
+	var entries []struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		out[e.Name] = true
+	}
+	return out, nil
+}
+
+// RepoInfo datos básicos de un repo (rama por defecto, privado, owner).
+func (m *Manager) RepoInfo(owner, repo, token string) (InstallationRepo, error) {
+	req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/repos/%s/%s", m.apiBase, owner, repo), nil)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := m.client.Do(req)
+	if err != nil {
+		return InstallationRepo{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return InstallationRepo{}, fmt.Errorf("repo %s/%s: %s", owner, repo, resp.Status)
+	}
+	var out InstallationRepo
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return InstallationRepo{}, err
+	}
+	return out, nil
 }
 
 // TokenFor devuelve installation token válido (cacheado hasta 5min antes).

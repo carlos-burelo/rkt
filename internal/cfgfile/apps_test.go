@@ -34,7 +34,7 @@ func TestCreateAppDirectorioLocalInfiere(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app, _, _, err := CreateApp(db, "", "", "", 0, "", dir, false)
+	app, _, _, err := CreateApp(db, nil, "", "", "", 0, "", dir, false)
 	if err != nil {
 		t.Fatalf("CreateApp local: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestCreateAppAstroServidoEstatico(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app, _, _, err := CreateApp(db, "", "coatl-in", "", 0, "", dir, false)
+	app, _, _, err := CreateApp(db, nil, "", "coatl-in", "", 0, "", dir, false)
 	if err != nil {
 		t.Fatalf("CreateApp astro: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestCreateAppAstroServidoEstatico(t *testing.T) {
 
 func TestCreateAppDirectorioInexistente(t *testing.T) {
 	db := newTestDB(t)
-	_, _, _, err := CreateApp(db, "", "x", "", 0, "", filepath.Join(t.TempDir(), "no-existe"), false)
+	_, _, _, err := CreateApp(db, nil, "", "x", "", 0, "", filepath.Join(t.TempDir(), "no-existe"), false)
 	if err == nil || !strings.Contains(err.Error(), "directorio no existe") {
 		t.Fatalf("err = %v, quiero error de directorio inexistente", err)
 	}
@@ -89,7 +89,7 @@ func TestCreateAppDirectorioInexistente(t *testing.T) {
 func TestCreateAppSinPlanFalla(t *testing.T) {
 	db := newTestDB(t)
 	dir := t.TempDir() // sin package.json ni requirements
-	_, _, _, err := CreateApp(db, "", "x", "", 0, "", dir, false)
+	_, _, _, err := CreateApp(db, nil, "", "x", "", 0, "", dir, false)
 	if err == nil || !strings.Contains(err.Error(), "sin plan de build") {
 		t.Fatalf("err = %v, quiero error de plan no detectado", err)
 	}

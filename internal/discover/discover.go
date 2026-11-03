@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -197,25 +198,51 @@ func register(d Deps, owner, repo, branch, tok string) error {
 	return nil
 }
 
-// detectPlanRemote clasifica un repo por package.json/requirements.
-// token = installation token: los repos privados de la App lo exigen y
-// además evita el límite anónimo (60 req/h). branch vacío = main.
+// detectPlanRemote clasifica un repo remoto con el árbol raíz (una llamada)
+// y su package.json si existe. token = installation token: los repos
+// privados lo exigen y evita el límite anónimo (60 req/h).
 func detectPlanRemote(gh *github.Manager, owner, repo, branch, token string) (buildpack.Plan, error) {
 	if branch == "" {
 		branch = "main"
 	}
-	content, ok, err := gh.FileContent(owner, repo, "package.json", branch, token)
+	files, err := gh.DirNames(owner, repo, "", branch, token)
 	if err != nil {
 		return buildpack.Plan{}, err
 	}
-	if ok {
-		_, hasReq, _ := gh.FileContent(owner, repo, "requirements.txt", branch, token)
-		return buildpack.FromPackageJSON(content, hasReq), nil
+	pkg := ""
+	if files["package.json"] {
+		content, ok, err := gh.FileContent(owner, repo, "package.json", branch, token)
+		if err != nil {
+			return buildpack.Plan{}, err
+		}
+		if ok {
+			pkg = content
+		}
 	}
-	if _, hasReq, err := gh.FileContent(owner, repo, "requirements.txt", branch, token); err == nil && hasReq {
-		return buildpack.FromPackageJSON("", true), nil
+	// static en public/: el árbol raíz no lo dice; consulta solo si hace falta.
+	if !files["package.json"] && !files["go.mod"] && !files["requirements.txt"] && !files["index.html"] {
+		if pub, err := gh.DirNames(owner, repo, "public", branch, token); err == nil && pub["index.html"] {
+			files["public/index.html"] = true
+		}
 	}
-	return buildpack.Plan{}, nil
+	return buildpack.FromRemote(pkg, files), nil
+}
+
+// tokenForOwner busca una instalación de la App para el owner del repo.
+// Sin instalación devuelve "" (público anónimo; privado fallará).
+func tokenForOwner(gh *github.Manager, owner string) string {
+	insts, err := gh.Installations()
+	if err != nil {
+		return ""
+	}
+	for _, inst := range insts {
+		if strings.EqualFold(inst.Account.Login, owner) {
+			if tok, err := gh.TokenFor(inst.ID); err == nil {
+				return tok
+			}
+		}
+	}
+	return ""
 }
 
 // slug minúsculas, [^a-z0-9] -> -.
@@ -322,6 +349,8 @@ type Suggestion struct {
 	Preset  string
 	Command string
 	Dir     string
+	// Branch rama por defecto del repo (main si no se pudo leer).
+	Branch string
 	// Plan build canónico (buildpack) para este proyecto.
 	Plan buildpack.Plan
 }
@@ -338,6 +367,11 @@ func Suggest(db *store.DB, gh *github.Manager, repoURL string) (*Suggestion, err
 			s.Plan = plan
 			s.Preset = plan.Kind
 		}
+		if out, err := exec.Command("git", "-C", abs, "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
+			if b := strings.TrimSpace(string(out)); b != "" && b != "HEAD" {
+				s.Branch = b
+			}
+		}
 	} else {
 		owner, repo, ok := github.ParseRepo(repoURL)
 		if !ok {
@@ -345,8 +379,13 @@ func Suggest(db *store.DB, gh *github.Manager, repoURL string) (*Suggestion, err
 		}
 		s.Name = slug(repo)
 		if gh != nil {
-			// manual: sin instalación no hay token; público funciona anónimo
-			if p, err := detectPlanRemote(gh, owner, repo, "", ""); err == nil {
+			tok := tokenForOwner(gh, owner)
+			branch := ""
+			if info, err := gh.RepoInfo(owner, repo, tok); err == nil {
+				branch = info.DefaultBranch
+				s.Branch = branch
+			}
+			if p, err := detectPlanRemote(gh, owner, repo, branch, tok); err == nil {
 				s.Plan = p
 				s.Preset = p.Kind
 			}

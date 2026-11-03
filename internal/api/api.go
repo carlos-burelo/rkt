@@ -53,6 +53,8 @@ type Deps struct {
 	Github func() (map[string]any, error)
 	// GithubRepos repos accesibles a las instalaciones (selector de app).
 	GithubRepos func() ([]github.Repo, error)
+	// GithubManager manager vivo para inferir plan de repos privados.
+	GithubManager func() *github.Manager
 }
 
 // cloneFleet copia editable de la flota viva (Live se lee sin lock;
@@ -553,7 +555,7 @@ func NewHandler(d Deps) http.Handler {
 				writeErr(w, http.StatusBadRequest, "JSON inválido")
 				return
 			}
-			name, err := createAppFromRepo(d.DB, d.Live, in.Repo, in.Name, in.Domain, in.Port, in.Command, in.Dir, in.Auto)
+			name, err := createAppFromRepo(d.DB, d.Live, d.githubManager(), in.Repo, in.Name, in.Domain, in.Port, in.Command, in.Dir, in.Auto)
 			if err != nil {
 				writeErr(w, http.StatusBadRequest, err.Error())
 				return
@@ -1398,10 +1400,17 @@ func mustUser(r *http.Request) string {
 	return u
 }
 
+func (d *Deps) githubManager() *github.Manager {
+	if d.GithubManager == nil {
+		return nil
+	}
+	return d.GithubManager()
+}
+
 // createAppFromRepo alta con inferencia vía cfgfile.CreateApp (hogar
 // único, también usado por MCP). Escribe vía AddApp y refresca Live.
-func createAppFromRepo(db *store.DB, live *config.Live, repo, name, domain string, port int, command, dir string, auto bool) (string, error) {
-	app, domains, portS, err := cfgfile.CreateApp(db, repo, name, domain, port, command, dir, auto)
+func createAppFromRepo(db *store.DB, live *config.Live, gh *github.Manager, repo, name, domain string, port int, command, dir string, auto bool) (string, error) {
+	app, domains, portS, err := cfgfile.CreateApp(db, gh, repo, name, domain, port, command, dir, auto)
 	if err != nil {
 		return "", err
 	}

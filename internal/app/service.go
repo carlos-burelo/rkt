@@ -281,7 +281,7 @@ func (p *Program) Run() {
 	}()
 	if cfg.Healthz.Enabled {
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal})
-		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Apply: func(apps []config.App, global map[string]string) { p.sup.Apply(apps, global) }, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos})
+		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Apply: func(apps []config.App, global map[string]string) { p.sup.Apply(apps, global) }, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh})
 		sub, err := fs.Sub(web.Dist, "dist")
 		if err != nil {
 			p.log.Error("dashboard sin dist", "err", err)
