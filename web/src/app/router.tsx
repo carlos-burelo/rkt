@@ -1,7 +1,8 @@
 import {
-  createBrowserRouter, Navigate, Outlet, useNavigate, RouterProvider,
+  createBrowserRouter, Navigate, Outlet, useNavigate, RouterProvider, useRouteError,
 } from "react-router";
 import { useAuth } from "../features/auth/store";
+import { Button } from "@/components/ui/button";
 import { ShellLayout } from "./layout";
 import { Login } from "../features/auth/Login";
 import { Setup } from "../features/auth/Setup";
@@ -80,13 +81,39 @@ function AppLogsTab() {
   return <Logs />;
 }
 
+// Fallback de render: un error de vista no debe blanquear la app entera.
+function RouteError() {
+  const err = useRouteError();
+  const msg = err instanceof Error ? err.message : String(err ?? "error desconocido");
+  return (
+    <div className="flex min-h-screen items-center justify-center p-6">
+      <div className="w-full max-w-lg border border-bad/40 bg-card/60 p-4">
+        <div className="flex items-center gap-2">
+          <span aria-hidden className="h-1.5 w-1.5 bg-bad" />
+          <p className="micro text-bad">error de interfaz</p>
+        </div>
+        <p className="mt-2 font-mono text-[11px] leading-relaxed break-words text-muted-foreground">{msg}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => window.location.reload()}>
+            recargar
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => { window.location.href = "/dashboard/overview"; }}>
+            ir a overview
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const router = createBrowserRouter(
   [
-    { path: "/login", element: <LoginRoute /> },
-    { path: "/setup", element: <SetupRoute /> },
+    { path: "/login", element: <LoginRoute />, errorElement: <RouteError /> },
+    { path: "/setup", element: <SetupRoute />, errorElement: <RouteError /> },
     {
       path: "/",
       element: <RequireAuth />,
+      errorElement: <RouteError />,
       children: [
         {
           element: <ShellLayout />,

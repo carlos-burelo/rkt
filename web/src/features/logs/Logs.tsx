@@ -106,7 +106,7 @@ export function Logs() {
   }, [log, follow]);
 
   const lines = useMemo(() => {
-    const all = log === "" ? [] : log.split("\n");
+    const all = typeof log === "string" && log !== "" ? log.split("\n") : [];
     const counts: Record<Level, number> = { info: 0, warning: 0, error: 0 };
     for (const l of all) counts[levelOf(l)]++;
     const rx = q.trim() === "" ? null : new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");

@@ -54,7 +54,7 @@ export function FunnelMap({
               <path d="M35 1.5 L39.5 5 L35 8.5" stroke="currentColor" strokeWidth="1" fill="none" />
             </svg>
             <span
-              className="flex w-fit items-center gap-2 border border-border bg-card/50 px-2 py-1"
+              className="flex w-fit max-w-full flex-wrap items-center gap-x-2 gap-y-1 border border-border bg-card/50 px-2 py-1"
               title={`${g.hosts.length} ruta${g.hosts.length > 1 ? "s" : ""} → ${g.target}`}
             >
               <Server className="h-3 w-3 text-muted-foreground" />

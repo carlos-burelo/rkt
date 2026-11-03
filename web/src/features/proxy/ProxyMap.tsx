@@ -30,7 +30,27 @@ export function RadialMap({
           {links.length} host{links.length > 1 ? "s" : ""} · dial real
         </span>
       </header>
-      <div className="grid-paper relative">
+      {/* móvil: ledger host → backend. El radial necesita ancho para
+          orbitar 6 nodos sin solapes, así que solo se dibuja en sm+. */}
+      <ul className="divide-y divide-border sm:hidden">
+        {links.map((l) => (
+          <li key={l.host}>
+            <button
+              onClick={() => onSelect(selected === l.host ? null : l.host)}
+              className={cn(
+                "flex w-full items-center gap-2 px-3 py-2 text-left",
+                active === l.host ? "bg-secondary/40" : "hover:bg-accent/40",
+              )}
+            >
+              <Dot status={l.ok ? "ok" : "failed"} />
+              <span className="min-w-0 flex-1 truncate font-mono text-[10px]">{l.host}</span>
+              <span aria-hidden className="shrink-0 text-[9px] text-muted-foreground">→</span>
+              <span className="tnum shrink-0 font-mono text-[9px] text-muted-foreground">{l.short}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="grid-paper relative hidden sm:block">
         <div
           className={`relative mx-auto w-full ${compact ? "aspect-[16/8] max-w-xl" : "aspect-[8/5] max-w-3xl"}`}
           role="img"
