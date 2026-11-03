@@ -30,3 +30,6 @@ scripts/shots/node_modules/
 # cobertura local
 /cover.out
 /cover
+
+# estado local del servicio (db, logs, certs)
+/logs/
