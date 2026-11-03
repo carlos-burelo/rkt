@@ -200,7 +200,7 @@ func (p *Program) Run() {
 			p.log.Error("dashboard sin dist", "err", err)
 			sub = nilFS{}
 		}
-		dashH := dashboard.NewHandler(db, sub)
+		dashH := dashboard.NewHandler(sub)
 		p.srvHealth = &http.Server{
 			Addr: cfg.Healthz.Listen,
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

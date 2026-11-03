@@ -1,6 +1,7 @@
 // Package dashboard sirve la SPA embebida (web/dist) en /dashboard/.
-// El HTML va tras el mismo token que api/v1 (cookie rkt_token sirve
-// para cargas de página). Sin dist compilado: 503 con pista.
+// El HTML/JS es público a propósito: el wizard inicial (sin usuarios)
+// y el login viven en la SPA; los DATOS van tras token en /api/v1.
+// Autenticar el HTML impediría el primer arranque (bug real).
 package dashboard
 
 import (
@@ -9,14 +10,11 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"rkt-proxy/internal/api"
-	"rkt-proxy/internal/store"
 )
 
 // NewHandler SPA con fallback a index.html (history routing).
 // fsys = web/dist (embed en prod, DirFS en tests).
-func NewHandler(db *store.DB, fsys fs.FS) http.Handler {
+func NewHandler(fsys fs.FS) http.Handler {
 	fileSrv := http.FileServer(http.FS(fsys))
 	mux := http.NewServeMux()
 	serveIndex := func(w http.ResponseWriter, r *http.Request) {
@@ -44,5 +42,5 @@ func NewHandler(db *store.DB, fsys fs.FS) http.Handler {
 		r.URL.Path = "/" + path
 		fileSrv.ServeHTTP(w, r)
 	})
-	return api.RequireAuth(db, mux)
+	return mux
 }
