@@ -61,13 +61,21 @@ export function AppOverview() {
 
   return (
     <div className="space-y-4">
-      {domains[0] && <AppPreview domain={domains[0]} running={running} />}
-
-      <Section
-        title="Despliegue en producción"
-        description={prod ? `rev ${prod.rev.slice(0, 8)} · ${dur(prod.started_at, prod.finished_at)}` : "sin salida correcta"}
-        accent={!prod}
+      <div
+        className={
+          domains[0]
+            ? "grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(320px,auto)_minmax(0,1fr)]"
+            : "grid grid-cols-1 gap-4"
+        }
       >
+        {domains[0] && <AppPreview domain={domains[0]} running={running} />}
+
+        <Section
+          title="Despliegue en producción"
+          className="h-full"
+          description={prod ? `rev ${prod.rev.slice(0, 8)} · ${dur(prod.started_at, prod.finished_at)}` : "sin salida correcta"}
+          accent={!prod}
+        >
         {!prod && (
           <div className="border border-border bg-card/30 px-4 py-6 text-center">
             <p className="micro text-muted-foreground/60">sin registro</p>
@@ -116,7 +124,8 @@ export function AppOverview() {
             </div>
           </>
         )}
-      </Section>
+        </Section>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Section title="Checklist de ruta" description="lo que falta para servir">
