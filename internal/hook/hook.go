@@ -179,7 +179,8 @@ var installGuideTpl = template.Must(template.New("install").Parse(`<!DOCTYPE htm
 <html lang="es"><head><meta charset="utf-8"><title>rkt: instalar GitHub App</title></head>
 <body style="font-family:system-ui;padding:48px;max-width:640px">
 <h1>App creada. Ahora instálala</h1>
-<p>En la página de GitHub elige <b>All repositories</b> (todos los repositorios).</p>
+<p>En la página de GitHub elige <b>All repositories</b> (todos los repositorios),
+incluidas las organizaciones donde seas admin.</p>
 <p>Así rkt podrá clonar también repos privados sin PAT.</p>
 <p><a href="https://github.com/apps/{{.Slug}}/installations/new"
  style="display:inline-block;padding:10px 18px;background:#18181b;color:#fff;text-decoration:none;border-radius:2px">

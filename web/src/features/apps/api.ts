@@ -17,6 +17,17 @@ export async function getUsage(app: string, windowSec = 300): Promise<AppUsage> 
   return api<AppUsage>(`/api/v1/apps/${app}/usage?window=${windowSec}`);
 }
 
+export interface GithubRepo {
+  full_name: string;
+  default_branch: string;
+  private: boolean;
+  owner: string;
+}
+
+export async function listGithubRepos(): Promise<GithubRepo[]> {
+  return api<GithubRepo[]>("/api/v1/github/repos");
+}
+
 export async function setEnv(app: string, key: string, value: string): Promise<void> {
   await api(`/api/v1/apps/${app}/env`, { method: "PUT", body: JSON.stringify({ key, value }) });
 }

@@ -293,6 +293,18 @@ func ExchangeManifestCode(apiBase, code string) (*ManifestCredentials, error) {
 type InstallationRepo struct {
 	FullName      string `json:"full_name"`
 	DefaultBranch string `json:"default_branch"`
+	Private       bool   `json:"private"`
+	Owner         struct {
+		Login string `json:"login"`
+	} `json:"owner"`
+}
+
+// Repo vista plana para selectores (owner + privado).
+type Repo struct {
+	FullName      string `json:"full_name"`
+	DefaultBranch string `json:"default_branch"`
+	Private       bool   `json:"private"`
+	Owner         string `json:"owner"`
 }
 
 // Repositories lista repos instalados (sigue paginación Link).

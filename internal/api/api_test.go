@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/store"
 )
@@ -835,11 +836,20 @@ func TestGithubEndpoint(t *testing.T) {
 	d.Github = func() (map[string]any, error) {
 		return map[string]any{"configured": true, "repository_selection": "all", "repositories": "12"}, nil
 	}
+	d.GithubRepos = func() ([]github.Repo, error) {
+		return []github.Repo{{FullName: "acme/priv", DefaultBranch: "main", Private: true, Owner: "acme"}}, nil
+	}
 	h = NewHandler(d)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/github", tok))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"repository_selection":"all"`) {
 		t.Fatalf("github status = %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/github/repos", tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"full_name":"acme/priv"`) ||
+		!strings.Contains(rec.Body.String(), `"private":true`) {
+		t.Fatalf("github repos = %d %s", rec.Code, rec.Body.String())
 	}
 }
 

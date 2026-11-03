@@ -20,6 +20,7 @@ import (
 	"rkt-proxy/internal/appview"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/store"
@@ -50,6 +51,8 @@ type Deps struct {
 	TLS func(host string) (managed bool, expires string)
 	// Github estado vivo de la GitHub App (nil = no configurada).
 	Github func() (map[string]any, error)
+	// GithubRepos repos accesibles a las instalaciones (selector de app).
+	GithubRepos func() ([]github.Repo, error)
 }
 
 // cloneFleet copia editable de la flota viva (Live se lee sin lock;
@@ -889,6 +892,24 @@ func NewHandler(d Deps) http.Handler {
 			return
 		}
 		writeJSON(w, st)
+	})
+
+	// Repos accesibles a la App (selector de "nueva app").
+	mux.HandleFunc("/api/v1/github/repos", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+			return
+		}
+		if d.GithubRepos == nil {
+			writeJSON(w, []github.Repo{})
+			return
+		}
+		repos, err := d.GithubRepos()
+		if err != nil {
+			writeErr(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		writeJSON(w, repos)
 	})
 
 	// Routes: misma semántica que CLI (rm quita host).

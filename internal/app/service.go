@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -276,7 +277,7 @@ func (p *Program) Run() {
 	}()
 	if cfg.Healthz.Enabled {
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal})
-		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Apply: func(apps []config.App, global map[string]string) { p.sup.Apply(apps, global) }, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus, Github: p.githubStatus})
+		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Apply: func(apps []config.App, global map[string]string) { p.sup.Apply(apps, global) }, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos})
 		sub, err := fs.Sub(web.Dist, "dist")
 		if err != nil {
 			p.log.Error("dashboard sin dist", "err", err)
@@ -527,6 +528,42 @@ func (p *Program) githubStatus() (map[string]any, error) {
 			out["repositories"] = strconv.Itoa(len(repos))
 		}
 	}
+	return out, nil
+}
+
+// githubRepos lista repos de todas las instalaciones (personales y orgs).
+func (p *Program) githubRepos() ([]github.Repo, error) {
+	gh := p.gh()
+	if gh == nil {
+		return nil, fmt.Errorf("sin github app")
+	}
+	insts, err := gh.Installations()
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	out := []github.Repo{}
+	for _, inst := range insts {
+		tok, err := gh.TokenFor(inst.ID)
+		if err != nil {
+			continue
+		}
+		repos, err := gh.Repositories(tok)
+		if err != nil {
+			continue
+		}
+		for _, r := range repos {
+			if seen[r.FullName] {
+				continue
+			}
+			seen[r.FullName] = true
+			out = append(out, github.Repo{
+				FullName: r.FullName, DefaultBranch: r.DefaultBranch,
+				Private: r.Private, Owner: r.Owner.Login,
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].FullName < out[j].FullName })
 	return out, nil
 }
 

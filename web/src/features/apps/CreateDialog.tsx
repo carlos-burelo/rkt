@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PathInput } from "../../shared/components/PathPicker";
 import { DomainSuggest } from "../../shared/components/DomainSuggest";
-import { createApp, CreateAppIn, detectApp, buildApp, deployAppAsync, DetectOut } from "./api";
+import { createApp, CreateAppIn, detectApp, buildApp, deployAppAsync, DetectOut, listGithubRepos, GithubRepo } from "./api";
 import { deploymentLog, getDeployment } from "../deployments/api";
 
 type Origin = "git" | "local" | "manual";
@@ -78,6 +78,9 @@ export function CreateDialog({
   const [step, setStep] = useState<Step>(1);
   const [origin, setOrigin] = useState<Origin>("git");
   const [repo, setRepo] = useState("");
+  const [ghRepos, setGhRepos] = useState<GithubRepo[] | null>(null);
+  const [repoPick, setRepoPick] = useState(false);
+  const [repoQ, setRepoQ] = useState("");
   const [name, setName] = useState("");
   const [nameTouched, setNameTouched] = useState(false);
   const [command, setCommand] = useState("");
@@ -98,6 +101,18 @@ export function CreateDialog({
 
   // nombre derivado mientras el usuario no lo escriba
   const suggested = useMemo(() => slugOf(origin === "git" ? repo : dir), [origin, repo, dir]);
+
+  const toggleRepos = () => {
+    const next = !repoPick;
+    setRepoPick(next);
+    if (next && ghRepos === null) {
+      listGithubRepos().then(setGhRepos).catch(fail);
+    }
+  };
+  const reposFiltered = (ghRepos ?? []).filter((r) => {
+    const q = repoQ.trim().toLowerCase();
+    return q === "" || r.full_name.toLowerCase().includes(q) || r.owner.toLowerCase().includes(q);
+  });
   useEffect(() => {
     if (!nameTouched) setName(suggested);
   }, [suggested, nameTouched]);
@@ -336,19 +351,64 @@ export function CreateDialog({
           <div className="space-y-3">
             {origin === "git" && (
               <Field label="repositorio" hint="https:// o git@" error={tried ? errs.gitRepo || errs.repo : ""}>
-                <Input
-                  autoFocus
-                  value={repo}
-                  onChange={(e) => setRepo(e.target.value)}
-                  placeholder="https://github.com/usuario/app"
-                  className="font-mono text-[11px]"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") next();
-                  }}
-                />
+                <div className="flex items-center gap-1">
+                  <Input
+                    autoFocus
+                    value={repo}
+                    onChange={(e) => setRepo(e.target.value)}
+                    placeholder="https://github.com/usuario/app"
+                    className="font-mono text-[11px]"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") next();
+                    }}
+                  />
+                  <Button type="button" size="sm" variant="outline" onClick={toggleRepos}>
+                    GitHub
+                  </Button>
+                </div>
                 <span className="font-mono text-[9px] normal-case text-muted-foreground/70">
                   se clona en segundo plano; el comando se detecta del proyecto
                 </span>
+                {repoPick && (
+                  <div className="mt-1 border border-border bg-card/40">
+                    <div className="border-b border-border p-1.5">
+                      <Input
+                        value={repoQ}
+                        onChange={(e) => setRepoQ(e.target.value)}
+                        placeholder="buscar repo u org…"
+                        className="h-7 font-mono text-[10px]"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="max-h-52 overflow-auto">
+                      {ghRepos === null && (
+                        <p className="px-2 py-3 font-mono text-[9px] text-muted-foreground">cargando repositorios de la App…</p>
+                      )}
+                      {ghRepos !== null && reposFiltered.length === 0 && (
+                        <p className="px-2 py-3 font-mono text-[9px] text-muted-foreground">
+                          sin repos visibles · instala la App con All repositories
+                        </p>
+                      )}
+                      {reposFiltered.map((r) => (
+                        <button
+                          key={r.full_name}
+                          type="button"
+                          onClick={() => {
+                            setRepo(`https://github.com/${r.full_name}.git`);
+                            setRepoPick(false);
+                          }}
+                          className="flex w-full items-center gap-2 border-b border-border/50 px-2 py-1.5 text-left last:border-0 hover:bg-accent/40"
+                        >
+                          <span className="min-w-0 flex-1 truncate font-mono text-[10px]">{r.full_name}</span>
+                          <span className="shrink-0 font-mono text-[8px] text-muted-foreground">{r.default_branch}</span>
+                          {r.private && (
+                            <span className="shrink-0 border border-warn/40 px-1 font-mono text-[8px] text-warn">privado</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </Field>
             )}
             {origin === "local" && (
