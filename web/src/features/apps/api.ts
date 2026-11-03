@@ -1,5 +1,5 @@
 import { api } from "../../shared/lib/http";
-import { AppMeta } from "../../shared/lib/types";
+import { AppMeta, AppUsage } from "../../shared/lib/types";
 
 export async function listApps(): Promise<AppMeta[]> {
   return api<AppMeta[]>("/api/v1/apps");
@@ -11,6 +11,10 @@ export async function appAction(name: string, action: "restart" | "deploy" | "ro
 
 export async function getEnv(app: string): Promise<Record<string, string>> {
   return api<Record<string, string>>(`/api/v1/apps/${app}/env`);
+}
+
+export async function getUsage(app: string, windowSec = 300): Promise<AppUsage> {
+  return api<AppUsage>(`/api/v1/apps/${app}/usage?window=${windowSec}`);
 }
 
 export async function setEnv(app: string, key: string, value: string): Promise<void> {

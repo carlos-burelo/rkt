@@ -139,8 +139,10 @@ real por Host), `hosts_list|add|remove`, `deployment_get`, `deploy_wait`,
 no lo trae), `prune` (exige `confirm=prune`).
 
 Monitoreo en vivo: `metrics_now` (estado/pid/RSS por app + tráfico 5m),
-`process_stats` (RSS + %CPU), `traffic_rate` (rps/errores/bytes/p50-p99 en
-ventana), `watch_status` (long-poll hasta healthy/unhealthy/…),
+`app_usage` (CPU%, RSS/pico/virtual, I/O, handles/hilos, disco del proyecto,
+log y tráfico real de la ventana), `process_stats` (RSS + %CPU), `traffic_rate`
+(rps/errores/bytes/p50-p99 en ventana), `watch_status` (long-poll hasta
+healthy/unhealthy/…),
 `watch_events` (eventos nuevos al instante), `watch_deployment` (espera un
 deploy nuevo), `tail_follow` (sigue un log y espera regex).
 Límite: no toca el servicio Windows; los cambios de manifiesto se aplican

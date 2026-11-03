@@ -16,7 +16,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"rkt-proxy/internal/appusage"
 	"rkt-proxy/internal/cfgfile"
+	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/procstat"
 	"rkt-proxy/internal/weblog"
@@ -45,6 +47,10 @@ type tailFollowArg struct {
 }
 type trafficArg struct {
 	Seconds int `json:"seconds,omitempty" jsonschema:"ventana en segundos (default 60, máx 86400)"`
+}
+type appUsageArg struct {
+	App     string `json:"app" jsonschema:"app a medir"`
+	WindowS int    `json:"window_s,omitempty" jsonschema:"ventana de tráfico (default 300, máx 86400)"`
 }
 
 type healthApp struct {
@@ -412,6 +418,44 @@ func (s *Server) doMetricsNow() (string, error) {
 	})
 }
 
+// doAppUsage mide proceso + disco + tráfico real de una app.
+func (s *Server) doAppUsage(a appUsageArg) (string, error) {
+	cfg, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	app := cfgfile.FindApp(cfg, a.App)
+	if app == nil {
+		return "", fmt.Errorf("app %q inexistente", a.App)
+	}
+	snap, err := s.healthSnap()
+	if err != nil {
+		return "", err
+	}
+	st := health.AppStatus{Name: app.Name}
+	for _, x := range snap.Apps {
+		if x.Name == app.Name {
+			st = health.AppStatus{Name: x.Name, Running: x.Running, Pid: x.Pid, Restarts: x.Restarts, Failed: x.Failed, HTTPOK: x.HTTPOK}
+		}
+	}
+	win := a.WindowS
+	if win <= 0 {
+		win = 300
+	}
+	if win > 86400 {
+		win = 86400
+	}
+	rep, err := appusage.Collect(appusage.Input{
+		App: *app, Cfg: cfg, LogsDir: logx.DirFor(s.cfgPath),
+		Status: st, Window: time.Duration(win) * time.Second,
+	})
+	if err != nil {
+		return "", err
+	}
+	return jsonText(rep)
+}
+
 // registerMonitor añade tools de monitoreo en vivo.
 func (s *Server) registerMonitor(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{Name: "metrics_now", Description: "Foto actual: estado/pid/RSS por app + tráfico de 5 min (req, errores, p50/p95/p99)."},
@@ -441,5 +485,9 @@ func (s *Server) registerMonitor(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{Name: "tail_follow", Description: "Sigue un log desde el final: devuelve líneas nuevas, o espera hasta que una regex aparezca."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a tailFollowArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doTailFollow(a))
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "app_usage", Description: "Consumo real de una app: CPU%, RSS/pico/virtual, I/O, handles/hilos, disco del proyecto, log y tráfico de la ventana."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a appUsageArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doAppUsage(a))
 		})
 }

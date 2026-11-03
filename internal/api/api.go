@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"rkt-proxy/internal/appusage"
 	"rkt-proxy/internal/appview"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
@@ -562,6 +563,28 @@ func NewHandler(d Deps) http.Handler {
 		switch {
 		case action == "" && r.Method == http.MethodGet:
 			writeJSON(w, appview.App(d.Live.Get(), *a))
+		case action == "usage" && r.Method == http.MethodGet:
+			st := health.AppStatus{Name: name}
+			if d.Apps != nil {
+				for _, s := range d.Apps() {
+					if s.Name == name {
+						st = s
+					}
+				}
+			}
+			win := queryInt(r, "window", 300)
+			if win > 86400 {
+				win = 86400
+			}
+			rep, err := appusage.Collect(appusage.Input{
+				App: *a, Cfg: d.Live.Get(), LogsDir: d.LogsDir,
+				Status: st, Window: time.Duration(win) * time.Second,
+			})
+			if err != nil {
+				writeErr(w, http.StatusServiceUnavailable, err.Error())
+				return
+			}
+			writeJSON(w, rep)
 		case action == "" && r.Method == http.MethodPut:
 			if !requireOperator(w, r, d.DB) {
 				return

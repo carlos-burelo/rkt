@@ -14,6 +14,7 @@ import { fixHost } from "../routes/api";
 
 const TABS = [
   { id: "overview", label: "Resumen" },
+  { id: "usage", label: "Consumo" },
   { id: "deploys", label: "Despliegues" },
   { id: "logs", label: "Registros" },
   { id: "analytics", label: "Analítica" },

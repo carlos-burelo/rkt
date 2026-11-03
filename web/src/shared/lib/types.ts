@@ -71,3 +71,35 @@ export interface Route {
   hosts: string[];
   target: string;
 }
+
+export interface UsageTraffic {
+  window_s: number;
+  requests: number;
+  bytes: number;
+  errors: number;
+  rps: number;
+  err_pct: number;
+}
+
+/** Consumo medido de una app (proceso + disco + tráfico real). */
+export interface AppUsage {
+  app: string;
+  pid: number;
+  running: boolean;
+  http_ok: boolean;
+  restarts: number;
+  uptime_s: number;
+  cpu_pct: number;
+  rss_mb: number;
+  peak_rss_mb: number;
+  virtual_mb: number;
+  io_read_mb: number;
+  io_write_mb: number;
+  handles: number;
+  threads: number;
+  disk_bytes: number;
+  /** el walk de disco se cortó por presupuesto de tiempo */
+  disk_partial?: boolean;
+  log_bytes: number;
+  traffic: UsageTraffic;
+}

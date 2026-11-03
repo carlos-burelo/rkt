@@ -17,6 +17,7 @@ import { Alerts } from "../features/alerts/Alerts";
 import { EnvAll } from "../features/env/EnvAll";
 import { AppTabs } from "../features/apps/AppTabs";
 import { AppOverview } from "../features/apps/AppOverview";
+import { AppUsage } from "../features/apps/AppUsage";
 import { AppEnv } from "../features/apps/AppEnv";
 import { AppSettings } from "../features/apps/AppSettings";
 import { Routes } from "../features/routes/Routes";
@@ -134,6 +135,7 @@ export const router = createBrowserRouter(
               children: [
                 { index: true, element: <Navigate to="overview" replace /> },
                 { path: "overview", element: <AppOverview /> },
+                { path: "usage", element: <AppUsage /> },
                 { path: "deploys", element: <AppDeploysTab /> },
                 { path: "logs", element: <AppLogsTab /> },
                 { path: "analytics", element: <AnalyticsPage /> },
