@@ -51,6 +51,7 @@ export function App() {
   const [settings, setSettingsMap] = useState<Record<string, string>>({});
   const [users, setUsers] = useState<User[]>([]);
   const [palette, setPalette] = useState(false);
+  const [menu, setMenu] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
 
   function toast(kind: "ok" | "err", msg: string) {
@@ -153,6 +154,7 @@ export function App() {
   function openApp(name: string) {
     setAppFilter(name);
     setPage("app");
+    setMenu(false);
   }
 
   const nav: { id: Page; label: string; admin?: boolean }[] = [
@@ -166,8 +168,29 @@ export function App() {
 
   return (
     <div className="flex min-h-screen bg-zinc-950 text-sm text-zinc-100">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-800 bg-zinc-900/40">
-        <div className="border-b border-zinc-800 px-4 py-3 text-base font-bold tracking-tight">▲ rkt</div>
+      {/* topbar móvil */}
+      <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-3 border-b border-zinc-800 bg-zinc-950/95 px-4 py-2.5 backdrop-blur md:hidden">
+        <button onClick={() => setMenu(true)} className="rounded border border-zinc-800 px-2 py-1 text-zinc-300" aria-label="menú">
+          ☰
+        </button>
+        <span className="font-bold tracking-tight">▲ rkt</span>
+        <span className="flex-1" />
+        {!online && <span className="text-xs text-amber-300">offline</span>}
+      </div>
+      {menu && (
+        <div className="fixed inset-0 z-40 bg-black/70 md:hidden" onClick={() => setMenu(false)} />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 transition-transform md:static md:z-auto md:w-56 md:translate-x-0 md:bg-zinc-900/40 ${
+          menu ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+          <span className="text-base font-bold tracking-tight">▲ rkt</span>
+          <button onClick={() => setMenu(false)} className="rounded px-2 text-zinc-500 md:hidden" aria-label="cerrar">
+            ✕
+          </button>
+        </div>
         <div className="px-3 pt-3">
           <button
             onClick={() => setPalette(true)}
@@ -189,7 +212,10 @@ export function App() {
             .map((n) => (
               <button
                 key={n.id}
-                onClick={() => setPage(n.id)}
+                onClick={() => {
+                  setPage(n.id);
+                  setMenu(false);
+                }}
                 className={`block w-full rounded-md px-2.5 py-1.5 text-left ${
                   page === n.id || (n.id === "deployments" && page === "app")
                     ? "bg-zinc-800 font-medium text-white"
@@ -245,14 +271,14 @@ export function App() {
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 p-6">
+      <main className="min-w-0 flex-1 p-4 pt-16 md:p-6 md:pt-6">
         <div className="mx-auto max-w-4xl">
           <Err msg={err} />
           {boot ? (
             <Skeleton rows={6} />
           ) : (
             <>
-          {page === "overview" && <Overview apps={apps} evs={evs} openApp={openApp} />}
+          {page === "overview" && <Overview apps={apps} evs={evs} deps={deps} openApp={openApp} />}
           {page === "deployments" && (
             <Deployments deps={vis} filtered={filter !== "" || appFilter !== ""} onSelect={setSel} />
           )}

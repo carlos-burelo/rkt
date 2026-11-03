@@ -1,18 +1,23 @@
-import { AppStatus, RktEvent } from "../../shared/lib/types";
+import { AppStatus, RktEvent, Deployment } from "../../shared/lib/types";
 import { rel } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
+import { Metrics } from "./Metrics";
 
 export function Overview({
   apps,
   evs,
+  deps,
   openApp,
 }: {
   apps: AppStatus[];
   evs: RktEvent[];
+  deps: Deployment[];
   openApp: (name: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+    <div className="space-y-3">
+      <Metrics apps={apps} deps={deps} />
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       {apps.map((a) => (
         <button
           key={a.name}
@@ -41,6 +46,7 @@ export function Overview({
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

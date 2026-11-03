@@ -3,6 +3,7 @@ import { Deployment } from "../../shared/lib/types";
 import { rel, dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
 import { CopyButton } from "../../shared/components/feedback";
+import { Timeline } from "./Timeline";
 
 export function DeployDrawer({
   dep,
@@ -54,6 +55,8 @@ export function DeployDrawer({
                 ))}
               </div>
             )}
+            <p className="text-xs uppercase tracking-wider text-zinc-500">timeline</p>
+            <Timeline dep={dep} />
             <p className="text-xs uppercase tracking-wider text-zinc-500">build log</p>
             <pre className="min-h-0 flex-1 overflow-auto rounded-lg border border-zinc-800 bg-black p-3 font-mono text-xs leading-relaxed text-zinc-300">
               {buildLog}
