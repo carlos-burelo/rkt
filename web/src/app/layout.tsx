@@ -143,13 +143,13 @@ export function ShellLayout() {
     <SidebarProvider>
       <Toaster theme="dark" position="bottom-right" />
       <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-        <SidebarHeader className="gap-0 border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:px-0.5">
+        <SidebarHeader className="gap-0 border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:px-2">
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
                 size="lg"
                 onClick={() => navigate("/overview")}
-                className="h-auto gap-2.5 rounded-none p-0 hover:bg-transparent"
+                className="h-auto gap-2.5 rounded-none p-0 hover:bg-transparent group-data-[collapsible=icon]:justify-center"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center border border-signal/40 bg-signal/10 text-signal">
                   <BrandMark className="h-4 w-4" />
@@ -171,7 +171,7 @@ export function ShellLayout() {
           </SidebarMenu>
 
           {canWrite && (
-            <Button className="mt-3 w-full justify-between px-2.5 group-data-[collapsible=icon]:px-0" size="sm" onClick={() => setCreateOpen(true)}>
+            <Button className="mt-3 w-full justify-between px-2.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0" size="sm" onClick={() => setCreateOpen(true)}>
               <span className="inline-flex items-center gap-1.5">
                 <Plus className="h-3.5 w-3.5" />
                 <span className="group-data-[collapsible=icon]:hidden">Nueva app</span>
@@ -184,7 +184,7 @@ export function ShellLayout() {
 
           <button
             onClick={() => setPalette(true)}
-            className="mt-2 flex h-8 w-full items-center gap-2 border border-border bg-field/25 px-2 text-left font-mono text-[10px] text-muted-foreground transition-colors hover:border-input hover:text-foreground group-data-[collapsible=icon]:justify-center"
+            className="mt-2 flex h-8 w-full items-center gap-2 border border-border bg-field/25 px-2 text-left font-mono text-[10px] text-muted-foreground transition-colors hover:border-input hover:text-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
           >
             <Search className="h-3.5 w-3.5 shrink-0" />
             <span className="flex-1 truncate group-data-[collapsible=icon]:hidden">Buscar o accionar</span>
@@ -199,7 +199,7 @@ export function ShellLayout() {
             const items = g.items.filter((n) => !("admin" in n && n.admin) || isAdmin);
             if (items.length === 0) return null;
             return (
-              <SidebarGroup key={g.label} className="py-0">
+              <SidebarGroup key={g.label} className="py-0 group-data-[collapsible=icon]:p-0">
                 <SidebarGroupLabel className="mt-4 mb-1 flex h-4 items-center gap-2 px-2 font-mono text-[9px] tracking-[0.18em] uppercase text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
                   <span>{g.label}</span>
                   <span aria-hidden className="h-px flex-1 bg-sidebar-border" />
@@ -213,10 +213,10 @@ export function ShellLayout() {
                             <SidebarMenuButton
                               isActive={isActive}
                               tooltip={n.label}
-                              className="relative h-8 rounded-[1px] px-2 text-[12px] font-normal text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-px before:bg-signal before:opacity-0 data-active:before:opacity-100 [&>svg]:size-3.5 [&>svg]:text-muted-foreground/70 data-active:[&>svg]:text-signal"
+                              className="relative h-8 rounded-[1px] px-2 text-[12px] font-normal text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-px before:bg-signal before:opacity-0 data-active:before:opacity-100 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 [&>svg]:size-3.5 [&>svg]:text-muted-foreground/70 data-active:[&>svg]:text-signal"
                             >
                               <n.icon />
-                              <span className="flex-1">{n.label}</span>
+                              <span className="flex-1 group-data-[collapsible=icon]:hidden">{n.label}</span>
                               {n.to === "/deployments" && runningDeps > 0 && (
                                 <span className="tnum font-mono text-[10px] text-signal">{runningDeps}</span>
                               )}
@@ -234,7 +234,7 @@ export function ShellLayout() {
             );
           })}
 
-          <SidebarGroup className="mt-4 py-0">
+          <SidebarGroup className="mt-4 py-0 group-data-[collapsible=icon]:p-0">
             <SidebarGroupLabel className="mb-1 flex h-4 items-center gap-2 px-2 font-mono text-[9px] tracking-[0.18em] uppercase text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
               <span>Bahías</span>
               <span aria-hidden className="h-px flex-1 bg-sidebar-border" />
@@ -247,7 +247,7 @@ export function ShellLayout() {
                     isActive={appFilter === ""}
                     onClick={() => setAppFilter("")}
                     tooltip="todas las bahías"
-                    className="h-7 rounded-[1px] px-2 font-mono text-[10px] text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:text-sidebar-foreground"
+                    className="h-7 rounded-[1px] px-2 font-mono text-[10px] text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:text-sidebar-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
                   >
                     <span className="hidden h-3.5 w-3.5 shrink-0 items-center justify-center text-muted-foreground/60 group-data-[collapsible=icon]:flex">
                       <LayoutGrid className="h-3.5 w-3.5" />
@@ -265,7 +265,7 @@ export function ShellLayout() {
                       <SidebarMenuButton
                         isActive={appFilter === a.name}
                         onClick={() => openApp(a.name)}
-                        className="h-7 rounded-[1px] px-2 font-mono text-[10px] text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:text-sidebar-foreground"
+                        className="h-7 rounded-[1px] px-2 font-mono text-[10px] text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:text-sidebar-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
                         tooltip={domain ? `${a.name} → ${domain}` : a.name}
                       >
                         <Dot status={st} />
@@ -285,7 +285,7 @@ export function ShellLayout() {
           </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter className="gap-2 border-t border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:px-1">
+        <SidebarFooter className="gap-2 border-t border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:px-2">
           {!online && (
             <p className="border border-warn/30 bg-warn/8 px-2 py-1.5 font-mono text-[10px] text-warn group-data-[collapsible=icon]:hidden">
               sin conexión · lectura local
@@ -297,7 +297,7 @@ export function ShellLayout() {
           <SidebarMenu>
             <SidebarMenuItem>
               <DropdownMenu>
-                <DropdownMenuTrigger className="flex w-full items-center gap-2 rounded-[1px] px-1 py-1 text-left outline-none hover:bg-sidebar-accent">
+                <DropdownMenuTrigger className="flex w-full items-center gap-2 rounded-[1px] px-1 py-1 text-left outline-none hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
                   <Avatar name={who?.user ?? "?"} />
                   <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
                     <span className="truncate text-[11px] font-medium">{who?.user}</span>
