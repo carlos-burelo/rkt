@@ -4,6 +4,7 @@ import { Me } from "../../shared/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Avatar } from "../../shared/components/ui";
 
 export function Login({ onOk }: { onOk: (me: Me) => void }) {
   const [user, setUser] = useState("");
@@ -21,19 +22,26 @@ export function Login({ onOk }: { onOk: (me: Me) => void }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Card className="w-80">
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-80 overflow-hidden py-0">
+        <div aria-hidden className="manifest-strip h-1.5 w-full opacity-80" />
         <CardHeader>
-          <CardTitle className="text-lg">▲ rkt</CardTitle>
+          <div className="flex items-center gap-3">
+            <Avatar name="rkt" />
+            <div>
+              <CardTitle className="text-lg tracking-tight">rkt</CardTitle>
+              <p className="tnum font-mono text-[11px] text-muted-foreground">terminal · acceso</p>
+            </div>
+          </div>
           <CardDescription>
-            Accede con tu usuario (creado por CLI: <span className="font-mono">users add</span>).
+            Accede con tu usuario (creado por CLI: <span className="tnum font-mono">users add</span>).
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pb-6">
           <form onSubmit={submit} className="space-y-3">
-            <Input value={user} onChange={(e) => setUser(e.target.value)} placeholder="usuario" autoComplete="username" />
-            <Input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="password" autoComplete="current-password" />
-            {err !== "" && <p className="text-sm text-destructive">{err}</p>}
+            <Input value={user} onChange={(e) => setUser(e.target.value)} placeholder="usuario" autoComplete="username" className="font-mono text-xs" />
+            <Input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="password" autoComplete="current-password" className="font-mono text-xs" />
+            {err !== "" && <p className="text-xs text-destructive">{err}</p>}
             <Button type="submit" className="w-full">Entrar</Button>
           </form>
         </CardContent>

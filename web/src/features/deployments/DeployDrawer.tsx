@@ -102,7 +102,7 @@ export function DeployDrawer() {
             <Timeline dep={dep} />
             <Steps log={buildLog} />
             <p className="text-sm font-medium">Build log</p>
-            <pre className="min-h-0 flex-1 overflow-auto rounded-lg border bg-black p-3 font-mono text-xs leading-relaxed text-foreground">
+            <pre className="min-h-0 flex-1 overflow-auto rounded-lg border bg-card/40 p-3 font-mono text-xs leading-relaxed text-foreground">
               {buildLog}
             </pre>
           </div>

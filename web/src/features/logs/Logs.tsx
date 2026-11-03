@@ -4,7 +4,8 @@ import { AppStatus, Deployment } from "../../shared/lib/types";
 import { deploymentLog } from "../deployments/api";
 import { fetchLog } from "./api";
 import { Bars } from "../../shared/components/feedback";
-import { PageHeader } from "../../shared/components/patterns";
+import { Dot, Avatar } from "../../shared/components/ui";
+import { PageHeader, Section } from "../../shared/components/patterns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -90,7 +91,17 @@ export function Logs() {
 
   return (
     <div className="space-y-3">
-      <PageHeader title="Logs" description="Runtime por app u operativo. Live refresca cada 2s; Build muestra el último deploy." />
+      <PageHeader
+        title="Logs"
+        description="Runtime por app u operativo. Live refresca cada 2s; Build muestra el último deploy."
+        actions={
+          <span className="tnum inline-flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+            <Dot status={tab === "runtime" && live ? "running" : "stopped"} />
+            {tab === "runtime" ? (live ? "live · 2s" : "pausado") : "build"}
+            {appFilter ? ` · ${appFilter}` : " · operativo"}
+          </span>
+        }
+      />
       <div className="flex flex-wrap items-center gap-2">
         <Tabs value={tab} onValueChange={(v) => setTab(v as "runtime" | "build")}>
           <TabsList>
@@ -162,11 +173,18 @@ export function Logs() {
             seguir
           </label>
           {lines.stamped > 0 && (
-            <div className="rounded-lg border bg-card p-3">
+            <Section title="24h" description={`${lines.stamped} líneas con hora · access.log local`}>
               <Bars data={lines.buckets} height={48} />
-            </div>
+            </Section>
           )}
-          <pre ref={logRef} className="h-[60vh] overflow-auto rounded-lg border bg-black p-3 font-mono text-xs leading-relaxed text-foreground">
+          <div className="overflow-hidden rounded-lg border">
+            <div className="tnum flex items-center gap-3 border-b bg-muted/40 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span aria-hidden className="manifest-strip h-4 w-1 rounded-full opacity-70" />
+              <span>consola</span>
+              <span className="flex-1" />
+              <span>{lines.vis.length} líneas</span>
+            </div>
+            <pre ref={logRef} className="h-[60vh] overflow-auto bg-card/40 p-3 font-mono text-xs leading-relaxed text-foreground">
             {lines.vis.map((l, i) => {
               const lv = levelOf(l);
               return (
@@ -182,17 +200,21 @@ export function Logs() {
               );
             })}
             {lines.vis.length === 0 && "sin líneas"}
-          </pre>
+            </pre>
+          </div>
         </>
       )}
       {tab === "build" && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="overflow-hidden rounded-lg border">
+          <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
             {latest ? (
               <>
-                <span className="font-mono">
+                <Dot status={latest.status} />
+                <Avatar name={latest.app} />
+                <span className="tnum font-mono">
                   #{latest.id} {latest.app} {latest.rev.slice(0, 8)} ({latest.status})
                 </span>
+                <span className="flex-1" />
                 <Button
                   variant="outline" size="sm"
                   onClick={() => {
@@ -209,7 +231,7 @@ export function Logs() {
               <span>Sin deployments{appFilter ? ` para ${appFilter}` : ""}.</span>
             )}
           </div>
-          <pre className="h-[60vh] overflow-auto rounded-lg border bg-black p-3 font-mono text-xs leading-relaxed text-foreground">
+          <pre className="h-[60vh] overflow-auto bg-card/40 p-3 font-mono text-xs leading-relaxed text-foreground">
             {build}
           </pre>
         </div>

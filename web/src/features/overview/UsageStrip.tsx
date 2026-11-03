@@ -22,27 +22,34 @@ export function UsageStrip() {
     ["Error rate", `${(u.err_rate * 100).toFixed(1)}%`, u.err_rate],
   ];
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <p className="mb-3 text-sm font-medium">Usage · 30 días</p>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {bars.map(([label, v, frac]) => (
-          <div key={label}>
-            <div className="tnum flex justify-between font-mono text-xs">
-              <span className="text-muted-foreground">{label}</span>
-              <span>{v}</span>
-            </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded bg-muted" role="img" aria-label={`${label} ${v}`}>
-              <div
-                className={`h-full rounded ${frac > 0.9 ? "bg-red-400" : frac > 0.7 ? "bg-amber-400" : "bg-emerald-400"}`}
-                style={{ width: `${Math.min(100, Math.max(2, frac * 100))}%` }}
-              />
-            </div>
-          </div>
-        ))}
+    <div className="overflow-hidden rounded-lg border">
+      <div className="tnum flex items-center gap-3 border-b bg-muted/40 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span aria-hidden className="manifest-strip h-4 w-1 rounded-full opacity-70" />
+        <span>usage · 30 días</span>
+        <span className="flex-1" />
+        <span>access.log local</span>
       </div>
-      <p className="mt-3 font-mono text-[11px] text-muted-foreground">
-        medido de access.log local · límites solo visuales (settings quota_*)
-      </p>
+      <div className="bg-card/40 p-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {bars.map(([label, v, frac]) => (
+            <div key={label}>
+              <div className="tnum flex justify-between font-mono text-xs">
+                <span className="text-muted-foreground">{label}</span>
+                <span>{v}</span>
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded bg-muted" role="img" aria-label={`${label} ${v}`}>
+                <div
+                  className={`h-full rounded ${frac > 0.9 ? "bg-red-400" : frac > 0.7 ? "bg-amber-400" : "bg-emerald-400"}`}
+                  style={{ width: `${Math.min(100, Math.max(2, frac * 100))}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="tnum mt-3 font-mono text-[11px] text-muted-foreground">
+          medido de access.log local · límites solo visuales (settings quota_*)
+        </p>
+      </div>
     </div>
   );
 }

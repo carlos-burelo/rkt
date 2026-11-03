@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getSettings, setSetting } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PageHeader } from "../../shared/components/patterns";
+import { PageHeader, Section } from "../../shared/components/patterns";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
 
@@ -37,34 +37,36 @@ export function Settings() {
   return (
     <div className="space-y-3">
       <PageHeader title="Settings" description="Ajustes de flota. Aplican en caliente salvo binarios." />
-      <div className="rounded-lg border bg-card p-4">
+      <Section title={`Claves · ${Object.keys(settings).length}`} description="Guardar valida antes de persistir. Binarios exigen restart.">
         {Object.entries(settings).map(([k, v]) => (
-          <div key={k} className="border-b py-3 last:border-0">
-            <div className="flex items-center gap-2">
-              <span className="w-40 shrink-0 font-mono text-xs">{k}</span>
-              <Input
-                defaultValue={v}
-                id={`set-${k}`}
-                disabled={!canWrite}
-                className="flex-1 font-mono text-xs"
-              />
-              {canWrite && (
-                <Button
-                  variant="outline" size="sm"
-                  onClick={() => {
-                    const el = document.getElementById(`set-${k}`) as HTMLInputElement;
-                    setSetting(k, el.value).then(load).catch(fail);
-                  }}
-                >
-                  guardar
-                </Button>
-              )}
+          <div key={k} className="flex items-center gap-3 border-b border-border/60 py-3 last:border-0">
+            <span aria-hidden className="manifest-strip h-8 w-1 shrink-0 rounded-full opacity-70" />
+            <div className="min-w-0 flex-1">
+              <p className="font-mono text-xs">{k}</p>
+              {DESCRIPTIONS[k] && <p className="mt-0.5 text-[11px] text-muted-foreground">{DESCRIPTIONS[k]}</p>}
             </div>
-            {DESCRIPTIONS[k] && <p className="mt-1 text-[11px] text-muted-foreground">{DESCRIPTIONS[k]}</p>}
+            <Input
+              key={v}
+              defaultValue={v}
+              id={`set-${k}`}
+              disabled={!canWrite}
+              className="tnum w-56 shrink-0 font-mono text-xs"
+            />
+            {canWrite && (
+              <Button
+                variant="outline" size="sm"
+                onClick={() => {
+                  const el = document.getElementById(`set-${k}`) as HTMLInputElement;
+                  setSetting(k, el.value).then(load).catch(fail);
+                }}
+              >
+                guardar
+              </Button>
+            )}
           </div>
         ))}
         {Object.keys(settings).length === 0 && <p className="text-xs text-muted-foreground">cargando…</p>}
-      </div>
+      </Section>
     </div>
   );
 }

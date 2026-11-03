@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Analytics, fetchAnalytics } from "./api";
 import { Bars } from "../../shared/components/feedback";
-import { PageHeader, Stat } from "../../shared/components/patterns";
+import { Dot } from "../../shared/components/ui";
+import { PageHeader, Stat, Section } from "../../shared/components/patterns";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const RANGES = [1, 7, 30];
@@ -48,15 +50,16 @@ export function AnalyticsPage() {
             ))}
           </SelectContent>
         </Select>
-        <div className="flex rounded-md border p-0.5" role="group" aria-label="rango">
+        <div className="flex gap-1.5" role="group" aria-label="rango">
           {RANGES.map((d) => (
-            <button
+            <Badge
               key={d}
+              variant={days === d ? "default" : "outline"}
+              className="tnum cursor-pointer font-mono text-[11px] font-normal"
               onClick={() => setDays(d)}
-              className={`tnum rounded px-2.5 py-1 font-mono text-xs ${days === d ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"}`}
             >
               {d === 1 ? "24h" : `${d}d`}
-            </button>
+            </Badge>
           ))}
         </div>
       </div>
@@ -70,14 +73,9 @@ export function AnalyticsPage() {
             <Stat value={errPct} label="error rate" sub={`${errCount} 5xx`} tone={errCount > 0 ? "warn" : undefined} />
             <Stat value={data.p95 || "—"} label="p95" sub="latencia" />
           </div>
-          <div className="rounded-lg border bg-card p-4">
-            <p className="mb-2 text-sm font-medium">Requests por día</p>
+          <Section title="Requests por día" description={`${dayKeys[0] ?? ""} → ${dayKeys[dayKeys.length - 1] ?? ""} · access.log local`}>
             <Bars data={series} height={96} />
-            <div className="tnum mt-1 flex justify-between font-mono text-[10px] text-muted-foreground">
-              <span>{dayKeys[0] ?? ""}</span>
-              <span>{dayKeys[dayKeys.length - 1] ?? ""}</span>
-            </div>
-          </div>
+          </Section>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {(
               [
@@ -86,15 +84,19 @@ export function AnalyticsPage() {
                 ["Top referers", data.by_ref],
               ] as const
             ).map(([title, rows]) => (
-              <div key={title} className="rounded-lg border bg-card p-4">
-                <p className="mb-2 text-sm font-medium">{title}</p>
-                {rows.map((r) => (
-                  <p key={r.k} className="tnum flex justify-between gap-2 truncate py-0.5 font-mono text-xs">
-                    <span className="truncate">{r.k}</span>
-                    <span className="text-muted-foreground">{r.v}</span>
-                  </p>
+              <div key={title} className="overflow-hidden rounded-lg border">
+                <div className="tnum border-b bg-muted/40 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {title} · {rows.length}
+                </div>
+                {rows.map((r, i) => (
+                  <div key={r.k} className="flex items-center gap-3 border-b bg-card/40 px-4 py-2 last:border-0">
+                    <Dot status="stopped" />
+                    <span className="tnum w-6 shrink-0 font-mono text-[11px] text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
+                    <span className="min-w-0 flex-1 truncate font-mono text-xs">{r.k}</span>
+                    <span className="tnum font-mono text-[11px] text-muted-foreground">{r.v}</span>
+                  </div>
                 ))}
-                {rows.length === 0 && <p className="text-xs text-muted-foreground">sin datos</p>}
+                {rows.length === 0 && <p className="bg-card/40 px-4 py-3 text-xs text-muted-foreground">sin datos</p>}
               </div>
             ))}
           </div>

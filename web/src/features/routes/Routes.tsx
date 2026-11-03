@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { CopyButton } from "../../shared/components/feedback";
-import { PageHeader, EmptyState } from "../../shared/components/patterns";
+import { Avatar } from "../../shared/components/ui";
+import { PageHeader, EmptyState, Section } from "../../shared/components/patterns";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
 
@@ -46,6 +47,8 @@ function RouteRow({ r, onChanged }: { r: Route; onChanged: () => void }) {
   }, [r.target]);
   return (
     <div className="flex items-center gap-2 border-b bg-card/40 px-4 py-2.5 last:border-0">
+      <span aria-hidden className="manifest-strip h-8 w-1 shrink-0 rounded-full opacity-70" />
+      <Avatar name={r.hosts[0]} />
       <a
         href={`https://${r.hosts[0]}`}
         target="_blank"
@@ -128,25 +131,27 @@ export function Routes() {
         )}
       </div>
       {canWrite && (
-        <div className="flex gap-2">
-          <Input value={hosts} onChange={(e) => setHosts(e.target.value)} placeholder="host1, host2"
-            className="flex-1 font-mono text-xs" />
-          <Input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="http://127.0.0.1:3000"
-            className="flex-1 font-mono text-xs" />
-          <Button
-            variant="outline" size="sm"
-            onClick={() => {
-              addRoute(hosts.split(",").map((s) => s.trim()).filter(Boolean), target.trim())
-                .then(() => {
-                  setHosts("");
-                  setTarget("");
-                  load();
-                }).catch(fail);
-            }}
-          >
-            agregar
-          </Button>
-        </div>
+        <Section title="Nueva ruta" description="Alta inmediata: el proxy recarga al instante. TLS se emite al primer request.">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input value={hosts} onChange={(e) => setHosts(e.target.value)} placeholder="host1, host2"
+              className="flex-1 font-mono text-xs" />
+            <Input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="http://127.0.0.1:3000"
+              className="tnum flex-1 font-mono text-xs" />
+            <Button
+              variant="outline" size="sm"
+              onClick={() => {
+                addRoute(hosts.split(",").map((s) => s.trim()).filter(Boolean), target.trim())
+                  .then(() => {
+                    setHosts("");
+                    setTarget("");
+                    load();
+                  }).catch(fail);
+              }}
+            >
+              agregar
+            </Button>
+          </div>
+        </Section>
       )}
     </div>
   );
