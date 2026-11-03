@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader, EmptyState, Section, Time } from "../../shared/components/patterns";
 import { Avatar, Dot } from "../../shared/components/ui";
+import { roleLabel } from "../../shared/lib/labels";
 import {
   Select, SelectTrigger, SelectContent, SelectItem,
 } from "@/components/ui/select";
@@ -41,7 +42,7 @@ export function Users() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Users"
+        title="Usuarios"
         description="Solo admin. Viewer lee, operator muta la flota, admin gestiona usuarios y configuración."
         meta={<span className="tnum font-mono text-[10px] text-muted-foreground">{users.length} cuentas</span>}
       />
@@ -74,7 +75,7 @@ export function Users() {
                 ROLE_CLASS[u.role] ?? ROLE_CLASS.viewer
               }`}
             >
-              {u.role}
+              {roleLabel(u.role)}
             </span>
             <span className="tnum hidden text-right font-mono text-[10px] text-muted-foreground sm:block">
               <Time iso={u.created_at} />
@@ -96,7 +97,7 @@ export function Users() {
         {users.length === 0 && <EmptyState title="Sin usuarios" hint="Crea el primero abajo." />}
       </div>
 
-      <Section title="Nuevo usuario" description="viewer lee · operator muta · admin gestiona · password mín 12">
+      <Section title="Nuevo usuario" description="lectura lee · operador muta · administrador gestiona · password mín 12">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <label className="field-label w-32 shrink-0">
             usuario
@@ -116,12 +117,12 @@ export function Users() {
             rol
             <Select value={role} onValueChange={(v: string | null) => setRole(v ?? "viewer")}>
               <SelectTrigger className="h-7 font-mono text-[11px]">
-                <span className="capitalize">{role}</span>
+                <span className="capitalize">{roleLabel(role)}</span>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="viewer">viewer</SelectItem>
-                <SelectItem value="operator">operator</SelectItem>
-                <SelectItem value="admin">admin</SelectItem>
+                <SelectItem value="viewer">lectura</SelectItem>
+                <SelectItem value="operator">operador</SelectItem>
+                <SelectItem value="admin">administrador</SelectItem>
               </SelectContent>
             </Select>
           </label>

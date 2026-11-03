@@ -36,6 +36,12 @@ const LEVEL_TEXT: Record<Level, string> = {
   error: "text-bad",
 };
 
+const LEVEL_ES: Record<Level, string> = {
+  info: "info",
+  warning: "aviso",
+  error: "error",
+};
+
 function LevelToggle({
   level,
   on,
@@ -57,7 +63,7 @@ function LevelToggle({
       }`}
     >
       <span aria-hidden className={`h-1.5 w-1.5 ${on ? LEVEL_TONE[level] : "bg-muted-foreground/25"}`} />
-      {level}
+      {LEVEL_ES[level]}
       <span className={`tnum ${on ? LEVEL_TEXT[level] : "text-muted-foreground/50"}`}>{count}</span>
     </button>
   );
@@ -76,7 +82,7 @@ export function Logs() {
   const [levels, setLevels] = useState<Record<Level, boolean>>({ info: true, warning: true, error: true });
   const [log, setLog] = useState("");
   const [follow, setFollow] = useState(true);
-  const [build, setBuild] = useState("elige un deployment en Deployments");
+  const [build, setBuild] = useState("elige un despliegue en Despliegues");
   const logRef = useRef<HTMLDivElement>(null);
   const latest = deps.find((d: Deployment) => appFilter === "" || d.app === appFilter);
 
@@ -141,11 +147,11 @@ export function Logs() {
     <div className="space-y-4">
       <PageHeader
         title="Logs"
-        description="Runtime por app u operativo. Live refresca cada 2s; Build muestra el último deploy. Sin parsers de terceros."
+        description="Ejecución por app u operativo. En vivo refresca cada 2s; Compilación muestra el último despliegue. Sin parsers de terceros."
         meta={
           <span className="tnum inline-flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
             <Dot status={tab === "runtime" && live ? "running" : "stopped"} />
-            {tab === "runtime" ? (live ? "live · 2s" : "pausado") : "build"}
+            {tab === "runtime" ? (live ? "en vivo · 2s" : "pausado") : "compilación"}
             {appFilter ? ` · ${appFilter}` : " · operativo"}
           </span>
         }
@@ -155,8 +161,8 @@ export function Logs() {
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-2">
           <Tabs value={tab} onValueChange={(v) => setTab(v as "runtime" | "build")}>
             <TabsList>
-              <TabsTrigger value="runtime">Runtime</TabsTrigger>
-              <TabsTrigger value="build">Build</TabsTrigger>
+              <TabsTrigger value="runtime">Ejecución</TabsTrigger>
+              <TabsTrigger value="build">Compilación</TabsTrigger>
             </TabsList>
           </Tabs>
           <span aria-hidden className="hidden h-4 w-px bg-border sm:block" />
@@ -198,7 +204,7 @@ export function Logs() {
               <span className="flex-1" />
               <Button variant="outline" size="sm" onClick={() => setLive(!live)}>
                 {live ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-                {live ? "pausar" : "live"}
+                {live ? "pausar" : "en vivo"}
               </Button>
               <Button variant="ghost" size="sm" onClick={load}>recargar</Button>
               <Button variant="ghost" size="sm" onClick={download}>
@@ -285,18 +291,18 @@ export function Logs() {
                         .catch((e) => setBuild(e instanceof Error ? e.message : "sin log"));
                     }}
                   >
-                    cargar build log
+                    cargar registro de compilación
                   </Button>
                 </>
               ) : (
                 <span className="font-mono text-[10px] text-muted-foreground">
-                  sin deployments{appFilter ? ` para ${appFilter}` : ""}
+                  sin despliegues{appFilter ? ` para ${appFilter}` : ""}
                 </span>
               )}
             </div>
             <div className="border border-border">
               <div className="flex items-center gap-2 border-b border-border bg-secondary/25 px-3 py-1.5">
-                <span className="micro">build log</span>
+                <span className="micro">registro de compilación</span>
                 <span className="flex-1" />
                 <span className="tnum font-mono text-[9px] text-muted-foreground">
                   {latest ? `#${latest.id}` : "—"}

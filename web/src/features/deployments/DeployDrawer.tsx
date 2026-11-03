@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import { rel, dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
+import { stateLabel } from "../../shared/lib/labels";
 import { CopyButton } from "../../shared/components/feedback";
 import { Button } from "@/components/ui/button";
 import { Timeline } from "./Timeline";
@@ -103,7 +104,7 @@ export function DeployDrawer() {
                       {dep.app} <span className="tnum text-muted-foreground">#{dep.id}</span>
                     </Title>
                     <p className="mt-1.5 flex flex-wrap items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
-                      <span>{dep.status}</span>
+                      <span>{stateLabel(dep.status)}</span>
                       <span aria-hidden>·</span>
                       <span className="tnum">{dep.rev.slice(0, 12)}</span>
                       <CopyButton text={dep.rev} />
@@ -129,13 +130,17 @@ export function DeployDrawer() {
                   </Button>
                   {canWrite && (
                     <>
-                      {(["restart", "deploy", "rollback"] as const).map((a) => (
+                      {([
+                        ["restart", "reiniciar"],
+                        ["deploy", "redesplegar"],
+                        ["rollback", "revertir"],
+                      ] as const).map(([a, label]) => (
                         <Button key={a} variant="outline" size="sm" onClick={() => act(dep.app, a)}>
-                          {a}
+                          {label}
                         </Button>
                       ))}
                       <Button variant="ghost" size="sm" onClick={() => retry(dep.id)}>
-                        retry #{dep.id}
+                        reintentar #{dep.id}
                       </Button>
                     </>
                   )}
@@ -148,7 +153,7 @@ export function DeployDrawer() {
                   <Timeline dep={dep} />
                 </section>
                 <section className="bg-popover p-4">
-                  <p className="micro mb-3">pasos del build</p>
+                  <p className="micro mb-3">pasos de la compilación</p>
                   {buildLog ? (
                     <Steps log={buildLog} />
                   ) : (

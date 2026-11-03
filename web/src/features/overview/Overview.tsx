@@ -19,8 +19,8 @@ function FirstRun({ apps, metas, deps }: { apps: AppStatus[]; metas: AppMeta[]; 
   if (done === 3) return null;
   const steps = [
     { ok: hasApp, label: "Crea tu primera app", hint: "apps add o Nueva app" },
-    { ok: hasDomain, label: "Asigna un dominio", hint: "Domains → nueva ruta" },
-    { ok: hasDeploy, label: "Publica tu primer deploy", hint: "Redeploy desde la ficha" },
+    { ok: hasDomain, label: "Asigna un dominio", hint: "Dominios → nueva ruta" },
+    { ok: hasDeploy, label: "Publica tu primer despliegue", hint: "Redesplegar desde la ficha" },
   ];
   return (
     <section className="border border-border bg-card/45">
@@ -121,7 +121,7 @@ export function Overview() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Overview"
+        title="Resumen"
         description="Manifiesto de flota. Lo que está en ruta, lo que varó y lo que salió último; sin visitantes ni métricas que rkt no mida."
         meta={
           <span className="hidden items-center gap-2 font-mono text-[10px] text-muted-foreground sm:flex">
@@ -242,10 +242,10 @@ export function Overview() {
         <aside className="min-w-0 space-y-5">
           <Section
             title="Salidas"
-            description="últimos deploys"
+            description="últimos despliegues"
             actions={
               <button onClick={() => navigate("/deployments")} className="font-mono text-[9px] text-muted-foreground hover:text-foreground">
-                ver todo →
+                ver todo
               </button>
             }
           >
@@ -269,7 +269,7 @@ export function Overview() {
           )}
 
           {discovered.length > 0 && (
-            <Section title="Inbound" description="repos detectados">
+            <Section title="Entrante" description="repos detectados">
               <div className="divide-y divide-border/60">
                 {discovered.map((e) => (
                   <div key={e.id} className="flex items-center gap-2 px-1 py-2">

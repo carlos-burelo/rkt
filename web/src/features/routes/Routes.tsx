@@ -152,7 +152,7 @@ export function Routes() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Domains"
+        title="Dominios"
         description="Host → backend con TLS real. Editar el target recarga el proxy al instante. Sin wildcards inventados."
         meta={
           <span className="tnum font-mono text-[10px] text-muted-foreground">

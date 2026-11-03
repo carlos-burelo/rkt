@@ -60,15 +60,15 @@ export function AppOverview() {
   return (
     <div className="space-y-4">
       <Section
-        title="Deployment en producción"
-        description={prod ? `rev ${prod.rev.slice(0, 8)} · ${dur(prod.started_at, prod.finished_at)}` : "sin salida ok"}
+        title="Despliegue en producción"
+        description={prod ? `rev ${prod.rev.slice(0, 8)} · ${dur(prod.started_at, prod.finished_at)}` : "sin salida correcta"}
         accent={!prod}
       >
         {!prod && (
           <div className="border border-border bg-card/30 px-4 py-6 text-center">
             <p className="micro text-muted-foreground/60">sin registro</p>
-            <p className="mt-2 text-[12px]">Todavía no hay un deploy ok.</p>
-            <p className="mt-1 font-mono text-[10px] text-muted-foreground">publica con Redeploy desde la ficha de la unidad.</p>
+            <p className="mt-2 text-[12px]">Todavía no hay un despliegue correcto.</p>
+            <p className="mt-1 font-mono text-[10px] text-muted-foreground">publica con Redesplegar desde la ficha de la unidad.</p>
           </div>
         )}
         {prod && (
@@ -93,7 +93,7 @@ export function AppOverview() {
               </div>
               {domains.length === 0 && (
                 <p className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
-                  sin dominios — asigna uno en Domains.
+                  sin dominios — asigna uno en Dominios.
                 </p>
               )}
               {domains.map((h) => (
@@ -118,10 +118,10 @@ export function AppOverview() {
         <Section title="Checklist de ruta" description="lo que falta para servir">
           <div className="divide-y divide-border/60">
             <Check ok={!!meta?.deploy?.repo} label="Repo conectado" hint="deploy.repo" />
-            <Check ok={domains.length > 0} label="Dominio asignado" hint="Domains → nueva ruta" />
-            <Check ok={!!prod} label="Primer deploy ok" hint="Redeploy" />
-            <Check ok={envCount > 0} label="Env configurado" hint="Environment" />
-            <Check ok={running} label="App corriendo" hint="supervisor" />
+            <Check ok={domains.length > 0} label="Dominio asignado" hint="Dominios → nueva ruta" />
+            <Check ok={!!prod} label="Primer despliegue correcto" hint="Redesplegar" />
+            <Check ok={envCount > 0} label="Entorno configurado" hint="Entorno" />
+            <Check ok={running} label="App en marcha" hint="supervisor" />
           </div>
         </Section>
 
@@ -133,8 +133,8 @@ export function AppOverview() {
           )}
           {stats && (
             <div className="grid grid-cols-2 gap-px border border-border bg-border">
-              <Stat value={`${stats.total}`} label="requests" sub="ventana 7d" />
-              <Stat value={`${(stats.bytes / 1048576).toFixed(1)}M`} label="bytes" sub="access.log" />
+              <Stat value={`${stats.total}`} label="peticiones" sub="ventana 7d" />
+              <Stat value={`${(stats.bytes / 1048576).toFixed(1)}M`} label="tráfico" sub="access.log" />
               <Stat value={stats.p95 || "—"} label="p95" sub="latencia" />
               <Stat
                 value={`${stats.by_class["5xx"] ?? 0}`}

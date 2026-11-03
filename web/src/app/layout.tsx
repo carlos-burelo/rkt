@@ -30,50 +30,50 @@ const GROUPS = [
   {
     label: "Operar",
     items: [
-      { to: "/overview", label: "Overview", icon: LayoutGrid },
-      { to: "/deployments", label: "Deployments", icon: Rocket },
+      { to: "/overview", label: "Resumen", icon: LayoutGrid },
+      { to: "/deployments", label: "Despliegues", icon: Rocket },
       { to: "/ci", label: "CI", icon: Hammer },
-      { to: "/logs", label: "Logs", icon: Terminal },
+      { to: "/logs", label: "Registros", icon: Terminal },
     ],
   },
   {
     label: "Servir",
     items: [
-      { to: "/routes", label: "Domains", icon: Globe },
+      { to: "/routes", label: "Dominios", icon: Globe },
       { to: "/proxy", label: "Proxy", icon: Network },
-      { to: "/environment", label: "Environment", icon: FlaskConical },
+      { to: "/environment", label: "Entorno", icon: FlaskConical },
     ],
   },
   {
     label: "Observar",
     items: [
-      { to: "/analytics", label: "Analytics", icon: BarChart3 },
-      { to: "/observability", label: "Observability", icon: Activity },
-      { to: "/alerts", label: "Alerts", icon: Bell },
+      { to: "/analytics", label: "Analítica", icon: BarChart3 },
+      { to: "/observability", label: "Observabilidad", icon: Activity },
+      { to: "/alerts", label: "Alertas", icon: Bell },
     ],
   },
   {
     label: "Sistema",
     items: [
-      { to: "/settings", label: "Settings", icon: SettingsIcon },
-      { to: "/users", label: "Users", icon: UsersIcon, admin: true },
+      { to: "/settings", label: "Ajustes", icon: SettingsIcon },
+      { to: "/users", label: "Usuarios", icon: UsersIcon, admin: true },
     ],
   },
 ] as const;
 
 const PAGE_LABEL: Record<string, string> = {
-  overview: "Overview",
-  deployments: "Deployments",
+  overview: "Resumen",
+  deployments: "Despliegues",
   ci: "CI",
-  logs: "Logs",
-  routes: "Domains",
+  logs: "Registros",
+  routes: "Dominios",
   proxy: "Proxy",
-  environment: "Environment",
-  analytics: "Analytics",
-  observability: "Observability",
-  alerts: "Alerts",
-  settings: "Settings",
-  users: "Users",
+  environment: "Entorno",
+  analytics: "Analítica",
+  observability: "Observabilidad",
+  alerts: "Alertas",
+  settings: "Ajustes",
+  users: "Usuarios",
   app: "App",
 };
 
@@ -91,7 +91,7 @@ export function ShellLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const crumbs = location.pathname.split("/").filter(Boolean);
-  const title = PAGE_LABEL[crumbs[0] ?? "overview"] ?? "Overview";
+  const title = PAGE_LABEL[crumbs[0] ?? "overview"] ?? "Resumen";
   const apps = status?.apps ?? [];
   const running = apps.filter((a) => a.running && !a.failed).length;
   const failed = apps.filter((a) => a.failed).length;

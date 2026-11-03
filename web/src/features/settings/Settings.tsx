@@ -12,8 +12,8 @@ const DESCRIPTIONS: Record<string, string> = {
   base_domain: "Dominio base para sugerir <app>.<base>.",
   port_pool: "Rango de puertos locales (ej 3000-3999).",
   site_name: "Nombre visible en rail y cabecera.",
-  quota_reqs: "Tope requests 30d para Usage (0 = sin tope).",
-  quota_bytes: "Tope bytes 30d para Usage (0 = sin tope).",
+  quota_reqs: "Tope de peticiones 30d para el medidor (0 = sin tope).",
+  quota_bytes: "Tope de tráfico 30d para el medidor (0 = sin tope).",
 };
 
 export function Settings() {
@@ -37,8 +37,8 @@ export function Settings() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Settings"
-        description="Ajustes de flota. Aplican en caliente salvo binarios, que exigen restart del servicio."
+        title="Ajustes"
+        description="Ajustes de flota. Aplican en caliente salvo binarios, que exigen reinicio del servicio."
         meta={<span className="tnum font-mono text-[10px] text-muted-foreground">{Object.keys(settings).length} claves</span>}
       />
       <Section
@@ -92,7 +92,7 @@ export function Settings() {
         </div>
       </Section>
       <p className="font-mono text-[9px] leading-relaxed text-muted-foreground/70">
-        Los secretos de entorno no viven aquí: se editan por app en Environment. Este panel solo guarda configuración de flota.
+        Los secretos de entorno no viven aquí: se editan por app en Entorno. Este panel solo guarda configuración de flota.
       </p>
     </div>
   );

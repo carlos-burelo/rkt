@@ -29,7 +29,7 @@ export function UsageStrip() {
   const reqFrac = qReqs > 0 ? u.total / qReqs : undefined;
   const byteFrac = qBytes > 0 ? u.bytes / qBytes : undefined;
   const bars: { label: string; value: string; frac?: number }[] = [
-    { label: "requests", value: `${u.total}${qReqs > 0 ? ` / ${qReqs}` : ""}`, frac: reqFrac },
+    { label: "peticiones", value: `${u.total}${qReqs > 0 ? ` / ${qReqs}` : ""}`, frac: reqFrac },
     {
       label: "bandwidth",
       value: `${(u.bytes / 1048576).toFixed(1)}M${qBytes > 0 ? ` / ${(qBytes / 1048576).toFixed(0)}M` : ""}`,

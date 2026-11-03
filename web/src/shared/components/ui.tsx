@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { stateLabel } from "../lib/labels";
 
 export type FleetState = "running" | "degraded" | "failed" | "stopped" | "ok";
 
@@ -22,8 +23,8 @@ export function Dot({ status, className }: { status: string; className?: string 
   return (
     <span
       className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-[1px]", DOT[key] ?? DOT.stopped, className)}
-      title={status}
-      aria-label={`estado ${status}`}
+      title={stateLabel(status)}
+      aria-label={`estado ${stateLabel(status)}`}
     />
   );
 }
@@ -42,7 +43,7 @@ export function StatusBadge({ status, className }: { status: string; className?:
       variant="outline"
       className={cn("tnum", STATUS_TONE[status] ?? STATUS_TONE.stopped, className)}
     >
-      {status}
+      {stateLabel(status)}
     </Badge>
   );
 }

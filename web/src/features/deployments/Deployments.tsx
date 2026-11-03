@@ -41,8 +41,8 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
     <div className="space-y-4">
       {!bare && (
         <PageHeader
-          title="Deployments"
-          description="Libro de salidas. La fila en curso late; la revisión y la duración mandan a la derecha. Click abre el manifiesto del build."
+          title="Despliegues"
+          description="Libro de salidas. La fila en curso late; la revisión y la duración quedan a la derecha. Click abre el manifiesto de la compilación."
           meta={<span className="tnum font-mono text-[10px] text-muted-foreground">{base.length} registros</span>}
         />
       )}
@@ -55,7 +55,7 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
               onChange={(e) => setQ(e.target.value)}
               placeholder="filtrar por app o rev…"
               className="h-7 border-transparent bg-transparent pl-8 font-mono text-[11px] hover:border-input"
-              aria-label="filtrar deployments"
+              aria-label="filtrar despliegues"
             />
           </div>
           <Segmented
@@ -71,7 +71,7 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
           />
         </div>
       )}
-      <div className="border border-border" role="table" aria-label="tablero de deployments">
+      <div className="border border-border" role="table" aria-label="tablero de despliegues">
         <div
           className="hidden grid-cols-[1.5rem_minmax(0,1fr)_8rem_4.5rem_5.5rem_1.5rem] items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 md:grid"
           aria-hidden
@@ -135,7 +135,7 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
           <div className="px-4 py-8 text-center">
             <p className="font-mono text-[11px] text-muted-foreground">sin salidas para este filtro</p>
             <p className="mt-1 font-mono text-[9px] text-muted-foreground/70">
-              production-only · no hay environments que filtrar
+              solo producción · no hay entornos que filtrar
             </p>
           </div>
         )}

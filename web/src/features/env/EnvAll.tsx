@@ -44,7 +44,7 @@ export function EnvAll() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Environment"
+        title="Entorno"
         description="Inventario por app. Los valores viven enmascarados; la edición ocurre en la ficha de cada unidad."
         meta={
           <span className="tnum font-mono text-[10px] text-muted-foreground">

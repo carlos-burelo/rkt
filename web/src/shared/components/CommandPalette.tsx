@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { Deployment, AppMeta } from "../../shared/lib/types";
 import { Dot, Kbd } from "../../shared/components/ui";
+import { stateLabel } from "../lib/labels";
 
 export interface PaletteTarget {
   kind: "page" | "app" | "deployment" | "action";
@@ -54,18 +55,18 @@ export function CommandPalette({
   const targets: PaletteTarget[] = useMemo(() => {
     const out: PaletteTarget[] = [];
     const pages: [string, "overview" | "proxy" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability" | "environment" | "ci" | "alerts"][] = [
-      ["Overview", "overview"],
+      ["Resumen", "overview"],
       ["Proxy", "proxy"],
-      ["Deployments", "deployments"],
+      ["Despliegues", "deployments"],
       ["CI", "ci"],
-      ["Logs", "logs"],
-      ["Analytics", "analytics"],
-      ["Observability", "observability"],
-      ["Alerts", "alerts"],
-      ["Domains", "routes"],
-      ["Environment", "environment"],
-      ["Settings", "settings"],
-      ["Users", "users"],
+      ["Registros", "logs"],
+      ["Analítica", "analytics"],
+      ["Observabilidad", "observability"],
+      ["Alertas", "alerts"],
+      ["Dominios", "routes"],
+      ["Entorno", "environment"],
+      ["Ajustes", "settings"],
+      ["Usuarios", "users"],
     ];
     for (const [label, p] of pages) {
       out.push({ kind: "page", label: `Ir a ${label}`, hint: "página", run: () => goPage(p) });
@@ -81,9 +82,10 @@ export function CommandPalette({
         run: () => openDeploy(d),
       });
     }
+    const ACT_ES = { restart: "reiniciar", deploy: "redesplegar", rollback: "revertir" } as const;
     for (const m of metas) {
       for (const a of ["restart", "deploy", "rollback"] as const) {
-        out.push({ kind: "action", label: `${a} ${m.name}`, hint: "acción", run: () => onAction(m.name, a) });
+        out.push({ kind: "action", label: `${ACT_ES[a]} ${m.name}`, hint: "acción", run: () => onAction(m.name, a) });
       }
     }
     const f = q.trim().toLowerCase();
@@ -125,7 +127,7 @@ export function CommandPalette({
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="App, deployment, acción…"
+            placeholder="App, despliegue, acción…"
             className="h-10 min-w-0 flex-1 bg-transparent font-mono text-[12px] outline-none placeholder:text-muted-foreground/60"
           />
           <Kbd>esc</Kbd>

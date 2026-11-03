@@ -37,7 +37,7 @@ export function AnalyticsPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Analytics"
+        title="Analítica"
         description="Tráfico real desde access.log. Sin visitors ni bounce inventados; lo que no se mide, no se pinta."
         meta={<span className="tnum font-mono text-[10px] text-muted-foreground">ventana {windowLabel}</span>}
       />
@@ -69,13 +69,13 @@ export function AnalyticsPage() {
       {data && (
         <>
           <StatGrid>
-            <Stat value={`${data.total}`} label="requests" sub={`ventana ${windowLabel}`} />
-            <Stat value={`${(data.bytes / 1048576).toFixed(1)}M`} label="bytes" sub="access.log" />
-            <Stat value={errPct} label="error rate" sub={`${errCount} 5xx`} tone={errCount > 0 ? "warn" : undefined} />
+            <Stat value={`${data.total}`} label="peticiones" sub={`ventana ${windowLabel}`} />
+            <Stat value={`${(data.bytes / 1048576).toFixed(1)}M`} label="tráfico" sub="access.log" />
+            <Stat value={errPct} label="tasa de error" sub={`${errCount} 5xx`} tone={errCount > 0 ? "warn" : undefined} />
             <Stat value={data.p95 || "—"} label="p95" sub={`p50 ${data.p50 || "—"}`} />
           </StatGrid>
           <Section
-            title="Requests por día"
+            title="Peticiones por día"
             description={`${dayKeys[0] ?? "sin fecha"} → ${dayKeys[dayKeys.length - 1] ?? "sin fecha"} · access.log local`}
             actions={<span className="tnum font-mono text-[9px] text-muted-foreground">{dayKeys.length} días</span>}
           >

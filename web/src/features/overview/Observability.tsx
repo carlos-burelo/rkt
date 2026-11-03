@@ -21,8 +21,8 @@ export function Observability() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Observability"
-        description="Serie por hora, restarts y apps caídas. Latencia real en Analytics; aquí solo lo que el supervisor y access.log pueden probar."
+        title="Observabilidad"
+        description="Serie por hora, reinicios y apps caídas. Latencia real en Analítica; aquí solo lo que el supervisor y access.log pueden probar."
         meta={<span className="tnum font-mono text-[10px] text-muted-foreground">ventana {label}</span>}
         actions={
           <Segmented
@@ -37,8 +37,8 @@ export function Observability() {
       {data && (
         <>
           <StatGrid className="md:grid-cols-3">
-            <Stat value={`${reqTotal}`} label="requests" sub={`ventana ${label}`} />
-            <Stat value={`${data.restarts}`} label="restarts" sub="events died/restarted" tone={data.restarts > 0 ? "warn" : undefined} />
+            <Stat value={`${reqTotal}`} label="peticiones" sub={`ventana ${label}`} />
+            <Stat value={`${data.restarts}`} label="reinicios" sub="eventos caída/reinicio" tone={data.restarts > 0 ? "warn" : undefined} />
             <Stat
               value={data.down.length === 0 ? "0" : `${data.down.length}`}
               label="apps caídas"
@@ -47,7 +47,7 @@ export function Observability() {
             />
           </StatGrid>
           <Section
-            title="Requests por hora"
+            title="Peticiones por hora"
             description={`serie local · ${data.buckets.length} buckets`}
             actions={<span className="tnum font-mono text-[9px] text-muted-foreground">{reqTotal} total</span>}
           >

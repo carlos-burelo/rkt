@@ -98,7 +98,7 @@ function RouteError() {
             recargar
           </Button>
           <Button size="sm" variant="outline" onClick={() => { window.location.href = "/dashboard/overview"; }}>
-            ir a overview
+            ir al resumen
           </Button>
         </div>
       </div>

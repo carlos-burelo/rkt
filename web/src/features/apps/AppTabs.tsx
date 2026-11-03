@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router";
 import { ExternalLink, RotateCw } from "lucide-react";
 import { Dot, StatusBadge } from "../../shared/components/ui";
+import { stateLabel } from "../../shared/lib/labels";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFleet } from "../overview/hooks";
@@ -9,12 +10,12 @@ import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
 
 const TABS = [
-  { id: "overview", label: "Overview" },
-  { id: "deploys", label: "Deployments" },
-  { id: "logs", label: "Logs" },
-  { id: "analytics", label: "Analytics" },
-  { id: "env", label: "Environment" },
-  { id: "settings", label: "Settings" },
+  { id: "overview", label: "Resumen" },
+  { id: "deploys", label: "Despliegues" },
+  { id: "logs", label: "Registros" },
+  { id: "analytics", label: "Analítica" },
+  { id: "env", label: "Entorno" },
+  { id: "settings", label: "Ajustes" },
 ] as const;
 
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {
@@ -71,16 +72,16 @@ export function AppTabs() {
                 rel="noreferrer"
                 className={buttonVariants({ variant: "outline", size: "sm" })}
               >
-                <ExternalLink className="h-3 w-3" /> Visit
+                <ExternalLink className="h-3 w-3" /> Abrir
               </a>
             )}
             {canWrite && name && (
               <>
                 <Button variant="outline" size="sm" onClick={() => act(name, "restart")}>
-                  <RotateCw className="h-3 w-3" /> Restart
+                  <RotateCw className="h-3 w-3" /> Reiniciar
                 </Button>
-                <Button size="sm" onClick={() => act(name, "deploy")}>Redeploy</Button>
-                <Button variant="ghost" size="sm" onClick={() => act(name, "rollback")}>Rollback</Button>
+                <Button size="sm" onClick={() => act(name, "deploy")}>Redesplegar</Button>
+                <Button variant="ghost" size="sm" onClick={() => act(name, "rollback")}>Revertir</Button>
               </>
             )}
           </div>
@@ -88,7 +89,7 @@ export function AppTabs() {
         <div className="grid grid-cols-2 gap-px bg-border md:grid-cols-4">
           <Cell label="estado">
             <span className={st?.failed ? "text-bad" : st?.running ? "text-ok" : "text-muted-foreground"}>
-              {state}
+              {stateLabel(state)}
             </span>
           </Cell>
           <Cell label="reinicios">
@@ -114,13 +115,16 @@ export function AppTabs() {
           if (v) navigate(v);
         }}
       >
-        <TabsList className="w-full gap-5">
-          {TABS.map((t) => (
-            <TabsTrigger key={t.id} value={t.id}>
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {/* scroll horizontal: 6 tabs no caben a 390px sin desbordar */}
+        <div className="-mx-1 overflow-x-auto px-1">
+          <TabsList className="w-max gap-5 sm:w-full">
+            {TABS.map((t) => (
+              <TabsTrigger key={t.id} value={t.id}>
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
       </Tabs>
       <Outlet />
     </div>

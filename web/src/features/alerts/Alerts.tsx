@@ -37,8 +37,8 @@ export function Alerts() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Alerts"
-        description="Reglas evaluadas cada minuto. El disparo queda como evento kind=alert en el manifiesto de Overview."
+        title="Alertas"
+        description="Reglas evaluadas cada minuto. El disparo queda como evento kind=alert en el manifiesto de Resumen."
         meta={
           <span className="tnum font-mono text-[10px] text-muted-foreground">
             {rules.length} reglas · {fired} disparadas

@@ -19,8 +19,8 @@ export function AppEnv() {
 
   return (
     <Section
-      title="Environment Variables"
-      description="solo operator+ · valores enmascarados · aplicar exige restart"
+      title="Variables de entorno"
+      description="solo operador+ · valores enmascarados · aplicar exige reinicio"
       actions={<span className="tnum font-mono text-[9px] text-muted-foreground">{keys.length} vars</span>}
     >
       <div className="border border-border">
