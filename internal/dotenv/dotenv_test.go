@@ -76,3 +76,61 @@ func TestExpand(t *testing.T) {
 		t.Fatalf("escape $$ mal: %q", got)
 	}
 }
+
+func TestParseErroresYExportSolo(t *testing.T) {
+	if _, err := Parse("1MAL=x\n"); err == nil {
+		t.Fatal("clave que empieza con número debe fallar")
+	}
+	if _, err := Parse("BA D=x\n"); err == nil {
+		t.Fatal("clave con espacio debe fallar")
+	}
+	m, err := Parse("export\n\nexport OK=1\n")
+	if err != nil || m["OK"] != "1" {
+		t.Fatalf("export solo debe saltarse: %+v %v", m, err)
+	}
+	if _, err := ParseFile(filepath.Join(t.TempDir(), "nope")); err == nil {
+		t.Fatal("ParseFile inexistente debe fallar")
+	}
+}
+
+func TestEnvironListYExpandBordes(t *testing.T) {
+	t.Setenv("RKT_DOTENV_TEST", "base")
+	list := EnvironList(map[string]string{"RKT_DOTENV_TEST": "override", "OTRA": "x"})
+	seen := map[string]bool{}
+	for _, kv := range list {
+		if kv == "RKT_DOTENV_TEST=override" {
+			seen["override"] = true
+		}
+		if kv == "OTRA=x" {
+			seen["otra"] = true
+		}
+	}
+	if !seen["override"] || !seen["otra"] {
+		t.Fatalf("EnvironList no aplicó overrides: %v", seen)
+	}
+
+	cases := map[string]string{
+		"$":      "$",    // $ suelto al final
+		"$1":     "",     // $ seguido de dígito no forma variable
+		"${SIN}": "",     // indefinida = ""
+		"${AB":   "${AB", // llave sin cerrar se deja literal
+		"a$":     "a$",
+		"${V}x":  "valx",
+		"A$V.B":  "Aval.B",
+	}
+	out := Expand(map[string]string{
+		"K1": cases["$"],
+		"K2": cases["$1"],
+		"K3": cases["${SIN}"],
+		"K4": cases["${AB"],
+		"K5": cases["a$"],
+		"K6": cases["${V}x"],
+		"K7": cases["A$V.B"],
+	}, map[string]string{"V": "val"})
+	want := map[string]string{"K1": "$", "K2": "", "K3": "", "K4": "${AB", "K5": "a$", "K6": "valx", "K7": "Aval.B"}
+	for k, v := range want {
+		if out[k] != v {
+			t.Fatalf("%s = %q, quiere %q", k, out[k], v)
+		}
+	}
+}
