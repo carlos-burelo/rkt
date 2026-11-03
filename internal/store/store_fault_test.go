@@ -45,7 +45,7 @@ func TestScanErroresConVistas(t *testing.T) {
 			_, err := db.ListRules()
 			return err
 		}},
-		{"apps", "apps", `CREATE VIEW apps AS SELECT name, command, NULL AS args, dir, env_file, env, restart_delay_ms, min_uptime_ms, memory_mb, deploy_repo, deploy_ref, deploy_token_env, deploy_build, deploy_auto FROM apps_real`, func(db *DB) error {
+		{"apps", "apps", `CREATE VIEW apps AS SELECT name, runtime, command, NULL AS args, dir, env_file, env, restart_delay_ms, min_uptime_ms, memory_mb, deploy_repo, deploy_ref, deploy_token_env, deploy_build, deploy_auto FROM apps_real`, func(db *DB) error {
 			_, err := db.LoadFleet()
 			return err
 		}},
@@ -285,7 +285,7 @@ func TestLoadFleetRowsErr(t *testing.T) {
 	_ = db.UpsertApp(&config.App{Name: "a", Command: "x", Env: map[string]string{}})
 	_ = db.UpsertApp(&config.App{Name: "b", Command: "x", Env: map[string]string{}})
 	exec(t, db, `ALTER TABLE apps RENAME TO apps_real`)
-	exec(t, db, `CREATE VIEW apps AS SELECT name, command,
+	exec(t, db, `CREATE VIEW apps AS SELECT name, runtime, command,
 		CASE WHEN name='b' THEN json_extract('no-json','$') ELSE args END AS args,
 		dir, env_file, env, restart_delay_ms, min_uptime_ms, memory_mb,
 		deploy_repo, deploy_ref, deploy_token_env, deploy_build, deploy_auto
