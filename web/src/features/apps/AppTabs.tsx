@@ -7,6 +7,7 @@ import { stateLabel } from "../../shared/lib/labels";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFleet } from "../overview/hooks";
+import { publicUrl, publicHost } from "../../shared/lib/url";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
 import { fixHost } from "../routes/api";
@@ -69,7 +70,7 @@ export function AppTabs() {
           <div className="flex flex-wrap items-center gap-2">
             {domains[0] && (
               <a
-                href={`https://${domains[0]}`}
+                href={publicUrl(domains[0], status)}
                 target="_blank"
                 rel="noreferrer"
                 className={buttonVariants({ variant: "outline", size: "sm" })}
@@ -100,8 +101,8 @@ export function AppTabs() {
           <Cell label="destino">
             {domains[0] ? (
               <span className="flex min-w-0 items-center gap-1.5">
-                <a href={`https://${domains[0]}`} target="_blank" rel="noreferrer" className="truncate hover:text-signal hover:underline">
-                  {domains[0]}
+                <a href={publicUrl(domains[0], status)} target="_blank" rel="noreferrer" className="truncate hover:text-signal hover:underline">
+                  {publicHost(domains[0], status)}
                 </a>
                 {meta?.dns_ok === false && (
                   <span className="flex shrink-0 items-center gap-1.5">

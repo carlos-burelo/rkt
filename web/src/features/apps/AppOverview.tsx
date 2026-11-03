@@ -7,6 +7,7 @@ import { Section, Stat, Time } from "../../shared/components/patterns";
 import { fetchAnalytics, Analytics } from "../overview/api";
 import { useFleet } from "../overview/hooks";
 import { useEnvCount } from "./hooks";
+import { publicUrl, publicHost } from "../../shared/lib/url";
 import { AppPreview } from "./AppPreview";
 
 function Check({ ok, label, hint }: { ok: boolean; label: string; hint: string }) {
@@ -102,13 +103,13 @@ export function AppOverview() {
               {domains.map((h) => (
                 <a
                   key={h}
-                  href={`https://${h}`}
+                  href={publicUrl(h, status)}
                   target="_blank"
                   rel="noreferrer"
                   className="group flex items-center gap-2 border-b border-border/60 px-3 py-1.5 last:border-0 hover:bg-accent/40"
                 >
                   <span aria-hidden className="h-1 w-1 bg-ok" />
-                  <span className="min-w-0 flex-1 truncate font-mono text-[10px]">{h}</span>
+                  <span className="min-w-0 flex-1 truncate font-mono text-[10px]">{publicHost(h, status)}</span>
                   <ExternalLink className="h-3 w-3 text-muted-foreground/50 group-hover:text-foreground" />
                 </a>
               ))}

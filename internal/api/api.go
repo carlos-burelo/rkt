@@ -441,10 +441,18 @@ func NewHandler(d Deps) http.Handler {
 		if d.Apps != nil {
 			apps = d.Apps()
 		}
+		cfg := d.Live.Get()
+		httpPort := listenPort(cfg.ListenHTTP, "80")
+		httpsPort := ""
+		if cfg.ListenHTTPS != "" {
+			httpsPort = listenPort(cfg.ListenHTTPS, "443")
+		}
 		writeJSON(w, map[string]any{
-			"version": d.Version,
-			"routes":  len(d.Live.Get().Routes),
-			"apps":    apps,
+			"version":    d.Version,
+			"routes":     len(cfg.Routes),
+			"apps":       apps,
+			"http_port":  httpPort,
+			"https_port": httpsPort,
 		})
 	})
 	mux.HandleFunc("/api/v1/deployments", func(w http.ResponseWriter, r *http.Request) {
@@ -1276,6 +1284,17 @@ func requireOperator(w http.ResponseWriter, r *http.Request, db *store.DB) bool 
 		return false
 	}
 	return true
+}
+
+// listenPort extrae el puerto de ":8080" / "127.0.0.1:8080".
+func listenPort(addr, def string) string {
+	if addr == "" {
+		return def
+	}
+	if i := strings.LastIndex(addr, ":"); i >= 0 && i+1 < len(addr) {
+		return addr[i+1:]
+	}
+	return def
 }
 
 func queryInt(r *http.Request, key string, def int) int {

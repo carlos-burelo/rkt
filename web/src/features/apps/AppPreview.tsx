@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { ExternalLink, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dot } from "../../shared/components/ui";
+import { useFleet } from "../overview/hooks";
+import { publicUrl, publicHost } from "../../shared/lib/url";
 
 // Vista previa de la app servida (Vercel-like): iframe del dominio real.
 // Si el navegador no puede incrustarla (X-Frame-Options, DNS, TLS), se
 // dice claro y se ofrece abrir en pestaña; nada de fingir un screenshot.
 export function AppPreview({ domain, running }: { domain: string; running: boolean }) {
-  const scheme = window.location.protocol === "https:" ? "https" : "http";
-  const src = `${scheme}://${domain}`;
+  const { status } = useFleet();
+  const src = publicUrl(domain, status);
   const [nonce, setNonce] = useState(0);
   const [state, setState] = useState<"loading" | "ok" | "blocked">("loading");
   const timer = useRef<number | null>(null);
@@ -32,7 +34,7 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
         <h2 className="text-[12px] font-medium">Vista previa</h2>
         <span className="flex min-w-0 items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
           <Dot status={running ? "running" : "stopped"} />
-          <span className="truncate">{domain}</span>
+          <span className="truncate">{publicHost(domain, status)}</span>
         </span>
         <span className="flex-1" />
         <Button

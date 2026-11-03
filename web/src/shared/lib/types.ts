@@ -17,6 +17,10 @@ export interface Status {
   version: string;
   routes: number;
   apps: AppStatus[];
+  /** puerto público HTTP del proxy (dev suele ser 8080) */
+  http_port?: string;
+  /** puerto público HTTPS (vacío = TLS off) */
+  https_port?: string;
 }
 
 export interface Deployment {

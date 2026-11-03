@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, ExternalLink } from "lucide-react";
-import { Route } from "../../shared/lib/types";
+import { Route, Status } from "../../shared/lib/types";
 import { addRoute, delRoute, putRoute, tlsStatus, listRoutes } from "./api";
 import { fetchProxy } from "../proxy/api";
 import { buildLinks, GraphLink } from "../proxy/graph";
@@ -13,6 +13,8 @@ import { PageHeader, EmptyState, Section } from "../../shared/components/pattern
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
 import { LocalZones } from "./LocalZones";
+import { useFleet } from "../overview/hooks";
+import { publicUrl, publicHost } from "../../shared/lib/url";
 
 function TLSBadge({ host }: { host: string }) {
   const [txt, setTxt] = useState("…");
@@ -40,7 +42,7 @@ function TLSBadge({ host }: { host: string }) {
   );
 }
 
-function RouteRow({ r, onChanged }: { r: Route; onChanged: () => void }) {
+function RouteRow({ r, onChanged, status }: { r: Route; onChanged: () => void; status: Status | null }) {
   const canWrite = useAuth((a) => a.canWrite);
   const fail = useUI((u) => u.fail);
   const [target, setTarget] = useState(r.target);
@@ -55,10 +57,10 @@ function RouteRow({ r, onChanged }: { r: Route; onChanged: () => void }) {
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <a
-            href={`https://${r.hosts[0]}`}
+            href={publicUrl(r.hosts[0], status)}
             target="_blank"
             rel="noreferrer"
-            title={`visitar https://${r.hosts[0]}`}
+            title={`visitar ${publicHost(r.hosts[0], status)}`}
             className="truncate font-mono text-[11px] hover:text-signal hover:underline"
           >
             {r.hosts.join(", ")}
@@ -110,6 +112,7 @@ function RouteRow({ r, onChanged }: { r: Route; onChanged: () => void }) {
 export function Routes() {
   const canWrite = useAuth((a) => a.canWrite);
   const fail = useUI((u) => u.fail);
+  const { status } = useFleet();
   const [routes, setRoutes] = useState<Route[]>([]);
   const [hosts, setHosts] = useState("");
   const [target, setTarget] = useState("");
@@ -177,7 +180,7 @@ export function Routes() {
           <span />
         </div>
         {routes.map((r) => (
-          <RouteRow key={r.hosts.join(",") + r.target} r={r} onChanged={load} />
+          <RouteRow key={r.hosts.join(",") + r.target} r={r} onChanged={load} status={status} />
         ))}
         {routes.length === 0 && <EmptyState title="Sin rutas" hint="Agrega tu primer dominio abajo." />}
       </div>
