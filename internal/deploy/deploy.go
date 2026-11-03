@@ -229,7 +229,14 @@ func runStep(step, dir string, env map[string]string, out io.Writer) error {
 	cmd.Env = dotenv.EnvironList(env)
 	cmd.Stdout = out
 	cmd.Stderr = out
-	return cmd.Run()
+	// marcador estable para checklist CI en dashboard (SPEC 12.2)
+	fmt.Fprintf(out, "▶ step: %s\n", step)
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(out, "✘ step failed: %s\n", step)
+		return err
+	}
+	fmt.Fprintf(out, "✔ step ok: %s\n", step)
+	return nil
 }
 
 func dirExists(p string) bool {

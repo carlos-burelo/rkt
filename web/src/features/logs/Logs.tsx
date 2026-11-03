@@ -2,6 +2,7 @@ import { RefObject, useEffect, useMemo, useState } from "react";
 import { AppStatus, Deployment } from "../../shared/lib/types";
 import { deploymentLog } from "../deployments/api";
 import { fetchLog } from "./api";
+import { Bars } from "../../shared/components/Bars";
 
 type Level = "info" | "warning" | "error";
 
@@ -55,7 +56,22 @@ export function Logs({
     for (const l of all) counts[levelOf(l)]++;
     const rx = q.trim() === "" ? null : new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
     const vis = all.filter((l) => levels[levelOf(l)] && (!rx || rx.test(l)));
-    return { vis, counts };
+    // histograma 24h desde timestamps time=YYYY-MM-DDTHH: (slog)
+    const buckets = new Array<number>(24).fill(0);
+    let stamped = 0;
+    const nowH = Date.now();
+    for (const l of all) {
+      const m = /time=(\d{4}-\d{2}-\d{2})T(\d{2})/.exec(l);
+      if (!m) continue;
+      const t = new Date(`${m[1]}T${m[2]}:00:00Z`).getTime();
+      if (Number.isNaN(t)) continue;
+      const h = Math.floor((nowH - t) / 3600000);
+      if (h >= 0 && h < 24) {
+        buckets[23 - h]++;
+        stamped++;
+      }
+    }
+    return { vis, counts, buckets, stamped };
   }, [log, q, levels]);
 
   return (
@@ -133,6 +149,11 @@ export function Logs({
             <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
             seguir
           </label>
+          {lines.stamped > 0 && (
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
+              <Bars data={lines.buckets} height={48} />
+            </div>
+          )}
           <pre ref={logRef} className="h-[60vh] overflow-auto rounded-lg border border-zinc-800 bg-black p-3 font-mono text-xs leading-relaxed text-zinc-300">
             {lines.vis.join("\n") || "sin líneas"}
           </pre>

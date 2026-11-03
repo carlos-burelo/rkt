@@ -1,9 +1,45 @@
 import { Root, Backdrop, Popup, Title, Close } from "@base_ui/react/dialog";
+import { useMemo } from "react";
 import { Deployment } from "../../shared/lib/types";
 import { rel, dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
 import { CopyButton } from "../../shared/components/feedback";
 import { Timeline } from "./Timeline";
+
+// steps checklist CI desde marcadores "▶/✔/✘ step" del build log.
+function Steps({ log }: { log: string }) {
+  const steps = useMemo(() => {
+    const out: { name: string; state: "ok" | "bad" | "run" }[] = [];
+    for (const line of log.split("\n")) {
+      if (line.startsWith("▶ step: ")) out.push({ name: line.slice(8), state: "run" });
+      else if (line.startsWith("✔ step ok: ")) {
+        const name = line.slice(11);
+        const s = [...out].reverse().find((x) => x.name === name);
+        if (s) s.state = "ok";
+      } else if (line.startsWith("✘ step failed: ")) {
+        const name = line.slice(15);
+        const s = [...out].reverse().find((x) => x.name === name);
+        if (s) s.state = "bad";
+      }
+    }
+    return out;
+  }, [log]);
+  if (steps.length === 0) return null;
+  return (
+    <div className="space-y-1">
+      {steps.map((s, i) => (
+        <p key={i} className="flex items-center gap-2 font-mono text-xs">
+          <span
+            className={`inline-block h-2 w-2 rounded-full ${
+              s.state === "ok" ? "bg-emerald-400" : s.state === "bad" ? "bg-red-400" : "bg-amber-400 animate-pulse"
+            }`}
+          />
+          <span className="truncate">{s.name}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
 
 export function DeployDrawer({
   dep,
@@ -70,6 +106,7 @@ export function DeployDrawer({
             )}
             <p className="text-xs uppercase tracking-wider text-zinc-500">timeline</p>
             <Timeline dep={dep} />
+            <Steps log={buildLog} />
             <p className="text-xs uppercase tracking-wider text-zinc-500">build log</p>
             <pre className="min-h-0 flex-1 overflow-auto rounded-lg border border-zinc-800 bg-black p-3 font-mono text-xs leading-relaxed text-zinc-300">
               {buildLog}
