@@ -17,6 +17,7 @@ certs/
 
 # reglas locales de agente (no se comitean)
 AGENTS.md
+PRODUCT.md
 
 # web (monorepo): deps y build (pero .gitkeep mantiene embed compilable)
 web/node_modules/
