@@ -498,3 +498,55 @@ func TestDeploymentLog(t *testing.T) {
 		t.Fatalf("fantasma: quiere 404, got %d", rec.Code)
 	}
 }
+
+func TestAppPutDelete(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	opTok := loginAs(t, h, db, "op", store.RoleOperator)
+	visTok := loginAs(t, h, db, "vis", store.RoleViewer)
+
+	// viewer no muta
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/apps/w",
+		strings.NewReader(`{"command":"x"}`))
+	req.Header.Set("Authorization", "Bearer "+visTok)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer put: quiere 403, got %d", rec.Code)
+	}
+	// inválido rechaza (command vacío)
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/apps/w",
+		strings.NewReader(`{"command":""}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("put inválido: quiere 400, got %d", rec.Code)
+	}
+	// válido aplica + visible
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/apps/w",
+		strings.NewReader(`{"command":"ncmd","restart_delay":"9s"}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("put: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w", opTok))
+	if !strings.Contains(rec.Body.String(), `"command":"ncmd"`) {
+		t.Fatalf("put no aplicado: %s", rec.Body.String())
+	}
+	// delete + GET 404 después
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/apps/w", opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "routes list") {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w", opTok))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("post-delete: quiere 404, got %d", rec.Code)
+	}
+}

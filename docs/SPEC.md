@@ -163,8 +163,9 @@ Captura 7 (project settings con 20 secciones → recorte honesto).
 - App Settings (nuevo, `PUT /api/v1/apps/:name` operator):
   command/args/dir/restart_delay/min_uptime/memory_mb (validado por
   `ValidateApp`), deploy {repo, ref, build[], auto}. Danger zone:
-  `DELETE /api/v1/apps/:name` (operator + confirm doble; borra app,
-  routes huérfanas y para supervisor vía restart requerido).
+  `DELETE /api/v1/apps/:name` (operator + confirm doble; borra solo la
+  app, igual que CLI `apps rm`: avisa revisar `routes list`, no adivina
+  huérfanas).
 - NO: Avatar upload, Passport, Sandboxes, Cron, Microfrontends,
   Drains, Tracing, Networking, Flags, Storage (fuera de misión;
   cada uno diría “no soportado” en vez de página vacía: no se crean).

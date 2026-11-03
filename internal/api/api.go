@@ -425,7 +425,12 @@ func NewHandler(d Deps) http.Handler {
 			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
 			return
 		}
-		writeJSON(w, sanitizeApps(d.Live.Get().Apps))
+		live := d.Live.Get()
+		out := []map[string]any{}
+		for _, x := range live.Apps {
+			out = append(out, sanitizeApp(x, live.Routes))
+		}
+		writeJSON(w, out)
 	})
 	mux.HandleFunc("/api/v1/apps/", func(w http.ResponseWriter, r *http.Request) {
 		rest := strings.TrimPrefix(r.URL.Path, "/api/v1/apps/")
@@ -440,7 +445,83 @@ func NewHandler(d Deps) http.Handler {
 		}
 		switch {
 		case action == "" && r.Method == http.MethodGet:
-			writeJSON(w, sanitizeApp(*a))
+			writeJSON(w, sanitizeApp(*a, d.Live.Get().Routes))
+		case action == "" && r.Method == http.MethodPut:
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			var in struct {
+				Command      *string   `json:"command"`
+				Args         *[]string `json:"args"`
+				Dir          *string   `json:"dir"`
+				RestartDelay *string   `json:"restart_delay"`
+				MinUptime    *string   `json:"min_uptime"`
+				MemoryMB     *uint64   `json:"memory_mb"`
+				Deploy       *struct {
+					Repo  string   `json:"repo"`
+					Ref   string   `json:"ref"`
+					Build []string `json:"build"`
+					Auto  bool     `json:"auto"`
+				} `json:"deploy"`
+			}
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
+				writeErr(w, http.StatusBadRequest, "JSON inválido")
+				return
+			}
+			cp := cloneFleet(d.Live)
+			t := cfgfile.FindApp(cp, name)
+			if in.Command != nil {
+				t.Command = *in.Command
+			}
+			if in.Args != nil {
+				t.Args = *in.Args
+			}
+			if in.Dir != nil {
+				t.Dir = *in.Dir
+			}
+			if in.RestartDelay != nil {
+				t.RestartDelay = *in.RestartDelay
+			}
+			if in.MinUptime != nil {
+				t.MinUptime = *in.MinUptime
+			}
+			if in.MemoryMB != nil {
+				t.MemoryMB = *in.MemoryMB
+			}
+			if in.Deploy != nil {
+				t.Deploy = &config.Deploy{
+					Repo: in.Deploy.Repo, Ref: in.Deploy.Ref,
+					Build: in.Deploy.Build, Auto: in.Deploy.Auto,
+				}
+			}
+			if err := t.ValidateApp(0); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			d.Live.Swap(cp)
+			writeJSON(w, map[string]string{"ok": "true"})
+		case action == "" && r.Method == http.MethodDelete:
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			cp := cloneFleet(d.Live)
+			kept := []config.App{}
+			for _, x := range cp.Apps {
+				if x.Name != name {
+					kept = append(kept, x)
+				}
+			}
+			cp.Apps = kept
+			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			d.Live.Swap(cp)
+			writeJSON(w, map[string]string{"ok": "true", "hint": "revisa huérfanas: routes list"})
 		case action == "restart" && r.Method == http.MethodPost:
 			if !requireOperator(w, r, d.DB) {
 				return
@@ -830,7 +911,9 @@ func requireOperator(w http.ResponseWriter, r *http.Request, db *store.DB) bool 
 }
 
 // sanitizeApp quita Env (secretos solo vía /env, operator).
-func sanitizeApp(a config.App) map[string]any {
+// domains: hosts cuyas routes apuntan al PORT de la app (mapeo real,
+// no adivinanza por nombre).
+func sanitizeApp(a config.App, routes []config.Route) map[string]any {
 	deploy := any(nil)
 	if a.Deploy != nil {
 		deploy = map[string]any{
@@ -838,19 +921,23 @@ func sanitizeApp(a config.App) map[string]any {
 			"build": a.Deploy.Build, "auto": a.Deploy.Auto,
 		}
 	}
+	// domains: hosts cuyas routes apuntan al PORT de la app (mapeo real,
+	// no adivinanza por nombre).
+	domains := []string{}
+	if port := a.Env["PORT"]; port != "" {
+		want := "http://127.0.0.1:" + port
+		for _, r := range routes {
+			if r.Target == want {
+				domains = append(domains, r.Hosts...)
+			}
+		}
+	}
 	return map[string]any{
 		"name": a.Name, "command": a.Command, "args": a.Args,
 		"dir": a.Dir, "restart_delay": a.RestartDelay,
-		"min_uptime": a.MinUptime, "deploy": deploy,
+		"min_uptime": a.MinUptime, "memory_mb": a.MemoryMB,
+		"deploy": deploy, "domains": domains,
 	}
-}
-
-func sanitizeApps(apps []config.App) []map[string]any {
-	out := []map[string]any{}
-	for _, a := range apps {
-		out = append(out, sanitizeApp(a))
-	}
-	return out
 }
 
 func queryInt(r *http.Request, key string, def int) int {
