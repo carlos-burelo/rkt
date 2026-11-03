@@ -2,6 +2,7 @@
 package proxy
 
 import (
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -101,13 +102,22 @@ func secureChain(live *config.Live, next http.Handler, log *slog.Logger) http.Ha
 }
 
 // recovery convierte un panic en 500 sin tumbar el servicio.
+// http.ErrAbortHandler es el sentinel de net/http cuando el cliente corta la
+// conexión a mitad de respuesta (p. ej. un video): no es un fallo del handler,
+// así que no se escribe 500 ni se ensucia el log.
 func recovery(log *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
-			if v := recover(); v != nil {
-				log.Error("panic recuperado", "v", v, "host", r.Host, "path", r.URL.Path)
-				http.Error(w, "error interno", http.StatusInternalServerError)
+			v := recover()
+			if v == nil {
+				return
 			}
+			if err, ok := v.(error); ok && errors.Is(err, http.ErrAbortHandler) {
+				log.Debug("petición abortada por el cliente", "host", r.Host, "path", r.URL.Path)
+				return
+			}
+			log.Error("panic recuperado", "v", v, "host", r.Host, "path", r.URL.Path)
+			http.Error(w, "error interno", http.StatusInternalServerError)
 		}()
 		next.ServeHTTP(w, r)
 	})

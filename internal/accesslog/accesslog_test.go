@@ -50,3 +50,40 @@ func TestCapturesErrorStatus(t *testing.T) {
 		t.Fatalf("debió registrar 404: %q", data)
 	}
 }
+
+// TestRecorderFlush: el writer envuelto debe seguir exponiendo Flush al
+// ResponseController (streaming/SSE/rangos de video).
+func TestRecorderFlush(t *testing.T) {
+	base := newFlushSpy()
+	r := &recorder{ResponseWriter: base}
+	if err := http.NewResponseController(r).Flush(); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
+	if !base.flushed {
+		t.Fatal("el Flush no llegó al writer real")
+	}
+}
+
+// TestWriteHeaderUnaVez: una cabecera final repetida se ignora en vez de
+// provocar "superfluous response.WriteHeader call".
+func TestWriteHeaderUnaVez(t *testing.T) {
+	base := httptest.NewRecorder()
+	r := &recorder{ResponseWriter: base}
+	r.WriteHeader(http.StatusOK)
+	r.WriteHeader(http.StatusInternalServerError)
+	if base.Code != http.StatusOK {
+		t.Fatalf("código = %d, quiere 200", base.Code)
+	}
+	if r.status != http.StatusOK {
+		t.Fatalf("status registrado = %d, quiere 200", r.status)
+	}
+}
+
+type flushSpy struct {
+	http.ResponseWriter
+	flushed bool
+}
+
+func newFlushSpy() *flushSpy { return &flushSpy{ResponseWriter: httptest.NewRecorder()} }
+
+func (f *flushSpy) Flush() { f.flushed = true }

@@ -155,3 +155,21 @@ func TestRecovery(t *testing.T) {
 		t.Fatalf("panic: got %d, quiere 500", rec.Code)
 	}
 }
+
+// TestRecoveryAbortHandler: si el cliente corta la conexión el proxy paniquea
+// con http.ErrAbortHandler; eso no es un 500 ni debe escribir cabeceras.
+func TestRecoveryAbortHandler(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	abort := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		panic(http.ErrAbortHandler)
+	})
+	rec := httptest.NewRecorder()
+	recovery(log, abort).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("abort: got %d, quiere 200 ya enviado", rec.Code)
+	}
+	if body := rec.Body.String(); body != "" {
+		t.Fatalf("abort no debe escribir body: %q", body)
+	}
+}

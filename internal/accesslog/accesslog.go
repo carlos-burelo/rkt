@@ -39,14 +39,26 @@ func (l *Logger) Close() error { return l.f.Close() }
 
 type recorder struct {
 	http.ResponseWriter
-	status int
+	status int // código final (>=200) ya enviado
 	bytes  int
 }
 
+// WriteHeader ignora cabeceras finales repetidas: si un handler ya respondió y
+// luego algo (recovery, error tardío) intenta escribir, net/http solo soltaría
+// "superfluous response.WriteHeader call". Los 1xx (Early Hints) sí pasan.
 func (r *recorder) WriteHeader(s int) {
-	r.status = s
+	if s >= 200 {
+		if r.status != 0 {
+			return
+		}
+		r.status = s
+	}
 	r.ResponseWriter.WriteHeader(s)
 }
+
+// Unwrap deja que http.ResponseController encuentre Flusher/Hijacker/ReaderFrom
+// del writer real: sin esto se rompen streaming, SSE y rangos de video.
+func (r *recorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 func (r *recorder) Write(b []byte) (int, error) {
 	if r.status == 0 {
