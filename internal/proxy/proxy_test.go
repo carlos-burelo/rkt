@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"log/slog"
@@ -146,6 +147,39 @@ routes:
 	}
 }
 
+func TestMaxBodyCeroYRateLimit(t *testing.T) {
+	live := liveFrom(t, `
+max_body_mb: 0
+restart_grace: 0s
+rate_limit:
+  enabled: true
+  rps: 0.001
+  burst: 1
+routes:
+  - hosts: ["h.test"]
+    target: "http://127.0.0.1:9"
+`)
+	h := NewHandler(live, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(strings.Repeat("x", 3<<20)))
+	req.Host = "h.test"
+	req.RemoteAddr = "127.0.0.1:1"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code == http.StatusRequestEntityTooLarge {
+		t.Fatal("max_body_mb:0 no debe limitar")
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req2.Host = "h.test"
+	req2.RemoteAddr = "127.0.0.1:1"
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Fatalf("segunda petición = %d, quiere 429", rec2.Code)
+	}
+}
+
 func TestRecovery(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	panicer := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -230,5 +264,37 @@ routes:
 	h.ServeHTTP(rec, req)
 	if rec.Code == http.StatusBadGateway {
 		t.Fatalf("cliente cancelado no debe ser 502: %s", rec.Body.String())
+	}
+}
+
+// TestForwardedProtoYHost: TLS y X-Forwarded-Proto previo se propagan.
+func TestForwardedProtoYHost(t *testing.T) {
+	var got http.Header
+	var gotHost string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		gotHost = r.Host
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer backend.Close()
+	live := liveFrom(t, fmt.Sprintf("rate_limit:\n  enabled: false\nrestart_grace: 0s\nroutes:\n  - hosts: [\"public.test\"]\n    target: \"%s\"\n", backend.URL))
+	h := NewHandler(live, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "public.test"
+	req.TLS = &tls.ConnectionState{}
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("proxy = %d", rec.Code)
+	}
+	if got.Get("X-Forwarded-Proto") != "https, https" {
+		t.Fatalf("proto = %q", got.Get("X-Forwarded-Proto"))
+	}
+	if got.Get("X-Forwarded-Host") != "public.test" {
+		t.Fatalf("xfh = %q", got.Get("X-Forwarded-Host"))
+	}
+	if gotHost == "public.test" {
+		t.Fatal("Host al backend no debe ser el público")
 	}
 }

@@ -134,3 +134,19 @@ func TestEnvironListYExpandBordes(t *testing.T) {
 		}
 	}
 }
+
+func TestParseClavesValidas(t *testing.T) {
+	m, err := Parse("A1=x\n_B=2\n")
+	if err != nil || m["A1"] != "x" || m["_B"] != "2" {
+		t.Fatalf("claves válidas: %+v %v", m, err)
+	}
+	if _, err := Parse("A-B=x\n"); err == nil {
+		t.Fatal("guion en clave debe fallar")
+	}
+	if validKey("") {
+		t.Fatal("clave vacía debe ser inválida")
+	}
+	if !validKey("A1") || !validKey("_B") {
+		t.Fatal("claves con dígito/guion bajo deben ser válidas")
+	}
+}

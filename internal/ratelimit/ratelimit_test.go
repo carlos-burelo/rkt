@@ -62,3 +62,49 @@ func TestMiddleware429(t *testing.T) {
 		t.Fatalf("segunda: got %d, quiere 429", rec2.Code)
 	}
 }
+
+func TestSweepYStop(t *testing.T) {
+	l := New(100, 10)
+	defer l.Stop()
+	l.Allow("viejo.test")
+	l.Allow("activo.test")
+	l.mu.Lock()
+	l.clients["viejo.test"].lastSeen = time.Now().Add(-2 * idleTTL)
+	l.mu.Unlock()
+	l.sweep(time.Now())
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if _, ok := l.clients["viejo.test"]; ok {
+		t.Fatal("bucket idle debe salir")
+	}
+	if _, ok := l.clients["activo.test"]; !ok {
+		t.Fatal("bucket activo debe quedarse")
+	}
+	l.Stop() // idempotente
+	l.Stop()
+}
+
+func TestTickerLimpiaSolo(t *testing.T) {
+	old := sweepEvery
+	sweepEvery = 10 * time.Millisecond
+	t.Cleanup(func() { sweepEvery = old })
+	l := New(100, 10)
+	defer l.Stop()
+	l.Allow("viejo.test")
+	l.mu.Lock()
+	l.clients["viejo.test"].lastSeen = time.Now().Add(-2 * idleTTL)
+	l.mu.Unlock()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		l.mu.Lock()
+		_, ok := l.clients["viejo.test"]
+		l.mu.Unlock()
+		if !ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("el ticker no limpió el bucket idle")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}

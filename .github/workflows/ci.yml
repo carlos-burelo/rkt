@@ -55,6 +55,22 @@ jobs:
         run: go test ./... -count=1
         shell: pwsh
 
+      - name: Cobertura 100% en paquetes blindados
+        run: |
+          $locked = @("accesslog","alerts","appview","dotenv","hosts","logx","proxy","ratelimit","server","staticweb","weblog")
+          $fail = @()
+          foreach ($p in $locked) {
+            $out = go test "./internal/$p" -count=1 -cover 2>&1
+            if ($LASTEXITCODE -ne 0 -or ($out -join "`n") -notmatch 'coverage: 100\.0%') {
+              $fail += $p
+            }
+          }
+          if ($fail.Count -gt 0) {
+            Write-Error "sin 100% de cobertura: $($fail -join ', ')"
+            exit 1
+          }
+        shell: pwsh
+
       - name: Build
         run: go build -trimpath -o bin/rkt.exe ./cmd/rkt-proxy
         shell: pwsh

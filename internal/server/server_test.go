@@ -102,6 +102,28 @@ func TestNewHTTPSUsaGetCert(t *testing.T) {
 	}
 }
 
+// TestNewHTTPSControl: el plano /_rkt/* va al control, no al backend.
+func TestNewHTTPSControl(t *testing.T) {
+	live := testLive(t, true)
+	srv := NewHTTPS(live.Get(), func(*tls.ClientHelloInfo) (*tls.Certificate, error) { return nil, nil },
+		okHandler("backend"), okHandler("control"), nil)
+	for path, want := range map[string]string{"/_rkt/hook": "control", "/app": "backend"} {
+		rec := httptest.NewRecorder()
+		srv.Handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if got := rec.Header().Get("X-Mark"); got != want {
+			t.Fatalf("%s = %q, quiere %q", path, got, want)
+		}
+	}
+	// control nil => 404 en /_rkt
+	srv = NewHTTPS(live.Get(), func(*tls.ClientHelloInfo) (*tls.Certificate, error) { return nil, nil },
+		okHandler("backend"), nil, nil)
+	rec := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/x", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("control nil = %d", rec.Code)
+	}
+}
+
 // TestHealthzPayloadNoSeUsaAqui evita dependencias: el JSON del healthz del
 // listener 80 no existe; solo verificamos que el backend responde JSON propio.
 func TestControlRespetaMetodo(t *testing.T) {

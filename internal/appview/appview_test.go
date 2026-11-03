@@ -72,3 +72,56 @@ func TestAppDescribeDominiosYDNS(t *testing.T) {
 		t.Fatalf("dns_ok = %v, localhost resuelve", m["dns_ok"])
 	}
 }
+
+func TestAppsYResolvesLocal(t *testing.T) {
+	cfg := &config.Config{
+		Apps: []config.App{
+			{Name: "a", Env: map[string]string{"PORT": "3001"}},
+			{Name: "b", Args: []string{"__static", `C:\sitio`}, Env: map[string]string{"PORT": "3002"}},
+			{Name: "c"},
+		},
+		Routes: []config.Route{
+			{Hosts: []string{"a.localhost"}, Target: "http://127.0.0.1:3001"},
+			{Hosts: []string{"b.localhost"}, Target: "http://127.0.0.1:3002"},
+		},
+	}
+	all := Apps(cfg)
+	if len(all) != 3 || all[1]["static"] != `C:\sitio` {
+		t.Fatalf("Apps = %+v", all)
+	}
+	if d := Domains(cfg, cfg.Apps[2]); len(d) != 0 {
+		t.Fatalf("sin PORT no hay dominios: %v", d)
+	}
+	if !ResolvesLocal("localhost") || !ResolvesLocal("app.localhost") {
+		t.Fatal("localhost debe resolver local")
+	}
+	if !anyLoopback([]string{"10.0.0.1", "::1"}) || !anyLoopback([]string{"127.0.0.1"}) {
+		t.Fatal("anyLoopback debe reconocer loopback")
+	}
+	if anyLoopback([]string{"10.0.0.1", "8.8.8.8"}) {
+		t.Fatal("IPs públicas no son loopback")
+	}
+	if lessHost(ZoneHost{Host: "z", IsBase: false}, ZoneHost{Host: "a", IsBase: true}) {
+		t.Fatal("apex debe ir primero")
+	}
+	if !lessHost(ZoneHost{Host: "a"}, ZoneHost{Host: "b"}) {
+		t.Fatal("mismo nivel ordena por host")
+	}
+	if !ResolvesLocal("127.0.0.1") {
+		t.Fatal("127.0.0.1 debe resolver local")
+	}
+	if ResolvesLocal("dominio-que-no-existe-rkt.invalid") {
+		t.Fatal("dominio inexistente no debe resolver local")
+	}
+	// dns_ok false cuando el host no resuelve a loopback
+	cfg.Routes = append(cfg.Routes, config.Route{Hosts: []string{"x.invalid"}, Target: "http://127.0.0.1:3002"})
+	if m := App(cfg, cfg.Apps[1]); m["dns_ok"] != false {
+		t.Fatalf("dns_ok = %v, quiere false", m["dns_ok"])
+	}
+	// deploy se describe cuando existe
+	cfg.Apps[0].Deploy = &config.Deploy{Repo: "r", Ref: "main", Build: []string{"x"}, Auto: true}
+	m := App(cfg, cfg.Apps[0])
+	if m["deploy"] == nil {
+		t.Fatal("deploy debe aparecer")
+	}
+}

@@ -94,3 +94,51 @@ func FuzzParseLine(f *testing.F) {
 		}
 	})
 }
+
+func TestParseLineInvalidas(t *testing.T) {
+	bad := []string{
+		"",
+		"sin-espacios",
+		`1.2.3.4 sin-corchetes`,
+		`1.2.3.4 - - [fecha-mala] "GET / HTTP/1.1" 200 1`,
+		`1.2.3.4 - - [03/Nov/2026:10:00:00 -0600] GET / HTTP/1.1 200 1`,
+		`1.2.3.4 - - [03/Nov/2026:10:00:00 -0600] "GET" 200 1`,
+		`1.2.3.4 - - [03/Nov/2026:10:00:00 -0600] "GET / HTTP/1.1"`,
+		`1.2.3.4 - - [03/Nov/2026:10:00:00 -0600] "GET / HTTP/1.1" abc 1`,
+		`1.2.3.4 - - [03/Nov/2026:10:00:00 -0600] "GET  HTTP/1.1" 200 1 "-" "u"`, // path vacío
+	}
+	for _, line := range bad {
+		if e, ok := ParseLine(line); ok {
+			t.Fatalf("debía fallar %q (dio %+v)", line, e)
+		}
+	}
+}
+
+func TestClassOfTopYAfterQuoted(t *testing.T) {
+	cases := map[int]string{100: "otro", 204: "2xx", 302: "3xx", 404: "4xx", 503: "5xx"}
+	for status, want := range cases {
+		if got := classOf(status); got != want {
+			t.Fatalf("classOf(%d) = %q, quiere %q", status, got, want)
+		}
+	}
+	m := map[string]int{"a": 2, "b": 2, "c": 1}
+	got := top(m, 2)
+	if len(got) != 2 || got[0].K != "a" || got[1].K != "b" {
+		t.Fatalf("top = %+v", got)
+	}
+	if len(top(map[string]int{}, 5)) != 0 {
+		t.Fatal("top vacío debe ser []")
+	}
+	if afterQuoted("sin comillas", 1) != "" {
+		t.Fatal("sin comillas debe devolver vacío")
+	}
+	if afterQuoted("\"abierto", 1) != "" {
+		t.Fatal("comilla sin cerrar debe devolver vacío")
+	}
+	if afterQuoted(`"a" resto`, 1) != " resto" {
+		t.Fatalf("afterQuoted = %q", afterQuoted(`"a" resto`, 1))
+	}
+	if got := afterQuoted("x", 0); got != "x" {
+		t.Fatalf("n=0 = %q", got)
+	}
+}

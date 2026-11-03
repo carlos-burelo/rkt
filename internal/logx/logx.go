@@ -19,22 +19,28 @@ const maxBytes = 10 << 20 // 10MB
 // CWD (dev desde el repo) y, si no existe, junto al .exe (servicio Windows,
 // que arranca en System32). Un mismo -config no debe cambiar la carpeta
 // de datos según cómo se escriba.
+// getwd/executable inyectables para tests de rutas.
+var (
+	getwd      = os.Getwd
+	executable = os.Executable
+)
+
 func Abs(p string) string {
 	if len(p) > 1 && (p[1] == ':' || p[0] == '/' || p[0] == '\\') {
 		return p
 	}
-	if wd, err := os.Getwd(); err == nil {
+	if wd, err := getwd(); err == nil {
 		if c := filepath.Join(wd, p); fileExists(c) {
 			return c
 		}
 	}
-	if exe, err := os.Executable(); err == nil {
+	if exe, err := executable(); err == nil {
 		if c := filepath.Join(filepath.Dir(exe), p); fileExists(c) {
 			return c
 		}
 	}
 	// Sin archivo: el CWD es el ancla estable (dev desde el repo).
-	if wd, err := os.Getwd(); err == nil {
+	if wd, err := getwd(); err == nil {
 		return filepath.Join(wd, p)
 	}
 	return p

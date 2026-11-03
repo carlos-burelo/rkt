@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -103,6 +104,9 @@ func validateRoot(root string) error {
 	return nil
 }
 
+// listen es net.Listen (inyectable en tests para no abrir puertos fijos).
+var listen = net.Listen
+
 // Serve arranca el servidor en $PORT (el supervisor lo inyecta).
 // Falla si no hay sitio compilado: mejor unidad failed que 200 mentiroso.
 func Serve(root string) error {
@@ -111,8 +115,21 @@ func Serve(root string) error {
 		port = "3000"
 	}
 	if err := validateRoot(root); err != nil {
-		log.Fatalf("static: %v", err)
+		return err
 	}
-	log.Printf("static %s en :%s", root, port)
-	return http.ListenAndServe(":"+port, Handler(root))
+	ln, err := listen("tcp", ":"+port)
+	if err != nil {
+		return fmt.Errorf("escuchar :%s: %w", port, err)
+	}
+	defer ln.Close()
+	return ServeOn(ln, root)
+}
+
+// ServeOn sirve sobre un listener ya abierto (testeable sin puerto fijo).
+func ServeOn(ln net.Listener, root string) error {
+	if err := validateRoot(root); err != nil {
+		return err
+	}
+	log.Printf("static %s en %s", root, ln.Addr())
+	return http.Serve(ln, Handler(root))
 }

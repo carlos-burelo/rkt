@@ -79,6 +79,11 @@ func ResolvesLocal(host string) bool {
 	if err != nil {
 		return false
 	}
+	return anyLoopback(ips)
+}
+
+// anyLoopback true si alguna IP es loopback (testeable sin DNS).
+func anyLoopback(ips []string) bool {
 	for _, ip := range ips {
 		if ip == "127.0.0.1" || ip == "::1" {
 			return true
@@ -143,16 +148,19 @@ func BuildZones(routes []config.Route, customBase string) Zones {
 	}
 	out := Zones{Suffixes: suffixes, Groups: []ZoneGroup{}}
 	for _, g := range groups {
-		sort.Slice(g.Hosts, func(i, j int) bool {
-			if g.Hosts[i].IsBase != g.Hosts[j].IsBase {
-				return g.Hosts[i].IsBase
-			}
-			return g.Hosts[i].Host < g.Hosts[j].Host
-		})
+		sort.Slice(g.Hosts, func(i, j int) bool { return lessHost(g.Hosts[i], g.Hosts[j]) })
 		out.Groups = append(out.Groups, *g)
 	}
 	sort.Slice(out.Groups, func(i, j int) bool { return out.Groups[i].Base < out.Groups[j].Base })
 	return out
+}
+
+// lessHost ordena apex primero y luego por host (testeable directo).
+func lessHost(a, b ZoneHost) bool {
+	if a.IsBase != b.IsBase {
+		return a.IsBase
+	}
+	return a.Host < b.Host
 }
 
 func splitLocal(host string, suffixes []string) (suffix, rest string) {

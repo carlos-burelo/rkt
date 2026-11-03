@@ -12,8 +12,10 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// idleTTL echa buckets sin uso; sweep cada minuto.
+// idleTTL echa buckets sin uso; sweep cada minuto (var para tests).
 const idleTTL = 3 * time.Minute
+
+var sweepEvery = time.Minute
 
 type client struct {
 	limiter  *rate.Limiter
@@ -38,25 +40,29 @@ func New(rps float64, burst int) *Limiter {
 		done:    make(chan struct{}),
 	}
 	go func() {
-		t := time.NewTicker(time.Minute)
+		t := time.NewTicker(sweepEvery)
 		defer t.Stop()
 		for {
 			select {
 			case <-t.C:
-				now := time.Now()
-				l.mu.Lock()
-				for ip, c := range l.clients {
-					if now.Sub(c.lastSeen) > idleTTL {
-						delete(l.clients, ip)
-					}
-				}
-				l.mu.Unlock()
+				l.sweep(time.Now())
 			case <-l.done:
 				return
 			}
 		}
 	}()
 	return l
+}
+
+// sweep echa buckets sin uso (una pasada; testeable sin esperar 1 minuto).
+func (l *Limiter) sweep(now time.Time) {
+	l.mu.Lock()
+	for ip, c := range l.clients {
+		if now.Sub(c.lastSeen) > idleTTL {
+			delete(l.clients, ip)
+		}
+	}
+	l.mu.Unlock()
 }
 
 // Stop detiene la limpieza.

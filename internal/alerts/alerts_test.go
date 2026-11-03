@@ -37,3 +37,32 @@ func TestFired(t *testing.T) {
 		t.Fatal("describe vacío")
 	}
 }
+
+func TestFiredBordes(t *testing.T) {
+	now := time.Now().UTC()
+	// LastFired inválido se ignora (no bloquea)
+	r := store.AlertRule{Kind: "failed", Threshold: 1, WindowMin: 60, LastFired: "no-es-fecha"}
+	if !Fired(r, 1, 0, now) {
+		t.Fatal("LastFired inválido no debe bloquear")
+	}
+	// error_rate
+	r2 := store.AlertRule{Kind: "error_rate", Threshold: 0.2, WindowMin: 60}
+	if Fired(r2, 99, 0.1, now) || !Fired(r2, 0, 0.2, now) {
+		t.Fatal("error_rate mal evaluado")
+	}
+	// tipo desconocido nunca dispara
+	if Fired(store.AlertRule{Kind: "otro", Threshold: 0}, 99, 1, now) {
+		t.Fatal("tipo desconocido no debe disparar")
+	}
+	// cooldown vigente
+	r3 := store.AlertRule{Kind: "failed", Threshold: 1, WindowMin: 60, LastFired: now.Add(-10 * time.Minute).Format(time.RFC3339)}
+	if Fired(r3, 5, 0, now) {
+		t.Fatal("cooldown debe bloquear")
+	}
+	if Describe(store.AlertRule{ID: 7, Kind: "failed"}) == "" {
+		t.Fatal("describe failed vacío")
+	}
+	if d := Describe(store.AlertRule{ID: 8, Kind: "error_rate"}); d == "" {
+		t.Fatal("describe error_rate vacío")
+	}
+}

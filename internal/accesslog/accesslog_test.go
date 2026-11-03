@@ -114,3 +114,64 @@ type flushSpy struct {
 func newFlushSpy() *flushSpy { return &flushSpy{ResponseWriter: httptest.NewRecorder()} }
 
 func (f *flushSpy) Flush() { f.flushed = true }
+
+func TestNewRotaYErrores(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "access.log")
+	if err := os.WriteFile(path, make([]byte, maxBytes+1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	l, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = l.Close()
+	if _, err := os.Stat(path + ".1"); err != nil {
+		t.Fatalf("rotación: %v", err)
+	}
+
+	// dir padre que es un archivo => error de MkdirAll
+	f := filepath.Join(dir, "archivo")
+	if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := New(filepath.Join(f, "sub", "access.log")); err == nil {
+		t.Fatal("MkdirAll sobre archivo debe fallar")
+	}
+
+	// el path es un directorio => OpenFile falla
+	asDir := filepath.Join(dir, "dir.log")
+	if err := os.Mkdir(asDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := New(asDir); err == nil {
+		t.Fatal("abrir un directorio como log debe fallar")
+	}
+}
+
+func TestMiddlewareSinEscribirYRepetido(t *testing.T) {
+	dir := t.TempDir()
+	l, err := New(filepath.Join(dir, "a.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	// handler que no escribe nada: se registra 200
+	l.Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).ServeHTTP(
+		httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/vacio", nil),
+	)
+	// handler que escribe cabecera dos veces: la segunda se ignora
+	l.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(http.StatusInternalServerError)
+	})).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/doble", nil))
+
+	data, _ := os.ReadFile(filepath.Join(dir, "a.log"))
+	text := string(data)
+	if !strings.Contains(text, " 200 ") || !strings.Contains(text, "/vacio") {
+		t.Fatalf("sin escritura debe ser 200: %q", text)
+	}
+	if !strings.Contains(text, " 201 ") || strings.Contains(text, " 500 ") {
+		t.Fatalf("cabecera repetida mal: %q", text)
+	}
+}

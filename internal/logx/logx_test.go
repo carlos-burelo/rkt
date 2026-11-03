@@ -1,6 +1,7 @@
 package logx
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,5 +117,60 @@ func TestSetupEscribeYRoja(t *testing.T) {
 	close2()
 	if _, err := os.Stat(Path(cfg) + ".1"); err != nil {
 		t.Fatalf("falta rotación .1: %v", err)
+	}
+}
+
+func TestAbsJuntoAlExeYSetupError(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Skip("sin executable")
+	}
+	name := "rkt-abs-probe-unico.yaml"
+	if err := os.WriteFile(filepath.Join(filepath.Dir(exe), name), []byte("x"), 0o644); err != nil {
+		t.Skipf("no puedo escribir junto al exe: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(filepath.Join(filepath.Dir(exe), name)) })
+	if got := Abs(name); got != filepath.Join(filepath.Dir(exe), name) {
+		t.Fatalf("Abs junto al exe = %q", got)
+	}
+
+	file := filepath.Join(t.TempDir(), "archivo")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Setup(filepath.Join(file, "rkt.yaml")); err == nil {
+		t.Fatal("Setup bajo un archivo debe fallar al crear logs/")
+	}
+}
+
+func TestAbsCWDYFallbackTotal(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "cfg.yaml"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	if got := Abs("cfg.yaml"); got != filepath.Join(dir, "cfg.yaml") {
+		t.Fatalf("Abs CWD existente = %q", got)
+	}
+
+	oldGet, oldExe := getwd, executable
+	getwd = func() (string, error) { return "", errors.New("sin cwd") }
+	executable = func() (string, error) { return "", errors.New("sin exe") }
+	t.Cleanup(func() { getwd, executable = oldGet, oldExe })
+	if got := Abs("rel.yaml"); got != "rel.yaml" {
+		t.Fatalf("fallback total = %q", got)
+	}
+}
+
+func TestSetupLogEsDirectorio(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "rkt.dev.yaml")
+	if err := os.MkdirAll(DirFor(cfg), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(Path(cfg), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Setup(cfg); err == nil {
+		t.Fatal("rkt.log como directorio debe fallar al abrir")
 	}
 }
