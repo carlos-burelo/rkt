@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 )
@@ -22,14 +21,11 @@ func Path() string {
 	if p := os.Getenv("RKT_HOSTS_PATH"); p != "" {
 		return p
 	}
-	if runtime.GOOS == "windows" {
-		root := os.Getenv("SystemRoot")
-		if root == "" {
-			root = `C:\Windows`
-		}
-		return filepath.Join(root, "System32", "drivers", "etc", "hosts")
+	root := os.Getenv("SystemRoot")
+	if root == "" {
+		root = `C:\Windows`
 	}
-	return "/etc/hosts"
+	return filepath.Join(root, "System32", "drivers", "etc", "hosts")
 }
 
 // List hosts gestionados por rkt.

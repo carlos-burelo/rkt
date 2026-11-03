@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -83,10 +82,7 @@ func (p pkgJSON) dep(name string) bool {
 func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
 	// Binarios sin ecosistema de paquetes.
 	if file("go.mod") {
-		name := "app"
-		if runtime.GOOS == "windows" {
-			name += ".exe"
-		}
+		name := "app.exe"
 		return Plan{
 			Kind:  "go",
 			Build: []string{"go build -o " + name + " ."},

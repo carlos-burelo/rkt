@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 
@@ -276,14 +275,9 @@ func RunSteps(steps []string, dir string, env map[string]string, out io.Writer) 
 	return nil
 }
 
-// runStep ejecuta un paso de build en shell del OS con el env de la app.
+// runStep ejecuta un paso de build en cmd.exe con el env de la app.
 func runStep(step, dir string, env map[string]string, out io.Writer) error {
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd.exe", "/C", step)
-	} else {
-		cmd = exec.Command("sh", "-c", step)
-	}
+	cmd := exec.Command("cmd.exe", "/C", step)
 	cmd.Dir = dir
 	cmd.Env = dotenv.EnvironList(env)
 	cmd.Stdout = out

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 )
@@ -81,10 +80,6 @@ func listDir(abs string) (fsListing, error) {
 			break
 		}
 		name := it.Name()
-		// ocultos solo en unix: en Windows los puntos son normales
-		if runtime.GOOS != "windows" && strings.HasPrefix(name, ".") {
-			continue
-		}
 		info, err := it.Info()
 		if err != nil {
 			continue
@@ -108,17 +103,10 @@ func listDir(abs string) (fsListing, error) {
 // rootsListing expone los puntos de entrada del disco como una lista.
 func rootsListing() fsListing {
 	entries := []fsEntry{}
-	if runtime.GOOS == "windows" {
-		for c := 'A'; c <= 'Z'; c++ {
-			p := string(c) + `:\`
-			if st, err := os.Stat(p); err == nil && st.IsDir() {
-				entries = append(entries, fsEntry{Name: p, Path: p, Dir: true})
-			}
-		}
-	} else {
-		entries = append(entries, fsEntry{Name: "/", Path: "/", Dir: true})
-		if home, err := os.UserHomeDir(); err == nil && home != "" {
-			entries = append(entries, fsEntry{Name: home, Path: home, Dir: true})
+	for c := 'A'; c <= 'Z'; c++ {
+		p := string(c) + `:\`
+		if st, err := os.Stat(p); err == nil && st.IsDir() {
+			entries = append(entries, fsEntry{Name: p, Path: p, Dir: true})
 		}
 	}
 	return fsListing{Path: "", Parent: "", Entries: entries}

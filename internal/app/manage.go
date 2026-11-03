@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -345,10 +344,8 @@ func appsAdd(args []string, cfgPath string) {
 	if dd == "" {
 		if sug != nil && sug.Dir != "" {
 			dd = sug.Dir
-		} else if runtime.GOOS == "windows" {
-			dd = `C:\apps\` + nm
 		} else {
-			dd = "/srv/" + nm
+			dd = `C:\apps\` + nm
 		}
 		dd = prompt("dir app", dd)
 	}
@@ -915,12 +912,9 @@ func githubInitURL(domain, name, org string) string {
 	return link
 }
 
-// openBrowser abre URL (best effort). Sin cmd.exe de por medio:
-// rundll32 recibe la URL como argumento directo y ningún shell la parte.
+// openBrowser abre URL (best effort) con rundll32: la URL va como argumento
+// directo y ningún shell la parte.
 func openBrowser(link string) {
-	if runtime.GOOS != "windows" {
-		return
-	}
 	_ = exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", link).Start()
 }
 

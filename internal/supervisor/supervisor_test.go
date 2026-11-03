@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -22,10 +21,7 @@ func testLog(t *testing.T) *slog.Logger {
 
 func shell(t *testing.T, script string) (string, []string) {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		return "cmd.exe", []string{"/c", script}
-	}
-	return "sh", []string{"-c", script}
+	return "cmd.exe", []string{"/c", script}
 }
 
 func loadApps(t *testing.T, yamlBody string) []config.App {
@@ -89,13 +85,7 @@ func TestRestartOnCrash(t *testing.T) {
 }
 
 func TestStopKillsRunning(t *testing.T) {
-	var cmd string
-	var args []string
-	if runtime.GOOS == "windows" {
-		cmd, args = "cmd.exe", []string{"/c", "ping -n 30 127.0.0.1 >nul"}
-	} else {
-		cmd, args = "sleep", []string{"30"}
-	}
+	cmd, args := "cmd.exe", []string{"/c", "ping -n 30 127.0.0.1 >nul"}
 	var argYaml string
 	for _, a := range args {
 		argYaml += "\"" + strings.ReplaceAll(a, `"`, `\"`) + "\", "
@@ -130,14 +120,7 @@ func TestCrashloopGuard(t *testing.T) {
 }
 
 func TestEnvOverride(t *testing.T) {
-	var cmd, script string
-	var args []string
-	if runtime.GOOS == "windows" {
-		cmd, args = "cmd.exe", []string{"/c", "echo %RKT_TEST_VAR%"}
-		_ = script
-	} else {
-		cmd, args = "sh", []string{"-c", "echo $RKT_TEST_VAR"}
-	}
+	cmd, args := "cmd.exe", []string{"/c", "echo %RKT_TEST_VAR%"}
 	var argYaml string
 	for _, a := range args {
 		argYaml += "\"" + a + "\", "
@@ -167,13 +150,7 @@ func TestBackoffFor(t *testing.T) {
 }
 
 func TestSlowDeathsDontTripGuard(t *testing.T) {
-	var cmd string
-	var args []string
-	if runtime.GOOS == "windows" {
-		cmd, args = "cmd.exe", []string{"/c", "ping -n 1 -w 300 127.0.0.1 >nul"}
-	} else {
-		cmd, args = "sleep", []string{"0.3"}
-	}
+	cmd, args := "cmd.exe", []string{"/c", "ping -n 1 -w 300 127.0.0.1 >nul"}
 	var argYaml string
 	for _, a := range args {
 		argYaml += "\"" + a + "\", "
@@ -192,9 +169,6 @@ func TestSlowDeathsDontTripGuard(t *testing.T) {
 }
 
 func TestMemoryLimitKills(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("límite RAM vía Job Objects es Windows")
-	}
 	py, err := exec.LookPath("python")
 	if err != nil {
 		py, err = exec.LookPath("python3")
@@ -227,13 +201,7 @@ func trunc(s string, n int) string {
 }
 
 func TestRestartImmediate(t *testing.T) {
-	var cmd string
-	var args []string
-	if runtime.GOOS == "windows" {
-		cmd, args = "cmd.exe", []string{"/c", "ping -n 30 127.0.0.1 >nul"}
-	} else {
-		cmd, args = "sleep", []string{"30"}
-	}
+	cmd, args := "cmd.exe", []string{"/c", "ping -n 30 127.0.0.1 >nul"}
 	var argYaml string
 	for _, a := range args {
 		argYaml += "\"" + a + "\", "
@@ -285,13 +253,7 @@ func TestRestartRevivesFailed(t *testing.T) {
 }
 
 func TestSwapAndRestart(t *testing.T) {
-	var cmd string
-	var args []string
-	if runtime.GOOS == "windows" {
-		cmd, args = "cmd.exe", []string{"/c", "ping -n 30 127.0.0.1 >nul"}
-	} else {
-		cmd, args = "sleep", []string{"30"}
-	}
+	cmd, args := "cmd.exe", []string{"/c", "ping -n 30 127.0.0.1 >nul"}
 	var argYaml string
 	for _, a := range args {
 		argYaml += "\"" + a + "\", "
