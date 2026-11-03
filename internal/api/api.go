@@ -924,6 +924,9 @@ func NewHandler(d Deps) http.Handler {
 	// Zonas locales agrupadas (panel tipo DNS): base + subdominios.
 	mux.HandleFunc("/api/v1/domains/zones", d.handleZones)
 
+	// Hosts del sistema: arreglar DNS de *.test/base desde la UI.
+	mux.HandleFunc("/api/v1/domains/hosts", d.handleHosts)
+
 	// Usage 30d (rollup access.log, caché 5min). Sin cobro: solo uso.
 	mux.HandleFunc("/api/v1/usage", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

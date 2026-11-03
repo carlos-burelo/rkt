@@ -17,6 +17,7 @@ Sintaxis: `rkt [-config <ruta>] [--json] <comando> [args]`.
 | `dev [--port 8080]` | Foreground local: genera `rkt.dev.yaml` (HTTP alto, sin TLS) si falta y corre |
 | `version` | Versión del binario (`dev` en builds locales) |
 | `mcp` | Servidor MCP stdio para agentes (ver abajo) |
+| `hosts list\|add\|rm <host>` | DNS local en el archivo hosts (admin) |
 | `help` | Esta referencia resumida |
 
 Sin args en terminal interactiva imprime ayuda; sin args como servicio arranca.

@@ -25,6 +25,7 @@ import (
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/discover"
+	"rkt-proxy/internal/hosts"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/store"
 )
@@ -186,6 +187,45 @@ func cmdUsers(args []string, cfgPath string) {
 		fmt.Printf("password de %s actualizado (sesiones invalidadas)\n", args[1])
 	default:
 		log.Fatalf("users: subcomando %q (list|add|del|passwd)", args[0])
+	}
+}
+
+// cmdHosts gestiona el bloque de rkt en el archivo hosts (DNS local).
+func cmdHosts(args []string) {
+	if len(args) == 0 {
+		log.Fatal("uso: hosts list|add|rm <host>")
+	}
+	switch args[0] {
+	case "list":
+		list, err := hosts.List()
+		if err != nil {
+			log.Fatalf("hosts list: %v", err)
+		}
+		for _, h := range list {
+			fmt.Println(h)
+		}
+		if len(list) == 0 {
+			fmt.Println("(sin hosts de rkt)")
+		}
+		fmt.Println("# archivo:", hosts.Path())
+	case "add":
+		if len(args) != 2 {
+			log.Fatal("uso: hosts add <host>")
+		}
+		if err := hosts.Add(args[1]); err != nil {
+			log.Fatalf("hosts add: %v (ejecuta como administrador)", err)
+		}
+		fmt.Printf("%s → 127.0.0.1\n", args[1])
+	case "rm":
+		if len(args) != 2 {
+			log.Fatal("uso: hosts rm <host>")
+		}
+		if err := hosts.Remove(args[1]); err != nil {
+			log.Fatalf("hosts rm: %v (ejecuta como administrador)", err)
+		}
+		fmt.Printf("%s quitado\n", args[1])
+	default:
+		log.Fatalf("hosts: subcomando %q (list|add|rm)", args[0])
 	}
 }
 

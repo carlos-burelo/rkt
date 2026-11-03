@@ -57,3 +57,16 @@ export interface Zones {
 export function listZones(): Promise<Zones> {
   return api<Zones>("/api/v1/domains/zones");
 }
+
+// fixHost añade el host al archivo hosts del sistema (requiere admin).
+export async function fixHost(host: string): Promise<{ ok: boolean; error?: string; hint?: string }> {
+  const res = await fetch("/api/v1/domains/hosts", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ host }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { error?: string; hint?: string };
+  if (!res.ok) return { ok: false, error: body.error ?? `http ${res.status}`, hint: body.hint };
+  return { ok: true };
+}

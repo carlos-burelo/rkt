@@ -143,6 +143,9 @@ func Run(cfgPath string) {
 		case "mcp":
 			runMCP(cfgPath)
 			return
+		case "hosts":
+			cmdHosts(flag.Args()[1:])
+			return
 		case "help", "-h", "--help":
 			usage(0)
 			return
@@ -185,6 +188,7 @@ Servicio:
   run                                    foreground (Ctrl+C limpio)
   dev [--port 8080]                      foreground local (HTTP alto, sin TLS)
   mcp                                    servidor MCP stdio (para agentes)
+  hosts list|add|rm <host>               DNS local (hosts del sistema, admin)
   version                                versión del binario
 
 Operate (contra el servicio en marcha):

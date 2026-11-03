@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router";
 import { ExternalLink, RotateCw } from "lucide-react";
+import { toast } from "sonner";
 import { Dot, StatusBadge } from "../../shared/components/ui";
 import { stateLabel } from "../../shared/lib/labels";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFleet } from "../overview/hooks";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
+import { fixHost } from "../routes/api";
 
 const TABS = [
   { id: "overview", label: "Resumen" },
@@ -102,8 +104,24 @@ export function AppTabs() {
                   {domains[0]}
                 </a>
                 {meta?.dns_ok === false && (
-                  <span className="shrink-0 font-mono text-[9px] text-warn" title="el dominio no resuelve a 127.0.0.1 en esta máquina">
-                    no resuelve
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    <span className="font-mono text-[9px] text-warn" title="el dominio no resuelve a 127.0.0.1 en esta máquina">
+                      no resuelve
+                    </span>
+                    {canWrite && (
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={() => {
+                          fixHost(domains[0]).then((r) => {
+                            if (r.ok) toast.success(`${domains[0]} añadido a hosts`);
+                            else toast.error(r.hint ?? r.error ?? "no se pudo escribir hosts");
+                          });
+                        }}
+                      >
+                        arreglar
+                      </Button>
+                    )}
                   </span>
                 )}
               </span>
