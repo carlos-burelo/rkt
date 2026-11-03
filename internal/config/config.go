@@ -67,7 +67,7 @@ func (g *Github) Poll() time.Duration { return g.poll }
 // EnsureParsed aplica defaults y parsea poll (para overlay de settings).
 func (g *Github) EnsureParsed() error {
 	if g.PollInterval == "" {
-		g.PollInterval = "60s"
+		g.PollInterval = "10s"
 	}
 	p, err := time.ParseDuration(g.PollInterval)
 	if err != nil || p < 10*time.Second {
@@ -259,7 +259,7 @@ func (cfg *Config) ApplyDefaults() {
 		cfg.RestartGrace = restartGraceDefault
 	}
 	if cfg.Github != nil && cfg.Github.PollInterval == "" {
-		cfg.Github.PollInterval = "60s"
+		cfg.Github.PollInterval = "10s"
 	}
 	for i := range cfg.Apps {
 		a := &cfg.Apps[i]

@@ -1131,7 +1131,8 @@ func (p *Program) runDiscovery() {
 // El intervalo se recalcula: tras crear la App la config llega por hot-reload.
 func (p *Program) autoDeploy(live *config.Live) {
 	next := 2 * time.Second
-	var lastPoll time.Time
+	var lastPoll, lastDiscovery time.Time
+	forceDiscovery := false
 	for {
 		wait := next
 		if gh := live.Get().Github; gh != nil && gh.Poll() > 0 && !lastPoll.IsZero() {
@@ -1140,14 +1141,14 @@ func (p *Program) autoDeploy(live *config.Live) {
 		select {
 		case <-time.After(wait):
 		case <-p.discoverKick:
+			forceDiscovery = true
 		}
 		cfg := live.Get()
 		if cfg.Github == nil || p.gh() == nil {
 			next = 2 * time.Second
 			continue
 		}
-		p.runDiscovery()
-		cfg = live.Get()
+		// 1) push-to-deploy primero: 1 request por app, latencia = poll.
 		for i := range cfg.Apps {
 			a := &cfg.Apps[i]
 			if a.Deploy == nil || !a.Deploy.Auto {
@@ -1177,12 +1178,19 @@ func (p *Program) autoDeploy(live *config.Live) {
 			} else {
 				p.log.Info("auto-deploy ok", "app", a.Name, "rev", rev)
 			}
+			cfg = live.Get()
+		}
+		// 2) auto-registro de repos nuevos: cada 5 min o kick (setup/discover).
+		if forceDiscovery || time.Since(lastDiscovery) >= 5*time.Minute {
+			p.runDiscovery()
+			lastDiscovery = time.Now()
+			forceDiscovery = false
 		}
 		lastPoll = time.Now()
 		if cfg.Github.Poll() > 0 {
 			next = cfg.Github.Poll()
 		} else {
-			next = time.Minute
+			next = 10 * time.Second
 		}
 	}
 }

@@ -7,6 +7,7 @@ import { stateLabel } from "../../shared/lib/labels";
 import { CopyButton } from "../../shared/components/feedback";
 import { Button } from "@/components/ui/button";
 import { streamLog, bust } from "../../shared/lib/http";
+import { getDeployment } from "./api";
 import { Timeline } from "./Timeline";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
@@ -88,7 +89,15 @@ export function DeployDrawer() {
         acc = append ? acc + text : text;
         useUI.setState({ buildLog: acc });
       },
-      () => bust("fleet:"),
+      async (status) => {
+        bust("fleet:");
+        if (status !== "done") return;
+        const d = await getDeployment(dep.id).catch(() => null);
+        if (d?.status !== "ok") return; // fallido: dejar el drawer abierto
+        const app = dep.app;
+        useUI.getState().setSel(null);
+        navigate(`/app/${app}`);
+      },
     );
   }, [dep?.id, dep?.status]);
   return (

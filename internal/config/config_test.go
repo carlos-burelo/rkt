@@ -347,3 +347,13 @@ func TestNormalizeNodePM(t *testing.T) {
 		}
 	}
 }
+
+func TestGithubPollDefault(t *testing.T) {
+	g := &Github{}
+	if err := g.EnsureParsed(); err != nil {
+		t.Fatal(err)
+	}
+	if g.Poll() != 10*time.Second {
+		t.Fatalf("poll default = %v, quiero 10s", g.Poll())
+	}
+}
