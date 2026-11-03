@@ -1,7 +1,7 @@
 import { Root, Backdrop, Popup, Title, Close } from "@base_ui/react/dialog";
-import { Deployment } from "../api";
-import { rel, dur } from "../time";
-import { Dot } from "../components/ui";
+import { Deployment } from "../../shared/lib/types";
+import { rel, dur } from "../../shared/lib/time";
+import { Dot } from "../../shared/components/ui";
 
 export function DeployDrawer({
   dep,

@@ -1,0 +1,56 @@
+// Tipos del contrato /api/v1 (único hogar; features importan de aquí).
+export interface Me {
+  user: string;
+  role: string;
+}
+
+export interface AppStatus {
+  name: string;
+  running: boolean;
+  restarts: number;
+  failed?: boolean;
+}
+
+export interface Status {
+  version: string;
+  routes: number;
+  apps: AppStatus[];
+}
+
+export interface Deployment {
+  id: number;
+  app: string;
+  rev: string;
+  status: string;
+  started_at: string;
+  finished_at: string;
+}
+
+export interface RktEvent {
+  id: number;
+  ts: string;
+  kind: string;
+  app: string;
+  msg: string;
+}
+
+export interface User {
+  name: string;
+  role: string;
+  created_at: string;
+}
+
+export interface AppMeta {
+  name: string;
+  command: string;
+  args: string[];
+  dir: string;
+  restart_delay: string;
+  min_uptime: string;
+  deploy: { repo: string; ref: string; build: string[]; auto: boolean } | null;
+}
+
+export interface Route {
+  hosts: string[];
+  target: string;
+}

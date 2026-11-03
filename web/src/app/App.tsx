@@ -1,20 +1,26 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  api, logout, me, Me, Status, Deployment, RktEvent, AppMeta,
-  listApps, appAction, getEnv, listRoutes, getSettings, listUsers, deploymentLog, User,
-} from "./api";
-import { Login } from "./Login";
-import { Dot, Err, Note } from "./components/ui";
-import { DeployDrawer } from "./components/DeployDrawer";
-import { Overview } from "./pages/Overview";
-import { Deployments } from "./pages/Deployments";
-import { AppDetail } from "./pages/AppDetail";
-import { Logs } from "./pages/Logs";
-import { Routes } from "./pages/Routes";
-import { Settings } from "./pages/Settings";
-import { Users } from "./pages/Users";
+import { api } from "../shared/lib/http";
+import { Me, Status, Deployment, RktEvent, AppMeta, User } from "../shared/lib/types";
+import { logout, me } from "../features/auth/api";
+import { Login } from "../features/auth/Login";
+import { Dot, Err, Note } from "../shared/components/ui";
+import { DeployDrawer } from "../features/deployments/DeployDrawer";
+import { Overview } from "../features/overview/Overview";
+import { Deployments } from "../features/deployments/Deployments";
+import { AppDetail } from "../features/apps/AppDetail";
+import { Logs } from "../features/logs/Logs";
+import { Routes } from "../features/routes/Routes";
+import { Settings } from "../features/settings/Settings";
+import { Users } from "../features/users/Users";
+import { fetchStatus, fetchDeployments, fetchEvents } from "../features/overview/api";
+import { deploymentLog } from "../features/deployments/api";
+import { listApps, appAction, getEnv } from "../features/apps/api";
+import { fetchLog } from "../features/logs/api";
+import { listRoutes } from "../features/routes/api";
+import { getSettings } from "../features/settings/api";
+import { listUsers } from "../features/users/api";
 
-type Page = "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "app";
+export type Page = "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "app";
 
 export function App() {
   const [who, setWho] = useState<Me | null>(null);
@@ -52,19 +58,16 @@ export function App() {
     try {
       setErr("");
       const [st, dp, ev, am] = await Promise.all([
-        api<Status>("/api/v1/status"),
-        api<Deployment[]>("/api/v1/deployments?n=50"),
-        api<RktEvent[]>("/api/v1/events?n=30"),
+        fetchStatus(),
+        fetchDeployments(),
+        fetchEvents(),
         listApps(),
       ]);
       setStatus(st);
       setDeps(dp);
       setEvs(ev);
       setMetas(am);
-      if (page === "logs") {
-        const q = `/api/v1/logs?n=200${appFilter !== "" ? `&app=${appFilter}` : ""}`;
-        setLog((await api<{ log: string }>(q)).log);
-      }
+      if (page === "logs") setLog(await fetchLog(appFilter));
       if (page === "routes") setRoutes(await listRoutes());
       if (page === "settings") setSettingsMap(await getSettings());
       if (page === "users" && isAdmin) setUsers(await listUsers());

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Route, addRoute, delRoute } from "../api";
+import { Route } from "../../shared/lib/types";
+import { addRoute, delRoute } from "./api";
 
 export function Routes({
   routes,

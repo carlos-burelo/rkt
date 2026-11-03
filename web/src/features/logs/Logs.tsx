@@ -1,5 +1,5 @@
 import { RefObject } from "react";
-import { AppStatus } from "../api";
+import { AppStatus } from "../../shared/lib/types";
 
 export function Logs({
   apps,

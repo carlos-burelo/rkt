@@ -1,4 +1,4 @@
-import { setSetting } from "../api";
+import { setSetting } from "./api";
 
 export function Settings({
   settings,

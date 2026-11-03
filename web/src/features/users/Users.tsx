@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { User, createUser, deleteUser } from "../api";
+import { User } from "../../shared/lib/types";
+import { createUser, deleteUser } from "./api";
 
 export function Users({
   users,

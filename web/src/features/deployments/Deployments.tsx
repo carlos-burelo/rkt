@@ -1,6 +1,6 @@
-import { Deployment } from "../api";
-import { rel } from "../time";
-import { Dot } from "../components/ui";
+import { Deployment } from "../../shared/lib/types";
+import { rel } from "../../shared/lib/time";
+import { Dot } from "../../shared/components/ui";
 
 export function Deployments({
   deps,

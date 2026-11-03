@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { AppMeta, Deployment, setEnv, delEnv } from "../api";
-import { dur } from "../time";
-import { Dot } from "../components/ui";
+import { AppMeta, Deployment } from "../../shared/lib/types";
+import { dur } from "../../shared/lib/time";
+import { Dot } from "../../shared/components/ui";
+import { setEnv, delEnv } from "./api";
 
 export function AppDetail({
   app,

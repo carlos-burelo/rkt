@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { login, Me } from "./api";
+import { login } from "./api";
+import { Me } from "../../shared/lib/types";
 
 export function Login({ onOk }: { onOk: (me: Me) => void }) {
   const [user, setUser] = useState("");

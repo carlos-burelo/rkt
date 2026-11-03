@@ -1,6 +1,6 @@
-import { AppStatus, RktEvent } from "../api";
-import { rel } from "../time";
-import { Dot } from "../components/ui";
+import { AppStatus, RktEvent } from "../../shared/lib/types";
+import { rel } from "../../shared/lib/time";
+import { Dot } from "../../shared/components/ui";
 
 export function Overview({
   apps,
