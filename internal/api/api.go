@@ -424,16 +424,43 @@ func NewHandler(d Deps) http.Handler {
 		writeJSON(w, map[string]any{"log": out})
 	})
 	mux.HandleFunc("/api/v1/apps", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+		if r.Method == http.MethodGet {
+			live := d.Live.Get()
+			out := []map[string]any{}
+			for _, x := range live.Apps {
+				out = append(out, sanitizeApp(x, live.Routes))
+			}
+			writeJSON(w, out)
 			return
 		}
-		live := d.Live.Get()
-		out := []map[string]any{}
-		for _, x := range live.Apps {
-			out = append(out, sanitizeApp(x, live.Routes))
+		if r.Method == http.MethodPost {
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			var in struct {
+				Repo    string `json:"repo"`
+				Name    string `json:"name"`
+				Domain  string `json:"domain"`
+				Port    int    `json:"port"`
+				Command string `json:"command"`
+				Dir     string `json:"dir"`
+				Preset  string `json:"preset"`
+				Auto    bool   `json:"auto"`
+			}
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
+				writeErr(w, http.StatusBadRequest, "JSON inválido")
+				return
+			}
+			name, err := createAppFromRepo(d.DB, d.Live, in.Repo, in.Name, in.Domain, in.Port, in.Command, in.Dir, in.Preset, in.Auto)
+			if err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			writeJSON(w, map[string]string{"app": name})
+			return
 		}
-		writeJSON(w, out)
+		writeErr(w, http.StatusMethodNotAllowed, "GET|POST")
 	})
 	mux.HandleFunc("/api/v1/apps/", func(w http.ResponseWriter, r *http.Request) {
 		rest := strings.TrimPrefix(r.URL.Path, "/api/v1/apps/")
@@ -988,6 +1015,22 @@ func NewHandler(d Deps) http.Handler {
 func mustUser(r *http.Request) string {
 	u, _ := UserOf(r)
 	return u
+}
+
+// createAppFromRepo alta con inferencia vía cfgfile.CreateApp (hogar
+// único, también usado por MCP). Escribe vía AddApp y refresca Live.
+func createAppFromRepo(db *store.DB, live *config.Live, repo, name, domain string, port int, command, dir, preset string, auto bool) (string, error) {
+	app, domains, portS, err := cfgfile.CreateApp(db, repo, name, domain, port, command, dir, preset, auto)
+	if err != nil {
+		return "", err
+	}
+	if err := cfgfile.AddApp(db, app, domains, portS); err != nil {
+		return "", err
+	}
+	if snap, err := cfgfile.Snapshot(db, live.Get()); err == nil {
+		live.Swap(snap)
+	}
+	return app.Name, nil
 }
 
 // requireOperator exige rol operator+ (escribe 403 si no).

@@ -4,8 +4,11 @@ package cfgfile
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/discover"
 	"rkt-proxy/internal/dotenv"
 	"rkt-proxy/internal/store"
 )
@@ -86,6 +89,69 @@ func SetEnv(db *store.DB, cfg *config.Config, appName, key, rawVal string) error
 		return fmt.Errorf("inválido, no guardado: %w", err)
 	}
 	return db.ImportFleet(cfg)
+}
+
+// CreateApp arma App+domains+port con inferencia (Suggest+PresetBuild).
+// Unico hogar (CLI wizard pregunta aparte; MCP y API la usan).
+// Crea el dir. No escribe en DB (eso es AddApp).
+func CreateApp(db *store.DB, repo, name, domain string, port int, command, dir, preset string, auto bool) (config.App, []string, string, error) {
+	var sug *discover.Suggestion
+	if repo != "" {
+		var err error
+		sug, err = discover.Suggest(db, nil, repo)
+		if err != nil {
+			return config.App{}, nil, "", err
+		}
+	} else {
+		sug = &discover.Suggestion{}
+	}
+	if name == "" {
+		name = sug.Name
+	}
+	if name == "" {
+		return config.App{}, nil, "", fmt.Errorf("sin nombre (pasa name)")
+	}
+	if command == "" {
+		command = sug.Command
+	}
+	if command == "" {
+		return config.App{}, nil, "", fmt.Errorf("sin binario (pasa command absoluto)")
+	}
+	if dir == "" {
+		dir = sug.Dir
+	}
+	if dir == "" {
+		dir = `C:\apps\` + name
+	}
+	portS := ""
+	if port > 0 {
+		portS = strconv.Itoa(port)
+	} else if sug.Port > 0 {
+		portS = strconv.Itoa(sug.Port)
+	}
+	domains := []string{}
+	if domain != "" {
+		domains = []string{domain}
+	} else if sug.Domain != "" {
+		domains = []string{sug.Domain}
+	}
+	if preset == "" {
+		preset = sug.Preset
+	}
+	build, args, env := discover.PresetBuild(preset, portS)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return config.App{}, nil, "", err
+	}
+	app := config.App{
+		Name: name, Command: command, Args: args,
+		Dir: dir, Env: env, RestartDelay: "5s",
+	}
+	if repo != "" {
+		app.Deploy = &config.Deploy{
+			Repo: repo, Ref: "main", Build: build, Auto: auto,
+		}
+	}
+	return app, domains, portS, nil
 }
 
 func findAppOrNil(cfg *config.Config, name string) *config.App {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/store"
 )
@@ -142,8 +143,19 @@ func TestDoAppsAddLocal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("apps_add: %v", err)
 	}
-	if !strings.Contains(out, `"app":"mirrepo"`) || !strings.Contains(out, `"preset":"next"`) {
+	if !strings.Contains(out, `"app":"mirrepo"`) {
 		t.Fatalf("inferencia mal: %s", out)
+	}
+	// preset next inferido: args standalone en DB
+	_, db, err := cfgfile.LoadMerged(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	fleet, _ := db.LoadFleet()
+	if len(fleet.Apps) != 1 || len(fleet.Apps[0].Args) == 0 ||
+		!strings.Contains(fleet.Apps[0].Args[0], "standalone") {
+		t.Fatalf("preset next no aplicado: %+v", fleet.Apps)
 	}
 	// duplicado debe fallar
 	if _, err := s.doAppsAdd(appsAddArg{Repo: repo}); err == nil {

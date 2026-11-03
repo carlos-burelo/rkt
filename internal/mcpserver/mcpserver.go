@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -277,70 +276,17 @@ func (s *Server) doAppsAdd(a appsAddArg) (string, error) {
 		return "", err
 	}
 	defer db.Close()
-	var sug *discover.Suggestion
-	if a.Repo != "" {
-		sug, err = discover.Suggest(db, nil, a.Repo)
-		if err != nil {
-			return "", err
-		}
-	} else {
-		sug = &discover.Suggestion{}
-	}
-	name := orDefault(a.Name, sug.Name)
-	if name == "" {
-		return "", fmt.Errorf("sin nombre (pasa name)")
-	}
-	command := orDefault(a.Command, sug.Command)
-	if command == "" {
-		return "", fmt.Errorf("sin binario (pasa command absoluto)")
-	}
-	dir := a.Dir
-	if dir == "" {
-		dir = sug.Dir
-	}
-	if dir == "" {
-		dir = `C:\apps\` + name
-	}
-	port := ""
-	if a.Port > 0 {
-		port = strconv.Itoa(a.Port)
-	} else if sug.Port > 0 {
-		port = strconv.Itoa(sug.Port)
-	}
-	domains := []string{}
-	if a.Domain != "" {
-		domains = []string{a.Domain}
-	} else if sug.Domain != "" {
-		domains = []string{sug.Domain}
-	}
-	preset := orDefault(a.Preset, sug.Preset)
-	build, args, env := discover.PresetBuild(preset, port)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	app, domains, port, err := cfgfile.CreateApp(db, a.Repo, a.Name, a.Domain, a.Port, a.Command, a.Dir, a.Preset, a.Auto)
+	if err != nil {
 		return "", err
-	}
-	app := config.App{
-		Name: name, Command: command, Args: args,
-		Dir: dir, Env: env, RestartDelay: "5s",
-	}
-	if a.Repo != "" {
-		app.Deploy = &config.Deploy{
-			Repo: a.Repo, Ref: "main", Build: build, Auto: a.Auto,
-		}
 	}
 	if err := cfgfile.AddApp(db, app, domains, port); err != nil {
 		return "", err
 	}
 	out, _ := json.Marshal(map[string]any{
-		"app": name, "preset": preset, "domains": domains, "port": port,
+		"app": app.Name, "domains": domains, "port": port,
 	})
 	return string(out), nil
-}
-
-func orDefault(v, def string) string {
-	if v != "" {
-		return v
-	}
-	return def
 }
 
 // doEnvSet escribe var (sin lectura: los secretos no vuelven al contexto).

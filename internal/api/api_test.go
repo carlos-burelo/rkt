@@ -583,6 +583,46 @@ func TestAppPutDelete(t *testing.T) {
 	}
 }
 
+func TestAppsCreate(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	opTok := loginAs(t, h, db, "op", store.RoleOperator)
+	visTok := loginAs(t, h, db, "vis", store.RoleViewer)
+
+	post := func(tok, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/apps", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+tok)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	// viewer no crea
+	if rec := post(visTok, `{"name":"n","command":"c"}`); rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer alta: quiere 403, got %d", rec.Code)
+	}
+	// sin datos rechaza
+	if rec := post(opTok, `{"name":"","command":""}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("vacía: quiere 400, got %d", rec.Code)
+	}
+	// explícita ok
+	dir := t.TempDir()
+	body := `{"name":"n2","command":"c2","dir":` + strconv_quote(dir) + `}`
+	if rec := post(opTok, body); rec.Code != http.StatusCreated {
+		t.Fatalf("alta: %d %s", rec.Code, rec.Body.String())
+	}
+	// duplicada rechaza
+	if rec := post(opTok, body); rec.Code != http.StatusBadRequest {
+		t.Fatalf("dup: quiere 400, got %d", rec.Code)
+	}
+	// visible en lista
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps", opTok))
+	if !strings.Contains(rec.Body.String(), `"n2"`) {
+		t.Fatalf("lista sin n2: %s", rec.Body.String())
+	}
+}
+
 func TestDomainsTLS(t *testing.T) {
 	d, db, done := testDeps(t)
 	defer done()
