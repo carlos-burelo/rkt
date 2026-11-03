@@ -46,7 +46,14 @@ export function DeployDrawer({
               <dt className="text-zinc-500">rev</dt><dd className="truncate">{dep.rev} <CopyButton text={dep.rev} /></dd>
               <dt className="text-zinc-500">inicio</dt><dd>{rel(dep.started_at)}</dd>
               <dt className="text-zinc-500">duración</dt><dd>{dur(dep.started_at, dep.finished_at)}</dd>
+              <dt className="text-zinc-500">actor</dt><dd>{dep.triggered_by || "—"}</dd>
             </dl>
+            {dep.env_snapshot && dep.env_snapshot !== "{}" && (
+              <details className="rounded-lg border border-zinc-800 p-3">
+                <summary className="cursor-pointer text-xs text-zinc-400">env snapshot</summary>
+                <pre className="mt-2 overflow-auto font-mono text-[11px] text-zinc-500">{dep.env_snapshot}</pre>
+              </details>
+            )}
             {canWrite && (
               <div className="flex gap-2">
                 {(["restart", "deploy", "rollback"] as const).map((a) => (

@@ -10,6 +10,7 @@ import { CommandPalette } from "../shared/components/CommandPalette";
 import { useOnline } from "../shared/hooks/useOnline";
 import { DeployDrawer } from "../features/deployments/DeployDrawer";
 import { Overview } from "../features/overview/Overview";
+import { CreateDialog } from "../features/apps/CreateDialog";
 import { AnalyticsPage } from "../features/overview/AnalyticsPage";
 import { Observability } from "../features/overview/Observability";
 import { Alerts } from "../features/alerts/Alerts";
@@ -58,6 +59,7 @@ export function App() {
   const [palette, setPalette] = useState(false);
   const [menu, setMenu] = useState(false);
   const [brand, setBrand] = useState("rkt");
+  const [createOpen, setCreateOpen] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
 
   function toast(kind: "ok" | "err", msg: string) {
@@ -209,6 +211,16 @@ export function App() {
             ✕
           </button>
         </div>
+        {canWrite && (
+          <div className="px-3 pt-3">
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="w-full rounded-md bg-zinc-100 px-2 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white"
+            >
+              + Create New
+            </button>
+          </div>
+        )}
         <div className="px-3 pt-3">
           <button
             onClick={() => setPalette(true)}
@@ -347,6 +359,17 @@ export function App() {
         </div>
       </main>
 
+      <CreateDialog
+        open={createOpen}
+        setOpen={setCreateOpen}
+        onCreated={(name) => {
+          toast("ok", `app ${name} creada`);
+          refresh();
+          openApp(name);
+        }}
+        goDomains={() => setPage("routes")}
+        fail={fail}
+      />
       <DeployDrawer
         dep={sel}
         buildLog={buildLog}

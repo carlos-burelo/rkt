@@ -38,3 +38,19 @@ export async function updateApp(name: string, patch: AppPatch): Promise<void> {
 export async function deleteApp(name: string): Promise<{ hint?: string }> {
   return api<{ hint?: string }>(`/api/v1/apps/${name}`, { method: "DELETE" });
 }
+
+export interface CreateAppIn {
+  repo?: string;
+  name?: string;
+  domain?: string;
+  port?: number;
+  command?: string;
+  dir?: string;
+  preset?: string;
+  auto?: boolean;
+}
+
+export async function createApp(input: CreateAppIn): Promise<string> {
+  const res = await api<{ app: string }>("/api/v1/apps", { method: "POST", body: JSON.stringify(input) });
+  return res.app;
+}
