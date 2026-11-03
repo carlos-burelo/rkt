@@ -216,6 +216,21 @@ func (s *Server) doDeploy(app string) (string, error) {
 	return fmt.Sprintf("deploy ok: %s", deploy.OneLine(body)), nil
 }
 
+// doRetry re-corre el rev exacto de un deploy (tarda minutos).
+func (s *Server) doRetry(id int) (string, error) {
+	if id <= 0 {
+		return "", fmt.Errorf("falta id")
+	}
+	code, body, err := s.post(fmt.Sprintf("/retry/%d", id), 10*time.Minute)
+	if err != nil {
+		return "", fmt.Errorf("sin servicio: %w", err)
+	}
+	if code != http.StatusOK {
+		return "", fmt.Errorf("retry: %s", deploy.OneLine(body))
+	}
+	return fmt.Sprintf("retry ok: %s", deploy.OneLine(body)), nil
+}
+
 func text(s string, err error) (*mcp.CallToolResult, any, error) {
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -231,6 +246,9 @@ func text(s string, err error) (*mcp.CallToolResult, any, error) {
 type noArgs struct{}
 type appArg struct {
 	App string `json:"app,omitempty" jsonschema:"nombre de la app"`
+}
+type retryArg struct {
+	ID int `json:"id,omitempty" jsonschema:"id del deployment a repetir"`
 }
 type logsArg struct {
 	N   int    `json:"n,omitempty" jsonschema:"últimas líneas (default 50)"`
@@ -454,6 +472,10 @@ func (s *Server) Run(ctx context.Context) error {
 	mcp.AddTool(srv, &mcp.Tool{Name: "deploy", Description: "Publica una app desde git (tarda minutos: clone+build+swap). Vigila con deployments_list."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doDeploy(a.App))
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "retry", Description: "Repite un deployment por ID con su mismo rev (tarda minutos)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a retryArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doRetry(a.ID))
 		})
 	mcp.AddTool(srv, &mcp.Tool{Name: "apps_add", Description: "Registra app con inferencia (repo local o URL): nombre, preset, puerto, dominio, comando. Luego deploy."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appsAddArg) (*mcp.CallToolResult, any, error) {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,6 +45,7 @@ type Deps struct {
 	Restart  func(name string) bool
 	Deploy   func(name, actor string) (string, error)
 	Rollback func(name, actor string) error
+	Retry    func(id int64, actor string) (string, error)
 }
 
 // NewHandler responde GET /healthz, POST /restart/<name>,
@@ -61,6 +63,10 @@ func NewHandler(d Deps) http.Handler {
 		}
 		if strings.HasPrefix(r.URL.Path, "/rollback/") {
 			rollbackHandler(w, r, d.Rollback)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/retry/") {
+			retryHandler(w, r, d.Retry)
 			return
 		}
 		if r.URL.Path != "/healthz" {
@@ -158,4 +164,26 @@ func rollbackHandler(w http.ResponseWriter, r *http.Request, fn func(name, actor
 		return
 	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"rolledback": name})
+}
+
+// retryHandler ejecuta POST /retry/<id> (mismo rev).
+func retryHandler(w http.ResponseWriter, r *http.Request, fn func(id int64, actor string) (string, error)) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodPost {
+		http.Error(w, "solo POST", http.StatusMethodNotAllowed)
+		return
+	}
+	raw := strings.TrimPrefix(r.URL.Path, "/retry/")
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 || strings.Contains(raw, "/") || fn == nil {
+		http.NotFound(w, r)
+		return
+	}
+	rev, err := fn(id, "local")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"retried": rev})
 }

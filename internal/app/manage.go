@@ -877,6 +877,10 @@ func cmdDeployments(args []string, cfgPath string) {
 		return
 	}
 	for _, d := range deps {
-		fmt.Printf("#%-4d %-12s %-9s rev=%.7s %s\n", d.ID, d.App, d.Status, d.Rev, d.StartedAt)
+		by := ""
+		if d.TriggeredBy != "" {
+			by = " por " + d.TriggeredBy
+		}
+		fmt.Printf("#%-4d %-12s %-9s rev=%.7s %s%s\n", d.ID, d.App, d.Status, d.Rev, d.StartedAt, by)
 	}
 }

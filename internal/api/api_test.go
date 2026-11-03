@@ -336,6 +336,29 @@ func TestRoutesCRUD(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("baja fantasma: quiere 404, got %d", rec.Code)
 	}
+	// PUT target (edición inline)
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/routes",
+		strings.NewReader(`{"host":"a.test","target":"http://127.0.0.1:99"}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("put: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/routes", opTok))
+	if !strings.Contains(rec.Body.String(), "127.0.0.1:99") {
+		t.Fatalf("put no aplicado: %s", rec.Body.String())
+	}
+	// PUT fantasma
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/routes",
+		strings.NewReader(`{"host":"nadie.test","target":"http://127.0.0.1:99"}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("put fantasma: quiere 404, got %d", rec.Code)
+	}
 }
 
 func TestEnvCRUD(t *testing.T) {

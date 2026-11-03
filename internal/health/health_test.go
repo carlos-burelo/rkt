@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"rkt-proxy/internal/config"
@@ -126,5 +127,28 @@ func TestNotFound(t *testing.T) {
 	NewHandler(Deps{Live: liveWithRoutes(t), Version: "x"}).ServeHTTP(rec, httptest.NewRequest("GET", "/otra", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("code %d", rec.Code)
+	}
+}
+
+func TestRetryEndpoint(t *testing.T) {
+	h := NewHandler(Deps{
+		Live:    liveWithRoutes(t),
+		Version: "x",
+		Retry: func(id int64, actor string) (string, error) {
+			if id != 7 || actor != "local" {
+				return "", fmt.Errorf("no")
+			}
+			return "rev7", nil
+		},
+	})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/retry/7", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "rev7") {
+		t.Fatalf("POST retry: code=%d body=%s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/retry/8", nil))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("retry malo: code=%d", rec.Code)
 	}
 }

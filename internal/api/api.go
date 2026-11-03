@@ -720,8 +720,44 @@ func NewHandler(d Deps) http.Handler {
 			}
 			d.Live.Swap(cp) // hot-reload inmediato
 			writeJSON(w, map[string]string{"ok": "true"})
+		case http.MethodPut:
+			if !requireOperator(w, r, d.DB) {
+				return
+			}
+			var pin struct {
+				Host   string `json:"host"`
+				Target string `json:"target"`
+			}
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&pin); err != nil {
+				writeErr(w, http.StatusBadRequest, "JSON inválido")
+				return
+			}
+			if pin.Host == "" || pin.Target == "" {
+				writeErr(w, http.StatusBadRequest, "host y target requeridos")
+				return
+			}
+			cp := cloneFleet(d.Live)
+			found := false
+			for i := range cp.Routes {
+				for _, h := range cp.Routes[i].Hosts {
+					if strings.EqualFold(h, pin.Host) {
+						cp.Routes[i].Target = pin.Target
+						found = true
+					}
+				}
+			}
+			if !found {
+				writeErr(w, http.StatusNotFound, "host no encontrado")
+				return
+			}
+			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			d.Live.Swap(cp) // hot-reload inmediato
+			writeJSON(w, map[string]string{"ok": "true"})
 		default:
-			writeErr(w, http.StatusMethodNotAllowed, "GET|POST|DELETE")
+			writeErr(w, http.StatusMethodNotAllowed, "GET|POST|PUT|DELETE")
 		}
 	})
 
