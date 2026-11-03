@@ -243,8 +243,8 @@ func cmdDev(args []string, cfgPath string) {
 		log.Fatal("dev: --http no puede estar vacío")
 	}
 	path := cfgPath
-	if path == "" || path == "config.yaml" {
-		path = "rkt.dev.yaml"
+	if path == "" || path == "rkt.db" {
+		path = "rkt.dev.db"
 	}
 	db, err := store.Open(logx.DBPath(path))
 	if err != nil {

@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -20,18 +19,9 @@ import (
 
 func liveFrom(t *testing.T, body string) *config.Live {
 	t.Helper()
-	f, err := os.CreateTemp("", "rkt-proxy-*.yaml")
+	cfg, _, err := config.ImportJSON([]byte(body))
 	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(f.Name())
-	if _, err := f.WriteString(body); err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-	cfg, err := config.Load(f.Name())
-	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("config: %v", err)
 	}
 	return config.NewLive(cfg)
 }
@@ -48,14 +38,7 @@ func freePort(t *testing.T) string {
 
 func TestGraceWaitsForBackend(t *testing.T) {
 	addr := freePort(t)
-	live := liveFrom(t, fmt.Sprintf(`
-restart_grace: 5s
-rate_limit:
-  enabled: false
-routes:
-  - hosts: ["h.test"]
-    target: "http://%s"
-`, addr))
+	live := liveFrom(t, fmt.Sprintf(`{"restart_grace":"5s","rate_limit":{"enabled":false},"routes":[{"hosts":["h.test"],"target":"http://%s"}]}`, addr))
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := NewHandler(live, log)
 
@@ -91,14 +74,7 @@ routes:
 
 func TestGraceExpires502(t *testing.T) {
 	addr := freePort(t) // nadie escucha: puerto libre tras cerrar
-	live := liveFrom(t, fmt.Sprintf(`
-restart_grace: 300ms
-rate_limit:
-  enabled: false
-routes:
-  - hosts: ["h.test"]
-    target: "http://%s"
-`, addr))
+	live := liveFrom(t, fmt.Sprintf(`{"restart_grace":"300ms","rate_limit":{"enabled":false},"routes":[{"hosts":["h.test"],"target":"http://%s"}]}`, addr))
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := NewHandler(live, log)
 	req := httptest.NewRequest("GET", "/", nil)
@@ -116,14 +92,7 @@ routes:
 }
 
 func TestMaxBody(t *testing.T) {
-	live := liveFrom(t, `
-max_body_mb: 1
-rate_limit:
-  enabled: false
-routes:
-  - hosts: ["h.test"]
-    target: "http://127.0.0.1:9"
-`)
+	live := liveFrom(t, `{"max_body_mb":1,"rate_limit":{"enabled":false},"routes":[{"hosts":["h.test"],"target":"http://127.0.0.1:9"}]}`)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := NewHandler(live, log)
 
@@ -148,17 +117,7 @@ routes:
 }
 
 func TestMaxBodyCeroYRateLimit(t *testing.T) {
-	live := liveFrom(t, `
-max_body_mb: 0
-restart_grace: 0s
-rate_limit:
-  enabled: true
-  rps: 0.001
-  burst: 1
-routes:
-  - hosts: ["h.test"]
-    target: "http://127.0.0.1:9"
-`)
+	live := liveFrom(t, `{"max_body_mb":0,"restart_grace":"0s","rate_limit":{"enabled":true,"requests_per_second":0.001,"burst":1},"routes":[{"hosts":["h.test"],"target":"http://127.0.0.1:9"}]}`)
 	h := NewHandler(live, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(strings.Repeat("x", 3<<20)))
@@ -218,14 +177,7 @@ func TestBodyChunkedExcedeTope(t *testing.T) {
 		_, _ = w.Write([]byte("ok"))
 	}))
 	defer backend.Close()
-	live := liveFrom(t, fmt.Sprintf(`
-max_body_mb: 1
-rate_limit:
-  enabled: false
-routes:
-  - hosts: ["h.test"]
-    target: "%s"
-`, backend.URL))
+	live := liveFrom(t, fmt.Sprintf(`{"max_body_mb":1,"rate_limit":{"enabled":false},"routes":[{"hosts":["h.test"],"target":"%s"}]}`, backend.URL))
 	h := NewHandler(live, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	big := bytes.Repeat([]byte("a"), 2<<20)
@@ -247,13 +199,7 @@ func TestClienteCanceladoNoEsBackendCaido(t *testing.T) {
 		_, _ = w.Write([]byte("tarde"))
 	}))
 	defer backend.Close()
-	live := liveFrom(t, fmt.Sprintf(`
-rate_limit:
-  enabled: false
-routes:
-  - hosts: ["h.test"]
-    target: "%s"
-`, backend.URL))
+	live := liveFrom(t, fmt.Sprintf(`{"rate_limit":{"enabled":false},"routes":[{"hosts":["h.test"],"target":"%s"}]}`, backend.URL))
 	h := NewHandler(live, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -277,7 +223,7 @@ func TestForwardedProtoYHost(t *testing.T) {
 		_, _ = w.Write([]byte("ok"))
 	}))
 	defer backend.Close()
-	live := liveFrom(t, fmt.Sprintf("rate_limit:\n  enabled: false\nrestart_grace: 0s\nroutes:\n  - hosts: [\"public.test\"]\n    target: \"%s\"\n", backend.URL))
+	live := liveFrom(t, fmt.Sprintf(`{"rate_limit":{"enabled":false},"restart_grace":"0s","routes":[{"hosts":["public.test"],"target":"%s"}]}`, backend.URL))
 	h := NewHandler(live, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Host = "public.test"

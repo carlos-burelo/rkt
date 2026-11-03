@@ -17,8 +17,6 @@ import (
 	"strconv"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"golang.org/x/term"
 
 	"rkt-proxy/internal/buildpack"
@@ -693,7 +691,7 @@ func cmdConfig(args []string, cfgPath string) {
 }
 
 func cmdExport(args []string, cfgPath string) {
-	out := cfgPath + ".export.yaml"
+	out := cfgPath + ".export.json"
 	if len(args) > 1 {
 		log.Fatal("uso: config export [salida]")
 	}
@@ -702,32 +700,15 @@ func cmdExport(args []string, cfgPath string) {
 	}
 	cfg, db := merged(cfgPath)
 	defer db.Close()
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		log.Fatalf("export: %v", err)
-	}
-	// settings en bloque aparte para backup completo
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		log.Fatalf("export: %v", err)
-	}
 	settings := map[string]string{}
 	for _, k := range store.KnownSettings() {
 		if v := db.GetSetting(k); v != "" {
 			settings[k] = v
 		}
 	}
-	if len(settings) > 0 {
-		var settingsNode yaml.Node
-		settingsNode.Encode(settings)
-		doc.Content[0].Content = append(doc.Content[0].Content,
-			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "x-settings"},
-			&settingsNode)
-		var err error
-		data, err = yaml.Marshal(&doc)
-		if err != nil {
-			log.Fatalf("export: %v", err)
-		}
+	data, err := config.ExportJSON(cfg, settings)
+	if err != nil {
+		log.Fatalf("export: %v", err)
 	}
 	if err := os.WriteFile(out, data, 0o644); err != nil {
 		log.Fatalf("export: %v", err)
@@ -743,15 +724,8 @@ func cmdImport(args []string, cfgPath string) {
 	if err != nil {
 		log.Fatalf("import: %v", err)
 	}
-	var cfg config.Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		log.Fatalf("import: %v", err)
-	}
-	cfg.ApplyDefaults()
-	if err := cfg.Validate(); err != nil {
-		log.Fatalf("import: %v", err)
-	}
-	if err := cfg.ResolveEnvAll(); err != nil {
+	cfg, settings, err := config.ImportJSON(data)
+	if err != nil {
 		log.Fatalf("import: %v", err)
 	}
 	db, err := store.Open(logx.DBPath(cfgPath))
@@ -759,17 +733,15 @@ func cmdImport(args []string, cfgPath string) {
 		log.Fatalf("import: %v", err)
 	}
 	defer db.Close()
-	if err := db.ImportFleet(&cfg); err != nil {
+	if err := db.ImportFleet(cfg); err != nil {
 		log.Fatalf("import: %v", err)
 	}
-	var doc struct {
-		Settings map[string]string `yaml:"x-settings"`
+	if err := cfgfile.SaveInfra(db, cfg); err != nil {
+		log.Fatalf("import: %v", err)
 	}
-	if err := yaml.Unmarshal(data, &doc); err == nil {
-		for k, v := range doc.Settings {
-			if err := db.SetSetting(k, v); err != nil {
-				log.Fatalf("import: %v", err)
-			}
+	for k, v := range settings {
+		if err := db.SetSetting(k, v); err != nil {
+			log.Fatalf("import: %v", err)
 		}
 	}
 	fmt.Println("flota importada (restart requerido para apps)")

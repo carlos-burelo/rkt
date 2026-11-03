@@ -5,24 +5,20 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
 	"rkt-proxy/internal/config"
 )
 
-func writeTemp(t *testing.T, content string) string {
+func liveWithRoutes(t *testing.T) *config.Live {
 	t.Helper()
-	f, err := os.CreateTemp("", "rkt-health-*.yaml")
-	if err != nil {
+	cfg := config.Default()
+	cfg.Routes = []config.Route{{Hosts: []string{"a.test"}, Target: "http://127.0.0.1:9"}}
+	if err := cfg.Finalize(); err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
-	if _, err := f.WriteString(content); err != nil {
-		t.Fatal(err)
-	}
-	return f.Name()
+	return config.NewLive(cfg)
 }
 
 func TestOKAndDegraded(t *testing.T) {
@@ -30,16 +26,12 @@ func TestOKAndDegraded(t *testing.T) {
 	defer upstream.Close()
 	host := upstream.Listener.Addr().String() // 127.0.0.1:puerto vivo
 
-	path := writeTemp(t, fmt.Sprintf(`
-routes:
-  - hosts: ["ok.test"]
-    target: "http://%s"
-  - hosts: ["muerta.test"]
-    target: "http://127.0.0.1:1"
-`, host))
-	defer os.Remove(path)
-	cfg, err := config.Load(path)
-	if err != nil {
+	cfg := config.Default()
+	cfg.Routes = []config.Route{
+		{Hosts: []string{"ok.test"}, Target: "http://" + host},
+		{Hosts: []string{"muerta.test"}, Target: "http://127.0.0.1:1"},
+	}
+	if err := cfg.Finalize(); err != nil {
 		t.Fatal(err)
 	}
 	h := NewHandler(Deps{Live: config.NewLive(cfg), Version: "test"})
@@ -109,17 +101,6 @@ func TestRestartEndpoint(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("traversal: code=%d", rec.Code)
 	}
-}
-
-func liveWithRoutes(t *testing.T) *config.Live {
-	t.Helper()
-	path := writeTemp(t, "routes:\n  - hosts: [a.test]\n    target: http://127.0.0.1:9\n")
-	defer os.Remove(path)
-	cfg, err := config.Load(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return config.NewLive(cfg)
 }
 
 func TestNotFound(t *testing.T) {

@@ -7,50 +7,37 @@ import (
 	"time"
 )
 
-func testConfig(t *testing.T, content string) *Config {
+func finalized(t *testing.T, cfg *Config) *Config {
 	t.Helper()
-	f, err := os.CreateTemp("", "rkt-*.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(f.Name())
-	if _, err := f.WriteString(content); err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-	cfg, err := Load(f.Name())
-	if err != nil {
-		t.Fatalf("Load: %v", err)
+	if err := cfg.Finalize(); err != nil {
+		t.Fatalf("Finalize: %v", err)
 	}
 	return cfg
 }
 
 func TestMatchExact(t *testing.T) {
-	cfg := testConfig(t, `
-listen_http: ":80"
-routes:
-  - hosts: ["app.ejemplo.com"]
-    target: "http://127.0.0.1:3000"
-`)
+	cfg := finalized(t, &Config{
+		ListenHTTP: ":80",
+		Routes:     []Route{{Hosts: []string{"app.ejemplo.com"}, Target: "http://127.0.0.1:3000"}},
+	})
 	if cfg.Match("app.ejemplo.com") == nil {
-		t.Fatal("debió matchear exacto")
+		t.Fatal("debía matchear exacto")
 	}
 	if cfg.Match("app.ejemplo.com:80") == nil {
-		t.Fatal("debió matchear con puerto")
+		t.Fatal("debía matchear con puerto")
 	}
 	if cfg.Match("otro.ejemplo.com") != nil {
-		t.Fatal("no debió matchear")
+		t.Fatal("no debía matchear")
 	}
 }
 
 func TestMatchWildcard(t *testing.T) {
-	cfg := testConfig(t, `
-routes:
-  - hosts: ["app.ejemplo.com"]
-    target: "http://127.0.0.1:3000"
-  - hosts: ["*.ejemplo.com"]
-    target: "http://127.0.0.1:4000"
-`)
+	cfg := finalized(t, &Config{
+		Routes: []Route{
+			{Hosts: []string{"app.ejemplo.com"}, Target: "http://127.0.0.1:3000"},
+			{Hosts: []string{"*.ejemplo.com"}, Target: "http://127.0.0.1:4000"},
+		},
+	})
 	if u := cfg.Match("app.ejemplo.com"); u == nil || u.Host != "127.0.0.1:3000" {
 		t.Fatalf("exacto debe ganar, got %v", u)
 	}
@@ -63,29 +50,23 @@ routes:
 }
 
 func TestMatchCaseInsensitive(t *testing.T) {
-	cfg := testConfig(t, `
-routes:
-  - hosts: ["App.Ejemplo.COM"]
-    target: "http://127.0.0.1:3000"
-`)
+	cfg := finalized(t, &Config{
+		Routes: []Route{{Hosts: []string{"App.Ejemplo.COM"}, Target: "http://127.0.0.1:3000"}},
+	})
 	if cfg.Match("app.ejemplo.com") == nil {
 		t.Fatal("match debe ser case-insensitive")
 	}
 }
 
 func TestLiveSwapAndNeedRestart(t *testing.T) {
-	a := testConfig(t, `
-listen_http: ":80"
-routes:
-  - hosts: ["a.com"]
-    target: "http://127.0.0.1:3000"
-`)
-	b := testConfig(t, `
-listen_http: ":8080"
-routes:
-  - hosts: ["a.com", "b.com"]
-    target: "http://127.0.0.1:3000"
-`)
+	a := finalized(t, &Config{
+		ListenHTTP: ":80",
+		Routes:     []Route{{Hosts: []string{"a.com"}, Target: "http://127.0.0.1:3000"}},
+	})
+	b := finalized(t, &Config{
+		ListenHTTP: ":8080",
+		Routes:     []Route{{Hosts: []string{"a.com", "b.com"}, Target: "http://127.0.0.1:3000"}},
+	})
 	live := NewLive(a)
 	if live.Get().Match("b.com") != nil {
 		t.Fatal("b.com no existe aún")
@@ -104,11 +85,9 @@ routes:
 }
 
 func TestDefaultsHealthzRateLimit(t *testing.T) {
-	cfg := testConfig(t, `
-routes:
-  - hosts: ["a.com"]
-    target: "http://127.0.0.1:3000"
-`)
+	cfg := Default()
+	cfg.Routes = []Route{{Hosts: []string{"a.com"}, Target: "http://127.0.0.1:3000"}}
+	finalized(t, cfg)
 	if !cfg.Healthz.Enabled || cfg.Healthz.Listen != "127.0.0.1:8090" {
 		t.Fatalf("defaults healthz mal: %+v", cfg.Healthz)
 	}
@@ -118,43 +97,33 @@ routes:
 }
 
 func TestInvalidRateLimitRejected(t *testing.T) {
-	for _, body := range []string{
-		"rate_limit:\n  enabled: true\n  requests_per_second: 0\n  burst: 1\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:3000\n",
-		"rate_limit:\n  enabled: true\n  requests_per_second: 5\n  burst: 0\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:3000\n",
-		"healthz:\n  enabled: true\n  listen: \"\"\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:3000\n",
-	} {
-		f, _ := os.CreateTemp("", "rkt-*.yaml")
-		f.WriteString(body)
-		f.Close()
-		if _, err := Load(f.Name()); err == nil {
-			t.Fatalf("debió fallar: %q", body)
+	cases := []Config{
+		{RateLimit: RateLimitConfig{Enabled: true, RPS: 0, Burst: 1}},
+		{RateLimit: RateLimitConfig{Enabled: true, RPS: 5, Burst: 0}},
+		{Healthz: HealthzConfig{Enabled: true, Listen: ""}},
+	}
+	for i := range cases {
+		cases[i].Routes = []Route{{Hosts: []string{"a.com"}, Target: "http://127.0.0.1:3000"}}
+		if err := cases[i].Finalize(); err == nil {
+			t.Fatalf("caso %d debía fallar", i)
 		}
-		os.Remove(f.Name())
 	}
 }
 
 func TestDuplicateHostRejected(t *testing.T) {
-	f, _ := os.CreateTemp("", "rkt-*.yaml")
-	defer os.Remove(f.Name())
-	f.WriteString(`
-routes:
-  - hosts: ["a.com"]
-    target: "http://127.0.0.1:3000"
-  - hosts: ["a.com"]
-    target: "http://127.0.0.1:4000"
-`)
-	f.Close()
-	if _, err := Load(f.Name()); err == nil {
+	cfg := &Config{Routes: []Route{
+		{Hosts: []string{"a.com"}, Target: "http://127.0.0.1:3000"},
+		{Hosts: []string{"a.com"}, Target: "http://127.0.0.1:4000"},
+	}}
+	if err := cfg.Finalize(); err == nil {
 		t.Fatal("duplicado debe fallar")
 	}
 }
 
 func TestDenyPathsDefaultsAndInvalid(t *testing.T) {
-	cfg := testConfig(t, `
-routes:
-  - hosts: ["a.com"]
-    target: "http://127.0.0.1:3000"
-`)
+	cfg := Default()
+	cfg.Routes = []Route{{Hosts: []string{"a.com"}, Target: "http://127.0.0.1:3000"}}
+	finalized(t, cfg)
 	found := false
 	for _, p := range cfg.DenyPaths {
 		if p == "/.env" {
@@ -164,45 +133,43 @@ routes:
 	if !found {
 		t.Fatalf("defaults deben incluir /.env: %v", cfg.DenyPaths)
 	}
-
-	f, _ := os.CreateTemp("", "rkt-*.yaml")
-	defer os.Remove(f.Name())
-	f.WriteString("deny_paths:\n  - \"/ok/*\"\n  - \"/mal/[/\"\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:3000\n")
-	f.Close()
-	if _, err := Load(f.Name()); err == nil {
+	bad := &Config{
+		DenyPaths: []string{"/ok/*", "/mal/[/"},
+		Routes:    []Route{{Hosts: []string{"a.com"}, Target: "http://127.0.0.1:3000"}},
+	}
+	if err := bad.Finalize(); err == nil {
 		t.Fatal("glob inválido debe fallar")
 	}
 }
 
 func TestAppsValidation(t *testing.T) {
 	dir := t.TempDir()
-	good := "apps:\n  - name: web-1\n    command: node\n    args: [\"server.js\"]\n    dir: '" + dir + "'\n    env:\n      PORT: \"3001\"\n    restart_delay: 5s\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:3001\n"
-	cfg := testConfig(t, good)
+	good := &Config{
+		Apps: []App{{
+			Name: "web-1", Command: "node", Args: []string{"server.js"}, Dir: dir,
+			Env: map[string]string{"PORT": "3001"}, RestartDelay: "5s",
+		}},
+		Routes: []Route{{Hosts: []string{"a.com"}, Target: "http://127.0.0.1:3001"}},
+	}
+	cfg := finalized(t, good)
 	if len(cfg.Apps) != 1 || cfg.Apps[0].Delay() != 5*time.Second {
 		t.Fatalf("app mal cargada: %+v", cfg.Apps)
 	}
 
-	cases := map[string]string{"nombre mayúsculas": "apps:\n  - name: Web\n    command: x\n    restart_delay: 5s\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:1\n",
-		"nombre duplicado":  "apps:\n  - name: a\n    command: x\n    restart_delay: 5s\n  - name: a\n    command: y\n    restart_delay: 5s\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:1\n",
-		"sin command":       "apps:\n  - name: a\n    restart_delay: 5s\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:1\n",
-		"dir inexistente":   "apps:\n  - name: a\n    command: x\n    dir: '" + dir + "\\nodir-rkt'\n    restart_delay: 5s\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:1\n",
-		"delay inválido":    "apps:\n  - name: a\n    command: x\n    restart_delay: nunca\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:1\n",
-		"delay por defecto": "",
+	invalid := []*Config{
+		{Apps: []App{{Name: "Web", Command: "x", RestartDelay: "5s"}}},                                              // nombre
+		{Apps: []App{{Name: "a", Command: "x", RestartDelay: "5s"}, {Name: "a", Command: "y", RestartDelay: "5s"}}}, // duplicado
+		{Apps: []App{{Name: "a", RestartDelay: "5s"}}},                                                              // sin command
+		{Apps: []App{{Name: "a", Command: "x", Dir: filepath.Join(dir, "nodir"), RestartDelay: "5s"}}},              // dir
+		{Apps: []App{{Name: "a", Command: "x", RestartDelay: "nunca"}}},                                             // delay
 	}
-	for name, body := range cases {
-		if body == "" {
-			continue
+	for i, c := range invalid {
+		if err := c.Finalize(); err == nil {
+			t.Fatalf("caso inválido %d debía fallar", i)
 		}
-		f, _ := os.CreateTemp("", "rkt-*.yaml")
-		f.WriteString(body)
-		f.Close()
-		if _, err := Load(f.Name()); err == nil {
-			t.Fatalf("%s: debió fallar", name)
-		}
-		os.Remove(f.Name())
 	}
 
-	def := testConfig(t, "apps:\n  - name: a\n    command: x\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:1\n")
+	def := finalized(t, &Config{Apps: []App{{Name: "a", Command: "x"}}})
 	if def.Apps[0].Delay() != 5*time.Second {
 		t.Fatalf("delay default debe ser 5s: %v", def.Apps[0].Delay())
 	}
@@ -211,78 +178,75 @@ func TestAppsValidation(t *testing.T) {
 func TestAppsEnvFileAndExpand(t *testing.T) {
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, "app.env")
-	os.WriteFile(envPath, []byte("DESDE_FILE=file\nBASE=base\n"), 0o644)
-	os.Setenv("RKT_DOT_OS", "osval")
-	defer os.Unsetenv("RKT_DOT_OS")
+	if err := os.WriteFile(envPath, []byte("DESDE_FILE=file\nBASE=base\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RKT_DOT_OS", "osval")
 
-	cfg := testConfig(t, "apps:\n  - name: a\n    command: x\n    env_file: '"+envPath+"'\n    env:\n      INLINE: \"${BASE}-in\"\n      SOLO_OS: \"$RKT_DOT_OS\"\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:1\n")
+	cfg := finalized(t, &Config{
+		Apps: []App{{
+			Name: "a", Command: "x", EnvFile: envPath,
+			Env: map[string]string{"INLINE": "${BASE}-in", "SOLO_OS": "$RKT_DOT_OS"},
+		}},
+	})
 	env := cfg.Apps[0].Env
 	if env["DESDE_FILE"] != "file" || env["INLINE"] != "base-in" || env["SOLO_OS"] != "osval" {
 		t.Fatalf("merge mal: %v", env)
 	}
 
-	over := testConfig(t, "apps:\n  - name: a\n    command: x\n    env_file: '"+envPath+"'\n    env:\n      BASE: ganainline\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:1\n")
+	over := finalized(t, &Config{
+		Apps: []App{{Name: "a", Command: "x", EnvFile: envPath, Env: map[string]string{"BASE": "ganainline"}}},
+	})
 	if over.Apps[0].Env["BASE"] != "ganainline" {
 		t.Fatalf("inline debe ganar a file: %v", over.Apps[0].Env)
 	}
 
-	f, _ := os.CreateTemp("", "rkt-*.yaml")
-	defer os.Remove(f.Name())
-	f.WriteString("apps:\n  - name: a\n    command: x\n    env_file: '" + filepath.Join(dir, "falta.env") + "'\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:1\n")
-	f.Close()
-	if _, err := Load(f.Name()); err == nil {
+	bad := &Config{Apps: []App{{Name: "a", Command: "x", EnvFile: filepath.Join(dir, "falta.env")}}}
+	if err := bad.Finalize(); err == nil {
 		t.Fatal("env_file inexistente debe fallar")
 	}
 }
 
 func TestDeployValidation(t *testing.T) {
 	dir := t.TempDir()
-	base := "apps:\n  - name: a\n    command: x\n    dir: '" + dir + "'\n"
-	routes := "routes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:1\n"
-
-	cfg := testConfig(t, base+"    deploy:\n      repo: https://github.com/o/r.git\n"+routes)
+	base := func(dep *Deploy) *Config {
+		return &Config{
+			Apps:   []App{{Name: "a", Command: "x", Dir: dir, Deploy: dep}},
+			Routes: []Route{{Hosts: []string{"a.com"}, Target: "http://127.0.0.1:1"}},
+		}
+	}
+	cfg := finalized(t, base(&Deploy{Repo: "https://github.com/o/r.git"}))
 	d := cfg.Apps[0].Deploy
 	if d.Ref != "main" || d.TokenEnv != "GITHUB_TOKEN" {
 		t.Fatalf("defaults deploy mal: %+v", d)
 	}
-
-	for name, stanza := range map[string]string{
-		"sin repo":    "    deploy:\n      ref: main\n",
-		"build vacío": "    deploy:\n      repo: https://github.com/o/r.git\n      build: [\"\"]\n",
+	for name, dep := range map[string]*Deploy{
+		"sin repo":    {Ref: "main"},
+		"build vacío": {Repo: "https://github.com/o/r.git", Build: []string{""}},
 	} {
-		f, _ := os.CreateTemp("", "rkt-*.yaml")
-		f.WriteString(base + stanza + routes)
-		f.Close()
-		if _, err := Load(f.Name()); err == nil {
-			t.Fatalf("%s: debió fallar", name)
+		if err := base(dep).Finalize(); err == nil {
+			t.Fatalf("%s: debía fallar", name)
 		}
-		os.Remove(f.Name())
 	}
-
-	f, _ := os.CreateTemp("", "rkt-*.yaml")
-	defer os.Remove(f.Name())
-	f.WriteString("apps:\n  - name: a\n    command: x\n    deploy:\n      repo: https://github.com/o/r.git\n" + routes)
-	f.Close()
-	if _, err := Load(f.Name()); err == nil {
+	if err := (&Config{
+		Apps: []App{{Name: "a", Command: "x", Deploy: &Deploy{Repo: "https://github.com/o/r.git"}}},
+	}).Finalize(); err == nil {
 		t.Fatal("deploy sin dir debe fallar")
 	}
 }
 
 func TestSecurityDefaults(t *testing.T) {
-	cfg := testConfig(t, `
-routes:
-  - hosts: ["a.com"]
-    target: "http://127.0.0.1:3000"
-`)
+	cfg := Default()
+	cfg.Routes = []Route{{Hosts: []string{"a.com"}, Target: "http://127.0.0.1:3000"}}
+	finalized(t, cfg)
 	if cfg.MaxBodyMB != 10 {
 		t.Fatalf("default max_body_mb debe ser 10: %d", cfg.MaxBodyMB)
 	}
-
-	f, _ := os.CreateTemp("", "rkt-*.yaml")
-	defer os.Remove(f.Name())
-	f.WriteString("max_body_mb: -1\nroutes:\n  - hosts: [a.com]\n    target: http://127.0.0.1:1\n")
-	f.Close()
-	if _, err := Load(f.Name()); err == nil {
+	bad := &Config{
+		MaxBodyMB: -1,
+		Routes:    []Route{{Hosts: []string{"a.com"}, Target: "http://127.0.0.1:1"}},
+	}
+	if err := bad.Finalize(); err == nil {
 		t.Fatal("max_body_mb negativo debe fallar")
 	}
 }
@@ -299,7 +263,6 @@ func TestMergeEnvGlobalYOverride(t *testing.T) {
 	if len(got) != len(want) {
 		t.Fatalf("len = %d, quiere %d", len(got), len(want))
 	}
-	// el override no muta los mapas originales
 	if cfg.GlobalEnv["B"] != "global" {
 		t.Fatal("MergeEnv no debe mutar el global")
 	}
@@ -309,26 +272,39 @@ func TestMergeEnvGlobalYOverride(t *testing.T) {
 }
 
 func TestHealthzSoloLoopback(t *testing.T) {
-	ok := testConfig(t, `
-healthz:
-  enabled: true
-  listen: "127.0.0.1:8090"
-`)
+	ok := finalized(t, &Config{Healthz: HealthzConfig{Enabled: true, Listen: "127.0.0.1:8090"}})
 	if !ok.Healthz.Enabled {
 		t.Fatal("healthz debió quedar activo")
 	}
 	for _, bad := range []string{"0.0.0.0:8090", ":8090", "192.168.1.5:8090"} {
-		f, err := os.CreateTemp("", "rkt-*.yaml")
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, _ = f.WriteString("healthz:\n  enabled: true\n  listen: \"" + bad + "\"\n")
-		f.Close()
-		_, err = Load(f.Name())
-		_ = os.Remove(f.Name())
-		if err == nil {
+		c := &Config{Healthz: HealthzConfig{Enabled: true, Listen: bad}}
+		if err := c.Finalize(); err == nil {
 			t.Fatalf("healthz %q expuesto debe fallar", bad)
 		}
+	}
+}
+
+func TestExportImportJSON(t *testing.T) {
+	cfg := finalized(t, &Config{
+		Apps:   []App{{Name: "a", Command: "x", Env: map[string]string{"K": "v"}}},
+		Routes: []Route{{Hosts: []string{"a.test"}, Target: "http://127.0.0.1:1"}},
+	})
+	data, err := ExportJSON(cfg, map[string]string{"site_name": "rkt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, settings, err := ImportJSON(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(back.Apps) != 1 || len(back.Routes) != 1 || settings["site_name"] != "rkt" {
+		t.Fatalf("roundtrip = %+v %v", back, settings)
+	}
+	if _, _, err := ImportJSON([]byte("{bad")); err == nil {
+		t.Fatal("JSON inválido debe fallar")
+	}
+	if _, _, err := ImportJSON([]byte(`{"routes":[{"hosts":[""],"target":"mal"}]}`)); err == nil {
+		t.Fatal("config inválida debe fallar")
 	}
 }
 

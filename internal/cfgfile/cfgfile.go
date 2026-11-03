@@ -1,12 +1,10 @@
-// Package cfgfile: configuración en SQLite (única fuente). El YAML solo
-// se lee una vez para migrar instalaciones viejas y queda como .migrated.
-// El CLI muta por aquí; el servicio solo lee.
+// Package cfgfile: configuración en SQLite (única fuente). El CLI muta
+// por aquí; el servicio solo lee.
 package cfgfile
 
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/logx"
@@ -46,8 +44,8 @@ func LoadMerged(cfgPath string) (*config.Config, *store.DB, error) {
 	return merged, db, nil
 }
 
-// LoadBase infra desde DB. Si no hay fila, migra el YAML una vez o usa
-// defaults y persiste. Deja el YAML como .migrated (nunca más se lee).
+// LoadBase infra desde DB. Si no hay fila, siembra defaults y los persiste.
+// No hay archivo de configuración: SQLite es la única fuente.
 func LoadBase(db *store.DB, cfgPath string) (*config.Config, error) {
 	raw, err := db.LoadInfra()
 	if err != nil {
@@ -65,21 +63,6 @@ func LoadBase(db *store.DB, cfgPath string) (*config.Config, error) {
 	}
 
 	base := config.Default()
-	yamlPath := logx.Abs(cfgPath)
-	if st, err := os.Stat(yamlPath); err == nil && !st.IsDir() {
-		if y, err := config.Load(yamlPath); err == nil {
-			base = y
-			if db.ConfigVersion() == 0 {
-				if err := db.ImportFleet(y); err != nil {
-					return nil, err
-				}
-				if y.Github != nil {
-					seedGithubSettings(db, y.Github)
-				}
-			}
-			_ = os.Rename(yamlPath, yamlPath+".migrated")
-		}
-	}
 	if err := base.Finalize(); err != nil {
 		return nil, err
 	}
@@ -139,26 +122,6 @@ func OverlayGithub(cfg *config.Config, db *store.DB) error {
 		}
 	}
 	return nil
-}
-
-// seedGithubSettings vuelca el bloque YAML a settings (migración una vez).
-func seedGithubSettings(db *store.DB, gh *config.Github) {
-	set := func(k, v string) {
-		if v != "" {
-			_ = db.SetSetting(k, v)
-		}
-	}
-	set("github_app_id", itoaOrEmpty(gh.AppID))
-	set("github_app_slug", gh.AppSlug)
-	set("github_key_file", gh.KeyFile)
-	set("github_webhook_secret", gh.WebhookSecret)
-}
-
-func itoaOrEmpty(n int64) string {
-	if n <= 0 {
-		return ""
-	}
-	return fmt.Sprintf("%d", n)
 }
 
 // SaveFleet valida (defaults + Validate) y persiste atómico.

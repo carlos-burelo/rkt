@@ -12,26 +12,13 @@ import (
 
 func liveWith(t *testing.T, deny []string) *config.Live {
 	t.Helper()
-	f, err := os.CreateTemp("", "rkt-waf-*.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	defer os.Remove(f.Name())
-	body := "routes:\n  - hosts: [a.test]\n    target: http://127.0.0.1:9\n"
+	cfg := config.Default()
+	cfg.Routes = []config.Route{{Hosts: []string{"a.test"}, Target: "http://127.0.0.1:9"}}
 	if deny != nil {
-		body = "deny_paths:\n"
-		for _, d := range deny {
-			body += "  - \"" + d + "\"\n"
-		}
-		body += "routes:\n  - hosts: [a.test]\n    target: http://127.0.0.1:9\n"
+		cfg.DenyPaths = deny
 	}
-	if _, err := f.WriteString(body); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := config.Load(f.Name())
-	if err != nil {
-		t.Fatalf("Load: %v", err)
+	if err := cfg.Finalize(); err != nil {
+		t.Fatalf("Finalize: %v", err)
 	}
 	return config.NewLive(cfg)
 }

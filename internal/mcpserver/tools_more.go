@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"gopkg.in/yaml.v3"
 
 	"rkt-proxy/internal/appview"
 	"rkt-proxy/internal/cfgfile"
@@ -97,7 +96,7 @@ type exportArg struct {
 	IncludeSecrets bool `json:"include_secrets,omitempty" jsonschema:"incluir valores de Env (default false)"`
 }
 type importArg struct {
-	YAML    string `json:"yaml" jsonschema:"config YAML completa"`
+	JSON    string `json:"json" jsonschema:"config JSON completa (export de config_export)"`
 	Confirm string `json:"confirm" jsonschema:"escribe replace para confirmar"`
 }
 type pruneArg struct {
@@ -823,7 +822,13 @@ func (s *Server) doConfigExport(a exportArg) (string, error) {
 			cp.Apps[i] = x
 		}
 	}
-	out, err := yaml.Marshal(&cp)
+	settings := map[string]string{}
+	for _, k := range store.KnownSettings() {
+		if v := db.GetSetting(k); v != "" {
+			settings[k] = v
+		}
+	}
+	out, err := config.ExportJSON(&cp, settings)
 	if err != nil {
 		return "", err
 	}
@@ -834,11 +839,8 @@ func (s *Server) doConfigImport(a importArg) (string, error) {
 	if a.Confirm != "replace" {
 		return "", fmt.Errorf(`confirmación requerida: {"confirm":"replace"}`)
 	}
-	cfg := config.Default()
-	if err := yaml.Unmarshal([]byte(a.YAML), cfg); err != nil {
-		return "", fmt.Errorf("yaml inválido: %w", err)
-	}
-	if err := cfg.Finalize(); err != nil {
+	cfg, settings, err := config.ImportJSON([]byte(a.JSON))
+	if err != nil {
 		return "", err
 	}
 	_, db, err := s.load()
@@ -867,6 +869,11 @@ func (s *Server) doConfigImport(a importArg) (string, error) {
 	}
 	if err := cfgfile.SaveFleet(db, cfg); err != nil {
 		return "", err
+	}
+	for k, v := range settings {
+		if err := db.SetSetting(k, v); err != nil {
+			return "", err
+		}
 	}
 	return fmt.Sprintf("config reemplazada: %d apps, %d rutas", len(cfg.Apps), len(cfg.Routes)), nil
 }
@@ -1015,11 +1022,11 @@ func (s *Server) registerMore(srv *mcp.Server) {
 		func(ctx context.Context, req *mcp.CallToolRequest, a userPassArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doUsersPasswd(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "config_export", Description: "Exporta config+flota en YAML (secretos solo con include_secrets)."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "config_export", Description: "Exporta config+flota en JSON (secretos solo con include_secrets)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a exportArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doConfigExport(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "config_import", Description: "Reemplaza config+flota desde YAML (confirm=replace). Destructivo."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "config_import", Description: "Reemplaza config+flota desde JSON (confirm=replace). Destructivo."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a importArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doConfigImport(a))
 		})

@@ -24,22 +24,10 @@ func shell(t *testing.T, script string) (string, []string) {
 	return "cmd.exe", []string{"/c", script}
 }
 
-func loadApps(t *testing.T, yamlBody string) []config.App {
-	t.Helper()
-	f, err := os.CreateTemp("", "rkt-sup-*.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(f.Name())
-	if _, err := f.WriteString("routes:\n  - hosts: [a.test]\n    target: http://127.0.0.1:9\n" + yamlBody); err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-	cfg, err := config.Load(f.Name())
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	return cfg.Apps
+func app1(name, cmd string, args []string, delay, minUp time.Duration) config.App {
+	a := config.App{Name: name, Command: cmd, Args: args}
+	a.SetDelays(delay, minUp)
+	return a
 }
 
 func waitFor(t *testing.T, d time.Duration, cond func() bool, msg string) {
@@ -56,7 +44,7 @@ func waitFor(t *testing.T, d time.Duration, cond func() bool, msg string) {
 
 func TestStartCapturesOutput(t *testing.T) {
 	cmd, args := shell(t, "echo hola-mundo")
-	apps := loadApps(t, "apps:\n  - name: eco\n    command: \""+cmd+"\"\n    args: [\""+strings.Join(args, "\", \"")+"\"]\n    restart_delay: 5s\n")
+	apps := []config.App{app1("eco", cmd, args, 5*time.Second, 10*time.Second)}
 	dir := t.TempDir()
 	m := New(apps, nil, dir, testLog(t))
 	m.Start()
@@ -70,11 +58,7 @@ func TestStartCapturesOutput(t *testing.T) {
 
 func TestRestartOnCrash(t *testing.T) {
 	cmd, args := shell(t, "exit 3")
-	var argYaml string
-	for _, a := range args {
-		argYaml += "\"" + a + "\", "
-	}
-	apps := loadApps(t, "apps:\n  - name: muere\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 50ms\n")
+	apps := []config.App{app1("muere", cmd, args, 50*time.Millisecond, 10*time.Second)}
 	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	defer m.Stop()
@@ -86,11 +70,7 @@ func TestRestartOnCrash(t *testing.T) {
 
 func TestStopKillsRunning(t *testing.T) {
 	cmd, args := "cmd.exe", []string{"/c", "ping -n 30 127.0.0.1 >nul"}
-	var argYaml string
-	for _, a := range args {
-		argYaml += "\"" + strings.ReplaceAll(a, `"`, `\"`) + "\", "
-	}
-	apps := loadApps(t, "apps:\n  - name: largo\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 5s\n")
+	apps := []config.App{app1("largo", cmd, args, 5*time.Second, 10*time.Second)}
 	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	waitFor(t, 5*time.Second, func() bool {
@@ -105,11 +85,7 @@ func TestStopKillsRunning(t *testing.T) {
 
 func TestCrashloopGuard(t *testing.T) {
 	cmd, args := shell(t, "exit 1")
-	var argYaml string
-	for _, a := range args {
-		argYaml += "\"" + a + "\", "
-	}
-	apps := loadApps(t, "apps:\n  - name: loop\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 1ms\n")
+	apps := []config.App{app1("loop", cmd, args, time.Millisecond, 10*time.Second)}
 	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	defer m.Stop()
@@ -121,11 +97,9 @@ func TestCrashloopGuard(t *testing.T) {
 
 func TestEnvOverride(t *testing.T) {
 	cmd, args := "cmd.exe", []string{"/c", "echo %RKT_TEST_VAR%"}
-	var argYaml string
-	for _, a := range args {
-		argYaml += "\"" + a + "\", "
-	}
-	apps := loadApps(t, "apps:\n  - name: envtest\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    env:\n      RKT_TEST_VAR: valor123\n    restart_delay: 5s\n")
+	envApp := app1("envtest", cmd, args, 5*time.Second, 10*time.Second)
+	envApp.Env = map[string]string{"RKT_TEST_VAR": "valor123"}
+	apps := []config.App{envApp}
 	dir := t.TempDir()
 	m := New(apps, nil, dir, testLog(t))
 	m.Start()
@@ -151,12 +125,7 @@ func TestBackoffFor(t *testing.T) {
 
 func TestSlowDeathsDontTripGuard(t *testing.T) {
 	cmd, args := "cmd.exe", []string{"/c", "ping -n 1 -w 300 127.0.0.1 >nul"}
-	var argYaml string
-	for _, a := range args {
-		argYaml += "\"" + a + "\", "
-	}
-	// muere cada ~300ms pero min_uptime 100ms: reinicia sin contar crash
-	apps := loadApps(t, "apps:\n  - name: lenta\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 50ms\n    min_uptime: 100ms\n")
+	apps := []config.App{app1("lenta", cmd, args, 50*time.Millisecond, 100*time.Millisecond)}
 	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	defer m.Stop()
@@ -179,7 +148,9 @@ func TestMemoryLimitKills(t *testing.T) {
 	// bytearray 300MB con tope 100MB: el commit falla -> MemoryError ->
 	// python muere -> supervisor reinicia. (El job niega memoria, no
 	// mata directo: runtimes que tragan OOM no reiniciarían.)
-	apps := loadApps(t, "apps:\n  - name: glotona\n    command: '"+py+"'\n    args: [\"-c\", \"bytearray(300_000_000)\"]\n    restart_delay: 200ms\n    min_uptime: 1ms\n    memory_mb: 100\n")
+	hungry := app1("glotona", py, []string{"-c", "bytearray(300_000_000)"}, 200*time.Millisecond, time.Millisecond)
+	hungry.MemoryMB = 100
+	apps := []config.App{hungry}
 	dir := t.TempDir()
 	m := New(apps, nil, dir, testLog(t))
 	m.Start()
@@ -202,12 +173,8 @@ func trunc(s string, n int) string {
 
 func TestRestartImmediate(t *testing.T) {
 	cmd, args := "cmd.exe", []string{"/c", "ping -n 30 127.0.0.1 >nul"}
-	var argYaml string
-	for _, a := range args {
-		argYaml += "\"" + a + "\", "
-	}
 	// delay 30s: si Restart tarda, el test lo delata
-	apps := loadApps(t, "apps:\n  - name: largo\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 30s\n    min_uptime: 1ms\n")
+	apps := []config.App{app1("largo", cmd, args, 30*time.Second, time.Millisecond)}
 	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	defer m.Stop()
@@ -232,11 +199,7 @@ func TestRestartImmediate(t *testing.T) {
 
 func TestRestartRevivesFailed(t *testing.T) {
 	cmd, args := shell(t, "exit 1")
-	var argYaml string
-	for _, a := range args {
-		argYaml += "\"" + a + "\", "
-	}
-	apps := loadApps(t, "apps:\n  - name: loop\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 1ms\n    min_uptime: 2s\n")
+	apps := []config.App{app1("loop", cmd, args, time.Millisecond, 2*time.Second)}
 	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	defer m.Stop()
@@ -254,11 +217,7 @@ func TestRestartRevivesFailed(t *testing.T) {
 
 func TestSwapAndRestart(t *testing.T) {
 	cmd, args := "cmd.exe", []string{"/c", "ping -n 30 127.0.0.1 >nul"}
-	var argYaml string
-	for _, a := range args {
-		argYaml += "\"" + a + "\", "
-	}
-	apps := loadApps(t, "apps:\n  - name: largo\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 30s\n    min_uptime: 1ms\n")
+	apps := []config.App{app1("largo", cmd, args, 30*time.Second, time.Millisecond)}
 	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	defer m.Stop()
@@ -290,11 +249,7 @@ func TestSwapAndRestart(t *testing.T) {
 
 func TestOnEventDied(t *testing.T) {
 	cmd, args := shell(t, "exit 3")
-	var argYaml string
-	for _, a := range args {
-		argYaml += "\"" + a + "\", "
-	}
-	apps := loadApps(t, "apps:\n  - name: muere\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 5s\n    min_uptime: 1ms\n")
+	apps := []config.App{app1("muere", cmd, args, 5*time.Second, time.Millisecond)}
 	m := New(apps, nil, t.TempDir(), testLog(t))
 	var mu sync.Mutex
 	var kinds []string

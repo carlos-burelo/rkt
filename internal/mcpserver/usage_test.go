@@ -14,9 +14,7 @@ import (
 // TestEnvGlobalTools: alta, lista (con/sin secretos) y borrado idempotente.
 func TestEnvGlobalTools(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(cfgPath, []byte("routes: []\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	seedConfig(t, cfgPath, `{"routes":[]}`)
 	s := New(cfgPath)
 
 	if _, err := s.doEnvGlobalSet(envGlobalArg{Key: "API_URL", Value: "https://api.test"}); err != nil {
@@ -54,22 +52,9 @@ func TestDoAppUsage(t *testing.T) {
 	defer healthz.Close()
 
 	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
-	yaml := fmt.Sprintf(`healthz:
-  enabled: true
-  listen: %q
-apps:
-  - name: w
-    command: "x"
-    dir: %q
-    env:
-      PORT: "3000"
-routes:
-  - hosts: ["w.test"]
-    target: "http://127.0.0.1:3000"
-`, strings.TrimPrefix(healthz.URL, "http://"), proj)
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	body := fmt.Sprintf(`{"healthz":{"enabled":true,"listen":%q},"apps":[{"name":"w","command":"x","dir":%q,"env":{"PORT":"3000"}}],"routes":[{"hosts":["w.test"],"target":"http://127.0.0.1:3000"}]}`,
+		strings.TrimPrefix(healthz.URL, "http://"), proj)
+	seedConfig(t, cfgPath, body)
 	s := New(cfgPath)
 	out, err := s.doAppUsage(appUsageArg{App: "w", WindowS: 60})
 	if err != nil {

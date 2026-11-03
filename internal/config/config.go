@@ -1,7 +1,8 @@
-// Package config: carga y validación de la config YAML canónica.
+// Package config: modelo, defaults y validación de la configuración.
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
@@ -10,8 +11,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-
-	"gopkg.in/yaml.v3"
 
 	"rkt-proxy/internal/dotenv"
 	"rkt-proxy/internal/github"
@@ -217,20 +216,34 @@ func (c *Config) Finalize() error {
 	return c.ResolveEnvAll()
 }
 
-// Load lee y valida YAML. Solo migración/tests: la fuente es la DB.
-func Load(path string) (*Config, error) {
-	cfg := defaultConfig()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("leer config %s: %w", path, err)
+// Portable es la config completa (infra + flota + settings) para
+// exportar/importar como JSON. La fuente viva sigue siendo SQLite.
+type Portable struct {
+	Config
+	Apps     []App             `json:"apps"`
+	Routes   []Route           `json:"routes"`
+	Settings map[string]string `json:"settings,omitempty"`
+}
+
+// ExportJSON serializa config + flota + settings.
+func ExportJSON(cfg *Config, settings map[string]string) ([]byte, error) {
+	doc := Portable{Config: *cfg, Apps: cfg.Apps, Routes: cfg.Routes, Settings: settings}
+	return json.MarshalIndent(doc, "", "  ")
+}
+
+// ImportJSON valida un documento portable y devuelve config + settings.
+func ImportJSON(data []byte) (*Config, map[string]string, error) {
+	doc := Portable{Config: *Default()}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, nil, fmt.Errorf("json inválido: %w", err)
 	}
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse yaml: %w", err)
-	}
+	cfg := doc.Config
+	cfg.Apps = doc.Apps
+	cfg.Routes = doc.Routes
 	if err := cfg.Finalize(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &cfg, nil
+	return &cfg, doc.Settings, nil
 }
 
 // ApplyDefaults rellena valores omitidos. Idempotente.

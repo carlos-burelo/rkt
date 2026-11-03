@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -29,15 +28,14 @@ func sign(t *testing.T, body, secret string) string {
 
 func liveEmpty(t *testing.T) *config.Live {
 	t.Helper()
-	f, err := os.CreateTemp("", "rkt-hook-*.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(f.Name())
-	f.WriteString("routes:\n  - hosts: [a.test]\n    target: http://127.0.0.1:9\napps:\n  - name: web\n    command: x\n    dir: '" + t.TempDir() + "'\n    deploy:\n      repo: https://github.com/o/r.git\n      ref: main\n      auto: true\n")
-	f.Close()
-	cfg, err := config.Load(f.Name())
-	if err != nil {
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.Routes = []config.Route{{Hosts: []string{"a.test"}, Target: "http://127.0.0.1:9"}}
+	cfg.Apps = []config.App{{
+		Name: "web", Command: "x", Dir: dir,
+		Deploy: &config.Deploy{Repo: "https://github.com/o/r.git", Ref: "main", Auto: true},
+	}}
+	if err := cfg.Finalize(); err != nil {
 		t.Fatal(err)
 	}
 	return config.NewLive(cfg)

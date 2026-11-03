@@ -22,16 +22,12 @@ func writeTemp(t *testing.T, content string) string {
 }
 
 func TestHostPolicy(t *testing.T) {
-	path := writeTemp(t, `
-routes:
-  - hosts: ["app.ejemplo.com"]
-    target: "http://127.0.0.1:3000"
-  - hosts: ["*.ejemplo.com"]
-    target: "http://127.0.0.1:4000"
-`)
-	defer os.Remove(path)
-	cfg, err := config.Load(path)
-	if err != nil {
+	cfg := config.Default()
+	cfg.Routes = []config.Route{
+		{Hosts: []string{"app.ejemplo.com"}, Target: "http://127.0.0.1:3000"},
+		{Hosts: []string{"*.ejemplo.com"}, Target: "http://127.0.0.1:4000"},
+	}
+	if err := cfg.Finalize(); err != nil {
 		t.Fatal(err)
 	}
 	policy := HostPolicy(config.NewLive(cfg))

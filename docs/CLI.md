@@ -2,7 +2,7 @@
 
 Sintaxis: `rkt [-config <ruta>] [--json] <comando> [args]`.
 
-- `-config` default `config.yaml` (relativa al `.exe` cuando corre como servicio).
+- `-config` default `rkt.db`: ancla de datos; DB y logs viven en `<dir>/logs`.
 - `--json` en comandos de lectura: salida JSON en vez de tabla.
 - Códigos de salida: `0` ok · `1` error de runtime · `2` mal uso.
 
@@ -63,7 +63,7 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 | `users add <nombre> [--role admin]` | Alta con password sin eco (el primero se fuerza a admin) |
 | `users del <nombre>` | Baja (protege último admin, mata sesiones) |
 | `users passwd <nombre>` | Rota password e invalida sesiones |
-| `config export [file]` | Vuelca YAML completo (+`x-settings`) para git |
+| `config export [file]` | Vuelca config+flota+settings en JSON para git |
 | `config import <file>` | Restaura flota + settings (valida antes) |
 | `github login` | URL para instalar la App en browser |
 | `github init --name --domain [--org]` | URL del form manifest para crear la App |
@@ -135,7 +135,7 @@ real por Host), `hosts_list|add|remove`, `deployment_get`, `deploy_wait`,
 `git_status`, `diff_rev`, `disk_usage`, `log_search`, `usage_summary`,
 `proxy_map`, `backends_probe`, `settings_list|set`, `alerts_list|add|remove`,
 `discover_status`, `users_list|add|remove|passwd`, `config_export|import`
-(import exige `confirm=replace` y conserva Env de apps existentes si el YAML
+(import exige `confirm=replace` y conserva Env de apps existentes si el JSON
 no lo trae), `prune` (exige `confirm=prune`).
 
 Monitoreo en vivo: `metrics_now` (estado/pid/RSS por app + tráfico 5m),
@@ -149,9 +149,9 @@ Límite: no toca el servicio Windows; los cambios de manifiesto se aplican
 en caliente en ≤10s (supervisor.Apply).
 
 ```jsonc
-// opencode.json
-{"mcp": {"rkt": {"type": "local",
+// opencode.json (V2)
+{"mcp": {"servers": {"rkt": {"type": "local",
   "command": ["C:\\Program Files\\rkt-proxy\\rkt.exe", "-config",
-              "C:\\Program Files\\rkt-proxy\\config.yaml", "mcp"],
-  "enabled": true}}}
+              "C:\\Program Files\\rkt-proxy\\rkt.db", "mcp"]}}},
+ "plugins": []}
 ```

@@ -46,14 +46,10 @@ Requisitos previos:
 irm https://raw.githubusercontent.com/carlos-burelo/rkt-proxy/main/scripts/install.ps1 | iex
 ```
 
-El instalador descarga el `.exe` del último release (verifica checksum), crea
-`config.yaml` si no existe, abre `80/443`, registra el dir en el `PATH` e
-instala/arranca el servicio. Después edita la config y reinicia:
-
-```powershell
-notepad "C:\Program Files\rkt-proxy\config.yaml"
-sc.exe stop Rkt; sc.exe start Rkt
-```
+El instalador descarga el `.exe` del último release (verifica checksum),
+abre `80/443`, registra el dir en el `PATH` e instala/arranca el servicio.
+La configuración vive en SQLite (`logs/rkt.db`), no en archivos YAML: se
+edita desde el dashboard o con el CLI (`rkt settings`, `rkt routes`, `rkt apps`).
 
 ## Configuración
 
@@ -88,7 +84,7 @@ Reglas de routing:
 ## Salud y límites
 
 Hot-reload: editar `routes` o `redirect_http_to_https` aplica en ≤10s sin
-restart (`config recargada` en log). YAML inválido = se conserva la anterior.
+restart (`config recargada` en log). Config inválida = se conserva la anterior.
 Cambios de listeners, ACME, healthz o rate-limit avisan `requieren restart`.
 ```powershell
 curl.exe http://127.0.0.1:8090/healthz
@@ -170,18 +166,18 @@ apps:
 Capas en orden: **OS → `env_file` → `env:`** (cada una gana a la anterior).
 `${VAR}`/`$VAR` expanden contra OS+file+inline-anteriores (ordenado,
 determinista); indefinida = `""`. Archivo inexistente o línea malformada =
-error al cargar (fail fast, no typo silencioso). Secretos: `config.yaml` y
+error al cargar (fail fast, no typo silencioso). Secretos: `rkt.db` y
 `.env` en disco con ACL solo SYSTEM+Admins:
 
 ```powershell
-icacls "C:\Program Files\rkt-proxy\config.yaml" /inheritance:r /grant:r "SYSTEM:(F)" "Administradores:(F)"
+icacls "C:\Program Files\rkt-proxy\rkt.db" /inheritance:r /grant:r "SYSTEM:(F)" "Administradores:(F)"
 icacls "C:\apps\app1\.env" /inheritance:r /grant:r "SYSTEM:(F)" "Administradores:(F)"
 ```
 
 ## Deploy desde git (repos privados incluidos)
 
 Por app, con un PAT (`contents:read`, fine-grained a esos repos) como
-**variable de máquina** (la ve el servicio SYSTEM — nunca en YAML):
+**variable de máquina** (la ve el servicio SYSTEM - nunca en la config):
 
 ```yaml
 apps:
@@ -272,9 +268,7 @@ rkt settings set node_bin="C:\Program Files\nodejs\node.exe"
 
 Stack raro = warn con el `apps add` manual (nada a medias).
 
-Ejemplo listo en [`configs/config.example.yaml`](configs/config.example.yaml).
-
-## CLI de gestión (adiós YAML a mano)
+## CLI de gestión (adiós config a mano)
 
 `rkt help` lista todo. Códigos: `0` ok, `1` error runtime, `2` mal uso.
 `--json` global para `status`, `deployments`, `apps list`, `routes list`.
@@ -286,8 +280,8 @@ rkt routes list
 rkt routes add --host x.coatl.in --host y.coatl.in --target http://127.0.0.1:4000
 rkt env set app2 CLAVE=valor
 rkt settings set base_domain=coatl.in
-rkt config export respaldo.yaml
-rkt config import respaldo.yaml
+rkt config export respaldo.json
+rkt config import respaldo.json
 rkt status
 rkt deploy app2
 rkt rollback app2
@@ -331,7 +325,7 @@ Fronteras de confianza (léeme):
 - **Deploy = código del repo corriendo como SYSTEM.** Solo repos tuyos;
   el swap exige parar la app (Windows) y el rollback es automático.
 - **Secretos**: `webhook_secret` (mín 16, rechazado si corto), PAT/App key y
-  `.env` con ACL SYSTEM+Admins (el instalador blinda `config.yaml`).
+  `.env` con ACL SYSTEM+Admins (el instalador blinda `rkt.db`).
   Rota PATs con fecha de expiración; prefiere GitHub App (tokens de 1h).
 - **healthz es loopback** por default; si lo expones, `/restart` y `/deploy`
   quedan sin auth — no lo hagas.
@@ -343,16 +337,16 @@ Servidor MCP por stdio: `status`, `logs`, `deployments_list`, `restart`,
 configura (eso es del operador por CLI).
 
 ```jsonc
-// opencode.json
-{"mcp": {"rkt": {"type": "local",
+// opencode.json (V2)
+{"mcp": {"servers": {"rkt": {"type": "local",
   "command": ["C:\\Program Files\\rkt-proxy\\rkt.exe", "-config",
-              "C:\\Program Files\\rkt-proxy\\config.yaml", "mcp"],
-  "enabled": true}}}
+              "C:\\Program Files\\rkt-proxy\\rkt.db", "mcp"]}}},
+ "plugins": []}
 ```
 
 ```powershell
 # Claude Code
-claude mcp add rkt -- C:\Program` Files\rkt-proxy\rkt.exe -config "C:\Program Files\rkt-proxy\config.yaml" mcp
+claude mcp add rkt -- C:\Program` Files\rkt-proxy\rkt.exe -config "C:\Program Files\rkt-proxy\rkt.db" mcp
 ```
 
 ## Logs
@@ -361,14 +355,14 @@ El servicio escribe en `<dir-config>/logs/rkt.log` (rota a `.1` a los
 10 MB). Desde cualquier terminal (el instalador agrega el dir al `PATH`):
 
 ```powershell
-rkt -config "C:\Program Files\rkt-proxy\config.yaml" logs -n 50
-rkt -config "C:\Program Files\rkt-proxy\config.yaml" logs -f
+rkt -config "C:\Program Files\rkt-proxy\rkt.db" logs -n 50
+rkt -config "C:\Program Files\rkt-proxy\rkt.db" logs -f
 ```
 
 ## Servicio Windows (manual)
 
 ```powershell
-.\bin\rkt.exe -config C:\ruta\config.yaml install
+.\bin\rkt.exe -config C:\ruta\rkt.db install
 sc.exe start Rkt
 sc.exe query Rkt
 sc.exe stop Rkt
@@ -410,7 +404,7 @@ go mod tidy
 go vet ./...
 go test ./...
 go build -o bin/rkt.exe ./cmd/rkt-proxy
-.\bin\rkt.exe -config config.yaml run
+.\bin\rkt.exe -config rkt.db run
 ```
 
 ```text

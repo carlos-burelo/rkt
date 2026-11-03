@@ -10,9 +10,31 @@ import (
 	"testing"
 
 	"rkt-proxy/internal/cfgfile"
+	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/store"
 )
+
+func seedConfig(t *testing.T, cfgPath, body string) {
+	t.Helper()
+	if err := os.WriteFile(cfgPath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := config.ImportJSON([]byte(body))
+	db, err2 := store.Open(logx.DBPath(cfgPath))
+	if err2 != nil {
+		t.Fatal(err2)
+	}
+	defer db.Close()
+	if err == nil {
+		if err := cfgfile.SaveFleet(db, cfg); err != nil {
+			t.Fatal(err)
+		}
+		if err := cfgfile.SaveInfra(db, cfg); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
 
 func testServer(t *testing.T, healthz http.HandlerFunc) *Server {
 	t.Helper()
@@ -23,9 +45,9 @@ func testServer(t *testing.T, healthz http.HandlerFunc) *Server {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgPath, []byte(
-		"routes:\n  - hosts: [a.test]\n    target: http://127.0.0.1:9\nhealthz:\n  enabled: true\n  listen: \""+
-			strings.TrimPrefix(srv.URL, "http://")+"\"\n"), 0o644)
+	seedConfig(t, cfgPath,
+		`{"routes":[{"hosts":["a.test"],"target":"http://127.0.0.1:9"}],"healthz":{"enabled":true,"listen":"`+
+			strings.TrimPrefix(srv.URL, "http://")+`"}}`)
 	return New(cfgPath)
 }
 
@@ -43,9 +65,7 @@ func TestDoStatusSinServicio(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
 	// healthz en un puerto cerrado: determinista aunque el dev local corra
-	if err := os.WriteFile(cfgPath, []byte("healthz:\n  enabled: true\n  listen: \"127.0.0.1:1\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	seedConfig(t, cfgPath, `{"healthz":{"enabled":true,"listen":"127.0.0.1:1"}}`)
 	s := New(cfgPath)
 	if _, err := s.doStatus(); err == nil {
 		t.Fatal("debía fallar sin servicio")
@@ -55,7 +75,7 @@ func TestDoStatusSinServicio(t *testing.T) {
 func TestDoLogs(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgPath, []byte("x"), 0o644)
+	seedConfig(t, cfgPath, "x")
 	logsDir := filepath.Join(dir, "logs")
 	os.MkdirAll(filepath.Join(logsDir, "apps"), 0o755)
 	os.WriteFile(filepath.Join(logsDir, "rkt.log"), []byte("l1\nl2\nl3\n"), 0o644)
@@ -103,7 +123,7 @@ func TestDoRestartRollback(t *testing.T) {
 func TestDoDeployments(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgPath, []byte("x"), 0o644)
+	seedConfig(t, cfgPath, "x")
 	s := New(cfgPath)
 	// DB fresca: lista vacía, sin error
 	out, err := s.doDeployments(5, "")
@@ -115,7 +135,7 @@ func TestDoDeployments(t *testing.T) {
 func TestDoEvents(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgPath, []byte("x"), 0o644)
+	seedConfig(t, cfgPath, "x")
 	db, err := store.Open(filepath.Join(dir, "logs", "rkt.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +156,7 @@ func TestDoEvents(t *testing.T) {
 func TestDoAppsAddLocal(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgPath, []byte("routes:\n  - hosts: [a.test]\n    target: http://127.0.0.1:9\n"), 0o644)
+	seedConfig(t, cfgPath, `{"routes":[{"hosts":["a.test"],"target":"http://127.0.0.1:9"}]}`)
 	repo := filepath.Join(dir, "mirrepo")
 	os.MkdirAll(repo, 0o755)
 	os.WriteFile(filepath.Join(repo, "package.json"), []byte(`{"dependencies":{"next":"14.0.0"}}`), 0o644)
@@ -184,7 +204,7 @@ func TestDoInspectYUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfgPath := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgPath, []byte("routes:\n  - hosts: [seed.test]\n    target: http://127.0.0.1:9\n"), 0o644)
+	seedConfig(t, cfgPath, `{"routes":[{"hosts":["seed.test"],"target":"http://127.0.0.1:9"}]}`)
 	s := New(cfgPath)
 
 	plan, err := s.doDetectPlan(proj)
@@ -215,7 +235,7 @@ func TestDoInspectYUpdate(t *testing.T) {
 func TestDoEnvSetNoRead(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgPath, []byte("routes:\n  - hosts: [a.test]\n    target: http://127.0.0.1:9\n"), 0o644)
+	seedConfig(t, cfgPath, `{"routes":[{"hosts":["a.test"],"target":"http://127.0.0.1:9"}]}`)
 	s := New(cfgPath)
 	if _, err := s.doAppsAdd(appsAddArg{Name: "w", Command: "c"}); err != nil {
 		t.Fatalf("apps_add: %v", err)
@@ -235,7 +255,7 @@ func TestDoEnvSetNoRead(t *testing.T) {
 func TestDoDeployCheck(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	os.WriteFile(cfgPath, []byte("routes:\n  - hosts: [a.test]\n    target: http://127.0.0.1:9\n"), 0o644)
+	seedConfig(t, cfgPath, `{"routes":[{"hosts":["a.test"],"target":"http://127.0.0.1:9"}]}`)
 	s := New(cfgPath)
 	if _, err := s.doAppsAdd(appsAddArg{Name: "w", Command: "c"}); err != nil {
 		t.Fatalf("apps_add: %v", err)

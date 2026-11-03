@@ -15,7 +15,10 @@ import (
 	"testing"
 	"time"
 
+	"rkt-proxy/internal/cfgfile"
+	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/logx"
+	"rkt-proxy/internal/store"
 )
 
 func freeAddr(t *testing.T) string {
@@ -62,22 +65,26 @@ func TestE2EProxyWAFBodyYAccessLog(t *testing.T) {
 	cfgPath := filepath.Join(dir, "config.yaml")
 	httpAddr := freeAddr(t)
 	healthAddr := freeAddr(t)
-	yaml := fmt.Sprintf(`listen_http: %q
-listen_https: ""
-redirect_http_to_https: false
-rate_limit:
-  enabled: false
-healthz:
-  enabled: true
-  listen: %q
-max_body_mb: 1
-routes:
-  - hosts: ["e2e.test"]
-    target: %q
-`, httpAddr, healthAddr, backend.URL)
+	yaml := fmt.Sprintf(`{"listen_http":%q,"listen_https":"","redirect_http_to_https":false,"rate_limit":{"enabled":false},"healthz":{"enabled":true,"listen":%q},"max_body_mb":1,"routes":[{"hosts":["e2e.test"],"target":%q}]}`,
+		httpAddr, healthAddr, backend.URL)
 	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	seed, _, err := config.ImportJSON([]byte(yaml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedDB, err := store.Open(logx.DBPath(cfgPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfgfile.SaveFleet(seedDB, seed); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfgfile.SaveInfra(seedDB, seed); err != nil {
+		t.Fatal(err)
+	}
+	_ = seedDB.Close()
 
 	p := New(cfgPath, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	go p.Run()

@@ -1,10 +1,6 @@
 package cfgfile
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"os"
 	"path/filepath"
@@ -151,12 +147,11 @@ func TestOverlayGithubYSeed(t *testing.T) {
 	if err := OverlayGithub(cfg, db); err != nil || cfg.Github != nil {
 		t.Fatalf("sin app_id no debe tocar: %+v %v", cfg.Github, err)
 	}
-	if itoaOrEmpty(0) != "" || itoaOrEmpty(7) != "7" {
-		t.Fatal("itoaOrEmpty mal")
+	if err := db.SetSetting("github_app_id", "42"); err != nil {
+		t.Fatal(err)
 	}
-	seedGithubSettings(db, &config.Github{AppID: 42, AppSlug: "slug", WebhookSecret: "s"})
-	if db.GetSetting("github_app_id") != "42" || db.GetSetting("github_app_slug") != "slug" {
-		t.Fatal("seed no escribió")
+	if err := db.SetSetting("github_app_slug", "slug"); err != nil {
+		t.Fatal(err)
 	}
 	if err := OverlayGithub(cfg, db); err != nil {
 		t.Fatal(err)
@@ -504,41 +499,5 @@ func TestRamasCfgfileRestantes(t *testing.T) {
 	}
 	if err := ApplyDev(db, "127.0.0.1:80", ""); err == nil {
 		t.Fatal("ApplyDev con infra corrupta debía fallar")
-	}
-}
-
-func TestLoadBaseMigraGithubDesdeYAML(t *testing.T) {
-	dir := t.TempDir()
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatal(err)
-	}
-	keyFile := filepath.Join(dir, "app.pem")
-	pemKey := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-	if err := os.WriteFile(keyFile, pemKey, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cfgPath := filepath.Join(dir, "config.yaml")
-	yaml := "routes: []\ngithub:\n  app_id: 99\n  app_slug: demo\n  key_file: " + keyFile + "\n"
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	db, err := store.Open(logx.DBPath(cfgPath))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	base, err := LoadBase(db, cfgPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if base.Github == nil || base.Github.AppID != 99 {
-		t.Fatalf("github migrado = %+v", base.Github)
-	}
-	if db.GetSetting("github_app_id") != "99" {
-		t.Fatal("seedGithubSettings no escribió")
-	}
-	if _, err := os.Stat(cfgPath + ".migrated"); err != nil {
-		t.Fatal("YAML debía quedar como .migrated")
 	}
 }
