@@ -3,6 +3,7 @@ import { getSettings, setSetting } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader, Section } from "../../shared/components/patterns";
+import { PathInput } from "../../shared/components/PathPicker";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
 
@@ -16,14 +17,22 @@ const DESCRIPTIONS: Record<string, string> = {
   quota_bytes: "Tope de tráfico 30d para el medidor (0 = sin tope).",
 };
 
+const PICKERS: Record<string, "dir" | "file"> = {
+  node_bin: "file",
+  python_bin: "file",
+};
+
 export function Settings() {
   const canWrite = useAuth((a) => a.canWrite);
   const fail = useUI((u) => u.fail);
   const [settings, setSettings] = useState<Record<string, string>>({});
+  const [draft, setDraft] = useState<Record<string, string>>({});
 
   async function load() {
     try {
-      setSettings(await getSettings());
+      const s = await getSettings();
+      setSettings(s);
+      setDraft(s);
     } catch (e) {
       fail(e);
     }
@@ -62,21 +71,31 @@ export function Settings() {
                 <p className="font-mono text-[11px]">{k}</p>
                 {DESCRIPTIONS[k] && <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">{DESCRIPTIONS[k]}</p>}
               </div>
-              <Input
-                key={v}
-                defaultValue={v}
-                id={`set-${k}`}
-                disabled={!canWrite}
-                aria-label={`valor de ${k}`}
-                className="tnum h-7 font-mono text-[11px]"
-              />
+              {PICKERS[k] ? (
+                <PathInput
+                  value={draft[k] ?? v}
+                  onChange={(nv) => setDraft({ ...draft, [k]: nv })}
+                  mode={PICKERS[k]}
+                  disabled={!canWrite}
+                  ariaLabel={`valor de ${k}`}
+                  className="tnum h-7 min-w-0 flex-1 font-mono text-[11px]"
+                />
+              ) : (
+                <Input
+                  value={draft[k] ?? v}
+                  onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}
+                  id={`set-${k}`}
+                  disabled={!canWrite}
+                  aria-label={`valor de ${k}`}
+                  className="tnum h-7 font-mono text-[11px]"
+                />
+              )}
               {canWrite ? (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const el = document.getElementById(`set-${k}`) as HTMLInputElement;
-                    setSetting(k, el.value).then(load).catch(fail);
+                    setSetting(k, draft[k] ?? v).then(load).catch(fail);
                   }}
                 >
                   guardar
