@@ -11,7 +11,7 @@ export default defineConfig({
     tsconfigPaths(),
     VitePWA({
       registerType: "autoUpdate",
-      // registro manual en main.tsx (scope ./ por subpath /dashboard/)
+      // registro manual en main.tsx (scope = BASE_URL, raíz)
       injectRegister: false,
       manifest: {
         name: "rkt dashboard",
@@ -40,7 +40,7 @@ export default defineConfig({
       },
     }),
   ],
-  base: "./",
+  base: "/",
   build: { outDir: "dist", emptyOutDir: true },
   server: {
     proxy: {

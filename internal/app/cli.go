@@ -210,7 +210,7 @@ func printDashboardURL(cfgPath string) {
 		fmt.Println("aviso: healthz desactivado, sin dashboard local")
 		return
 	}
-	fmt.Printf("dashboard: http://%s/dashboard/ (crea tu admin ahí la primera vez)\n", cfg.Healthz.Listen)
+	fmt.Printf("dashboard: http://%s/ (crea tu admin ahí la primera vez)\n", cfg.Healthz.Listen)
 }
 
 // cmdDev levanta entorno local: genera rkt.dev.yaml (HTTP alto, sin TLS)

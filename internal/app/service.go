@@ -69,6 +69,19 @@ func New(cfgPath string, log *slog.Logger) *Program {
 }
 
 // Start lanza Run en goroutine (contrato kardianos/service).
+// isHealthPath separa el control por loopback de la SPA en la raíz.
+func isHealthPath(p string) bool {
+	if p == "/healthz" {
+		return true
+	}
+	for _, prefix := range []string{"/restart/", "/deploy/", "/rollback/", "/retry/"} {
+		if strings.HasPrefix(p, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *Program) Start(_ service.Service) error {
 	go p.Run()
 	return nil
@@ -204,15 +217,29 @@ func (p *Program) Run() {
 		p.srvHealth = &http.Server{
 			Addr: cfg.Healthz.Listen,
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if strings.HasPrefix(r.URL.Path, "/dashboard/") {
-					dashH.ServeHTTP(w, r)
-					return
-				}
+				// API primero: nada del SPA puede tapar /api/v1.
 				if strings.HasPrefix(r.URL.Path, "/api/") {
 					apiH.ServeHTTP(w, r)
 					return
 				}
-				healthH.ServeHTTP(w, r)
+				// Endpoints de control (healthz y acciones por loopback).
+				if isHealthPath(r.URL.Path) {
+					healthH.ServeHTTP(w, r)
+					return
+				}
+				// Enlaces viejos con /dashboard: una sola redirección.
+				if strings.HasPrefix(r.URL.Path, "/dashboard/") {
+					target := strings.TrimPrefix(r.URL.Path, "/dashboard")
+					if target == "" {
+						target = "/"
+					}
+					if r.URL.RawQuery != "" {
+						target += "?" + r.URL.RawQuery
+					}
+					http.Redirect(w, r, target, http.StatusMovedPermanently)
+					return
+				}
+				dashH.ServeHTTP(w, r)
 			}),
 			// Sin WriteTimeout: POST /deploy/* tarda minutos (solo loopback).
 			ReadTimeout: 10 * time.Second,

@@ -20,7 +20,7 @@ func testDist(t *testing.T) string {
 // inalcanzable (bug). Los datos siguen tras token en /api/v1.
 func TestPublicoSinSesion(t *testing.T) {
 	h := NewHandler(os.DirFS(testDist(t)))
-	for _, p := range []string{"/dashboard/", "/dashboard/app.js", "/dashboard/ruta-spa/"} {
+	for _, p := range []string{"/", "/app.js", "/ruta-spa/"} {
 		req := httptest.NewRequest(http.MethodGet, p, nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
@@ -34,9 +34,9 @@ func TestSirveYFallback(t *testing.T) {
 	h := NewHandler(os.DirFS(testDist(t)))
 
 	for path, want := range map[string]string{
-		"/dashboard/":          "<html>spa</html>",
-		"/dashboard/app.js":    "x",
-		"/dashboard/ruta-spa/": "<html>spa</html>", // fallback index
+		"/":          "<html>spa</html>",
+		"/app.js":    "x",
+		"/ruta-spa/": "<html>spa</html>", // fallback index
 	} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rec := httptest.NewRecorder()
@@ -49,7 +49,7 @@ func TestSirveYFallback(t *testing.T) {
 
 func Test503SinDist(t *testing.T) {
 	h := NewHandler(os.DirFS(t.TempDir())) // vacío
-	req := httptest.NewRequest(http.MethodGet, "/dashboard/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {

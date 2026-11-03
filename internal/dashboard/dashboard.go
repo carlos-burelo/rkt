@@ -1,22 +1,28 @@
-// Package dashboard sirve la SPA embebida (web/dist) en /dashboard/.
-// El HTML/JS es público a propósito: el wizard inicial (sin usuarios)
-// y el login viven en la SPA; los DATOS van tras token en /api/v1.
-// Autenticar el HTML impediría el primer arranque (bug real).
+// Package dashboard sirve la SPA embebida (web/dist) en la raíz del
+// listener interno. El HTML/JS es público a propósito: el wizard inicial
+// (sin usuarios) y el login viven en la SPA; los DATOS van tras token en
+// /api/v1. Autenticar el HTML impediría el primer arranque (bug real).
 package dashboard
 
 import (
 	"bytes"
 	"io/fs"
+	"mime"
 	"net/http"
 	"strings"
 	"time"
 )
 
-// NewHandler SPA con fallback a index.html (history routing).
+func init() {
+	// ServeContent no conoce .webmanifest; sin esto el manifest sale
+	// como text/plain (algunos navegadores lo rechazan).
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
+}
+
+// NewHandler SPA en "/" con fallback a index.html (history routing).
 // fsys = web/dist (embed en prod, DirFS en tests).
 func NewHandler(fsys fs.FS) http.Handler {
 	fileSrv := http.FileServer(http.FS(fsys))
-	mux := http.NewServeMux()
 	serveIndex := func(w http.ResponseWriter, r *http.Request) {
 		data, err := fs.ReadFile(fsys, "index.html")
 		if err != nil {
@@ -27,8 +33,8 @@ func NewHandler(fsys fs.FS) http.Handler {
 		}
 		http.ServeContent(w, r, "index.html", time.Now(), bytes.NewReader(data))
 	}
-	mux.HandleFunc("/dashboard/", func(w http.ResponseWriter, r *http.Request) {
-		path := strings.TrimPrefix(r.URL.Path, "/dashboard/")
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/")
 		if path == "" {
 			serveIndex(w, r)
 			return
@@ -42,5 +48,4 @@ func NewHandler(fsys fs.FS) http.Handler {
 		r.URL.Path = "/" + path
 		fileSrv.ServeHTTP(w, r)
 	})
-	return mux
 }

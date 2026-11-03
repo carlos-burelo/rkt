@@ -24,7 +24,7 @@ await page.route("**/api/v1/**", (route) => {
     {};
   route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 });
-await page.goto("http://localhost:5173/dashboard/app/checkout/overview", { waitUntil: "networkidle" });
+await page.goto("http://localhost:5173/app/checkout/overview", { waitUntil: "networkidle" });
 const section = page.locator("section").filter({ hasText: "Tráfico 7d" }).first();
 await section.screenshot({ path: "docs/shots/debug-trafico.png" });
 console.log("box", await section.boundingBox());

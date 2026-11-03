@@ -198,7 +198,7 @@ sc.exe query Rkt
 
 # 9. dashboard listo: espera healthz, imprime URL y abre browser.
 # Tras esto no hay comandos: el admin inicial se crea en el wizard.
-$dashUrl = "http://127.0.0.1:8090/dashboard/"
+$dashUrl = "http://127.0.0.1:8090/"
 $ready = $false
 for ($i = 0; $i -lt 30; $i++) {
   try {

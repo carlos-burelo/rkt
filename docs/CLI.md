@@ -88,11 +88,11 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 `apps list` / `routes list`: arrays de objetos con los campos de la tabla.
 Vacío = `[]` (nunca `null` en listas).
 
-## Dashboard (`/dashboard/` + `/api/v1/`)
+## Dashboard (`/` + `/api/v1/`)
 
-SPA embebida servida en el listener healthz (loopback). Auth por
+SPA embebida servida en la raíz del listener healthz (loopback). Auth por
 credenciales: crea el primer admin con `users add`, entra en
-`/dashboard/`, sesión por cookie httpOnly (30d). Roles:
+`/`, sesión por cookie httpOnly (30d). Roles:
 viewer lee, operator muta, admin gestiona usuarios.
 
 Endpoints principales (todos salvo login exigen sesión):

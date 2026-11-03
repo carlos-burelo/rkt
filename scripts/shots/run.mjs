@@ -23,7 +23,7 @@ const main = async () => {
   if (!stRes.ok) throw new Error("servicio no responde (¿rkt dev corriendo?)");
   const st = await stRes.json();
   if (st.setup_required) {
-    throw new Error("sin usuarios: completa el wizard en /dashboard/ primero");
+    throw new Error("sin usuarios: completa el wizard en / primero");
   }
 
   const browser = await chromium.launch();
@@ -37,11 +37,11 @@ const main = async () => {
   page.on("pageerror", (e) => console.log(`[pageerror:${page.url()}]`, e.message));
 
   // login por UI (como un humano: la cookie la pone el browser)
-  await page.goto(BASE + "/dashboard/login", { waitUntil: "networkidle" });
+  await page.goto(BASE + "/login", { waitUntil: "networkidle" });
   await page.getByLabel(/usuario/i).fill(USER);
   await page.getByLabel(/password/i).fill(PASS);
   await page.getByRole("button", { name: /Entrar/ }).click();
-  await page.waitForURL("**/dashboard/overview", { timeout: 15000 });
+  await page.waitForURL("**/overview", { timeout: 15000 });
 
   // token para llamadas API directas (apps, rol)
   const cookies = await ctx.cookies();
@@ -50,7 +50,7 @@ const main = async () => {
 
   mkdirSync(OUT, { recursive: true });
   const shot = async (name, route) => {
-    await page.goto(`${BASE}/dashboard/${route}`, { waitUntil: "networkidle" });
+    await page.goto(`${BASE}/${route}`, { waitUntil: "networkidle" });
     await page.waitForTimeout(2500); // deja asentar polls/skeletons
     await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: true });
     console.log("ok", name);

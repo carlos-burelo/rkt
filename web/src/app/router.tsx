@@ -97,7 +97,7 @@ function RouteError() {
           <Button size="sm" onClick={() => window.location.reload()}>
             recargar
           </Button>
-          <Button size="sm" variant="outline" onClick={() => { window.location.href = "/dashboard/overview"; }}>
+          <Button size="sm" variant="outline" onClick={() => { window.location.href = "/overview"; }}>
             ir al resumen
           </Button>
         </div>
@@ -150,7 +150,6 @@ export const router = createBrowserRouter(
       ],
     },
   ],
-  { basename: "/dashboard" },
 );
 
 export function AppRouter() {

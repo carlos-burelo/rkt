@@ -259,7 +259,7 @@ const main = async () => {
   page.on("pageerror", (e) => errors.push(`[pageerror] ${e.message}`));
 
   const shot = async (name, route, opts = {}) => {
-    await page.goto(`${BASE}/dashboard/${route}`, { waitUntil: "networkidle" });
+    await page.goto(`${BASE}/${route}`, { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
     await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: opts.fullPage ?? true });
     console.log("ok", name);
@@ -282,7 +282,7 @@ const main = async () => {
   }
 
   // overlays desktop
-  await page.goto(`${BASE}/dashboard/overview`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/overview`, { waitUntil: "networkidle" });
   await page.waitForTimeout(300);
   await page.keyboard.press("Control+k");
   await page.waitForTimeout(250);
@@ -290,14 +290,14 @@ const main = async () => {
   console.log("ok overlay-palette");
   await page.keyboard.press("Escape");
 
-  await page.goto(`${BASE}/dashboard/deployments`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/deployments`, { waitUntil: "networkidle" });
   await page.waitForTimeout(300);
   await page.locator('[role="row"]').nth(1).click();
   await page.waitForTimeout(400);
   await page.screenshot({ path: join(OUT, "overlay-drawer.png"), fullPage: false });
   console.log("ok overlay-drawer");
 
-  await page.goto(`${BASE}/dashboard/overview`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/overview`, { waitUntil: "networkidle" });
   await page.waitForTimeout(300);
   await page.getByRole("button", { name: /Nueva app/ }).first().click();
   await page.waitForTimeout(300);
@@ -318,7 +318,7 @@ const main = async () => {
     ["mobile-proxy", "proxy"],
     ["mobile-logs", "logs"],
   ]) {
-    await mpage.goto(`${BASE}/dashboard/${route}`, { waitUntil: "networkidle" });
+    await mpage.goto(`${BASE}/${route}`, { waitUntil: "networkidle" });
     await mpage.waitForTimeout(500);
     await mpage.screenshot({ path: join(OUT, `${name}.png`), fullPage: true });
     console.log("ok", name);
@@ -329,7 +329,7 @@ const main = async () => {
   const lctx = await browser.newContext({ viewport: { width: 1600, height: 900 } });
   const lpage = await lctx.newPage();
   await mockApi(lpage, { authed: false });
-  await lpage.goto(`${BASE}/dashboard/login`, { waitUntil: "networkidle" });
+  await lpage.goto(`${BASE}/login`, { waitUntil: "networkidle" });
   await lpage.waitForTimeout(400);
   await lpage.screenshot({ path: join(OUT, "login.png"), fullPage: true });
   console.log("ok login");
@@ -338,7 +338,7 @@ const main = async () => {
   const sctx = await browser.newContext({ viewport: { width: 1600, height: 900 } });
   const spage = await sctx.newPage();
   await mockApi(spage, { authed: false, setupRequired: true });
-  await spage.goto(`${BASE}/dashboard/setup`, { waitUntil: "networkidle" });
+  await spage.goto(`${BASE}/setup`, { waitUntil: "networkidle" });
   await spage.waitForTimeout(400);
   await spage.screenshot({ path: join(OUT, "setup.png"), fullPage: true });
   console.log("ok setup");
