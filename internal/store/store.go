@@ -73,6 +73,20 @@ var migrations = []string{
 	);`,
 	// v5: instalaciones las manda la API (ya no se cachean en DB).
 	`DROP TABLE IF EXISTS installations;`,
+	// v6: auth local (usuarios + sesiones bearer).
+	`CREATE TABLE IF NOT EXISTS users (
+		name TEXT PRIMARY KEY,
+		pass_hash TEXT NOT NULL,
+		role TEXT NOT NULL DEFAULT 'viewer',
+		created_at TEXT NOT NULL DEFAULT ''
+	);
+	CREATE TABLE IF NOT EXISTS sessions (
+		token_hash TEXT PRIMARY KEY,
+		user TEXT NOT NULL,
+		created_at TEXT NOT NULL DEFAULT '',
+		expires_at TEXT NOT NULL DEFAULT ''
+	);
+	CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user);`,
 }
 
 // DB wrapper.
