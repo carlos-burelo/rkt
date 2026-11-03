@@ -332,6 +332,9 @@ func TestAppsSinEnvYAcciones(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"w"`) {
 		t.Fatalf("falta app: %s", rec.Body.String())
 	}
+	if !strings.Contains(rec.Body.String(), `"port":""`) {
+		t.Fatalf("falta port (vacío honesto): %s", rec.Body.String())
+	}
 
 	// viewer no acciona
 	rec = httptest.NewRecorder()

@@ -1197,7 +1197,8 @@ func sanitizeApp(a config.App, routes []config.Route) map[string]any {
 	// domains: hosts cuyas routes apuntan al PORT de la app (mapeo real,
 	// no adivinanza por nombre).
 	domains := []string{}
-	if port := a.Env["PORT"]; port != "" {
+	port := a.Env["PORT"]
+	if port != "" {
 		want := "http://127.0.0.1:" + port
 		for _, r := range routes {
 			if r.Target == want {
@@ -1209,7 +1210,7 @@ func sanitizeApp(a config.App, routes []config.Route) map[string]any {
 		"name": a.Name, "command": a.Command, "args": a.Args,
 		"dir": a.Dir, "restart_delay": a.RestartDelay,
 		"min_uptime": a.MinUptime, "memory_mb": a.MemoryMB,
-		"deploy": deploy, "domains": domains,
+		"port": port, "deploy": deploy, "domains": domains,
 	}
 }
 
