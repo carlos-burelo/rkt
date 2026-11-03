@@ -21,6 +21,7 @@ import (
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/mcpserver"
+	"rkt-proxy/internal/staticweb"
 )
 
 // JSON salida máquina para comandos de lectura (--json).
@@ -84,6 +85,15 @@ func Run(cfgPath string) {
 			return
 		case "run":
 			RunForeground(cfgPath)
+			return
+		case "__static":
+			// interno: el supervisor arranca sitios estáticos así
+			if len(flag.Args()) < 2 {
+				log.Fatal("uso: rkt __static <dir>")
+			}
+			if err := staticweb.Serve(flag.Arg(1)); err != nil {
+				log.Fatalf("static: %v", err)
+			}
 			return
 		case "version":
 			fmt.Println(build.Version)

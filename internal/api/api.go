@@ -508,14 +508,13 @@ func NewHandler(d Deps) http.Handler {
 				Port    int    `json:"port"`
 				Command string `json:"command"`
 				Dir     string `json:"dir"`
-				Preset  string `json:"preset"`
 				Auto    bool   `json:"auto"`
 			}
 			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
 				writeErr(w, http.StatusBadRequest, "JSON inválido")
 				return
 			}
-			name, err := createAppFromRepo(d.DB, d.Live, in.Repo, in.Name, in.Domain, in.Port, in.Command, in.Dir, in.Preset, in.Auto)
+			name, err := createAppFromRepo(d.DB, d.Live, in.Repo, in.Name, in.Domain, in.Port, in.Command, in.Dir, in.Auto)
 			if err != nil {
 				writeErr(w, http.StatusBadRequest, err.Error())
 				return
@@ -1161,8 +1160,8 @@ func mustUser(r *http.Request) string {
 
 // createAppFromRepo alta con inferencia vía cfgfile.CreateApp (hogar
 // único, también usado por MCP). Escribe vía AddApp y refresca Live.
-func createAppFromRepo(db *store.DB, live *config.Live, repo, name, domain string, port int, command, dir, preset string, auto bool) (string, error) {
-	app, domains, portS, err := cfgfile.CreateApp(db, repo, name, domain, port, command, dir, preset, auto)
+func createAppFromRepo(db *store.DB, live *config.Live, repo, name, domain string, port int, command, dir string, auto bool) (string, error) {
+	app, domains, portS, err := cfgfile.CreateApp(db, repo, name, domain, port, command, dir, auto)
 	if err != nil {
 		return "", err
 	}
@@ -1211,7 +1210,7 @@ func sanitizeApp(a config.App, routes []config.Route) map[string]any {
 	}
 	return map[string]any{
 		"name": a.Name, "command": a.Command, "args": a.Args,
-		"dir": a.Dir, "restart_delay": a.RestartDelay,
+		"dir": a.Dir, "static": a.Static, "restart_delay": a.RestartDelay,
 		"min_uptime": a.MinUptime, "memory_mb": a.MemoryMB,
 		"port": port, "deploy": deploy, "domains": domains,
 	}

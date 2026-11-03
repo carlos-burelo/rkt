@@ -19,7 +19,7 @@ func newTestDB(t *testing.T) *store.DB {
 	return db
 }
 
-// El alta desde "directorio local" debe inferir preset y comando igual
+// El alta desde "directorio local" debe inferir plan y comando igual
 // que desde un repo; era el bug de creación (400 sin binario).
 func TestCreateAppDirectorioLocalInfiere(t *testing.T) {
 	db := newTestDB(t)
@@ -27,16 +27,22 @@ func TestCreateAppDirectorioLocalInfiere(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"coatl","scripts":{"start":"node index.js"}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"coatl"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "server.js"), []byte(""), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	app, _, _, err := CreateApp(db, "", "", "", 0, "", dir, "", false)
+	app, _, _, err := CreateApp(db, "", "", "", 0, "", dir, false)
 	if err != nil {
 		t.Fatalf("CreateApp local: %v", err)
 	}
 	if app.Command != `C:\Program Files\nodejs\node.exe` {
 		t.Fatalf("command = %q, quiero el node_bin configurado", app.Command)
+	}
+	if len(app.Args) != 1 || app.Args[0] != "server.js" {
+		t.Fatalf("args = %v, quiero server.js", app.Args)
 	}
 	if app.Name == "" {
 		t.Fatal("nombre vacío: debía derivarse del directorio")
@@ -49,19 +55,42 @@ func TestCreateAppDirectorioLocalInfiere(t *testing.T) {
 	}
 }
 
+// Astro/Vite: plan estático servido por el binario, sin proceso Node.
+func TestCreateAppAstroServidoEstatico(t *testing.T) {
+	db := newTestDB(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"scripts":{"build":"astro build"},"dependencies":{"astro":"^7"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	app, _, _, err := CreateApp(db, "", "coatl-in", "", 0, "", dir, false)
+	if err != nil {
+		t.Fatalf("CreateApp astro: %v", err)
+	}
+	if app.Static == "" {
+		t.Fatal("Static vacío: astro debía servirse como estático")
+	}
+	if len(app.Args) != 2 || app.Args[0] != "__static" {
+		t.Fatalf("args = %v, quiero __static <dir>", app.Args)
+	}
+	if app.Command == "" {
+		t.Fatal("command vacío: debe apuntar al binario propio")
+	}
+}
+
 func TestCreateAppDirectorioInexistente(t *testing.T) {
 	db := newTestDB(t)
-	_, _, _, err := CreateApp(db, "", "x", "", 0, "", filepath.Join(t.TempDir(), "no-existe"), "", false)
+	_, _, _, err := CreateApp(db, "", "x", "", 0, "", filepath.Join(t.TempDir(), "no-existe"), false)
 	if err == nil || !strings.Contains(err.Error(), "directorio no existe") {
 		t.Fatalf("err = %v, quiero error de directorio inexistente", err)
 	}
 }
 
-func TestCreateAppSinBinarioApuntaAAjustes(t *testing.T) {
+func TestCreateAppSinPlanFalla(t *testing.T) {
 	db := newTestDB(t)
-	dir := t.TempDir() // sin package.json ni requirements: preset vacío
-	_, _, _, err := CreateApp(db, "", "x", "", 0, "", dir, "", false)
-	if err == nil || !strings.Contains(err.Error(), "Ajustes") {
-		t.Fatalf("err = %v, quiero mensaje accionable hacia Ajustes", err)
+	dir := t.TempDir() // sin package.json ni requirements
+	_, _, _, err := CreateApp(db, "", "x", "", 0, "", dir, false)
+	if err == nil || !strings.Contains(err.Error(), "sin plan de build") {
+		t.Fatalf("err = %v, quiero error de plan no detectado", err)
 	}
 }

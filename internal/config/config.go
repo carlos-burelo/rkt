@@ -87,7 +87,9 @@ type App struct {
 	RestartDelay string            `yaml:"restart_delay"`
 	MinUptime    string            `yaml:"min_uptime"`
 	MemoryMB     uint64            `yaml:"memory_mb"`
-	Deploy       *Deploy           `yaml:"deploy"`
+	// Static dir servido por el propio binario (sitios: astro/vite/export).
+	Static string  `yaml:"static,omitempty"`
+	Deploy *Deploy `yaml:"deploy"`
 
 	delay time.Duration `yaml:"-"`
 	minUp time.Duration `yaml:"-"`

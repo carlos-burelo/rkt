@@ -94,7 +94,7 @@ func SetEnv(db *store.DB, cfg *config.Config, appName, key, rawVal string) error
 // CreateApp arma App+domains+port con inferencia (Suggest+PresetBuild).
 // Unico hogar (CLI wizard pregunta aparte; MCP y API la usan).
 // Crea el dir. No escribe en DB (eso es AddApp).
-func CreateApp(db *store.DB, repo, name, domain string, port int, command, dir, preset string, auto bool) (config.App, []string, string, error) {
+func CreateApp(db *store.DB, repo, name, domain string, port int, command, dir string, auto bool) (config.App, []string, string, error) {
 	var sug *discover.Suggestion
 	if repo != "" {
 		var err error
@@ -121,19 +121,6 @@ func CreateApp(db *store.DB, repo, name, domain string, port int, command, dir, 
 	if name == "" {
 		return config.App{}, nil, "", fmt.Errorf("sin nombre (pasa name)")
 	}
-	if preset == "" {
-		preset = sug.Preset
-	}
-	if command == "" {
-		command = sug.Command
-	}
-	if command == "" {
-		// error accionable: dice qué falta y dónde se arregla
-		if binKey, ok := discover.PresetBinKey(preset); ok {
-			return config.App{}, nil, "", fmt.Errorf("sin binario para preset %q (define comando o configura %s en Ajustes)", preset, binKey)
-		}
-		return config.App{}, nil, "", fmt.Errorf("sin binario inferido (define comando o configura node_bin/python_bin en Ajustes)")
-	}
 	if dir == "" {
 		dir = sug.Dir
 	}
@@ -152,12 +139,39 @@ func CreateApp(db *store.DB, repo, name, domain string, port int, command, dir, 
 	} else if sug.Domain != "" {
 		domains = []string{sug.Domain}
 	}
-	build, args, env := discover.PresetBuild(preset, portS)
+
+	// Plan canónico (buildpack): estático o proceso + pasos de build.
+	plan := sug.Plan
+	args := []string{}
+	staticDir := ""
+	if command == "" && plan.IsStatic() {
+		exe, err := os.Executable()
+		if err != nil {
+			return config.App{}, nil, "", fmt.Errorf("binario propio: %w", err)
+		}
+		command = exe
+		staticDir = plan.Static(dir)
+		args = []string{"__static", staticDir}
+	} else if command == "" && len(plan.Start) > 0 {
+		command = processBin(plan.Start[0], db)
+		args = append(args, plan.Start[1:]...)
+	}
+	if command == "" {
+		if plan.Kind != "" {
+			return config.App{}, nil, "", fmt.Errorf("plan %q sin arranque: define comando", plan.Kind)
+		}
+		return config.App{}, nil, "", fmt.Errorf("sin plan de build (define comando o añade package.json/go.mod/requirements.txt/index.html)")
+	}
+	env := map[string]string{}
+	if portS != "" {
+		env["PORT"] = portS
+	}
+	build := append(append([]string{}, plan.Install...), plan.Build...)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return config.App{}, nil, "", err
 	}
 	app := config.App{
-		Name: name, Command: command, Args: args,
+		Name: name, Command: command, Args: args, Static: staticDir,
 		Dir: dir, Env: env, RestartDelay: "5s",
 	}
 	if repo != "" {
@@ -166,6 +180,21 @@ func CreateApp(db *store.DB, repo, name, domain string, port int, command, dir, 
 		}
 	}
 	return app, domains, portS, nil
+}
+
+// processBin respeta node_bin/python_bin de Ajustes; resto va por PATH.
+func processBin(bin string, db *store.DB) string {
+	switch bin {
+	case "node":
+		if v := db.GetSetting(store.KeyNodeBin); v != "" {
+			return v
+		}
+	case "python", "python3":
+		if v := db.GetSetting(store.KeyPythonBin); v != "" {
+			return v
+		}
+	}
+	return bin
 }
 
 func findAppOrNil(cfg *config.Config, name string) *config.App {

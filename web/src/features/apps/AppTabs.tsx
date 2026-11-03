@@ -105,7 +105,9 @@ export function AppTabs() {
             )}
           </Cell>
           <Cell label="comando">
-            <span className="text-muted-foreground">{meta?.command || "—"}</span>
+            <span className="text-muted-foreground">
+              {meta?.static ? `estático · ${meta.static}` : meta?.command || "—"}
+            </span>
           </Cell>
         </div>
       </header>

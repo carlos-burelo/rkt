@@ -268,9 +268,8 @@ type appsAddArg struct {
 	Name    string `json:"name,omitempty" jsonschema:"nombre [a-z0-9-] (default: slug del repo)"`
 	Domain  string `json:"domain,omitempty" jsonschema:"dominio (default: <nombre>.<base_domain>)"`
 	Port    int    `json:"port,omitempty" jsonschema:"puerto local (default: libre del pool)"`
-	Command string `json:"command,omitempty" jsonschema:"binario absoluto (default: bin del preset)"`
+	Command string `json:"command,omitempty" jsonschema:"binario absoluto (default: detectado del plan)"`
 	Dir     string `json:"dir,omitempty" jsonschema:"dir app (default: estándar por OS)"`
-	Preset  string `json:"preset,omitempty" jsonschema:"next|node|python (default: detectado)"`
 	Auto    bool   `json:"auto,omitempty" jsonschema:"auto-deploy"`
 }
 type envSetArg struct {
@@ -294,7 +293,7 @@ func (s *Server) doAppsAdd(a appsAddArg) (string, error) {
 		return "", err
 	}
 	defer db.Close()
-	app, domains, port, err := cfgfile.CreateApp(db, a.Repo, a.Name, a.Domain, a.Port, a.Command, a.Dir, a.Preset, a.Auto)
+	app, domains, port, err := cfgfile.CreateApp(db, a.Repo, a.Name, a.Domain, a.Port, a.Command, a.Dir, a.Auto)
 	if err != nil {
 		return "", err
 	}
@@ -477,7 +476,7 @@ func (s *Server) Run(ctx context.Context) error {
 		func(ctx context.Context, req *mcp.CallToolRequest, a retryArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doRetry(a.ID))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "apps_add", Description: "Registra app con inferencia (repo local o URL): nombre, preset, puerto, dominio, comando. Luego deploy."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "apps_add", Description: "Registra app con inferencia (repo local o URL): detecta build/arranque, nombre, puerto y dominio. Luego deploy."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appsAddArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppsAdd(a))
 		})

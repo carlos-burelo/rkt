@@ -4,7 +4,6 @@
 package discover
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"rkt-proxy/internal/buildpack"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/store"
@@ -28,52 +28,6 @@ var presetBinKey = map[string]string{
 func PresetBinKey(preset string) (string, bool) {
 	k, ok := presetBinKey[preset]
 	return k, ok
-}
-
-// PresetBuild tabla canónica next|node|python -> build/args/env.
-// Unico lugar con estos literales; CLI/MCP/discover la usan.
-func PresetBuild(preset, port string) (build, args []string, env map[string]string) {
-	env = map[string]string{}
-	switch preset {
-	case "next":
-		args = []string{`.next\standalone\server.js`}
-		build = []string{"npm ci --omit=dev", "npm run build"}
-	case "node":
-		args = []string{"server.js"}
-		build = []string{"npm ci --omit=dev"}
-	case "python":
-		args = []string{"-u", "app.py"}
-	default:
-		return nil, nil, env
-	}
-	if port != "" {
-		env["PORT"] = port
-	}
-	return build, args, env
-}
-
-// Classify preset desde contenido package.json + presencia requirements.
-// Canónica; detectPreset/detectPresetRemote/sniffLocal delegan aquí.
-func Classify(pkgJSON []byte, hasRequirements bool) string {
-	if len(pkgJSON) > 0 {
-		var pj struct {
-			Dependencies    map[string]string `json:"dependencies"`
-			DevDependencies map[string]string `json:"devDependencies"`
-		}
-		if err := json.Unmarshal(pkgJSON, &pj); err == nil {
-			if _, ok := pj.Dependencies["next"]; ok {
-				return "next"
-			}
-			if _, ok := pj.DevDependencies["next"]; ok {
-				return "next"
-			}
-			return "node"
-		}
-	}
-	if hasRequirements {
-		return "python"
-	}
-	return ""
 }
 
 // Deps dependencias inyectables (tests usan fakes).
@@ -153,12 +107,12 @@ func splitFull(full string) (string, string, bool) {
 }
 
 func register(d Deps, owner, repo, branch, tok string) error {
-	preset, err := detectPreset(d.GH, owner, repo, branch, tok)
+	plan, err := detectPlanRemote(d.GH, owner, repo)
 	if err != nil {
 		return err
 	}
-	if preset == "" {
-		d.Log.Warn("repo sin preset conocido, regístralo manual",
+	if plan.Kind == "" {
+		d.Log.Warn("repo sin plan de build conocido, regístralo manual",
 			"repo", owner+"/"+repo, "ayuda", "apps add")
 		return nil
 	}
@@ -166,16 +120,20 @@ func register(d Deps, owner, repo, branch, tok string) error {
 	if base == "" {
 		return fmt.Errorf("sin base_domain (settings set base_domain=...)")
 	}
-	binKey, ok := presetBinKey[preset]
-	if !ok {
-		return fmt.Errorf("preset %q sin binario", preset)
-	}
-	bin := d.DB.GetSetting(binKey)
-	if bin == "" {
-		return fmt.Errorf("sin %s (settings set %s=...)", binKey, binKey)
-	}
-	if st, err := os.Stat(bin); err != nil || st.IsDir() {
-		return fmt.Errorf("%s no es ejecutable: %s", binKey, bin)
+	// plan estático no necesita binario; proceso sí.
+	var bin string
+	if !plan.IsStatic() {
+		binKey, ok := presetBinKey[plan.Kind]
+		if !ok {
+			return fmt.Errorf("plan %q sin binario", plan.Kind)
+		}
+		bin = d.DB.GetSetting(binKey)
+		if bin == "" {
+			return fmt.Errorf("sin %s (settings set %s=...)", binKey, binKey)
+		}
+		if st, err := os.Stat(bin); err != nil || st.IsDir() {
+			return fmt.Errorf("%s no es ejecutable: %s", binKey, bin)
+		}
 	}
 	port, err := freePort(d.DB)
 	if err != nil {
@@ -189,14 +147,6 @@ func register(d Deps, owner, repo, branch, tok string) error {
 		return fmt.Errorf("app %q ya existe (registro manual?)", name)
 	}
 	domain := uniqueDomain(d.DB, name, owner, base)
-	app := config.App{
-		Name: name, Command: bin, Env: map[string]string{"PORT": strconv.Itoa(port)},
-		Deploy: &config.Deploy{
-			Repo: "https://github.com/" + owner + "/" + repo + ".git",
-			Ref:  branch, Auto: true,
-		},
-	}
-	app.SetDelays(5*time.Second, 10*time.Second)
 	dir := d.DirBase
 	if dir == "" {
 		dir = `C:\apps`
@@ -205,10 +155,30 @@ func register(d Deps, owner, repo, branch, tok string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("crear dir: %w", err)
 	}
+	app := config.App{
+		Name: name, Env: map[string]string{"PORT": strconv.Itoa(port)},
+		Deploy: &config.Deploy{
+			Repo: "https://github.com/" + owner + "/" + repo + ".git",
+			Ref:  branch, Auto: true,
+			Build: append(append([]string{}, plan.Install...), plan.Build...),
+		},
+	}
+	app.SetDelays(5*time.Second, 10*time.Second)
 	app.Dir = dir
-	defBuild, defArgs, _ := PresetBuild(preset, strconv.Itoa(port))
-	app.Args = defArgs
-	app.Deploy.Build = defBuild
+	if plan.IsStatic() {
+		exe, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("binario propio: %w", err)
+		}
+		app.Command = exe
+		app.Args = []string{"__static", plan.Static(dir)}
+		app.Static = plan.Static(dir)
+	} else {
+		app.Command = bin
+		if len(plan.Start) > 1 {
+			app.Args = plan.Start[1:]
+		}
+	}
 	if err := d.DB.UpsertApp(&app); err != nil {
 		return err
 	}
@@ -227,22 +197,21 @@ func register(d Deps, owner, repo, branch, tok string) error {
 	return nil
 }
 
-// detectPreset next|node|python por package.json/requirements, "" si nada.
-func detectPreset(gh *github.Manager, owner, repo, branch, tok string) (string, error) {
-	if content, ok, err := gh.FileContent(owner, repo, "package.json", branch, tok); err != nil {
-		return "", err
-	} else if ok {
-		if p := Classify([]byte(content), false); p != "" {
-			return p, nil
-		}
-		// package.json ilegible: cae a requirements
+// detectPlanRemote clasifica un repo por package.json (público o token).
+func detectPlanRemote(gh *github.Manager, owner, repo string) (buildpack.Plan, error) {
+	branch := "main"
+	content, ok, err := gh.FileContent(owner, repo, "package.json", branch, "")
+	if err != nil {
+		return buildpack.Plan{}, err
 	}
-	if _, ok, err := gh.FileContent(owner, repo, "requirements.txt", branch, tok); err != nil {
-		return "", err
-	} else if ok {
-		return "python", nil
+	if ok {
+		_, hasReq, _ := gh.FileContent(owner, repo, "requirements.txt", branch, "")
+		return buildpack.FromPackageJSON(content, hasReq), nil
 	}
-	return "", nil
+	if _, hasReq, err := gh.FileContent(owner, repo, "requirements.txt", branch, ""); err == nil && hasReq {
+		return buildpack.FromPackageJSON("", true), nil
+	}
+	return buildpack.Plan{}, nil
 }
 
 // slug minúsculas, [^a-z0-9] -> -.
@@ -349,17 +318,22 @@ type Suggestion struct {
 	Preset  string
 	Command string
 	Dir     string
+	// Plan build canónico (buildpack) para este proyecto.
+	Plan buildpack.Plan
 }
 
 // Suggest infiere desde repo local (disco) o URL https (API pública).
-// Nunca falla por red: sin acceso, preset vacío (el wizard pregunta).
+// Nunca falla por red: sin acceso, plan vacío (el wizard pregunta).
 func Suggest(db *store.DB, gh *github.Manager, repoURL string) (*Suggestion, error) {
 	s := &Suggestion{}
 	if st, err := os.Stat(repoURL); err == nil && st.IsDir() {
 		abs, _ := filepath.Abs(repoURL)
 		s.Dir = abs
 		s.Name = slug(filepath.Base(abs))
-		s.Preset = sniffLocal(abs)
+		if plan, err := buildpack.DetectDir(abs); err == nil {
+			s.Plan = plan
+			s.Preset = plan.Kind
+		}
 	} else {
 		owner, repo, ok := github.ParseRepo(repoURL)
 		if !ok {
@@ -367,9 +341,10 @@ func Suggest(db *store.DB, gh *github.Manager, repoURL string) (*Suggestion, err
 		}
 		s.Name = slug(repo)
 		if gh != nil {
-			// público sin token; privado sin App -> preset vacío
-			if p, err := detectPresetRemote(gh, owner, repo); err == nil {
-				s.Preset = p
+			// público sin token; privado sin App -> plan vacío
+			if p, err := detectPlanRemote(gh, owner, repo); err == nil {
+				s.Plan = p
+				s.Preset = p.Kind
 			}
 		}
 	}
@@ -383,29 +358,4 @@ func Suggest(db *store.DB, gh *github.Manager, repoURL string) (*Suggestion, err
 		s.Port = port
 	}
 	return s, nil
-}
-
-// detectPresetRemote package.json público (sin token).
-func detectPresetRemote(gh *github.Manager, owner, repo string) (string, error) {
-	branch := "main"
-	if content, ok, err := gh.FileContent(owner, repo, "package.json", branch, ""); err != nil {
-		return "", err
-	} else if ok {
-		if p := Classify([]byte(content), false); p != "" {
-			return p, nil
-		}
-	}
-	if _, ok, err := gh.FileContent(owner, repo, "requirements.txt", branch, ""); err != nil {
-		return "", err
-	} else if ok {
-		return "python", nil
-	}
-	return "", nil
-}
-
-// sniffLocal preset por archivos en disco.
-func sniffLocal(dir string) string {
-	data, _ := os.ReadFile(filepath.Join(dir, "package.json"))
-	_, reqErr := os.Stat(filepath.Join(dir, "requirements.txt"))
-	return Classify(data, reqErr == nil)
 }

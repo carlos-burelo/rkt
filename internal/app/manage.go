@@ -21,6 +21,7 @@ import (
 
 	"golang.org/x/term"
 
+	"rkt-proxy/internal/buildpack"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/discover"
@@ -253,7 +254,7 @@ func cmdApps(args []string, cfgPath string) {
 //
 //	rkt apps add https://github.com/o/app2.git
 //	rkt apps add --name app2 --repo ... --domain app2.coatl.in --port 3002 \
-//	  --command C:\nodejs\node.exe --preset next --auto
+//	  --command C:\nodejs\node.exe --auto
 func appsAdd(args []string, cfgPath string) {
 	fs := flag.NewFlagSet("apps add", flag.ContinueOnError)
 	name := fs.String("name", "", "nombre [a-z0-9-]")
@@ -263,11 +264,10 @@ func appsAdd(args []string, cfgPath string) {
 	fs.Var(&domains, "domain", "dominio (repetible)")
 	port := fs.String("port", "", "puerto local (con --domain)")
 	dir := fs.String("dir", "", "dir app")
-	command := fs.String("command", "", "binario absoluto")
-	preset := fs.String("preset", "", "next|node|python")
+	command := fs.String("command", "", "binario absoluto (anula el plan)")
 	auto := fs.Bool("auto", false, "auto-deploy")
 	var builds multiFlag
-	fs.Var(&builds, "build", "paso build (repetible, gana a preset)")
+	fs.Var(&builds, "build", "paso build (repetible, anula el plan)")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
@@ -300,17 +300,6 @@ func appsAdd(args []string, cfgPath string) {
 			log.Fatalf("apps: %q ya existe", nm)
 		}
 	}
-	cmd := *command
-	if cmd == "" {
-		d := ""
-		if sug != nil {
-			d = sug.Command
-		}
-		cmd = prompt("binario absoluto", d)
-		if cmd == "" {
-			log.Fatal("apps add requiere --command")
-		}
-	}
 	dd := *dir
 	if dd == "" {
 		if sug != nil && sug.Dir != "" {
@@ -324,6 +313,37 @@ func appsAdd(args []string, cfgPath string) {
 	}
 	if err := os.MkdirAll(dd, 0o755); err != nil {
 		log.Fatalf("apps add: crear dir: %v", err)
+	}
+	// Plan canónico: si hay dir/repo con señales, decide arranque y build.
+	var plan buildpack.Plan
+	if sug != nil {
+		plan = sug.Plan
+	}
+	if plan.Kind == "" {
+		if p, err := buildpack.DetectDir(dd); err == nil {
+			plan = p
+		}
+	}
+	cmd := *command
+	if cmd == "" && plan.IsStatic() {
+		exe, err := os.Executable()
+		if err != nil {
+			log.Fatalf("apps add: binario propio: %v", err)
+		}
+		cmd = exe
+	}
+	if cmd == "" && len(plan.Start) > 0 {
+		cmd = plan.Start[0]
+	}
+	if cmd == "" {
+		d := ""
+		if sug != nil {
+			d = sug.Command
+		}
+		cmd = prompt("binario absoluto", d)
+		if cmd == "" {
+			log.Fatal("apps add: sin plan de build (pasa --command o un dir con package.json/go.mod/index.html)")
+		}
 	}
 	pt := *port
 	if pt == "" && sug != nil && sug.Port > 0 {
@@ -345,14 +365,6 @@ func appsAdd(args []string, cfgPath string) {
 	if len(domains) > 0 && pt == "" {
 		pt = prompt("puerto local", "3000")
 	}
-	pr := *preset
-	if pr == "" {
-		d := "none"
-		if sug != nil && sug.Preset != "" {
-			d = sug.Preset
-		}
-		pr = prompt("preset [next|node|python|none]", d)
-	}
 	rp := *repo
 	if rp == "" {
 		rp = prompt("repo git (vacío = sin deploy)", "")
@@ -365,25 +377,26 @@ func appsAdd(args []string, cfgPath string) {
 	}
 
 	build := []string(builds)
+	if len(build) == 0 {
+		build = append(append([]string{}, plan.Install...), plan.Build...)
+	}
 	env := map[string]string{}
+	if pt != "" {
+		env["PORT"] = pt
+	}
 	appArgs := []string{}
-	switch pr {
-	case "", "none":
-	case "next", "node", "python":
-		defBuild, defArgs, defEnv := discover.PresetBuild(pr, pt)
-		appArgs = defArgs
-		if len(build) == 0 {
-			build = defBuild
+	staticDir := ""
+	if *command == "" {
+		if plan.IsStatic() {
+			staticDir = plan.Static(dd)
+			appArgs = []string{"__static", staticDir}
+		} else if len(plan.Start) > 1 {
+			appArgs = append(appArgs, plan.Start[1:]...)
 		}
-		for k, v := range defEnv {
-			env[k] = v
-		}
-	default:
-		log.Fatalf("preset %q (next|node|python|none)", pr)
 	}
 
 	app := config.App{
-		Name: nm, Command: cmd, Args: appArgs,
+		Name: nm, Command: cmd, Args: appArgs, Static: staticDir,
 		Dir: dd, Env: env, RestartDelay: "5s",
 	}
 	if rp != "" {
