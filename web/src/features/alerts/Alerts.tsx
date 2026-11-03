@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 import { listRules, addRule, delRule, AlertRule } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PageHeader, EmptyState, Section } from "../../shared/components/patterns";
+import { PageHeader, EmptyState } from "../../shared/components/patterns";
+import { FormDialog, Field } from "../../shared/components/FormDialog";
 import { Dot, StateRail } from "../../shared/components/ui";
 import {
   Select, SelectTrigger, SelectContent, SelectItem,
@@ -43,6 +45,64 @@ export function Alerts() {
           <span className="tnum font-mono text-[10px] text-muted-foreground">
             {rules.length} reglas · {fired} disparadas
           </span>
+        }
+        actions={
+          canWrite ? (
+            <FormDialog
+              trigger={
+                <Button size="sm">
+                  <Plus className="h-3 w-3" /> nueva regla
+                </Button>
+              }
+              title="Nueva regla de alerta"
+              description="se evalúa cada minuto · el disparo queda como evento kind=alert"
+              submitLabel="crear"
+              canSubmit={Number.isFinite(parseFloat(threshold)) && parseInt(windowMin, 10) > 0}
+              onSubmit={async () => {
+                await addRule(app.trim() || "*", kind, parseFloat(threshold), parseInt(windowMin, 10));
+                await load();
+              }}
+            >
+              <Field label="app" hint="* = toda la flota">
+                <Input
+                  value={app}
+                  onChange={(e) => setApp(e.target.value)}
+                  placeholder="app o *"
+                  className="h-8 font-mono text-[12px]"
+                  autoFocus
+                />
+              </Field>
+              <Field label="tipo">
+                <Select value={kind} onValueChange={(v: string | null) => setKind(v ?? "failed")}>
+                  <SelectTrigger className="h-8 font-mono text-[12px]">
+                    <span>{kind}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="failed">failed (caídas)</SelectItem>
+                    <SelectItem value="error_rate">error_rate (5xx)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="umbral" hint={kind === "failed" ? "fallos" : "0.1 = 10%"}>
+                  <Input
+                    value={threshold}
+                    onChange={(e) => setThreshold(e.target.value)}
+                    placeholder={kind === "failed" ? "1" : "0.1"}
+                    className="tnum h-8 font-mono text-[12px]"
+                  />
+                </Field>
+                <Field label="ventana" hint="minutos">
+                  <Input
+                    value={windowMin}
+                    onChange={(e) => setWindowMin(e.target.value)}
+                    placeholder="60"
+                    className="tnum h-8 font-mono text-[12px]"
+                  />
+                </Field>
+              </div>
+            </FormDialog>
+          ) : undefined
         }
       />
       <div className="border border-border" role="table" aria-label="reglas de alerta">
@@ -101,58 +161,6 @@ export function Alerts() {
           <EmptyState title="Sin reglas" hint="failed = caídas por app · error_rate = 5xx global (0.1 = 10%)." />
         )}
       </div>
-
-      {canWrite && (
-        <Section title="Nueva regla" description="se evalúa cada minuto · el disparo queda como evento kind=alert">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:flex-wrap">
-            <label className="field-label w-32 shrink-0">
-              app
-              <Input value={app} onChange={(e) => setApp(e.target.value)} placeholder="app o *" className="h-7 font-mono text-[11px]" />
-            </label>
-            <label className="field-label w-36 shrink-0">
-              tipo
-              <Select value={kind} onValueChange={(v: string | null) => setKind(v ?? "failed")}>
-                <SelectTrigger className="h-7 font-mono text-[11px]">
-                  <span>{kind}</span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="failed">failed</SelectItem>
-                  <SelectItem value="error_rate">error_rate</SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="field-label w-32 shrink-0">
-              umbral
-              <Input
-                value={threshold}
-                onChange={(e) => setThreshold(e.target.value)}
-                placeholder={kind === "failed" ? "fallos ≥" : "tasa ≥ (0.1)"}
-                className="tnum h-7 font-mono text-[11px]"
-              />
-            </label>
-            <label className="field-label w-28 shrink-0">
-              ventana
-              <Input
-                value={windowMin}
-                onChange={(e) => setWindowMin(e.target.value)}
-                placeholder="min"
-                className="tnum h-7 font-mono text-[11px]"
-              />
-            </label>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                addRule(app.trim() || "*", kind, parseFloat(threshold), parseInt(windowMin, 10))
-                  .then(load)
-                  .catch(fail);
-              }}
-            >
-              crear
-            </Button>
-          </div>
-        </Section>
-      )}
     </div>
   );
 }

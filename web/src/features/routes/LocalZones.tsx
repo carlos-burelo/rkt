@@ -3,6 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Section } from "../../shared/components/patterns";
+import { FormDialog, Field } from "../../shared/components/FormDialog";
 import { Dot } from "../../shared/components/ui";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
@@ -20,7 +21,6 @@ export function LocalZones({ onChanged }: { onChanged: () => void }) {
   const [suffix, setSuffix] = useState("localhost");
   const [target, setTarget] = useState("http://127.0.0.1:3000");
   const [subs, setSubs] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
 
   const load = () => listZones().then(setZones).catch(fail);
   useEffect(() => {
@@ -34,44 +34,32 @@ export function LocalZones({ onChanged }: { onChanged: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metas.length]);
 
-  function createZone() {
+  async function createZone() {
     const p = prefix.trim().toLowerCase();
     if (!SLUG.test(p)) {
-      fail("subdominio inválido: minúsculas, números y guiones");
-      return;
+      throw new Error("subdominio inválido: minúsculas, números y guiones");
     }
-    setBusy(true);
-    addRoute([`${p}.${suffix}`], target.trim())
-      .then(() => {
-        setPrefix("");
-        return Promise.all([load(), Promise.resolve(onChanged())]);
-      })
-      .catch(fail)
-      .finally(() => setBusy(false));
+    await addRoute([`${p}.${suffix}`], target.trim());
+    setPrefix("");
+    await load();
+    onChanged();
   }
 
-  function addSub(g: ZoneGroup) {
+  async function addSub(g: ZoneGroup) {
     const s = (subs[g.base] ?? "").trim().toLowerCase();
     if (!SLUG.test(s)) {
-      fail("subdominio inválido: minúsculas, números y guiones");
-      return;
+      throw new Error("subdominio inválido: minúsculas, números y guiones");
     }
-    setBusy(true);
-    addRoute([`${s}.${g.base}`], g.target || target.trim())
-      .then(() => {
-        setSubs({ ...subs, [g.base]: "" });
-        return Promise.all([load(), Promise.resolve(onChanged())]);
-      })
-      .catch(fail)
-      .finally(() => setBusy(false));
+    await addRoute([`${s}.${g.base}`], g.target || target.trim());
+    setSubs({ ...subs, [g.base]: "" });
+    await load();
+    onChanged();
   }
 
   function remove(host: string) {
-    setBusy(true);
     delRoute(host)
       .then(() => Promise.all([load(), Promise.resolve(onChanged())]))
-      .catch(fail)
-      .finally(() => setBusy(false));
+      .catch(fail);
   }
 
   const suffixes = zones?.suffixes ?? ["localhost", "test"];
@@ -80,55 +68,66 @@ export function LocalZones({ onChanged }: { onChanged: () => void }) {
     <Section
       title="Zonas locales"
       description="dominio local + subdominios · .localhost resuelve sin editar hosts"
-      actions={<span className="micro">{zones?.groups.length ?? 0} zonas</span>}
-    >
-      {suffixes.filter((s) => !s.includes(".")).length > 0 && (
-        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
-          <label className="field-label min-w-0 flex-1">
-            dominio
-            <Input
-              value={prefix}
-              onChange={(e) => setPrefix(e.target.value)}
-              placeholder="mi-app"
-              className="h-7 font-mono text-[11px]"
-              aria-label="nombre del dominio local"
-            />
-          </label>
-          <label className="field-label w-32 shrink-0">
-            zona
-            <select
-              value={suffix}
-              onChange={(e) => setSuffix(e.target.value)}
-              className="h-7 w-full border border-input bg-transparent px-2 font-mono text-[11px]"
-              aria-label="zona local"
+      actions={
+        <div className="flex items-center gap-2">
+          <span className="micro">{zones?.groups.length ?? 0} zonas</span>
+          {suffixes.filter((s) => !s.includes(".")).length > 0 && (
+            <FormDialog
+              trigger={
+                <Button size="xs" variant="outline">
+                  <Plus className="h-3 w-3" /> nueva zona
+                </Button>
+              }
+              title="Nueva zona local"
+              description="crea la ruta del dominio · .localhost resuelve solo"
+              submitLabel="crear"
+              canSubmit={SLUG.test(prefix.trim().toLowerCase()) && target.trim() !== ""}
+              onSubmit={createZone}
             >
-              {suffixes.map((s) => (
-                <option key={s} value={s}>
-                  .{s}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field-label min-w-0 flex-1">
-            target
-            <Input
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              placeholder="http://127.0.0.1:3000"
-              className="h-7 font-mono text-[11px]"
-              aria-label="target del dominio"
-            />
-          </label>
-          <Button size="sm" onClick={createZone} disabled={busy}>
-            <Plus className="h-3 w-3" /> crear zona
-          </Button>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="dominio" hint="sin punto">
+                  <Input
+                    value={prefix}
+                    onChange={(e) => setPrefix(e.target.value)}
+                    placeholder="mi-app"
+                    className="h-8 font-mono text-[12px]"
+                    aria-label="nombre del dominio local"
+                    autoFocus
+                  />
+                </Field>
+                <Field label="zona">
+                  <select
+                    value={suffix}
+                    onChange={(e) => setSuffix(e.target.value)}
+                    className="h-8 w-full border border-input bg-transparent px-2 font-mono text-[12px]"
+                    aria-label="zona local"
+                  >
+                    {suffixes.map((s) => (
+                      <option key={s} value={s}>
+                        .{s}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+              <Field label="target" hint="http(s)://127.0.0.1:puerto">
+                <Input
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  placeholder="http://127.0.0.1:3000"
+                  className="tnum h-8 font-mono text-[12px]"
+                  aria-label="target del dominio"
+                />
+              </Field>
+            </FormDialog>
+          )}
         </div>
-      )}
-
+      }
+    >
       <div className="border border-border">
         {(zones?.groups ?? []).length === 0 && (
           <p className="px-3 py-4 font-mono text-[10px] text-muted-foreground">
-            sin zonas locales todavía. crea una arriba (ej. mi-app.localhost) y añade subdominios.
+            sin zonas locales todavía. crea una con «nueva zona» (ej. mi-app.localhost) y añade subdominios.
           </p>
         )}
         {(zones?.groups ?? []).map((g) => (
@@ -150,18 +149,34 @@ export function LocalZones({ onChanged }: { onChanged: () => void }) {
                   <Trash2 className="h-3 w-3" />
                 </Button>
               )}
-              <span className="inline-flex items-center gap-1">
-                <Input
-                  value={subs[g.base] ?? ""}
-                  onChange={(e) => setSubs({ ...subs, [g.base]: e.target.value })}
-                  placeholder="subdominio"
-                  className="h-6 w-32 font-mono text-[10px]"
-                  aria-label={`nuevo subdominio de ${g.base}`}
-                />
-                <Button variant="outline" size="xs" onClick={() => addSub(g)} disabled={busy}>
-                  <Plus className="h-3 w-3" />
-                </Button>
-              </span>
+              <FormDialog
+                trigger={
+                  <Button variant="outline" size="xs" title={`añadir subdominio a ${g.base}`}>
+                    <Plus className="h-3 w-3" /> subdominio
+                  </Button>
+                }
+                title={`Nuevo subdominio de ${g.base}`}
+                description="se crea la ruta y el proxy recarga al instante"
+                submitLabel="crear"
+                canSubmit={SLUG.test((subs[g.base] ?? "").trim().toLowerCase())}
+                onSubmit={() => addSub(g)}
+              >
+                <Field label="subdominio" hint={`se añade .${g.base}`}>
+                  <Input
+                    value={subs[g.base] ?? ""}
+                    onChange={(e) => setSubs({ ...subs, [g.base]: e.target.value })}
+                    placeholder="api"
+                    className="h-8 font-mono text-[12px]"
+                    aria-label={`nuevo subdominio de ${g.base}`}
+                    autoFocus
+                  />
+                </Field>
+                {!g.target && (
+                  <p className="font-mono text-[9px] text-muted-foreground">
+                    esta zona no tiene apex; usará el target por defecto {target}
+                  </p>
+                )}
+              </FormDialog>
             </div>
             {g.hosts
               .filter((h) => !h.is_base)

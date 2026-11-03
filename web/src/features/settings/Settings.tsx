@@ -3,6 +3,7 @@ import { getSettings, setSetting } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader, Section } from "../../shared/components/patterns";
+import { FormDialog, Field } from "../../shared/components/FormDialog";
 import { PathInput } from "../../shared/components/PathPicker";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
@@ -71,35 +72,45 @@ export function Settings() {
                 <p className="font-mono text-[11px]">{k}</p>
                 {DESCRIPTIONS[k] && <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">{DESCRIPTIONS[k]}</p>}
               </div>
-              {PICKERS[k] ? (
-                <PathInput
-                  value={draft[k] ?? v}
-                  onChange={(nv) => setDraft({ ...draft, [k]: nv })}
-                  mode={PICKERS[k]}
-                  disabled={!canWrite}
-                  ariaLabel={`valor de ${k}`}
-                  className="tnum h-7 min-w-0 flex-1 font-mono text-[11px]"
-                />
-              ) : (
-                <Input
-                  value={draft[k] ?? v}
-                  onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}
-                  id={`set-${k}`}
-                  disabled={!canWrite}
-                  aria-label={`valor de ${k}`}
-                  className="tnum h-7 font-mono text-[11px]"
-                />
-              )}
+              <span className="tnum min-w-0 truncate font-mono text-[11px] text-muted-foreground" title={v}>
+                {v === "" ? "—" : v}
+              </span>
               {canWrite ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSetting(k, draft[k] ?? v).then(load).catch(fail);
+                <FormDialog
+                  trigger={
+                    <Button variant="outline" size="xs">
+                      editar
+                    </Button>
+                  }
+                  title={`Editar ${k}`}
+                  description={DESCRIPTIONS[k] ?? "se valida antes de persistir"}
+                  submitLabel="guardar"
+                  onSubmit={async () => {
+                    await setSetting(k, draft[k] ?? v);
+                    await load();
                   }}
                 >
-                  guardar
-                </Button>
+                  <Field label={k} hint={PICKERS[k] ? "ruta en disco" : undefined}>
+                    {PICKERS[k] ? (
+                      <PathInput
+                        value={draft[k] ?? v}
+                        onChange={(nv) => setDraft({ ...draft, [k]: nv })}
+                        mode={PICKERS[k]}
+                        ariaLabel={`valor de ${k}`}
+                        className="tnum h-8 min-w-0 flex-1 font-mono text-[12px]"
+                      />
+                    ) : (
+                      <Input
+                        value={draft[k] ?? v}
+                        onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}
+                        id={`set-${k}`}
+                        aria-label={`valor de ${k}`}
+                        className="tnum h-8 font-mono text-[12px]"
+                        autoFocus
+                      />
+                    )}
+                  </Field>
+                </FormDialog>
               ) : (
                 <span className="font-mono text-[9px] text-muted-foreground">solo lectura</span>
               )}

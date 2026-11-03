@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Globe2 } from "lucide-react";
+import { Globe2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Section, EnvSecret } from "../../shared/components/patterns";
+import { FormDialog, Field } from "../../shared/components/FormDialog";
 import { setEnv, delEnv } from "./api";
 import { useEnv } from "./hooks";
 import { useGlobalEnv } from "../env/hooks";
@@ -74,7 +75,48 @@ export function AppEnv() {
       <Section
         title="Del proyecto"
         description="sobrescriben a las globales · solo operador+ · valores enmascarados"
-        actions={<span className="tnum font-mono text-[9px] text-muted-foreground">{keys.length} vars</span>}
+        actions={
+          <div className="flex items-center gap-2">
+            <span className="tnum font-mono text-[9px] text-muted-foreground">{keys.length} vars</span>
+            {canWrite && (
+              <FormDialog
+                trigger={
+                  <Button size="xs" variant="outline">
+                    <Plus className="h-3 w-3" /> nueva variable
+                  </Button>
+                }
+                title="Nueva variable del proyecto"
+                description={`se inyecta solo en ${name} · sobrescribe la global del mismo nombre`}
+                submitLabel="crear"
+                canSubmit={key.trim() !== ""}
+                onSubmit={async () => {
+                  await setEnv(name, key.trim(), val);
+                  setKey("");
+                  setVal("");
+                  reload();
+                }}
+              >
+                <Field label="clave" hint="si ya existe como global, la anula">
+                  <Input
+                    value={key}
+                    onChange={(e) => setKey(e.target.value)}
+                    placeholder="CLAVE"
+                    className="h-8 font-mono text-[12px]"
+                    autoFocus
+                  />
+                </Field>
+                <Field label="valor" hint="admite ${VAR}">
+                  <Input
+                    value={val}
+                    onChange={(e) => setVal(e.target.value)}
+                    placeholder="valor"
+                    className="h-8 font-mono text-[12px]"
+                  />
+                </Field>
+              </FormDialog>
+            )}
+          </div>
+        }
       >
         <div className="border border-border">
           {keys.map((k, i) => (
@@ -105,49 +147,6 @@ export function AppEnv() {
             </p>
           )}
         </div>
-
-        {canWrite && (
-          <div className="mt-3 border border-border bg-secondary/15 p-2.5">
-            <p className="micro mb-2">nueva variable del proyecto</p>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <label className="field-label w-44 shrink-0">
-                clave
-                <Input
-                  value={key}
-                  onChange={(e) => setKey(e.target.value)}
-                  placeholder="CLAVE"
-                  className="h-7 font-mono text-[11px]"
-                />
-              </label>
-              <label className="field-label min-w-0 flex-1">
-                valor
-                <Input
-                  value={val}
-                  onChange={(e) => setVal(e.target.value)}
-                  placeholder="valor (admite ${VAR})"
-                  className="h-7 font-mono text-[11px]"
-                />
-              </label>
-              <div className="flex items-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEnv(name, key.trim(), val)
-                      .then(() => {
-                        setKey("");
-                        setVal("");
-                        reload();
-                      })
-                      .catch(fail);
-                  }}
-                >
-                  guardar
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
       </Section>
     </div>
   );

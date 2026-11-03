@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, ExternalLink, Plus } from "lucide-react";
 import { Route, Status } from "../../shared/lib/types";
 import { addRoute, delRoute, putRoute, tlsStatus, listRoutes } from "./api";
 import { fetchProxy } from "../proxy/api";
@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CopyButton } from "../../shared/components/feedback";
 import { Avatar } from "../../shared/components/ui";
-import { PageHeader, EmptyState, Section } from "../../shared/components/patterns";
+import { PageHeader, EmptyState } from "../../shared/components/patterns";
+import { FormDialog, Field } from "../../shared/components/FormDialog";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
 import { LocalZones } from "./LocalZones";
@@ -46,11 +47,14 @@ function RouteRow({ r, onChanged, status }: { r: Route; onChanged: () => void; s
   const canWrite = useAuth((a) => a.canWrite);
   const fail = useUI((u) => u.fail);
   const [target, setTarget] = useState(r.target);
-  const [saved, setSaved] = useState(r.target);
+  const [edit, setEdit] = useState(false);
   useEffect(() => {
     setTarget(r.target);
-    setSaved(r.target);
   }, [r.target]);
+  const save = async () => {
+    await putRoute(r.hosts[0], target.trim());
+    onChanged();
+  };
   return (
     <div className="group relative grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-2 border-b border-border/70 bg-card/35 px-3 py-2.5 last:border-0 hover:bg-accent/30 md:grid-cols-[1.5rem_minmax(0,1.4fr)_auto_1.5rem_minmax(0,1.4fr)_auto]">
       <Avatar name={r.hosts[0]} />
@@ -72,30 +76,35 @@ function RouteRow({ r, onChanged, status }: { r: Route; onChanged: () => void; s
       </div>
       <TLSBadge host={r.hosts[0]} />
       <ArrowRight className="hidden h-3 w-3 text-muted-foreground/30 md:block" />
-      {canWrite ? (
-        <Input
-          value={target}
-          onChange={(e) => setTarget(e.target.value)}
-          aria-label={`target de ${r.hosts[0]}`}
-          className="col-span-2 h-7 min-w-0 border-transparent bg-transparent px-1 font-mono text-[10px] text-muted-foreground hover:border-input focus-visible:border-ring focus-visible:bg-field/30 md:col-span-1"
-        />
-      ) : (
-        <span className="tnum col-span-2 min-w-0 truncate font-mono text-[10px] text-muted-foreground md:col-span-1">
-          {r.target}
-        </span>
-      )}
+      <span className="tnum col-span-2 min-w-0 truncate font-mono text-[10px] text-muted-foreground md:col-span-1">
+        {r.target}
+      </span>
       {canWrite && (
         <div className="col-span-3 flex justify-end gap-1 md:col-span-1">
-          {target !== saved && (
-            <Button
-              variant="ghost"
-              size="xs"
-              className="text-ok hover:text-ok/80"
-              onClick={() => putRoute(r.hosts[0], target.trim()).then(onChanged).catch(fail)}
-            >
-              guardar
-            </Button>
-          )}
+          <FormDialog
+            open={edit}
+            onOpenChange={setEdit}
+            trigger={
+              <Button variant="ghost" size="xs">
+                editar
+              </Button>
+            }
+            title={`Target de ${r.hosts[0]}`}
+            description="el proxy recarga al instante · solo loopback"
+            submitLabel="guardar"
+            canSubmit={target.trim() !== "" && target.trim() !== r.target}
+            onSubmit={save}
+          >
+            <Field label="target" hint="http(s)://127.0.0.1:puerto">
+              <Input
+                value={target}
+                onChange={(e) => setTarget(e.target.value)}
+                aria-label={`target de ${r.hosts[0]}`}
+                className="tnum h-8 font-mono text-[12px]"
+                autoFocus
+              />
+            </Field>
+          </FormDialog>
           <Button
             variant="destructive"
             size="xs"
@@ -117,7 +126,7 @@ export function Routes() {
   const [hosts, setHosts] = useState("");
   const [target, setTarget] = useState("");
   const [mapLinks, setMapLinks] = useState<GraphLink[]>([]);
-  const newHostRef = useRef<HTMLInputElement>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   async function load() {
     try {
@@ -162,10 +171,54 @@ export function Routes() {
             {routes.length} rutas · {hostCount} hosts
           </span>
         }
+        actions={
+          canWrite ? (
+            <FormDialog
+              open={addOpen}
+              onOpenChange={setAddOpen}
+              trigger={
+                <Button size="sm">
+                  <Plus className="h-3 w-3" /> nueva ruta
+                </Button>
+              }
+              title="Nueva ruta"
+              description="alta inmediata · el proxy recarga al instante · TLS se emite al primer request"
+              submitLabel="crear"
+              canSubmit={hosts.trim() !== "" && target.trim() !== ""}
+              onSubmit={async () => {
+                await addRoute(
+                  hosts.split(",").map((s) => s.trim()).filter(Boolean),
+                  target.trim(),
+                );
+                setHosts("");
+                setTarget("");
+                await load();
+              }}
+            >
+              <Field label="hosts" hint="separados por coma">
+                <Input
+                  value={hosts}
+                  onChange={(e) => setHosts(e.target.value)}
+                  placeholder="app.localhost, app.test"
+                  className="h-8 font-mono text-[12px]"
+                  autoFocus
+                />
+              </Field>
+              <Field label="target" hint="http(s)://127.0.0.1:puerto">
+                <Input
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  placeholder="http://127.0.0.1:3000"
+                  className="tnum h-8 font-mono text-[12px]"
+                />
+              </Field>
+            </FormDialog>
+          ) : undefined
+        }
       />
       <LocalZones onChanged={load} />
 
-      <FunnelMap links={mapLinks} onAdd={() => newHostRef.current?.focus()} />
+      <FunnelMap links={mapLinks} onAdd={() => setAddOpen(true)} />
 
       <div className="border border-border" role="table" aria-label="rutas de dominio">
         <div
@@ -182,52 +235,8 @@ export function Routes() {
         {routes.map((r) => (
           <RouteRow key={r.hosts.join(",") + r.target} r={r} onChanged={load} status={status} />
         ))}
-        {routes.length === 0 && <EmptyState title="Sin rutas" hint="Agrega tu primer dominio abajo." />}
+        {routes.length === 0 && <EmptyState title="Sin rutas" hint="Agrega tu primer dominio con «nueva ruta»." />}
       </div>
-
-      {canWrite && (
-        <Section
-          title="Nueva ruta"
-          description="alta inmediata · el proxy recarga al instante · TLS se emite al primer request"
-        >
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <label className="field-label min-w-0 flex-1">
-              hosts
-              <Input
-                value={hosts}
-                onChange={(e) => setHosts(e.target.value)}
-                placeholder="host1, host2"
-                ref={newHostRef}
-                className="h-7 font-mono text-[11px]"
-              />
-            </label>
-            <label className="field-label min-w-0 flex-1">
-              target
-              <Input
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-                placeholder="http://127.0.0.1:3000"
-                className="tnum h-7 font-mono text-[11px]"
-              />
-            </label>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                addRoute(hosts.split(",").map((s) => s.trim()).filter(Boolean), target.trim())
-                  .then(() => {
-                    setHosts("");
-                    setTarget("");
-                    load();
-                  })
-                  .catch(fail);
-              }}
-            >
-              agregar
-            </Button>
-          </div>
-        </Section>
-      )}
     </div>
   );
 }

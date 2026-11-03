@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Globe2, Lock, Search } from "lucide-react";
+import { ArrowRight, Globe2, Lock, Plus, Search } from "lucide-react";
 import { useNavigate } from "react-router";
 import { listApps, getEnv } from "../apps/api";
 import { AppMeta } from "../../shared/lib/types";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "../../shared/components/ui";
 import { PageHeader, EmptyState, Section, EnvSecret } from "../../shared/components/patterns";
+import { FormDialog, Field } from "../../shared/components/FormDialog";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
 import { useGlobalEnv } from "./hooks";
@@ -50,17 +51,16 @@ export function EnvAll() {
     return app.toLowerCase().includes(f) || Object.keys(vars).some((k) => k.toLowerCase().includes(f));
   });
 
-  const save = () => {
+  const save = async () => {
     const k = key.trim();
     if (!k) return;
-    setGlobalEnv(k, val)
-      .then(() => {
-        setKey("");
-        setVal("");
-        global.reload();
-      })
-      .catch(fail);
+    await setGlobalEnv(k, val);
+    setKey("");
+    setVal("");
+    global.reload();
   };
+
+  const canSave = key.trim() !== "";
 
   return (
     <div className="space-y-4">
@@ -78,7 +78,43 @@ export function EnvAll() {
         title="Globales"
         accent
         description="se inyectan en todas las apps · la app puede anular una clave"
-        actions={<span className="tnum font-mono text-[9px] text-muted-foreground">{globalKeys.length} vars</span>}
+        actions={
+          <div className="flex items-center gap-2">
+            <span className="tnum font-mono text-[9px] text-muted-foreground">{globalKeys.length} vars</span>
+            {canWrite && (
+              <FormDialog
+                trigger={
+                  <Button size="xs" variant="outline">
+                    <Plus className="h-3 w-3" /> nueva global
+                  </Button>
+                }
+                title="Nueva variable global"
+                description="la heredan todas las apps · admite ${VAR} · se aplica al reiniciar"
+                submitLabel="crear"
+                canSubmit={canSave}
+                onSubmit={save}
+              >
+                <Field label="clave" hint="mayúsculas, sin espacios">
+                  <Input
+                    value={key}
+                    onChange={(e) => setKey(e.target.value)}
+                    placeholder="CLAVE"
+                    className="h-8 font-mono text-[12px]"
+                    autoFocus
+                  />
+                </Field>
+                <Field label="valor" hint="admite ${VAR}">
+                  <Input
+                    value={val}
+                    onChange={(e) => setVal(e.target.value)}
+                    placeholder="valor"
+                    className="h-8 font-mono text-[12px]"
+                  />
+                </Field>
+              </FormDialog>
+            )}
+          </div>
+        }
       >
         <div className="border border-border">
           {globalKeys.map((k, i) => (
@@ -96,41 +132,10 @@ export function EnvAll() {
           ))}
           {globalKeys.length === 0 && (
             <p className="bg-card/30 px-3 py-5 text-center font-mono text-[10px] text-muted-foreground">
-              sin globales · agrega la primera abajo
+              sin globales · usa «nueva global»
             </p>
           )}
         </div>
-
-        {canWrite && (
-          <div className="mt-3 border border-border bg-secondary/15 p-2.5">
-            <p className="micro mb-2">nueva global</p>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <label className="field-label w-44 shrink-0">
-                clave
-                <Input
-                  value={key}
-                  onChange={(e) => setKey(e.target.value)}
-                  placeholder="CLAVE"
-                  className="h-7 font-mono text-[11px]"
-                />
-              </label>
-              <label className="field-label min-w-0 flex-1">
-                valor
-                <Input
-                  value={val}
-                  onChange={(e) => setVal(e.target.value)}
-                  placeholder="valor (admite ${VAR})"
-                  className="h-7 font-mono text-[11px]"
-                />
-              </label>
-              <div className="flex items-end">
-                <Button variant="outline" size="sm" onClick={save}>
-                  guardar
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
       </Section>
 
       <div className="flex items-center gap-2 border border-border bg-card/35 p-2">

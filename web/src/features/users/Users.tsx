@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 import { User } from "../../shared/lib/types";
 import { listUsers, createUser, deleteUser } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PageHeader, EmptyState, Section, Time } from "../../shared/components/patterns";
+import { PageHeader, EmptyState, Time } from "../../shared/components/patterns";
+import { FormDialog, Field } from "../../shared/components/FormDialog";
 import { Avatar, Dot } from "../../shared/components/ui";
 import { roleLabel } from "../../shared/lib/labels";
 import {
@@ -45,6 +47,57 @@ export function Users() {
         title="Usuarios"
         description="Solo admin. Viewer lee, operator muta la flota, admin gestiona usuarios y configuración."
         meta={<span className="tnum font-mono text-[10px] text-muted-foreground">{users.length} cuentas</span>}
+        actions={
+          <FormDialog
+            trigger={
+              <Button size="sm">
+                <Plus className="h-3 w-3" /> nuevo usuario
+              </Button>
+            }
+            title="Nuevo usuario"
+            description="lectura lee · operador muta la flota · administrador gestiona todo · contraseña mín. 12"
+            submitLabel="crear"
+            canSubmit={name.trim() !== "" && password.length >= 12}
+            onSubmit={async () => {
+              await createUser(name.trim(), password, role);
+              setName("");
+              setPassword("");
+              setRole("viewer");
+              await load();
+            }}
+          >
+            <Field label="usuario">
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="usuario"
+                className="h-8 font-mono text-[12px]"
+                autoFocus
+              />
+            </Field>
+            <Field label="contraseña" hint="mín. 12">
+              <Input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="mínimo 12 caracteres"
+                type="password"
+                className="tnum h-8 font-mono text-[12px]"
+              />
+            </Field>
+            <Field label="rol">
+              <Select value={role} onValueChange={(v: string | null) => setRole(v ?? "viewer")}>
+                <SelectTrigger className="h-8 font-mono text-[12px]">
+                  <span className="capitalize">{roleLabel(role)}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="viewer">lectura</SelectItem>
+                  <SelectItem value="operator">operador</SelectItem>
+                  <SelectItem value="admin">administrador</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          </FormDialog>
+        }
       />
       <div className="border border-border" role="table" aria-label="usuarios">
         <div
@@ -93,56 +146,8 @@ export function Users() {
             </div>
           </div>
         ))}
-        {users.length === 0 && <EmptyState title="Sin usuarios" hint="Crea el primero abajo." />}
+        {users.length === 0 && <EmptyState title="Sin usuarios" hint="Crea el primero con «nuevo usuario»." />}
       </div>
-
-      <Section title="Nuevo usuario" description="lectura lee · operador muta · administrador gestiona · contraseña mín. 12">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <label className="field-label w-32 shrink-0">
-            usuario
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="usuario" className="h-7 font-mono text-[11px]" />
-          </label>
-          <label className="field-label min-w-0 flex-1">
-            contraseña
-            <Input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="mín 12 caracteres"
-              type="password"
-              className="tnum h-7 font-mono text-[11px]"
-            />
-          </label>
-          <label className="field-label w-32 shrink-0">
-            rol
-            <Select value={role} onValueChange={(v: string | null) => setRole(v ?? "viewer")}>
-              <SelectTrigger className="h-7 font-mono text-[11px]">
-                <span className="capitalize">{roleLabel(role)}</span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="viewer">lectura</SelectItem>
-                <SelectItem value="operator">operador</SelectItem>
-                <SelectItem value="admin">administrador</SelectItem>
-              </SelectContent>
-            </Select>
-          </label>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              createUser(name.trim(), password, role)
-                .then(() => {
-                  setName("");
-                  setPassword("");
-                  setRole("viewer");
-                  load();
-                })
-                .catch(fail);
-            }}
-          >
-            crear
-          </Button>
-        </div>
-      </Section>
     </div>
   );
 }
