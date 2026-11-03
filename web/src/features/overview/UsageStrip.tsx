@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchUsage, Usage } from "./api";
 import { getSettings } from "../settings/api";
-import { Bars } from "../../shared/components/Bars";
+import { Bars } from "../../shared/components/feedback";
 
 // UsageStrip uso 30d vs quotas (solo visual, sin cobro).
 export function UsageStrip() {

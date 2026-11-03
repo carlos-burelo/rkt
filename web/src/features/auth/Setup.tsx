@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { setup } from "./api";
 import { Me } from "../../shared/lib/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 
 // Setup primer arranque: crea el admin (one-shot, el backend lo
 // permite solo sin usuarios). Sin comandos.
@@ -25,38 +28,22 @@ export function Setup({ onOk }: { onOk: (me: Me) => void }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-zinc-100">
-      <form onSubmit={submit} className="w-80 space-y-3 rounded-lg border border-zinc-800 bg-zinc-900 p-6">
-        <h1 className="text-lg font-semibold">▲ Bienvenido a rkt</h1>
-        <p className="text-sm text-zinc-400">Crea tu administrador. Solo pasa una vez.</p>
-        <input
-          value={user}
-          onChange={(e) => setUser(e.target.value)}
-          placeholder="usuario"
-          autoComplete="username"
-          className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm outline-none focus:border-zinc-500"
-        />
-        <input
-          type="password"
-          value={p1}
-          onChange={(e) => setP1(e.target.value)}
-          placeholder="password (mín 12)"
-          autoComplete="new-password"
-          className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm outline-none focus:border-zinc-500"
-        />
-        <input
-          type="password"
-          value={p2}
-          onChange={(e) => setP2(e.target.value)}
-          placeholder="repite password"
-          autoComplete="new-password"
-          className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm outline-none focus:border-zinc-500"
-        />
-        {err !== "" && <p className="text-sm text-red-400">{err}</p>}
-        <button type="submit" className="w-full rounded bg-zinc-100 px-2 py-1.5 text-sm font-medium text-zinc-900 hover:bg-white">
-          Crear admin y entrar
-        </button>
-      </form>
+    <div className="min-h-screen flex items-center justify-center">
+      <Card className="w-80">
+        <CardHeader>
+          <CardTitle className="text-lg">▲ Bienvenido a rkt</CardTitle>
+          <CardDescription>Crea tu administrador. Solo pasa una vez.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={submit} className="space-y-3">
+            <Input value={user} onChange={(e) => setUser(e.target.value)} placeholder="usuario" autoComplete="username" />
+            <Input type="password" value={p1} onChange={(e) => setP1(e.target.value)} placeholder="password (mín 12)" autoComplete="new-password" />
+            <Input type="password" value={p2} onChange={(e) => setP2(e.target.value)} placeholder="repite password" autoComplete="new-password" />
+            {err !== "" && <p className="text-sm text-destructive">{err}</p>}
+            <Button type="submit" className="w-full">Crear admin y entrar</Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

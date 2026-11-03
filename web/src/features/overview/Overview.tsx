@@ -1,6 +1,7 @@
 import { AppStatus, RktEvent, Deployment, AppMeta } from "../../shared/lib/types";
 import { rel } from "../../shared/lib/time";
 import { Avatar, Dot } from "../../shared/components/ui";
+import { Button } from "@/components/ui/button";
 import { Metrics } from "./Metrics";
 import { UsageStrip } from "./UsageStrip";
 
@@ -45,12 +46,11 @@ export function Overview({
                 <p className="text-sm font-medium">New repository detected</p>
                 <p className="font-mono text-xs text-zinc-500">{e.msg}</p>
               </div>
-              <button
+              <Button
                 onClick={() => openApp(e.app)}
-                className="rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white"
               >
                 Import
-              </button>
+              </Button>
             </div>
           ))}
         </section>

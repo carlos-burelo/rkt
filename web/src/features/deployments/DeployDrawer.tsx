@@ -4,6 +4,7 @@ import { Deployment } from "../../shared/lib/types";
 import { rel, dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
 import { CopyButton } from "../../shared/components/feedback";
+import { Button } from "@/components/ui/button";
 import { Timeline } from "./Timeline";
 
 // steps checklist CI desde marcadores "▶/✔/✘ step" del build log.
@@ -91,17 +92,15 @@ export function DeployDrawer({
               </details>
             )}
             {canWrite && (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {(["restart", "deploy", "rollback"] as const).map((a) => (
-                  <button key={a} onClick={() => onAction(dep.app, a)}
-                    className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs hover:bg-zinc-800">
+                  <Button key={a} variant="outline" size="sm" onClick={() => onAction(dep.app, a)}>
                     {a} {dep.app}
-                  </button>
+                  </Button>
                 ))}
-                <button onClick={() => onRetry(dep.id)}
-                  className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs hover:bg-zinc-800">
+                <Button variant="outline" size="sm" onClick={() => onRetry(dep.id)}>
                   retry #{dep.id}
-                </button>
+                </Button>
               </div>
             )}
             <p className="text-xs uppercase tracking-wider text-zinc-500">timeline</p>

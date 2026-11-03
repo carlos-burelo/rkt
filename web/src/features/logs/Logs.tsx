@@ -2,7 +2,14 @@ import { RefObject, useEffect, useMemo, useState } from "react";
 import { AppStatus, Deployment } from "../../shared/lib/types";
 import { deploymentLog } from "../deployments/api";
 import { fetchLog } from "./api";
-import { Bars } from "../../shared/components/Bars";
+import { Bars } from "../../shared/components/feedback";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select, SelectValue, SelectTrigger, SelectContent, SelectItem,
+} from "@/components/ui/select";
 
 type Level = "info" | "warning" | "error";
 
@@ -77,57 +84,55 @@ export function Logs({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-md border border-zinc-800 p-0.5">
-          {(["runtime", "build"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`rounded px-2.5 py-1 text-xs capitalize ${tab === t ? "bg-zinc-700 text-white" : "text-zinc-400"}`}
-            >
-              {t === "runtime" ? "Runtime" : "Build"}
-            </button>
-          ))}
-        </div>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "runtime" | "build")}>
+          <TabsList>
+            <TabsTrigger value="runtime">Runtime</TabsTrigger>
+            <TabsTrigger value="build">Build</TabsTrigger>
+          </TabsList>
+        </Tabs>
         {tab === "runtime" && (
           <>
-            <select
-              value={appFilter}
-              onChange={(e) => setAppFilter(e.target.value)}
-              className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 font-mono text-xs outline-none"
-            >
-              <option value="">operativo (rkt.log)</option>
-              {apps.map((a) => (
-                <option key={a.name} value={a.name}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-            <input
+            <Select value={appFilter || "__all"} onValueChange={(v: string | null) => setAppFilter(v === "__all" ? "" : (v ?? ""))}>
+              <SelectTrigger className="w-52 font-mono text-xs">
+                <SelectValue placeholder="app" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all">operativo (rkt.log)</SelectItem>
+                {apps.map((a) => (
+                  <SelectItem key={a.name} value={a.name}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Buscar…"
-              className="w-48 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs outline-none placeholder:text-zinc-600"
+              className="h-8 w-48 text-xs"
             />
             {(["info", "warning", "error"] as const).map((l) => (
-              <label key={l} className="flex items-center gap-1 text-xs text-zinc-400">
-                <input
-                  type="checkbox"
+              <label key={l} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Checkbox
                   checked={levels[l]}
-                  onChange={() => setLevels({ ...levels, [l]: !levels[l] })}
+                  onCheckedChange={() => setLevels({ ...levels, [l]: !levels[l] })}
                 />
                 {l} <span className="font-mono text-zinc-600">{lines.counts[l]}</span>
               </label>
             ))}
-            <button
+            <Button
+              variant={live ? "default" : "outline"}
+              size="sm"
               onClick={() => setLive(!live)}
-              className={`rounded-md border px-2.5 py-1 text-xs ${live ? "border-zinc-100 bg-zinc-100 font-medium text-zinc-900" : "border-zinc-800 text-zinc-400"}`}
             >
               {live ? "❚❚ Live" : "▶ Live"}
-            </button>
-            <button onClick={refresh} className="rounded-md border border-zinc-800 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100">
+            </Button>
+            <Button variant="outline" size="sm" onClick={refresh}>
               recargar
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 const blob = new Blob([log], { type: "text/plain" });
                 const a = document.createElement("a");
@@ -136,17 +141,16 @@ export function Logs({
                 a.click();
                 URL.revokeObjectURL(a.href);
               }}
-              className="rounded-md border border-zinc-800 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100"
             >
               descargar
-            </button>
+            </Button>
           </>
         )}
       </div>
       {tab === "runtime" && (
         <>
-          <label className="flex items-center gap-1.5 text-xs text-zinc-400">
-            <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Checkbox checked={follow} onCheckedChange={(v) => setFollow(v === true)} />
             seguir
           </label>
           {lines.stamped > 0 && (

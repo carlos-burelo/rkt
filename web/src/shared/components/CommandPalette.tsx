@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Deployment, AppMeta } from "../../shared/lib/types";
 import { Dot } from "../../shared/components/ui";
+import { Input } from "@/components/ui/input";
 
 export interface PaletteTarget {
   kind: "page" | "app" | "deployment" | "action";
@@ -106,12 +107,12 @@ export function CommandPalette({
           }
         }}
       >
-        <input
+        <Input
           ref={inputRef}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="App, deployment, acción…"
-          className="w-full border-b border-zinc-800 bg-transparent px-4 py-3 text-sm outline-none placeholder:text-zinc-600"
+          className="rounded-none border-0 border-b text-sm focus-visible:ring-0"
         />
         <div className="max-h-72 overflow-auto p-1.5">
           {targets.map((t, i) => (

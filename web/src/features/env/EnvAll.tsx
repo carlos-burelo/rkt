@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listApps, getEnv } from "../apps/api";
 import { AppMeta } from "../../shared/lib/types";
+import { Input } from "@/components/ui/input";
 
 // EnvAll vista agrupada por app con buscador global.
 export function EnvAll({ fail }: { fail: (e: unknown) => void }) {
@@ -28,11 +29,11 @@ export function EnvAll({ fail }: { fail: (e: unknown) => void }) {
   const f = q.toLowerCase();
   return (
     <div className="space-y-3">
-      <input
+      <Input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Buscar variable o app…"
-        className="w-full max-w-md rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs outline-none placeholder:text-zinc-600"
+        className="max-w-md text-xs"
       />
       {rows.map(({ app, vars }) => {
         const keys = Object.keys(vars).filter(

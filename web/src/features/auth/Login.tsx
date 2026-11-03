@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { login } from "./api";
 import { Me } from "../../shared/lib/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 
 export function Login({ onOk }: { onOk: (me: Me) => void }) {
   const [user, setUser] = useState("");
@@ -18,30 +21,23 @@ export function Login({ onOk }: { onOk: (me: Me) => void }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-zinc-100">
-      <form onSubmit={submit} className="w-80 space-y-3 rounded-lg border border-zinc-800 bg-zinc-900 p-6">
-        <h1 className="text-lg font-semibold">▲ rkt</h1>
-        <p className="text-sm text-zinc-400">Accede con tu usuario (creado por CLI: <span className="font-mono">users add</span>).</p>
-        <input
-          value={user}
-          onChange={(e) => setUser(e.target.value)}
-          placeholder="usuario"
-          autoComplete="username"
-          className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm outline-none focus:border-zinc-500"
-        />
-        <input
-          type="password"
-          value={pass}
-          onChange={(e) => setPass(e.target.value)}
-          placeholder="password"
-          autoComplete="current-password"
-          className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm outline-none focus:border-zinc-500"
-        />
-        {err !== "" && <p className="text-sm text-red-400">{err}</p>}
-        <button type="submit" className="w-full rounded bg-zinc-100 px-2 py-1.5 text-sm font-medium text-zinc-900 hover:bg-white">
-          Entrar
-        </button>
-      </form>
+    <div className="min-h-screen flex items-center justify-center">
+      <Card className="w-80">
+        <CardHeader>
+          <CardTitle className="text-lg">▲ rkt</CardTitle>
+          <CardDescription>
+            Accede con tu usuario (creado por CLI: <span className="font-mono">users add</span>).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={submit} className="space-y-3">
+            <Input value={user} onChange={(e) => setUser(e.target.value)} placeholder="usuario" autoComplete="username" />
+            <Input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="password" autoComplete="current-password" />
+            {err !== "" && <p className="text-sm text-destructive">{err}</p>}
+            <Button type="submit" className="w-full">Entrar</Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

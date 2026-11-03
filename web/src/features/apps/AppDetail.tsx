@@ -4,6 +4,9 @@ import { dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
 import { setEnv, delEnv, updateApp, deleteApp } from "./api";
 import { fetchAnalytics, Analytics } from "../overview/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 
 function Check({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -79,13 +82,13 @@ export function AppDetail({
         {canWrite && app && (
           <div className="flex gap-2">
             {(["restart", "deploy", "rollback"] as const).map((a) => (
-              <button
+              <Button
                 key={a}
                 onClick={() => onAction(app, a)}
-                className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs hover:bg-zinc-800"
+                variant="outline" size="sm"
               >
                 {a}
-              </button>
+              </Button>
             ))}
           </div>
         )}
@@ -152,23 +155,25 @@ export function AppDetail({
           ).map(([label, v, set]) => (
             <label key={label} className="block">
               <span className="font-mono text-[11px] text-zinc-500">{label}</span>
-              <input
+              <Input
                 value={v}
                 onChange={(e) => set(e.target.value)}
                 disabled={!canWrite}
-                className="mt-0.5 w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-xs outline-none disabled:text-zinc-500"
+                className="mt-0.5 font-mono text-xs"
               />
             </label>
           ))}
           {canWrite && (
             <label className="flex items-center gap-2 text-xs text-zinc-400">
-              <input type="checkbox" checked={form.auto} onChange={(e) => setForm({ ...form, auto: e.target.checked })} />
+              <Checkbox checked={form.auto} onCheckedChange={(v) => setForm({ ...form, auto: v === true })} />
               auto-deploy
             </label>
           )}
         </div>
         {canWrite && (
-          <button
+          <Button
+            variant="outline" size="sm"
+            className="mt-3"
             onClick={() => {
               updateApp(app, {
                 command: form.command || undefined,
@@ -180,10 +185,9 @@ export function AppDetail({
                   : null,
               }).then(refresh).catch(fail);
             }}
-            className="mt-3 rounded border border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-800"
           >
             guardar (restart requerido)
-          </button>
+          </Button>
         )}
       </div>
 
@@ -195,20 +199,22 @@ export function AppDetail({
             <span className="w-48 truncate text-zinc-200">{k}</span>
             <span className="flex-1 truncate text-zinc-500">{v}</span>
             {canWrite && (
-              <button onClick={() => delEnv(app, k).then(refresh).catch(fail)} className="text-zinc-600 hover:text-red-300">
+              <Button variant="ghost" size="sm" className="text-xs text-zinc-600 hover:text-red-300"
+                onClick={() => delEnv(app, k).then(refresh).catch(fail)}>
                 borrar
-              </button>
+              </Button>
             )}
           </div>
         ))}
         {Object.keys(env).length === 0 && <p className="text-xs text-zinc-600">Sin vars inline.</p>}
         {canWrite && (
           <div className="mt-2 flex gap-2">
-            <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="CLAVE"
-              className="w-40 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-xs outline-none" />
-            <input value={val} onChange={(e) => setVal(e.target.value)} placeholder="valor"
-              className="flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-xs outline-none" />
-            <button
+            <Input value={key} onChange={(e) => setKey(e.target.value)} placeholder="CLAVE"
+              className="w-40 font-mono text-xs" />
+            <Input value={val} onChange={(e) => setVal(e.target.value)} placeholder="valor"
+              className="flex-1 font-mono text-xs" />
+            <Button
+              variant="outline" size="sm"
               onClick={() => {
                 setEnv(app, key.trim(), val).then(() => {
                   setKey("");
@@ -216,10 +222,9 @@ export function AppDetail({
                   refresh();
                 }).catch(fail);
               }}
-              className="rounded border border-zinc-700 px-2.5 py-1 text-xs hover:bg-zinc-800"
             >
               guardar
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -244,18 +249,18 @@ export function AppDetail({
         <div className="rounded-lg border border-red-900 bg-red-950/20 p-4">
           <p className="mb-2 text-xs uppercase tracking-wider text-red-400">Danger zone</p>
           <div className="flex gap-2">
-            <input value={confirmDel} onChange={(e) => setConfirmDel(e.target.value)}
+            <Input value={confirmDel} onChange={(e) => setConfirmDel(e.target.value)}
               placeholder={`escribe ${app} para borrar`}
-              className="flex-1 rounded border border-red-900 bg-zinc-900 px-2 py-1 font-mono text-xs outline-none" />
-            <button
+              className="flex-1 border-red-900 font-mono text-xs" />
+            <Button
+              variant="destructive" size="sm"
               disabled={confirmDel !== app}
               onClick={() => {
                 deleteApp(app).then(() => onDeleted()).catch(fail);
               }}
-              className="rounded border border-red-900 px-3 py-1 text-xs text-red-300 hover:bg-red-950 disabled:opacity-40"
             >
               borrar app
-            </button>
+            </Button>
           </div>
         </div>
       )}

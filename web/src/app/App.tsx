@@ -1,11 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
+import { toast } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
+import {
+  LayoutGrid, Network, Rocket, Hammer, Terminal, BarChart3, Activity,
+  Bell, Globe, FlaskConical, Settings as SettingsIcon, Users as UsersIcon,
+  Plus, Menu, X, Search,
+} from "lucide-react";
 import { api } from "../shared/lib/http";
 import { Me, Status, Deployment, RktEvent, AppMeta, User } from "../shared/lib/types";
 import { logout, me, authStatus } from "../features/auth/api";
 import { Login } from "../features/auth/Login";
 import { Setup } from "../features/auth/Setup";
-import { Dot, Err, Avatar, Glyph } from "../shared/components/ui";
-import { Toast, ToastStack, CopyButton, Skeleton } from "../shared/components/feedback";
+import { Dot, Err, Avatar } from "../shared/components/ui";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { InstallButton } from "../shared/components/InstallButton";
 import { CommandPalette } from "../shared/components/CommandPalette";
 import { useOnline } from "../shared/hooks/useOnline";
@@ -34,6 +46,21 @@ import { listUsers } from "../features/users/api";
 
 export type Page = "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "app" | "analytics" | "observability" | "environment" | "ci" | "alerts" | "proxy";
 
+const NAV: { id: Page; label: string; icon: ComponentType<{ className?: string }>; admin?: boolean }[] = [
+  { id: "overview", label: "Overview", icon: LayoutGrid },
+  { id: "proxy", label: "Proxy", icon: Network },
+  { id: "deployments", label: "Deployments", icon: Rocket },
+  { id: "ci", label: "CI", icon: Hammer },
+  { id: "logs", label: "Logs", icon: Terminal },
+  { id: "analytics", label: "Analytics", icon: BarChart3 },
+  { id: "observability", label: "Observability", icon: Activity },
+  { id: "alerts", label: "Alerts", icon: Bell },
+  { id: "routes", label: "Domains", icon: Globe },
+  { id: "environment", label: "Environment", icon: FlaskConical },
+  { id: "settings", label: "Settings", icon: SettingsIcon },
+  { id: "users", label: "Users", icon: UsersIcon, admin: true },
+];
+
 export function App() {
   const [who, setWho] = useState<Me | null>(null);
   const online = useOnline();
@@ -50,7 +77,6 @@ export function App() {
   const [log, setLog] = useState("");
   const [follow, setFollow] = useState(true);
   const [err, setErr] = useState("");
-  const [toasts, setToasts] = useState<Toast[]>([]);
   const [boot, setBoot] = useState(true);
   const [sel, setSel] = useState<Deployment | null>(null);
   const [buildLog, setBuildLog] = useState("");
@@ -64,11 +90,6 @@ export function App() {
   const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
-
-  function toast(kind: "ok" | "err", msg: string) {
-    const id = Date.now() + Math.random();
-    setToasts((ts) => [...ts.slice(-3), { id, kind, msg }]);
-  }
 
   function fail(e: unknown) {
     if (e instanceof Error && e.message.startsWith("no autorizado")) {
@@ -181,10 +202,10 @@ export function App() {
   async function act(app: string, a: "restart" | "deploy" | "rollback") {
     try {
       await appAction(app, a);
-      toast("ok", `${a} ${app} ok`);
+      toast.success(`${a} ${app} ok`);
       refresh();
     } catch (e) {
-      toast("err", e instanceof Error ? e.message : "error");
+      toast.error(e instanceof Error ? e.message : "error");
     }
   }
 
@@ -194,28 +215,14 @@ export function App() {
     setMenu(false);
   }
 
-  const nav: { id: Page; label: string; admin?: boolean }[] = [
-    { id: "overview", label: "Overview" },
-    { id: "proxy", label: "Proxy" },
-    { id: "deployments", label: "Deployments" },
-    { id: "ci", label: "CI" },
-    { id: "logs", label: "Logs" },
-    { id: "analytics", label: "Analytics" },
-    { id: "observability", label: "Observability" },
-    { id: "alerts", label: "Alerts" },
-    { id: "routes", label: "Domains" },
-    { id: "environment", label: "Environment" },
-    { id: "settings", label: "Settings" },
-    { id: "users", label: "Users", admin: true },
-  ];
-
   return (
-    <div className="flex min-h-screen bg-zinc-950 text-sm text-zinc-100">
+    <div className="flex min-h-screen bg-background text-sm text-foreground">
+      <Toaster theme="dark" position="bottom-right" />
       {/* topbar móvil */}
-      <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-3 border-b border-zinc-800 bg-zinc-950/95 px-4 py-2.5 backdrop-blur md:hidden">
-        <button onClick={() => setMenu(true)} className="rounded border border-zinc-800 px-2 py-1 text-zinc-300" aria-label="menú">
-          ☰
-        </button>
+      <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-3 border-b bg-background/95 px-4 py-2.5 backdrop-blur md:hidden">
+        <Button variant="outline" size="icon" onClick={() => setMenu(true)} aria-label="menú">
+          <Menu />
+        </Button>
         <span className="font-bold tracking-tight">▲ {brand}</span>
         <span className="flex-1" />
         {!online && <span className="text-xs text-amber-300">offline</span>}
@@ -224,135 +231,132 @@ export function App() {
         <div className="fixed inset-0 z-40 bg-black/70 md:hidden" onClick={() => setMenu(false)} />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 transition-transform md:static md:z-auto md:w-56 md:translate-x-0 md:bg-zinc-900/40 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r bg-background transition-transform md:static md:z-auto md:w-56 md:translate-x-0 ${
           menu ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3">
+        <div className="flex items-center gap-2 border-b px-4 py-3">
           <Avatar name={brand} />
           <span className="text-sm font-semibold tracking-tight">{brand}</span>
-          <span className="rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">local</span>
+          <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">local</span>
           <span className="flex-1" />
-          <button onClick={() => setMenu(false)} className="rounded px-2 text-zinc-500 md:hidden" aria-label="cerrar">
-            ✕
-          </button>
+          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMenu(false)} aria-label="cerrar">
+            <X />
+          </Button>
         </div>
         {canWrite && (
           <div className="px-3 pt-3">
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="w-full rounded-md bg-zinc-100 px-2 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white"
-            >
-              + Create New
-            </button>
+            <Button className="w-full" size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus /> Create New
+            </Button>
           </div>
         )}
         <div className="px-3 pt-3">
-          <button
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-between text-muted-foreground"
             onClick={() => setPalette(true)}
-            className="flex w-full items-center justify-between rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
           >
-            Buscar o accionar…
-            <kbd className="rounded border border-zinc-700 px-1 font-mono text-[10px]">⌘K</kbd>
-          </button>
+            <span className="flex items-center gap-2"><Search /> Buscar o accionar…</span>
+            <kbd className="rounded border px-1 font-mono text-[10px]">⌘K</kbd>
+          </Button>
         </div>
-        <input
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Buscar app o sha…"
-          className="mx-3 mt-3 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs outline-none placeholder:text-zinc-600 focus:border-zinc-600"
-        />
+        <div className="px-3 pt-3">
+          <Input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Buscar app o sha…"
+            className="h-8 text-xs"
+          />
+        </div>
         <nav className="space-y-0.5 p-3">
-          {nav
-            .filter((n) => !n.admin || isAdmin)
-            .map((n) => (
-              <button
-                key={n.id}
-                onClick={() => {
-                  setPage(n.id);
-                  setMenu(false);
-                }}
-                className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left ${
-                  page === n.id || (n.id === "deployments" && page === "app")
-                    ? "bg-zinc-800 font-medium text-white"
-                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
-                }`}
-              >
-                <span className="w-4 text-center text-xs text-zinc-500">{Glyph[n.id] ?? "·"}</span>
-                {n.label}
-              </button>
-            ))}
+          {NAV.filter((n) => !n.admin || isAdmin).map((n) => (
+            <Button
+              key={n.id}
+              variant={page === n.id || (n.id === "deployments" && page === "app") ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              size="sm"
+              onClick={() => {
+                setPage(n.id);
+                setMenu(false);
+              }}
+            >
+              <n.icon />
+              {n.label}
+            </Button>
+          ))}
         </nav>
-        <div className="border-t border-zinc-800 p-3">
-          <p className="px-2.5 pb-1.5 text-[11px] uppercase tracking-wider text-zinc-600">Apps</p>
-          <button
+        <div className="border-t p-3">
+          <p className="px-2.5 pb-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">Apps</p>
+          <Button
+            variant={appFilter === "" ? "secondary" : "ghost"}
+            size="sm"
+            className="w-full justify-start font-mono text-xs"
             onClick={() => setAppFilter("")}
-            className={`block w-full rounded-md px-2.5 py-1.5 text-left font-mono text-xs ${
-              appFilter === "" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-            }`}
           >
             todas
-          </button>
+          </Button>
           {apps.map((a) => (
-            <button
+            <Button
               key={a.name}
+              variant={appFilter === a.name ? "secondary" : "ghost"}
+              size="sm"
+              className="w-full justify-start font-mono text-xs"
               onClick={() => openApp(a.name)}
-              className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left font-mono text-xs ${
-                appFilter === a.name ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-              }`}
             >
               <Dot status={a.failed ? "failed" : a.running ? "running" : "stopped"} />
               {a.name}
-            </button>
+            </Button>
           ))}
         </div>
         <div className="flex-1" />
-        <div className="space-y-1 border-t border-zinc-800 p-3">
+        <div className="space-y-1 border-t p-3">
           {!online && (
             <p className="rounded-md bg-amber-500/15 px-2.5 py-1.5 text-xs text-amber-300">
               Sin conexión — mostrando último estado
             </p>
           )}
           <InstallButton />
-          <div className="flex items-center gap-2.5 px-2.5 py-1.5">
-            <Avatar name={who?.user ?? "?"} />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium">{who?.user}</p>
-              <p className="font-mono text-[10px] text-zinc-600">{who?.role} · v{status?.version ?? "…"}</p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              logout().finally(() => setWho(null));
-            }}
-            className="mt-1 block w-full rounded-md px-2.5 py-1.5 text-left text-xs text-zinc-500 hover:text-zinc-200"
-          >
-            Salir
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left outline-none hover:bg-accent">
+              <Avatar name={who?.user ?? "?"} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium">{who?.user}</p>
+                <p className="font-mono text-[10px] text-muted-foreground">{who?.role} · v{status?.version ?? "…"}</p>
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={() => logout().finally(() => setWho(null))}>
+                Salir
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
 
       <main className="min-w-0 flex-1 p-4 pt-16 md:p-6 md:pt-6">
         <div className="mx-auto max-w-4xl">
           <div className="mb-4 hidden items-center gap-3 text-sm md:flex">
-            <span className="text-xs text-zinc-600">▲ {brand}{page === "app" ? ` / ${appFilter}` : ""}</span>
+            <span className="text-xs text-muted-foreground">▲ {brand}{page === "app" ? ` / ${appFilter}` : ""}</span>
             <span className="flex-1 text-center text-sm font-medium capitalize">
               {page === "app" ? appFilter || "app" : page}
             </span>
             {!online && <span className="text-xs text-amber-300">offline</span>}
             {canWrite && (
-              <button
-                onClick={() => setCreateOpen(true)}
-                className="rounded-md bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-900 hover:bg-white"
-              >
-                + Create New
-              </button>
+              <Button size="sm" onClick={() => setCreateOpen(true)}>
+                <Plus /> Create New
+              </Button>
             )}
             <Avatar name={who?.user ?? "?"} />
           </div>
           <Err msg={err} />
           {boot ? (
-            <Skeleton rows={6} />
+            <div className="space-y-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
           ) : (
             <>
           {page === "overview" && <Overview apps={apps} evs={evs} deps={deps} metas={metas} openApp={openApp} />}
@@ -403,7 +407,6 @@ export function App() {
           {page === "ci" && <CI deps={deps} onSelect={setSel} />}
             </>
           )}
-          <ToastStack toasts={toasts} dismiss={(id) => setToasts((ts) => ts.filter((t) => t.id !== id))} />
         </div>
       </main>
 
@@ -411,7 +414,7 @@ export function App() {
         open={createOpen}
         setOpen={setCreateOpen}
         onCreated={(name) => {
-          toast("ok", `app ${name} creada`);
+          toast.success(`app ${name} creada`);
           refresh();
           openApp(name);
         }}
@@ -426,11 +429,11 @@ export function App() {
         onRetry={(id) => {
           retryDeployment(id)
             .then((rev) => {
-              toast("ok", `retry ok ${rev.slice(0, 8)}`);
+              toast.success(`retry ok ${rev.slice(0, 8)}`);
               setSel(null);
               refresh();
             })
-            .catch((e) => toast("err", e instanceof Error ? e.message : "error"));
+            .catch((e) => toast.error(e instanceof Error ? e.message : "error"));
         }}
         onClose={() => setSel(null)}
       />

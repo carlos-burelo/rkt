@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchObs, Obs } from "./api";
-import { Bars } from "../../shared/components/Bars";
+import { Bars } from "../../shared/components/feedback";
 
 export function Observability() {
   const [hours, setHours] = useState(6);

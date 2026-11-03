@@ -1,4 +1,7 @@
 import { setSetting } from "./api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 
 export function Settings({
   settings,
@@ -12,29 +15,32 @@ export function Settings({
   fail: (e: unknown) => void;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-      {Object.entries(settings).map(([k, v]) => (
-        <div key={k} className="flex items-center gap-2 py-1.5">
-          <span className="w-40 font-mono text-xs text-zinc-300">{k}</span>
-          <input
-            defaultValue={v}
-            id={`set-${k}`}
-            disabled={!canWrite}
-            className="flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-xs outline-none disabled:text-zinc-500"
-          />
-          {canWrite && (
-            <button
-              onClick={() => {
-                const el = document.getElementById(`set-${k}`) as HTMLInputElement;
-                setSetting(k, el.value).then(refresh).catch(fail);
-              }}
-              className="rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800"
-            >
-              guardar
-            </button>
-          )}
-        </div>
-      ))}
-    </div>
+    <Card>
+      <CardContent className="space-y-1 pt-6">
+        {Object.entries(settings).map(([k, v]) => (
+          <div key={k} className="flex items-center gap-2 py-1.5">
+            <span className="w-40 font-mono text-xs text-muted-foreground">{k}</span>
+            <Input
+              defaultValue={v}
+              id={`set-${k}`}
+              disabled={!canWrite}
+              className="flex-1 font-mono text-xs"
+            />
+            {canWrite && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const el = document.getElementById(`set-${k}`) as HTMLInputElement;
+                  setSetting(k, el.value).then(refresh).catch(fail);
+                }}
+              >
+                guardar
+              </Button>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }

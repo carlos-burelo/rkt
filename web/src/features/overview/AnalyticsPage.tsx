@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Analytics, fetchAnalytics } from "./api";
-import { Bars } from "../../shared/components/Bars";
+import { Bars } from "../../shared/components/feedback";
 
 const RANGES = [1, 7, 30];
 
