@@ -90,22 +90,28 @@ func prompt(label, def string) string {
 	return def
 }
 
-// promptPassword lee sin eco (mín 12, pide dos veces).
+// promptPassword lee sin eco (mín 12, pide dos veces). Sin consola
+// (pipe/tests), cae a lectura visible con un solo reader (dos
+// readers se roban el buffer y ciclan).
 func promptPassword() string {
+	fd := int(os.Stdin.Fd())
+	var fb *bufio.Reader
+	read := func(label string) string {
+		fmt.Print(label)
+		if fb == nil {
+			if b, err := term.ReadPassword(fd); err == nil {
+				fmt.Println()
+				return string(b)
+			}
+			fb = bufio.NewReader(os.Stdin)
+		}
+		line, _ := fb.ReadString('\n')
+		return strings.TrimSpace(line)
+	}
 	for {
-		fmt.Print("password (mín 12): ")
-		b1, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Println()
-		if err != nil {
-			log.Fatalf("password: %v", err)
-		}
-		fmt.Print("repite password: ")
-		b2, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Println()
-		if err != nil {
-			log.Fatalf("password: %v", err)
-		}
-		if string(b1) != string(b2) {
+		b1 := read("password (mín 12): ")
+		b2 := read("repite password: ")
+		if b1 != b2 {
 			fmt.Println("no coinciden, de nuevo")
 			continue
 		}
@@ -113,7 +119,7 @@ func promptPassword() string {
 			fmt.Println("mínimo 12 caracteres")
 			continue
 		}
-		return string(b1)
+		return b1
 	}
 }
 
@@ -138,27 +144,33 @@ func cmdUsers(args []string, cfgPath string) {
 			fmt.Printf("%s\t%s\t%s\n", u.Name, u.Role, u.CreatedAt)
 		}
 	case "add":
-		fs := flag.NewFlagSet("users add", flag.ContinueOnError)
-		role := fs.String("role", "viewer", "admin|operator|viewer")
-		if err := fs.Parse(args[1:]); err != nil {
-			os.Exit(2)
+		role, rest := "viewer", []string{}
+		for i := 1; i < len(args); i++ {
+			if args[i] == "--role" && i+1 < len(args) {
+				role = args[i+1]
+				i++
+			} else if strings.HasPrefix(args[i], "--role=") {
+				role = strings.TrimPrefix(args[i], "--role=")
+			} else {
+				rest = append(rest, args[i])
+			}
 		}
-		if fs.NArg() != 1 {
+		if len(rest) != 1 {
 			log.Fatal("uso: users add <nombre> [--role admin]")
 		}
-		name := fs.Arg(0)
+		name := rest[0]
 		n, err := db.CountUsers()
 		if err != nil {
 			log.Fatalf("users: %v", err)
 		}
-		if n == 0 && *role != store.RoleAdmin {
+		if n == 0 && role != store.RoleAdmin {
 			fmt.Println("primer usuario debe ser admin (forzando --role admin)")
-			*role = store.RoleAdmin
+			role = store.RoleAdmin
 		}
-		if err := db.CreateUser(name, promptPassword(), *role); err != nil {
+		if err := db.CreateUser(name, promptPassword(), role); err != nil {
 			log.Fatalf("users add: %v", err)
 		}
-		fmt.Printf("usuario %s (%s) creado\n", name, *role)
+		fmt.Printf("usuario %s (%s) creado\n", name, role)
 	case "del":
 		if len(args) != 2 {
 			log.Fatal("uso: users del <nombre>")
