@@ -30,7 +30,12 @@ import (
 )
 
 // healthWait tope esperando app sana tras restart.
-const healthWait = 30 * time.Second
+const healthWait = 45 * time.Second
+
+// stableFor ventana continua sana antes de dar el deploy por bueno:
+// atrapa apps que arrancan y mueren al segundo (puerto ocupado, crashloop).
+// var para tests (10ms) sin dormir 5s por deploy.
+var stableFor = 5 * time.Second
 
 // httpWait tope del probe HTTP post-restart (app debe responder).
 const httpWait = 15 * time.Second
@@ -85,6 +90,13 @@ func Run(app config.App, token string, ctl Controller, out io.Writer, log *slog.
 	}
 	if err := ctl.SwapAndRestart(app.Name, swap); err != nil {
 		_ = os.RemoveAll(staging)
+		// Swap parcial: si live desapareció, devolver el backup antes de salir.
+		if hadLive && !dirExists(live) && dirExists(prev) {
+			_ = ctl.SwapAndRestart(app.Name, func() error {
+				return renameRetry(prev, live)
+			})
+		}
+		fmt.Fprintf(out, "\n✗ swap: %v\n", err)
 		return "", fmt.Errorf("swap: %w", err)
 	}
 	if err := WaitAppHealthy(ctl.Snapshot, app.Name, healthWait); err != nil {
@@ -97,6 +109,7 @@ func Run(app config.App, token string, ctl Controller, out io.Writer, log *slog.
 			return renameRetry(prev, live)
 		}
 		_ = ctl.SwapAndRestart(app.Name, back)
+		fmt.Fprintf(out, "\n✗ app no quedó sana: %v\n↺ rollback aplicado\n", err)
 		log.Warn("rollback aplicado", "app", app.Name)
 		return "", fmt.Errorf("deploy fallido, rollback aplicado: %w", err)
 	}
@@ -111,6 +124,7 @@ func Run(app config.App, token string, ctl Controller, out io.Writer, log *slog.
 			return renameRetry(prev, live)
 		}
 		_ = ctl.SwapAndRestart(app.Name, back)
+		fmt.Fprintf(out, "\n✗ sin respuesta HTTP: %v\n↺ rollback aplicado\n", err)
 		log.Warn("rollback por HTTP", "app", app.Name)
 		return "", fmt.Errorf("deploy fallido (sin respuesta HTTP), rollback aplicado: %w", err)
 	}
@@ -149,19 +163,34 @@ func WaitAppHTTP(app config.App, timeout time.Duration) error {
 	}
 }
 
-// WaitAppHealthy espera app corriendo y no failed (poll 1s).
+// WaitAppHealthy espera app corriendo, no failed y estable durante
+// stableFor seguido (poll 0.5s). Una app que arranca y muere al instante
+// no cuenta como sana.
 func WaitAppHealthy(snap func() []supervisor.Status, name string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
+	var since time.Time
 	for {
+		ok := false
 		for _, s := range snap() {
 			if s.Name == name && s.Running && !s.Failed {
-				return nil
+				ok = true
+				break
 			}
 		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("app %s no sana tras %v", name, timeout)
+		if ok {
+			if since.IsZero() {
+				since = time.Now()
+			}
+			if time.Since(since) >= stableFor {
+				return nil
+			}
+		} else {
+			since = time.Time{}
 		}
-		time.Sleep(time.Second)
+		if time.Now().After(deadline) {
+			return fmt.Errorf("app %s no estable tras %v", name, timeout)
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 

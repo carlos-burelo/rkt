@@ -8,10 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/supervisor"
 )
+
+func init() { stableFor = 10 * time.Millisecond }
 
 func gitOK(t *testing.T) {
 	t.Helper()

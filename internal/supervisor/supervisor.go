@@ -42,6 +42,7 @@ type app struct {
 	logPath  string
 	mu       sync.Mutex
 	cmd      *exec.Cmd
+	job      *jobCtx
 	running  bool
 	alive    bool
 	held     bool
@@ -375,7 +376,15 @@ func (a *app) loop() {
 		a.log.Info("límite RAM", "mb", a.cfg.MemoryMB)
 	}
 	if job != nil {
-		defer job.Close()
+		a.mu.Lock()
+		a.job = job
+		a.mu.Unlock()
+		defer func() {
+			a.mu.Lock()
+			a.job = nil
+			a.mu.Unlock()
+			job.Close()
+		}()
 	}
 	for {
 		if !a.start(job) {
@@ -567,7 +576,13 @@ func (a *app) stop() {
 func (a *app) killCurrent() {
 	a.mu.Lock()
 	cmd := a.cmd
+	job := a.job
 	a.mu.Unlock()
+	// Job Object: mata npm + node/hijos. Sin esto, el hijo conserva el
+	// puerto y el cwd, el swap no puede renombrar y la app nueva muere.
+	if job != nil {
+		job.Kill()
+	}
 	if cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait() // cosecha: libera handles y evita carrera con loop

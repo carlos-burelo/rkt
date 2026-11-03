@@ -50,6 +50,13 @@ func (j *jobCtx) Assign(pid uint32) error {
 	return windows.AssignProcessToJobObject(j.h, ph)
 }
 
+// Kill termina todos los procesos del job (padre + hijos).
+func (j *jobCtx) Kill() {
+	if j != nil {
+		_ = windows.TerminateJobObject(j.h, 1)
+	}
+}
+
 // Close libera el job (con KILL_ON_JOB_CLOSE, mata lo que quede).
 func (j *jobCtx) Close() {
 	if j != nil {

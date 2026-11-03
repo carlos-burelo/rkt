@@ -78,6 +78,10 @@ type Program struct {
 	// ops serializa operaciones destructivas por app (deploy/build/rollback).
 	opMu sync.Mutex
 	ops  map[string]bool
+	// deployMu protege el registro de últimos deploys para auto-rollback.
+	deployMu    sync.Mutex
+	lastDeploy  map[string]time.Time
+	rollingBack map[string]bool
 }
 
 // beginOp reclama la app para una operación destructiva. Devuelve error si
@@ -108,7 +112,8 @@ type probeResult struct {
 
 // New crea el programa sin arrancarlo.
 func New(cfgPath string, log *slog.Logger) *Program {
-	return &Program{cfgPath: cfgPath, log: log, discoverKick: make(chan struct{}, 1), probes: map[string]probeResult{}}
+	return &Program{cfgPath: cfgPath, log: log, discoverKick: make(chan struct{}, 1), probes: map[string]probeResult{},
+		lastDeploy: map[string]time.Time{}, rollingBack: map[string]bool{}}
 }
 
 // gh devuelve el manager de GitHub App (atómico: se reemplaza al crear la App).
@@ -189,6 +194,9 @@ func (p *Program) Run() {
 		p.sup.OnEvent = func(kind, app, msg string) {
 			if err := db.InsertEvent(kind, app, msg); err != nil {
 				p.log.Warn("evento no guardado", "err", err)
+			}
+			if kind == "failed" {
+				p.maybeAutoRollback(app)
 			}
 		}
 	}
@@ -900,12 +908,22 @@ func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, 
 			defer p.endOp(app.Name)
 			defer out.Close()
 			rev, runErr := deploy.Run(app, token, &supCtl{sup: p.sup}, out, p.log)
+			if runErr != nil {
+				fmt.Fprintf(out, "\n✗ deploy fallido: %v\n", runErr)
+			} else {
+				p.markDeployed(app.Name)
+			}
 			finish(rev, runErr)
 		}()
 		return depID, "", nil
 	}
 	defer out.Close()
 	rev, err := deploy.Run(app, token, &supCtl{sup: p.sup}, out, p.log)
+	if err != nil {
+		fmt.Fprintf(out, "\n✗ deploy fallido: %v\n", err)
+	} else {
+		p.markDeployed(app.Name)
+	}
 	finish(rev, err)
 	if err != nil {
 		return depID, "", err
@@ -963,6 +981,46 @@ func (p *Program) tlsStatus(host string) (bool, string) {
 		return true, ""
 	}
 	return true, cert.NotAfter.UTC().Format("2006-01-02")
+}
+
+// markDeployed registra un deploy exitoso para el auto-rollback si la app
+// entra en crashloop poco después (build que compila pero no arranca).
+func (p *Program) markDeployed(name string) {
+	p.deployMu.Lock()
+	p.lastDeploy[name] = time.Now()
+	p.deployMu.Unlock()
+}
+
+// maybeAutoRollback devuelve live.prev si la app falló dentro de la
+// ventana post-deploy. Reintenta porque el deploy puede seguir soltando
+// el lock de operación.
+func (p *Program) maybeAutoRollback(name string) {
+	p.deployMu.Lock()
+	t, ok := p.lastDeploy[name]
+	if !ok || time.Since(t) > 10*time.Minute || p.rollingBack[name] {
+		p.deployMu.Unlock()
+		return
+	}
+	delete(p.lastDeploy, name)
+	p.rollingBack[name] = true
+	p.deployMu.Unlock()
+	go func() {
+		defer func() {
+			p.deployMu.Lock()
+			delete(p.rollingBack, name)
+			p.deployMu.Unlock()
+		}()
+		p.log.Warn("app falló tras deploy; rollback automático", "app", name)
+		var err error
+		for i := 0; i < 6; i++ {
+			if err = p.rollbackApp(name, "auto-rollback"); err == nil {
+				p.log.Info("rollback automático ok", "app", name)
+				return
+			}
+			time.Sleep(5 * time.Second)
+		}
+		p.log.Error("rollback automático fallido", "app", name, "err", err)
+	}()
 }
 
 // rollbackApp devuelve live.prev a live (rollback manual).
