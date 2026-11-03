@@ -31,6 +31,9 @@ export default defineConfig({
       workbox: {
         // SPA: shell offline; api siempre red (con offline en UI).
         navigateFallback: "index.html",
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: /^https?:.*\/api\/v1\/.*/i,

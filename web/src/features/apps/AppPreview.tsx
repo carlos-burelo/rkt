@@ -8,12 +8,26 @@ import { publicUrl, publicHost } from "../../shared/lib/url";
 // Vista previa de la app servida (Vercel-like): iframe del dominio real.
 // Si el navegador no puede incrustarla (X-Frame-Options, DNS, TLS), se
 // dice claro y se ofrece abrir en pestaña; nada de fingir un screenshot.
+const PREVIEW_SIZES = { s: 150, m: 240, l: 380 } as const;
+type PreviewSize = keyof typeof PREVIEW_SIZES;
+
+function initialSize(): PreviewSize {
+  const saved = localStorage.getItem("rkt.preview.size");
+  return saved === "m" || saved === "l" ? saved : "s";
+}
+
 export function AppPreview({ domain, running }: { domain: string; running: boolean }) {
   const { status } = useFleet();
   const src = publicUrl(domain, status);
   const [nonce, setNonce] = useState(0);
+  const [size, setSize] = useState<PreviewSize>(initialSize);
   const [state, setState] = useState<"loading" | "ok" | "blocked">("loading");
   const timer = useRef<number | null>(null);
+
+  const changeSize = (s: PreviewSize) => {
+    setSize(s);
+    localStorage.setItem("rkt.preview.size", s);
+  };
 
   useEffect(() => {
     if (!running) return;
@@ -37,6 +51,22 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
           <span className="truncate">{publicHost(domain, status)}</span>
         </span>
         <span className="flex-1" />
+        <div className="flex items-center gap-0.5" role="group" aria-label="tamaño de la vista previa">
+          {(["s", "m", "l"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => changeSize(s)}
+              title={s === "s" ? "compacta" : s === "m" ? "mediana" : "amplia"}
+              className={
+                size === s
+                  ? "border border-signal/60 bg-signal/10 px-1.5 font-mono text-[9px] uppercase text-signal"
+                  : "border border-transparent px-1.5 font-mono text-[9px] uppercase text-muted-foreground/60 hover:text-foreground"
+              }
+            >
+              {s}
+            </button>
+          ))}
+        </div>
         <Button
           variant="ghost"
           size="xs"
@@ -69,7 +99,8 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
             key={nonce}
             src={src}
             title={`vista previa de ${domain}`}
-            className="block h-56 w-full bg-background"
+            className="block w-full bg-background"
+            style={{ height: PREVIEW_SIZES[size] }}
             onLoad={() => setState("ok")}
           />
           {state === "loading" && (
