@@ -18,6 +18,15 @@ export function Overview({
   return (
     <div className="space-y-3">
       <Metrics apps={apps} deps={deps} />
+      {evs.filter((e) => e.kind === "alert").slice(0, 3).map((e) => (
+        <div key={e.id} className="flex items-center gap-3 rounded-lg border border-amber-900 bg-amber-950/30 px-4 py-3">
+          <span className="h-2 w-2 rounded-full bg-amber-400" />
+          <div className="flex-1">
+            <p className="font-mono text-xs">{e.app} · {e.msg}</p>
+            <p className="font-mono text-[11px] text-zinc-500">{rel(e.ts)}</p>
+          </div>
+        </div>
+      ))}
       <UsageStrip />
       {evs.filter((e) => e.kind === "discover").slice(0, 3).map((e) => (
         <div key={e.id} className="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3">

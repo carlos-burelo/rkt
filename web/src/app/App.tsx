@@ -12,6 +12,7 @@ import { DeployDrawer } from "../features/deployments/DeployDrawer";
 import { Overview } from "../features/overview/Overview";
 import { AnalyticsPage } from "../features/overview/AnalyticsPage";
 import { Observability } from "../features/overview/Observability";
+import { Alerts } from "../features/alerts/Alerts";
 import { EnvAll } from "../features/env/EnvAll";
 import { CI } from "../features/ci/CI";
 import { Deployments } from "../features/deployments/Deployments";
@@ -28,7 +29,7 @@ import { listRoutes } from "../features/routes/api";
 import { getSettings } from "../features/settings/api";
 import { listUsers } from "../features/users/api";
 
-export type Page = "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "app" | "analytics" | "observability" | "environment" | "ci";
+export type Page = "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "app" | "analytics" | "observability" | "environment" | "ci" | "alerts";
 
 export function App() {
   const [who, setWho] = useState<Me | null>(null);
@@ -176,6 +177,7 @@ export function App() {
     { id: "logs", label: "Logs" },
     { id: "analytics", label: "Analytics" },
     { id: "observability", label: "Observability" },
+    { id: "alerts", label: "Alerts" },
     { id: "routes", label: "Domains" },
     { id: "environment", label: "Environment" },
     { id: "settings", label: "Settings" },
@@ -336,6 +338,7 @@ export function App() {
           {page === "users" && isAdmin && <Users users={users} refresh={refresh} fail={fail} />}
           {page === "analytics" && <AnalyticsPage />}
           {page === "observability" && <Observability />}
+          {page === "alerts" && <Alerts canWrite={canWrite} fail={fail} />}
           {page === "environment" && <EnvAll fail={fail} />}
           {page === "ci" && <CI deps={deps} onSelect={setSel} />}
             </>
