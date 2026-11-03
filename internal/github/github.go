@@ -11,13 +11,18 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 )
+
+// ErrAppGone: la App ya no existe en GitHub o su clave no autentica.
+var ErrAppGone = errors.New("github app inexistente o clave inválida")
 
 // Manager miente tokens de instalación (1h) con cache por instalación.
 type Manager struct {
@@ -400,6 +405,14 @@ func (m *Manager) Installations() ([]installationResp, error) {
 		resp, err := m.client.Do(req)
 		if err != nil {
 			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusNotFound {
+				return nil, fmt.Errorf("%w (%s)", ErrAppGone, resp.Status)
+			}
+			return nil, fmt.Errorf("instalaciones: %s %s", resp.Status, strings.TrimSpace(string(body)))
 		}
 		var page []installationResp
 		if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {

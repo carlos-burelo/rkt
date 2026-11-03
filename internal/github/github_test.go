@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -172,6 +173,24 @@ func TestParseRepo(t *testing.T) {
 		if _, _, ok := ParseRepo(bad); ok {
 			t.Fatalf("%q debió fallar", bad)
 		}
+	}
+}
+
+func TestInstallationsAppGone(t *testing.T) {
+	_, path := testKey(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, `{"message":"A JSON web token could not be decoded"}`)
+	}))
+	defer srv.Close()
+
+	m, err := New(123, path, srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Installations(); !errors.Is(err, ErrAppGone) {
+		t.Fatalf("quiere ErrAppGone, got %v", err)
 	}
 }
 

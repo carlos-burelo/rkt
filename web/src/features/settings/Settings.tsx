@@ -90,6 +90,12 @@ export function Settings() {
         {!gh && <p className="font-mono text-[10px] text-muted-foreground">consultando GitHub…</p>}
         {gh && !gh.configured && (
           <div className="space-y-2">
+            {gh.stale && (
+              <p className="border border-warn/35 bg-warn/5 px-3 py-2 text-[12px] text-warn">
+                La App anterior ya no existe en GitHub. La configuración local se limpió;
+                crea una nueva.
+              </p>
+            )}
             <p className="text-[12px] text-muted-foreground">
               Sin App conectada. Crea la GitHub App desde aquí y en el paso de instalación elige{" "}
               <b className="text-foreground">All repositories</b>. Para repos de una organización, instálala

@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -61,6 +62,7 @@ type Program struct {
 	log          *slog.Logger
 	live         *config.Live
 	ghm          atomic.Pointer[github.Manager]
+	ghStale      atomic.Bool
 	autoStarted  atomic.Bool
 	db           *store.DB
 	discoverKick chan struct{}
@@ -432,6 +434,7 @@ func (p *Program) onManifest(c *github.ManifestCredentials) (string, error) {
 		slug = "rkt-deployer"
 	}
 	_ = p.db.SetSetting("github_app_slug", slug)
+	p.ghStale.Store(false)
 	if gh, err := github.New(c.ID, keyPath, ""); err != nil {
 		p.log.Warn("github app creada pero manager inválido", "err", err)
 	} else {
@@ -498,7 +501,10 @@ func (p *Program) githubStatus() (map[string]any, error) {
 		"&domain=" + url.QueryEscape(domain) + "&local=" + boolStr(local) + "&tls=" + boolStr(tls)
 	out["local"] = local
 	cfg := p.live.Get()
-	if cfg.Github == nil {
+	if cfg.Github == nil || p.gh() == nil || p.db.GetSetting("github_app_id") == "" {
+		if p.ghStale.Load() {
+			out["stale"] = true
+		}
 		return out, nil
 	}
 	out["configured"] = true
@@ -516,11 +522,32 @@ func (p *Program) githubStatus() (map[string]any, error) {
 	}
 	insts, err := p.gh().Installations()
 	if err != nil {
+		if errors.Is(err, github.ErrAppGone) {
+			p.dropGithub()
+			for _, k := range []string{
+				"app_id", "app_slug", "account", "repository_selection",
+				"install_url", "install_target", "repositories", "installations", "error",
+			} {
+				delete(out, k)
+			}
+			out["configured"] = false
+			out["stale"] = true
+			return out, nil
+		}
 		out["error"] = err.Error()
 		return out, nil
 	}
 	out["installations"] = len(insts)
 	if len(insts) == 0 {
+		// la App existe pero no está instalada (o la desinstalaron)
+		for _, k := range []string{
+			"github_install_id", "github_account", "github_repo_selection",
+			"github_install_url", "github_install_target", "github_repo_count",
+		} {
+			_ = p.db.SetSetting(k, "")
+		}
+		out["account"] = ""
+		out["repositories"] = ""
 		out["repository_selection"] = ""
 		return out, nil
 	}
@@ -544,6 +571,23 @@ func (p *Program) githubStatus() (map[string]any, error) {
 		}
 	}
 	return out, nil
+}
+
+// dropGithub limpia la configuración local cuando la App ya no existe
+// en GitHub (borrada) o su clave dejó de autenticar. Permite recrearla
+// desde Ajustes sin reiniciar ni dejar estado fantasma.
+func (p *Program) dropGithub() {
+	for _, k := range []string{
+		"github_app_id", "github_app_slug", "github_key_file", "github_webhook_secret",
+		"github_install_id", "github_account", "github_repo_selection",
+		"github_install_url", "github_install_target", "github_repo_count",
+	} {
+		_ = p.db.SetSetting(k, "")
+	}
+	_ = os.Remove(logx.AppKeyPath(p.cfgPath))
+	p.ghm.Store(nil)
+	p.ghStale.Store(true)
+	p.log.Warn("github: la App ya no existe en GitHub; configuración local limpiada")
 }
 
 // githubRepos lista repos de todas las instalaciones (personales y orgs).

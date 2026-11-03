@@ -20,6 +20,7 @@ export interface GithubStatus {
   installations?: number;
   setup_url?: string;
   local?: boolean;
+  stale?: boolean;
   error?: string;
 }
 
