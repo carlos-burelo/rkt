@@ -15,17 +15,29 @@ import (
 // maxBytes rota rkt.log a .1 al arrancar si se supera.
 const maxBytes = 10 << 20 // 10MB
 
-// Abs resuelve un path relativo junto al .exe (el servicio
-// Windows arranca en System32 y la ruta relativa rompería).
+// Abs resuelve un path relativo de forma determinista: primero junto al
+// CWD (dev desde el repo) y, si no existe, junto al .exe (servicio Windows,
+// que arranca en System32). Un mismo -config no debe cambiar la carpeta
+// de datos según cómo se escriba.
 func Abs(p string) string {
 	if len(p) > 1 && (p[1] == ':' || p[0] == '/' || p[0] == '\\') {
 		return p
+	}
+	if wd, err := os.Getwd(); err == nil {
+		if c := filepath.Join(wd, p); fileExists(c) {
+			return c
+		}
 	}
 	exe, err := os.Executable()
 	if err != nil {
 		return p
 	}
 	return filepath.Join(filepath.Dir(exe), p)
+}
+
+func fileExists(p string) bool {
+	st, err := os.Stat(p)
+	return err == nil && !st.IsDir()
 }
 
 // DirFor devuelve <dir-config>/logs para cualquier config path.
