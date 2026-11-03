@@ -31,11 +31,11 @@ export function UsageStrip() {
   const bars: { label: string; value: string; frac?: number }[] = [
     { label: "peticiones", value: `${u.total}${qReqs > 0 ? ` / ${qReqs}` : ""}`, frac: reqFrac },
     {
-      label: "bandwidth",
+      label: "ancho de banda",
       value: `${(u.bytes / 1048576).toFixed(1)}M${qBytes > 0 ? ` / ${(qBytes / 1048576).toFixed(0)}M` : ""}`,
       frac: byteFrac,
     },
-    { label: "error rate", value: `${(u.err_rate * 100).toFixed(1)}%`, frac: u.err_rate },
+    { label: "tasa de error", value: `${(u.err_rate * 100).toFixed(1)}%`, frac: u.err_rate },
   ];
   return (
     <div className="space-y-3">
@@ -43,7 +43,7 @@ export function UsageStrip() {
         <Meter key={b.label} label={b.label} value={b.value} frac={b.frac} tone={toneOf(b.frac)} />
       ))}
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-border/60 pt-2">
-        <span className="font-mono text-[9px] text-muted-foreground">medido de access.log local · 30d</span>
+        <span className="font-mono text-[9px] text-muted-foreground">medido de access.log local · 30 días</span>
         <span className="tnum font-mono text-[9px] text-muted-foreground">p95 {u.p95 || "—"}</span>
       </div>
     </div>

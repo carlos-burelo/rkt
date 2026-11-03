@@ -21,8 +21,8 @@ export function Metrics({ apps, deps }: { apps: AppStatus[]; deps: Deployment[] 
         sub={failed === 0 ? "sin fallos" : "requieren acción"}
         tone={failed === 0 ? undefined : "bad"}
       />
-      <Stat value={`${recent.length}`} label="deploys 24h" sub="flota · ventana 24h" tone="signal" />
-      <Stat value={rate} label="tasa ok 24h" sub={done.length === 0 ? "sin deploys" : `${ok}/${done.length} ok`} />
+      <Stat value={`${recent.length}`} label="despliegues 24h" sub="flota · ventana 24h" tone="signal" />
+      <Stat value={rate} label="tasa correcta 24h" sub={done.length === 0 ? "sin despliegues" : `${ok}/${done.length} ok`} />
     </div>
   );
 }

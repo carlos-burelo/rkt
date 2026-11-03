@@ -140,12 +140,10 @@ export function ShellLayout() {
   }
 
   return (
-    // Sidebar en un solo modo: expandida en escritorio, drawer en móvil.
-    // Sin rail colapsado (el modo icono desalineaba y desbordaba).
-    <SidebarProvider open onOpenChange={() => {}}>
+    <SidebarProvider>
       <Toaster theme="dark" position="bottom-right" />
       <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-        <SidebarHeader className="gap-0 border-b border-sidebar-border px-3 py-3">
+        <SidebarHeader className="gap-0 border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:px-0.5">
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
@@ -178,7 +176,9 @@ export function ShellLayout() {
                 <Plus className="h-3.5 w-3.5" />
                 <span className="group-data-[collapsible=icon]:hidden">Nueva app</span>
               </span>
-              <Kbd>N</Kbd>
+              <span className="group-data-[collapsible=icon]:hidden">
+                <Kbd>N</Kbd>
+              </span>
             </Button>
           )}
 
@@ -246,10 +246,14 @@ export function ShellLayout() {
                   <SidebarMenuButton
                     isActive={appFilter === ""}
                     onClick={() => setAppFilter("")}
+                    tooltip="todas las bahías"
                     className="h-7 rounded-[1px] px-2 font-mono text-[10px] text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:text-sidebar-foreground"
                   >
-                    <span className="flex-1">todas</span>
-                    <span className="tnum text-[9px] text-muted-foreground/60">{apps.length}</span>
+                    <span className="hidden h-3.5 w-3.5 shrink-0 items-center justify-center text-muted-foreground/60 group-data-[collapsible=icon]:flex">
+                      <LayoutGrid className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="flex-1 group-data-[collapsible=icon]:hidden">todas</span>
+                    <span className="tnum text-[9px] text-muted-foreground/60 group-data-[collapsible=icon]:hidden">{apps.length}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 {apps.map((a) => {
@@ -265,10 +269,12 @@ export function ShellLayout() {
                         tooltip={domain ? `${a.name} → ${domain}` : a.name}
                       >
                         <Dot status={st} />
-                        <span className="min-w-0 flex-1 truncate">{a.name}</span>
-                        {meta?.port && <span className="tnum text-[9px] text-muted-foreground/55">:{meta.port}</span>}
+                        <span className="min-w-0 flex-1 truncate group-data-[collapsible=icon]:hidden">{a.name}</span>
+                        {meta?.port && (
+                          <span className="tnum text-[9px] text-muted-foreground/55 group-data-[collapsible=icon]:hidden">:{meta.port}</span>
+                        )}
                         {st === "failed" && (
-                          <span className="tnum text-[9px] text-bad">!{a.restarts}</span>
+                          <span className="tnum text-[9px] text-bad group-data-[collapsible=icon]:hidden">!{a.restarts}</span>
                         )}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -279,7 +285,7 @@ export function ShellLayout() {
           </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter className="gap-2 border-t border-sidebar-border px-3 py-3">
+        <SidebarFooter className="gap-2 border-t border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:px-1">
           {!online && (
             <p className="border border-warn/30 bg-warn/8 px-2 py-1.5 font-mono text-[10px] text-warn group-data-[collapsible=icon]:hidden">
               sin conexión · lectura local
@@ -310,11 +316,12 @@ export function ShellLayout() {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
+        <SidebarRail />
       </Sidebar>
 
       <SidebarInset className="min-w-0 bg-transparent">
         <header className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-border bg-background/92 px-3 backdrop-blur-md md:px-4">
-          <SidebarTrigger className="h-7 w-7 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden" />
+          <SidebarTrigger className="h-7 w-7 text-muted-foreground hover:bg-accent hover:text-foreground" />
           <span aria-hidden className="hidden h-3 w-px bg-border sm:block" />
           <nav aria-label="ruta" className="flex min-w-0 items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
             <span className="shrink-0 tracking-[0.08em] text-foreground/60">{brand}</span>
