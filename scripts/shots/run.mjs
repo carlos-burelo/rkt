@@ -38,9 +38,9 @@ const main = async () => {
 
   // login por UI (como un humano: la cookie la pone el browser)
   await page.goto(BASE + "/dashboard/login", { waitUntil: "networkidle" });
-  await page.getByPlaceholder("usuario").fill(USER);
-  await page.getByPlaceholder("password").fill(PASS);
-  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.getByLabel(/usuario/i).fill(USER);
+  await page.getByLabel(/password/i).fill(PASS);
+  await page.getByRole("button", { name: /Entrar/ }).click();
   await page.waitForURL("**/dashboard/overview", { timeout: 15000 });
 
   // token para llamadas API directas (apps, rol)
