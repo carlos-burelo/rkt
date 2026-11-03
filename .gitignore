@@ -26,3 +26,7 @@ scripts/shots/node_modules/
 
 # estado local de skill de diseño (no se comitea)
 .impeccable/
+
+# cobertura local
+/cover.out
+/cover
