@@ -55,7 +55,6 @@ export function EnvAll() {
               onClick={() => navigate(`/app/${app}`)}
               className="flex w-full items-center gap-3 border-b bg-card px-4 py-3 text-left hover:bg-accent/40"
             >
-              <span aria-hidden className="manifest-strip h-8 w-1 shrink-0 rounded-full opacity-70" />
               <Avatar name={app} />
               <span className="min-w-0 flex-1 truncate font-mono text-xs">{app}</span>
               <span className="tnum font-mono text-[11px] text-muted-foreground">

@@ -61,9 +61,8 @@ export function Err({ msg }: { msg: string }) {
 const GLYPH_TONES = [
   "bg-signal/15 text-signal",
   "bg-emerald-500/15 text-emerald-300",
-  "bg-sky-500/15 text-sky-300",
   "bg-amber-500/15 text-amber-300",
-  "bg-violet-500/15 text-violet-300",
+  "bg-zinc-500/15 text-zinc-300",
 ];
 
 export function Avatar({ name }: { name: string }) {

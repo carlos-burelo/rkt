@@ -18,16 +18,17 @@ export function RadialMap({
   const [hover, setHover] = useState<string | null>(null);
   const active = hover ?? selected;
   if (links.length === 0) return null;
+  const compact = links.length <= 2;
 
   return (
     <div
       className="relative overflow-hidden rounded-xl border bg-background"
       style={{
-        backgroundImage: "radial-gradient(circle, oklch(1 0 0 / 10%) 1px, transparent 1.4px)",
-        backgroundSize: "16px 16px",
+        backgroundImage: "radial-gradient(circle, oklch(1 0 0 / 7%) 1px, transparent 1.3px)",
+        backgroundSize: "20px 20px",
       }}
     >
-      <div className="relative mx-auto aspect-[8/5] w-full max-w-3xl" role="img"
+      <div className={`relative mx-auto w-full ${compact ? "aspect-[16/8] max-w-xl" : "aspect-[8/5] max-w-3xl"}`} role="img"
         aria-label={`topología proxy: edge con ${links.length} ruta${links.length > 1 ? "s" : ""}`}>
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 800 500" aria-hidden>
           <ellipse cx="400" cy="250" rx="272" ry="168" fill="none"
@@ -112,7 +113,7 @@ export function RadialMap({
           return (
             <div className="absolute bottom-3 right-3 flex items-center gap-2 rounded-lg border bg-card/95 px-3 py-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary">
-                <Monitor className="h-4 w-4 text-violet-300" />
+                <Monitor className="h-4 w-4 text-muted-foreground" />
               </span>
               <span>
                 <span className="block font-mono text-xs">{l.short}</span>

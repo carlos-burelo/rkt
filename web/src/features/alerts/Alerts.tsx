@@ -49,7 +49,6 @@ export function Alerts() {
         {rules.map((r) => (
           <div key={r.id} className="flex items-center gap-3 border-b bg-card/40 px-4 py-2.5 last:border-0">
             <Dot status={r.last_fired ? "degraded" : "stopped"} />
-            <span aria-hidden className="manifest-strip h-8 w-1 shrink-0 rounded-full opacity-70" />
             <span className="tnum font-mono text-xs text-muted-foreground">#{r.id}</span>
             <span className="truncate font-mono text-xs">{r.app}</span>
             <Badge variant="secondary" className="tnum font-mono text-[11px] font-normal">{r.kind}</Badge>

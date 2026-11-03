@@ -50,7 +50,6 @@ function RouteRow({ r, onChanged }: { r: Route; onChanged: () => void }) {
   }, [r.target]);
   return (
     <div className="flex items-center gap-2 border-b bg-card/40 px-4 py-2.5 last:border-0">
-      <span aria-hidden className="manifest-strip h-8 w-1 shrink-0 rounded-full opacity-70" />
       <Avatar name={r.hosts[0]} />
       <a
         href={`https://${r.hosts[0]}`}

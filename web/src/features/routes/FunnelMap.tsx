@@ -84,7 +84,7 @@ export function FunnelMap({
                   style={{ transition: "opacity 180ms ease-out, border-color 180ms ease-out" }}
                   title={`${l.host} → ${l.target}`}
                 >
-                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-sky-300 underline decoration-sky-300/40 underline-offset-2">
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground underline decoration-muted-foreground/50 underline-offset-2">
                     {l.host}
                   </span>
                   <span className="hidden shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground sm:flex">

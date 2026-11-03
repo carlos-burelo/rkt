@@ -5,6 +5,9 @@ import { buildLinks } from "./graph";
 import { RadialMap } from "./ProxyMap";
 import { Dot } from "../../shared/components/ui";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select, SelectValue, SelectTrigger, SelectContent, SelectItem,
+} from "@/components/ui/select";
 import { PageHeader, EmptyState } from "../../shared/components/patterns";
 import { useUI } from "../../app/ui";
 
@@ -41,28 +44,26 @@ export function Proxy() {
         description="Mapa real por ruta (dial TCP al backend + cert ACME). Toca un host para aislar su haz."
         actions={
           <div className="flex items-center gap-2">
-            <label className="sr-only" htmlFor="f-estado">estado</label>
-            <select
-              id="f-estado"
-              value={fState}
-              onChange={(e) => setFState(e.target.value)}
-              className="rounded-md border border-input bg-background px-2 py-1.5 text-xs"
-            >
-              <option value="all">Todos los estados</option>
-              <option value="ok">En ruta</option>
-              <option value="down">Varados</option>
-            </select>
-            <label className="sr-only" htmlFor="f-tls">tls</label>
-            <select
-              id="f-tls"
-              value={fTls}
-              onChange={(e) => setFTls(e.target.value)}
-              className="rounded-md border border-input bg-background px-2 py-1.5 text-xs"
-            >
-              <option value="all">Todos los TLS</option>
-              <option value="tls">Con TLS</option>
-              <option value="off">Sin TLS</option>
-            </select>
+            <Select value={fState} onValueChange={(v: string | null) => setFState(v ?? "all")}>
+              <SelectTrigger className="w-40 text-xs" aria-label="estado">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los estados</SelectItem>
+                <SelectItem value="ok">En ruta</SelectItem>
+                <SelectItem value="down">Varados</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={fTls} onValueChange={(v: string | null) => setFTls(v ?? "all")}>
+              <SelectTrigger className="w-32 text-xs" aria-label="tls">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los TLS</SelectItem>
+                <SelectItem value="tls">Con TLS</SelectItem>
+                <SelectItem value="off">Sin TLS</SelectItem>
+              </SelectContent>
+            </Select>
             <Link to="/routes" className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
               Gestionar →
             </Link>

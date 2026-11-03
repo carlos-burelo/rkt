@@ -48,8 +48,9 @@ export function groupByTarget(links: GraphLink[]): { target: string; short: stri
 }
 
 // Posición radial en [0,1]². Órbita elíptica, arranque arriba (-90°).
+// Un solo host va a la derecha (arriba solapa la órbita).
 export function radialPos(i: number, n: number): { x: number; y: number } {
-  if (n === 1) return { x: 0.5, y: 0.14 };
+  if (n === 1) return { x: 0.82, y: 0.5 };
   const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
   return { x: 0.5 + 0.34 * Math.cos(a), y: 0.5 + 0.33 * Math.sin(a) };
 }

@@ -24,7 +24,6 @@ export function UsageStrip() {
   return (
     <div className="overflow-hidden rounded-lg border">
       <div className="tnum flex items-center gap-3 border-b bg-muted/40 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-        <span aria-hidden className="manifest-strip h-4 w-1 rounded-full opacity-70" />
         <span>usage · 30 días</span>
         <span className="flex-1" />
         <span>access.log local</span>

@@ -40,7 +40,6 @@ export function Settings() {
       <Section title={`Claves · ${Object.keys(settings).length}`} description="Guardar valida antes de persistir. Binarios exigen restart.">
         {Object.entries(settings).map(([k, v]) => (
           <div key={k} className="flex items-center gap-3 border-b border-border/60 py-3 last:border-0">
-            <span aria-hidden className="manifest-strip h-8 w-1 shrink-0 rounded-full opacity-70" />
             <div className="min-w-0 flex-1">
               <p className="font-mono text-xs">{k}</p>
               {DESCRIPTIONS[k] && <p className="mt-0.5 text-[11px] text-muted-foreground">{DESCRIPTIONS[k]}</p>}
