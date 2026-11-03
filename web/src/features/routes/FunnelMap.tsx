@@ -3,8 +3,11 @@ import { ArrowRight, Plus, Server } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GraphLink, groupByTarget } from "../proxy/graph";
 
-// Funnel host → backend en filas: cada fila su conector, sin solapes.
-// Sin azul Vercel; verde/rojo solo por estado real del dial.
+const ROW = 34;
+const GAP = 10;
+
+// Flowchart host → backend: columna de hosts, conectores bezier y caja
+// de destino centrada. Geometría fija (sin medir DOM) para no romperse.
 export function FunnelMap({
   links,
   onAdd,
@@ -17,55 +20,111 @@ export function FunnelMap({
 
   return (
     <section aria-label="mapa de rutas" className="border border-border bg-card/30">
-      <header className="flex items-center gap-2 border-b border-border bg-secondary/20 px-3 py-2">
+      <header className="flex flex-wrap items-center gap-2 border-b border-border bg-secondary/20 px-3 py-2">
         <span aria-hidden className="h-1.5 w-1.5 bg-signal" />
-        <h3 className="text-[12px] font-medium">Rutas</h3>
-        <span className="tnum font-mono text-[9px] text-muted-foreground">{links.length} hosts</span>
+        <h3 className="text-[12px] font-medium">Flujo de rutas</h3>
+        <span className="tnum font-mono text-[9px] text-muted-foreground">
+          {links.length} host{links.length > 1 ? "s" : ""} · {groups.length} destino{groups.length > 1 ? "s" : ""}
+        </span>
         <span className="flex-1" />
         <Link to="/proxy" className="inline-flex items-center gap-1 font-mono text-[9px] text-muted-foreground hover:text-foreground">
-          ver todo <ArrowRight className="h-3 w-3" />
+          ver topología <ArrowRight className="h-3 w-3" />
         </Link>
       </header>
+
       <ul className="divide-y divide-border/60">
-        {groups.map((g) => (
-          <li
-            key={g.target}
-            className="grid items-center gap-2 px-3 py-2.5 md:grid-cols-[minmax(0,1fr)_2.5rem_auto]"
-          >
-            <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1">
-              {g.hosts.map((l) => (
-                <span
-                  key={l.host}
-                  className={cn("inline-flex max-w-64 items-center gap-1.5", l.stale ? "opacity-55" : "")}
-                  title={`${l.host} → ${l.target}`}
+        {groups.map((g) => {
+          const n = g.hosts.length;
+          const height = n * ROW + (n - 1) * GAP;
+          const mid = height / 2;
+          return (
+            <li key={g.target} className="px-3 py-3">
+              {/* desktop: flowchart con conectores */}
+              <div className="hidden items-stretch gap-2 sm:flex">
+                <div className="flex w-56 max-w-[45%] shrink-0 flex-col" style={{ gap: GAP }}>
+                  {g.hosts.map((l) => (
+                    <span
+                      key={l.host}
+                      className="flex items-center gap-2 border border-border bg-card/50 px-2"
+                      style={{ height: ROW }}
+                      title={`${l.host} → ${l.target}`}
+                    >
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "h-1.5 w-1.5 shrink-0",
+                          l.stale ? "bg-muted-foreground/40" : l.ok ? "bg-ok" : "bg-bad",
+                        )}
+                      />
+                      <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{l.host}</span>
+                    </span>
+                  ))}
+                </div>
+
+                <svg
+                  className="shrink-0 text-muted-foreground/45"
+                  width={76}
+                  height={height}
+                  viewBox={`0 0 100 ${height}`}
+                  preserveAspectRatio="none"
+                  aria-hidden
                 >
-                  <span
-                    aria-hidden
-                    className={`h-1.5 w-1.5 shrink-0 ${
-                      l.stale ? "bg-muted-foreground/35" : l.ok ? "bg-ok" : "bg-bad"
-                    }`}
+                  {g.hosts.map((l, i) => {
+                    const y = i * (ROW + GAP) + ROW / 2;
+                    return (
+                      <path
+                        key={l.host}
+                        d={`M0 ${y} C 45 ${y}, 55 ${mid}, 96 ${mid}`}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.2}
+                        strokeDasharray="5 4"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    );
+                  })}
+                  <path
+                    d={`M92 ${mid - 4} L97 ${mid} L92 ${mid + 4}`}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.2}
+                    vectorEffect="non-scaling-stroke"
                   />
-                  <span className="truncate font-mono text-[11px]">{l.host}</span>
-                </span>
-              ))}
-            </div>
-            <svg width="40" height="10" viewBox="0 0 40 10" fill="none" aria-hidden className="hidden shrink-0 text-muted-foreground/35 md:block">
-              <path d="M0 5 H40" stroke="currentColor" strokeWidth="1" />
-              <path d="M35 1.5 L39.5 5 L35 8.5" stroke="currentColor" strokeWidth="1" fill="none" />
-            </svg>
-            <span
-              className="flex w-fit max-w-full flex-wrap items-center gap-x-2 gap-y-1 border border-border bg-card/50 px-2 py-1"
-              title={`${g.hosts.length} ruta${g.hosts.length > 1 ? "s" : ""} → ${g.target}`}
-            >
-              <Server className="h-3 w-3 text-muted-foreground" />
-              <span className="tnum font-mono text-[10px]">{g.short}</span>
-              <span className="font-mono text-[8px] tracking-[0.08em] text-muted-foreground/60 uppercase">
-                {g.hosts[0]?.tls === "off" ? "sin tls" : `tls ${g.hosts[0]?.tls ?? "?"}`}
-              </span>
-            </span>
-          </li>
-        ))}
+                </svg>
+
+                <div className="flex min-w-0 flex-1 items-center">
+                  <span
+                    className="flex min-w-0 items-center gap-2 border border-border bg-card/60 px-2 py-1.5"
+                    title={`${g.hosts.length} ruta${g.hosts.length > 1 ? "s" : ""} → ${g.target}`}
+                  >
+                    <Server className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    <span className="tnum truncate font-mono text-[10px]">{g.short}</span>
+                    <span className="shrink-0 font-mono text-[8px] tracking-[0.08em] text-muted-foreground/60 uppercase">
+                      {g.hosts[0]?.tls === "off" ? "sin tls" : `tls ${g.hosts[0]?.tls ?? "?"}`}
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              {/* móvil: mismo flujo, apilado (sin conectores que se corten) */}
+              <div className="space-y-1.5 sm:hidden">
+                {g.hosts.map((l) => (
+                  <div key={l.host} className="flex items-center gap-2 border border-border bg-card/50 px-2 py-1.5">
+                    <span
+                      aria-hidden
+                      className={cn("h-1.5 w-1.5 shrink-0", l.stale ? "bg-muted-foreground/40" : l.ok ? "bg-ok" : "bg-bad")}
+                    />
+                    <span className="min-w-0 flex-1 truncate font-mono text-[10px]">{l.host}</span>
+                    <span aria-hidden className="text-[9px] text-muted-foreground">→</span>
+                    <span className="tnum shrink-0 font-mono text-[9px] text-muted-foreground">{g.short}</span>
+                  </div>
+                ))}
+              </div>
+            </li>
+          );
+        })}
       </ul>
+
       <div className="border-t border-border px-3 py-2">
         <button
           onClick={onAdd}
