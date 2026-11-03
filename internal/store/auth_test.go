@@ -75,4 +75,22 @@ func TestUsersSessions(t *testing.T) {
 	if err != nil || len(users) != 1 || users[0].Name != "admin2" {
 		t.Fatalf("list: %+v %v", users, err)
 	}
+
+	// rotación invalida sesiones
+	tok2, err := db.NewSession("admin2", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetPassword("admin2", "password-nueva-99"); err != nil {
+		t.Fatalf("passwd: %v", err)
+	}
+	if _, _, ok := db.SessionUser(tok2); ok {
+		t.Fatal("rotación debe invalidar sesiones")
+	}
+	if _, err := db.CheckPassword("admin2", "password-nueva-99"); err != nil {
+		t.Fatalf("nuevo password: %v", err)
+	}
+	if err := db.SetPassword("nadie", "password-larga-99"); err == nil {
+		t.Fatal("inexistente debe fallar")
+	}
 }

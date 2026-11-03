@@ -119,6 +119,26 @@ func (d *DB) DeleteUser(name string) error {
 	return d.bumpVersion()
 }
 
+// SetPassword rota password e invalida sesiones (re-login).
+func (d *DB) SetPassword(name, password string) error {
+	if len(password) < 12 {
+		return fmt.Errorf("password mínimo 12 caracteres")
+	}
+	var exists string
+	if err := d.sql.QueryRow(`SELECT name FROM users WHERE name=?`, name).Scan(&exists); err != nil {
+		return fmt.Errorf("usuario %q inexistente", name)
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	if _, err := d.sql.Exec(`UPDATE users SET pass_hash=? WHERE name=?`, string(hash), name); err != nil {
+		return err
+	}
+	_, _ = d.sql.Exec(`DELETE FROM sessions WHERE user=?`, name)
+	return d.bumpVersion()
+}
+
 // CheckPassword compara password (tiempo constante en hash bcrypt).
 func (d *DB) CheckPassword(name, password string) (string, error) {
 	var hash, role string

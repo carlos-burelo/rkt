@@ -100,6 +100,9 @@ func Run(cfgPath string) {
 		case "settings":
 			cmdSettings(flag.Args()[1:], cfgPath)
 			return
+		case "users":
+			cmdUsers(flag.Args()[1:], cfgPath)
+			return
 		case "config":
 			cmdConfig(flag.Args()[1:], cfgPath)
 			return
@@ -181,6 +184,7 @@ Gestión (flota en SQLite, con backup implícito):
   routes list|add|rm                     --host (repetible) --target
   env list|set|unset                      env set <app> CLAVE=valor
   settings list|set                      settings set CLAVE=valor
+  users list|add|del|passwd              usuarios dashboard (primer add = admin)
   config export [file]|import <file>     respaldo/restaura en git
   github login|init                      vincular GitHub App en browser
 

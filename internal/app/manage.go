@@ -19,6 +19,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"golang.org/x/term"
+
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/discover"
@@ -86,6 +88,96 @@ func prompt(label, def string) string {
 		return v
 	}
 	return def
+}
+
+// promptPassword lee sin eco (mín 12, pide dos veces).
+func promptPassword() string {
+	for {
+		fmt.Print("password (mín 12): ")
+		b1, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Println()
+		if err != nil {
+			log.Fatalf("password: %v", err)
+		}
+		fmt.Print("repite password: ")
+		b2, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Println()
+		if err != nil {
+			log.Fatalf("password: %v", err)
+		}
+		if string(b1) != string(b2) {
+			fmt.Println("no coinciden, de nuevo")
+			continue
+		}
+		if len(b1) < 12 {
+			fmt.Println("mínimo 12 caracteres")
+			continue
+		}
+		return string(b1)
+	}
+}
+
+// cmdUsers alta/baja/lista/password (bootstrap: primer admin por aquí).
+func cmdUsers(args []string, cfgPath string) {
+	if len(args) == 0 {
+		log.Fatal("uso: users <list|add|del|passwd>")
+	}
+	_, db := merged(cfgPath)
+	defer db.Close()
+	switch args[0] {
+	case "list":
+		users, err := db.ListUsers()
+		if err != nil {
+			log.Fatalf("users: %v", err)
+		}
+		if len(users) == 0 {
+			fmt.Println("(sin usuarios; crea el primero: users add <nombre> --role admin)")
+			return
+		}
+		for _, u := range users {
+			fmt.Printf("%s\t%s\t%s\n", u.Name, u.Role, u.CreatedAt)
+		}
+	case "add":
+		fs := flag.NewFlagSet("users add", flag.ContinueOnError)
+		role := fs.String("role", "viewer", "admin|operator|viewer")
+		if err := fs.Parse(args[1:]); err != nil {
+			os.Exit(2)
+		}
+		if fs.NArg() != 1 {
+			log.Fatal("uso: users add <nombre> [--role admin]")
+		}
+		name := fs.Arg(0)
+		n, err := db.CountUsers()
+		if err != nil {
+			log.Fatalf("users: %v", err)
+		}
+		if n == 0 && *role != store.RoleAdmin {
+			fmt.Println("primer usuario debe ser admin (forzando --role admin)")
+			*role = store.RoleAdmin
+		}
+		if err := db.CreateUser(name, promptPassword(), *role); err != nil {
+			log.Fatalf("users add: %v", err)
+		}
+		fmt.Printf("usuario %s (%s) creado\n", name, *role)
+	case "del":
+		if len(args) != 2 {
+			log.Fatal("uso: users del <nombre>")
+		}
+		if err := db.DeleteUser(args[1]); err != nil {
+			log.Fatalf("users del: %v", err)
+		}
+		fmt.Printf("usuario %s borrado\n", args[1])
+	case "passwd":
+		if len(args) != 2 {
+			log.Fatal("uso: users passwd <nombre>")
+		}
+		if err := db.SetPassword(args[1], promptPassword()); err != nil {
+			log.Fatalf("users passwd: %v", err)
+		}
+		fmt.Printf("password de %s actualizado (sesiones invalidadas)\n", args[1])
+	default:
+		log.Fatalf("users: subcomando %q (list|add|del|passwd)", args[0])
+	}
 }
 
 func cmdApps(args []string, cfgPath string) {
