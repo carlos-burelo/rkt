@@ -1,5 +1,5 @@
 import {
-  createBrowserRouter, Navigate, useNavigate, RouterProvider,
+  createBrowserRouter, Navigate, Outlet, useNavigate, RouterProvider,
 } from "react-router";
 import { useAuth } from "../features/auth/store";
 import { ShellLayout } from "./layout";
@@ -19,13 +19,13 @@ import { Routes } from "../features/routes/Routes";
 import { Settings } from "../features/settings/Settings";
 import { Users } from "../features/users/Users";
 
-// Puerta auth: setup primero, luego login.
+// Puerta auth: setup primero, luego login. Solo guarda, no pinta.
 function RequireAuth() {
   const { authed, setupRequired } = useAuth();
   if (setupRequired === null) return null;
   if (setupRequired) return <Navigate to="/setup" replace />;
   if (!authed) return <Navigate to="/login" replace />;
-  return <ShellLayout />;
+  return <Outlet />;
 }
 
 function LoginRoute() {
