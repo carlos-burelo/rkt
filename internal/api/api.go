@@ -307,10 +307,15 @@ func NewHandler(d Deps) http.Handler {
 			writeErr(w, http.StatusBadRequest, "JSON inválido")
 			return
 		}
-		// re-chequea bajo carrera: el primero gana, el resto 403
+		// re-chequea bajo carrera: el primero gana, el resto 403.
+		// validación primero para error 400 exacto (no mentir).
+		if err := store.ValidateCredential(in.User, in.Password); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		if err := d.DB.CreateUser(in.User, in.Password, store.RoleAdmin); err != nil {
 			th.fail(ip)
-			writeErr(w, http.StatusForbidden, "setup ya completado o datos inválidos")
+			writeErr(w, http.StatusForbidden, "setup ya completado")
 			return
 		}
 		th.ok(ip)

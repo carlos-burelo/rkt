@@ -34,7 +34,8 @@ func validRole(r string) bool {
 	return r == RoleAdmin || r == RoleOperator || r == RoleViewer
 }
 
-func validUserName(s string) bool {
+// ValidUserName [a-z0-9-_] hasta 64. Canónico (CLI y API lo usan).
+func ValidUserName(s string) bool {
 	if s == "" || len(s) > 64 {
 		return false
 	}
@@ -55,13 +56,21 @@ func (d *DB) CountUsers() (int, error) {
 	return n, err
 }
 
-// CreateUser alta con password hasheado. Primera cuenta la crea el CLI.
-func (d *DB) CreateUser(name, password, role string) error {
-	if !validUserName(name) {
-		return fmt.Errorf("usuario inválido [a-z0-9-_]")
+// ValidateCredential valida sin tocar DB (para errores 400 exactos).
+func ValidateCredential(name, password string) error {
+	if !ValidUserName(name) {
+		return fmt.Errorf("usuario inválido [a-z0-9-_], máx 64")
 	}
 	if len(password) < 12 {
 		return fmt.Errorf("password mínimo 12 caracteres")
+	}
+	return nil
+}
+
+// CreateUser alta con password hasheado. Primera cuenta la crea el CLI.
+func (d *DB) CreateUser(name, password, role string) error {
+	if err := ValidateCredential(name, password); err != nil {
+		return err
 	}
 	if !validRole(role) {
 		return fmt.Errorf("rol inválido (admin|operator|viewer)")
