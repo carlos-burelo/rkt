@@ -1,6 +1,9 @@
 package appview
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"rkt-proxy/internal/config"
@@ -123,5 +126,28 @@ func TestAppsYResolvesLocal(t *testing.T) {
 	m := App(cfg, cfg.Apps[0])
 	if m["deploy"] == nil {
 		t.Fatal("deploy debe aparecer")
+	}
+}
+
+func TestAppExternal(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"scripts":{"dev":"vite"},"devDependencies":{"vite":"^5"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		Apps: []config.App{{
+			Name: "dev", Runtime: config.RuntimeExternal, Dir: dir,
+			Env: map[string]string{"PORT": "3010"},
+		}},
+		Routes: []config.Route{{Hosts: []string{"dev.localhost"}, Target: "http://127.0.0.1:3010"}},
+	}
+	cfg.ApplyDefaults()
+	m := App(cfg, cfg.Apps[0])
+	if m["external"] != true || m["runtime"] != config.RuntimeExternal {
+		t.Fatalf("external mal: %+v", m)
+	}
+	cmd, _ := m["run_command"].(string)
+	if !strings.Contains(cmd, "pnpm exec vite") {
+		t.Fatalf("run_command = %q", cmd)
 	}
 }

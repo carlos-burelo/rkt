@@ -288,8 +288,8 @@ func (p *Program) Run() {
 		}
 	}()
 	if cfg.Healthz.Enabled {
-		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal})
-		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Apply: func(apps []config.App, global map[string]string) { p.sup.Apply(apps, global) }, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh})
+		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.restartApp, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal})
+		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) { p.sup.Apply(apps, global) }, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh})
 		sub, err := fs.Sub(web.Dist, "dist")
 		if err != nil {
 			p.log.Error("dashboard sin dist", "err", err)
@@ -651,7 +651,31 @@ func (p *Program) appStatuses() []health.AppStatus {
 			Restarts: s.Restarts, Failed: s.Failed, HTTPOK: ok,
 		})
 	}
+	// Externas: no hay supervisor; el estado es si el dev server escucha.
+	for i := range live.Apps {
+		a := &live.Apps[i]
+		if !a.External() {
+			continue
+		}
+		up := portOpen(a.Env["PORT"])
+		out = append(out, health.AppStatus{
+			Name: a.Name, Running: up, HTTPOK: up && p.probeApp(a.Name, live),
+		})
+	}
 	return out
+}
+
+// portOpen dial corto a 127.0.0.1:<port> (estado de app externa).
+func portOpen(port string) bool {
+	if port == "" {
+		return false
+	}
+	c, err := net.DialTimeout("tcp", "127.0.0.1:"+port, 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
 }
 
 // probeApp verifica HTTP al puerto de la app (cache 3s: evita martillar
@@ -685,6 +709,14 @@ func (p *Program) probeApp(name string, live *config.Config) bool {
 	p.probes[name] = probeResult{at: time.Now(), ok: ok}
 	p.probeMu.Unlock()
 	return ok
+}
+
+// restartApp reinicia una app gestionada; externas no tienen proceso.
+func (p *Program) restartApp(name string) bool {
+	if a := cfgfile.FindApp(p.live.Get(), name); a != nil && a.External() {
+		return false
+	}
+	return p.sup.Restart(name)
 }
 
 // supCtl adapta Manager a deploy.Controller.
@@ -786,6 +818,9 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 	if app == nil {
 		return 0, fmt.Errorf("app %q inexistente", name)
 	}
+	if app.External() {
+		return 0, fmt.Errorf("app %q es externa: no tiene build; corre el dev server en %s", name, app.Dir)
+	}
 	plan, err := buildpack.DetectDir(app.Dir)
 	if err != nil {
 		return 0, err
@@ -863,6 +898,9 @@ func (p *Program) deployAppAsync(name, actor string) (int64, error) {
 
 // startDeploy prepara log + registro y ejecuta (async o no) el pipeline.
 func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, string, error) {
+	if app.External() {
+		return 0, "", fmt.Errorf("app %q es externa: no tiene pipeline; corre el dev server en %s", app.Name, app.Dir)
+	}
 	if err := p.beginOp(app.Name); err != nil {
 		return 0, "", err
 	}
@@ -1039,6 +1077,9 @@ func (p *Program) rollbackApp(name, actor string) error {
 	}
 	if app == nil {
 		return fmt.Errorf("app %q inexistente", name)
+	}
+	if app.External() {
+		return fmt.Errorf("app %q es externa: no tiene rollback; corre el dev server en %s", name, app.Dir)
 	}
 	var depID int64
 	if p.db != nil {

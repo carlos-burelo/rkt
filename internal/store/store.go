@@ -107,6 +107,8 @@ var migrations = []string{
 		data TEXT NOT NULL,
 		updated_at TEXT NOT NULL DEFAULT ''
 	);`,
+	// v10: apps externas (solo proxy, sin supervisor/deploy).
+	`ALTER TABLE apps ADD COLUMN runtime TEXT NOT NULL DEFAULT 'managed';`,
 }
 
 // DB wrapper.

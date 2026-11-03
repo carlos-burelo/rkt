@@ -282,6 +282,7 @@ Stack raro = warn con el `apps add` manual (nada a medias).
 
 ```powershell
 rkt apps add --name app2 --repo https://github.com/o/app2.git --domain app2.coatl.in --port 3002 --command C:\nodejs\node.exe --preset next --auto
+rkt apps add --external --name dev --dir C:\repo\dev --domain dev.localhost --port 3010
 rkt apps list
 rkt routes list
 rkt routes add --host x.coatl.in --host y.coatl.in --target http://127.0.0.1:4000
@@ -294,6 +295,12 @@ rkt deploy app2
 rkt rollback app2
 rkt deployments list --app app2
 ```
+
+**Apps externas (dev local sin pipeline).** Una app `runtime: external` solo
+presta el proxy: host, TLS local, access log y dashboard. No se supervisa, no
+se compila y no se despliega; el dev server (`pnpm dev`, Vite, Next dev) lo
+corre el humano en su terminal con el puerto registrado. El alta sugiere el
+comando exacto y el backend se marca `running` cuando ese puerto escucha.
 
 La flota (apps/routes/settings) vive en SQLite (`<dir-config>/logs/rkt.db`);
 el YAML conserva solo infra estable. Toda mutación valida + sube versión

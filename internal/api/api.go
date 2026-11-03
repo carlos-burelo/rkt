@@ -561,6 +561,7 @@ func NewHandler(d Deps) http.Handler {
 			var in struct {
 				Repo    string `json:"repo"`
 				Name    string `json:"name"`
+				Runtime string `json:"runtime"`
 				Domain  string `json:"domain"`
 				Port    int    `json:"port"`
 				Command string `json:"command"`
@@ -571,7 +572,7 @@ func NewHandler(d Deps) http.Handler {
 				writeErr(w, http.StatusBadRequest, "JSON inválido")
 				return
 			}
-			name, err := createAppFromRepo(d.DB, d.Live, d.githubManager(), in.Repo, in.Name, in.Domain, in.Port, in.Command, in.Dir, in.Auto)
+			name, err := createAppFromRepo(d.DB, d.Live, d.githubManager(), in.Runtime, in.Repo, in.Name, in.Domain, in.Port, in.Command, in.Dir, in.Auto)
 			if err != nil {
 				writeErr(w, http.StatusBadRequest, err.Error())
 				return
@@ -591,6 +592,10 @@ func NewHandler(d Deps) http.Handler {
 		a := cfgfile.FindApp(d.Live.Get(), name)
 		if a == nil {
 			writeErr(w, http.StatusNotFound, "app inexistente")
+			return
+		}
+		if a.External() && (action == "deploy" || action == "restart" || action == "rollback" || action == "build" || action == "retry") {
+			writeErr(w, http.StatusConflict, "app externa: solo proxy; corre el dev server en "+a.Dir)
 			return
 		}
 		switch {
@@ -706,6 +711,12 @@ func NewHandler(d Deps) http.Handler {
 				return
 			}
 			cp := cloneFleet(d.Live)
+			target := ""
+			if old := cfgfile.FindApp(cp, name); old != nil {
+				if p := old.Env["PORT"]; p != "" {
+					target = "http://127.0.0.1:" + p
+				}
+			}
 			kept := []config.App{}
 			for _, x := range cp.Apps {
 				if x.Name != name {
@@ -713,6 +724,15 @@ func NewHandler(d Deps) http.Handler {
 				}
 			}
 			cp.Apps = kept
+			if target != "" {
+				routes := []config.Route{}
+				for _, r := range cp.Routes {
+					if r.Target != target {
+						routes = append(routes, r)
+					}
+				}
+				cp.Routes = routes
+			}
 			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
 				writeErr(w, http.StatusBadRequest, err.Error())
 				return
@@ -1432,8 +1452,16 @@ func (d *Deps) githubManager() *github.Manager {
 
 // createAppFromRepo alta con inferencia vía cfgfile.CreateApp (hogar
 // único, también usado por MCP). Escribe vía AddApp y refresca Live.
-func createAppFromRepo(db *store.DB, live *config.Live, gh *github.Manager, repo, name, domain string, port int, command, dir string, auto bool) (string, error) {
-	app, domains, portS, err := cfgfile.CreateApp(db, gh, repo, name, domain, port, command, dir, auto)
+func createAppFromRepo(db *store.DB, live *config.Live, gh *github.Manager, runtime, repo, name, domain string, port int, command, dir string, auto bool) (string, error) {
+	var app config.App
+	var domains []string
+	var portS string
+	var err error
+	if runtime == config.RuntimeExternal {
+		app, domains, portS, err = cfgfile.CreateExternalApp(db, name, domain, dir, port)
+	} else {
+		app, domains, portS, err = cfgfile.CreateApp(db, gh, repo, name, domain, port, command, dir, auto)
+	}
 	if err != nil {
 		return "", err
 	}

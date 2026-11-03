@@ -266,3 +266,17 @@ func TestOnEventDied(t *testing.T) {
 		return len(kinds) >= 1 && kinds[0] == "died:muere"
 	}, "evento died")
 }
+
+func TestExternalNoSeSupervisa(t *testing.T) {
+	dir := t.TempDir()
+	ext := config.App{Name: "ext", Runtime: config.RuntimeExternal, Dir: dir, Env: map[string]string{"PORT": "3999"}}
+	man := app1("man", "cmd.exe", []string{"/c", "exit 0"}, time.Second, time.Second)
+	m := New([]config.App{ext, man}, nil, dir, testLog(t))
+	if got := len(m.Snapshot()); got != 1 {
+		t.Fatalf("snapshot = %d, solo debe estar la managed", got)
+	}
+	m.Apply([]config.App{ext}, nil)
+	if got := len(m.Snapshot()); got != 0 {
+		t.Fatalf("apply externa no debe crear procesos: %d", got)
+	}
+}

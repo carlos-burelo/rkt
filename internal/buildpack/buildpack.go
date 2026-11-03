@@ -199,3 +199,40 @@ func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
 	}
 	return plan
 }
+
+// DevHint sugiere el comando para levantar el dev server local. Solo es
+// texto para el humano: rkt NO lo ejecuta en apps externas.
+func DevHint(dir, port string) string {
+	if dir == "" {
+		return ""
+	}
+	if port == "" {
+		port = "3000"
+	}
+	plan, err := DetectDir(dir)
+	if err != nil {
+		return ""
+	}
+	switch plan.Kind {
+	case "next":
+		return "pnpm exec next dev -p " + port + " -H 127.0.0.1"
+	case "vite":
+		return "pnpm exec vite --host 127.0.0.1 --port " + port + " --strictPort"
+	case "astro":
+		return "pnpm exec astro dev --host 127.0.0.1 --port " + port
+	case "sveltekit":
+		return "pnpm exec vite dev --host 127.0.0.1 --port " + port + " --strictPort"
+	case "nuxt":
+		return "pnpm exec nuxt dev --host 127.0.0.1 --port " + port
+	case "go":
+		return "go run ."
+	case "python":
+		return "python -u app.py"
+	case "static":
+		return "" // sin proceso: se sirve estático
+	}
+	if plan.Kind != "" {
+		return "pnpm run dev"
+	}
+	return ""
+}

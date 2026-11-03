@@ -303,6 +303,7 @@ func appsAdd(args []string, cfgPath string) {
 	port := fs.String("port", "", "puerto local (con --domain)")
 	dir := fs.String("dir", "", "dir app")
 	command := fs.String("command", "", "binario absoluto (anula el plan)")
+	external := fs.Bool("external", false, "app externa: solo proxy, sin proceso (dev server aparte)")
 	auto := fs.Bool("auto", false, "auto-deploy")
 	var builds multiFlag
 	fs.Var(&builds, "build", "paso build (repetible, anula el plan)")
@@ -315,6 +316,24 @@ func appsAdd(args []string, cfgPath string) {
 
 	cfg, db := merged(cfgPath)
 	defer db.Close()
+	if *external {
+		if *name == "" || *dir == "" || len(domains) == 0 {
+			log.Fatal("apps add --external requiere --name, --dir y --domain")
+		}
+		p := 0
+		if *port != "" {
+			p, _ = strconv.Atoi(*port)
+		}
+		app, doms, portS, err := cfgfile.CreateExternalApp(db, *name, domains[0], *dir, p)
+		if err != nil {
+			log.Fatalf("apps add: %v", err)
+		}
+		if err := cfgfile.AddApp(db, app, doms, portS); err != nil {
+			log.Fatalf("apps add: %v", err)
+		}
+		fmt.Printf("app externa %s → %s puerto %s (sin proceso; corre: pnpm dev)\n", app.Name, strings.Join(doms, ","), portS)
+		return
+	}
 	var sug *discover.Suggestion
 	if *repo != "" {
 		if s, err := discover.Suggest(db, nil, *repo); err == nil {

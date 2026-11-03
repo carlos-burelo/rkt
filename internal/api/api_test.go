@@ -707,6 +707,51 @@ func TestAppsCreate(t *testing.T) {
 	}
 }
 
+func TestAppsCreateExternal(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	tok := loginAs(t, h, db, "op", store.RoleOperator)
+	dir := t.TempDir()
+	body := `{"name":"dev","runtime":"external","dir":` + strconv_quote(dir) + `,"domain":"dev.localhost"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/apps", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("alta externa: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps", tok))
+	if !strings.Contains(rec.Body.String(), `"external":true`) || !strings.Contains(rec.Body.String(), `"runtime":"external"`) {
+		t.Fatalf("lista sin externa: %s", rec.Body.String())
+	}
+	// sin pipeline: deploy/restart/rollback 409
+	for _, act := range []string{"deploy", "restart", "rollback"} {
+		rec = httptest.NewRecorder()
+		h.ServeHTTP(rec, authed(http.MethodPost, "/api/v1/apps/dev/"+act, tok))
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("%s externa: quiere 409, got %d %s", act, rec.Code, rec.Body.String())
+		}
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/apps/dev", tok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete externa: %d %s", rec.Code, rec.Body.String())
+	}
+	fleet, err := db.LoadFleet()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range fleet.Routes {
+		for _, h := range r.Hosts {
+			if h == "dev.localhost" {
+				t.Fatalf("ruta huérfana tras borrar externa: %+v", r)
+			}
+		}
+	}
+}
+
 func TestDomainsTLS(t *testing.T) {
 	d, db, done := testDeps(t)
 	defer done()

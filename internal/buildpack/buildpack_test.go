@@ -150,3 +150,15 @@ func TestFromRemoteSinPackageJSON(t *testing.T) {
 		t.Fatalf("sin señales debe quedar vacío: %+v", p)
 	}
 }
+
+func TestDevHint(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "package.json", `{"scripts":{"dev":"vite"},"devDependencies":{"vite":"^5"}}`)
+	got := DevHint(dir, "3010")
+	if !strings.Contains(got, "pnpm exec vite") || !strings.Contains(got, "3010") {
+		t.Fatalf("DevHint = %q", got)
+	}
+	if DevHint(t.TempDir(), "3010") != "" {
+		t.Fatal("sin señales no debe sugerir comando")
+	}
+}

@@ -116,6 +116,23 @@ func TestAlertsCRUD(t *testing.T) {
 	}
 }
 
+func TestRuntimeExternalRoundtrip(t *testing.T) {
+	db := newDB(t)
+	dir := t.TempDir()
+	app := config.App{Name: "ext", Runtime: config.RuntimeExternal, Dir: dir, Env: map[string]string{"PORT": "3999"}}
+	app.SetDelays(time.Second, time.Second)
+	if err := db.UpsertApp(&app); err != nil {
+		t.Fatal(err)
+	}
+	f, err := db.LoadFleet()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Apps) != 1 || !f.Apps[0].External() || f.Apps[0].Dir != dir {
+		t.Fatalf("roundtrip externa: %+v", f.Apps)
+	}
+}
+
 func TestPruneYDeployments(t *testing.T) {
 	db := newDB(t)
 	oldID, err := db.InsertDeployment("w", "rev1", `C:\logs\a.log`, "yo", nil)

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, FolderGit2, FolderOpen, Terminal } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, FolderGit2, FolderOpen, Laptop, Terminal } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +9,13 @@ import { DomainSuggest } from "../../shared/components/DomainSuggest";
 import { createApp, CreateAppIn, detectApp, buildApp, deployAppAsync, DetectOut, listGithubRepos, GithubRepo } from "./api";
 import { deploymentLog, getDeployment } from "../deployments/api";
 
-type Origin = "git" | "local" | "manual";
+type Origin = "git" | "local" | "external" | "manual";
 type Step = 1 | 2 | 3;
 
 const ORIGINS: { id: Origin; label: string; hint: string; icon: typeof FolderGit2 }[] = [
   { id: "git", label: "Repositorio Git", hint: "Clona el repo y detecta comando, puerto y dominio.", icon: FolderGit2 },
   { id: "local", label: "Directorio local", hint: "Sirve un proyecto que ya vive en esta máquina.", icon: FolderOpen },
+  { id: "external", label: "Dev externo", hint: "Solo proxy: registra dominio/puerto; el dev server lo corrés vos.", icon: Laptop },
   { id: "manual", label: "Manual", hint: "Sin repo: defines el binario y el directorio a mano.", icon: Terminal },
 ];
 
@@ -160,7 +161,7 @@ export function CreateDialog({
   const errs = {
     repo: origin === "git" && repo.trim() !== "" && !looksGit(repo) ? "usa https:// o git@…" : "",
     name: !SLUG.test(name) ? "minúsculas, números y guiones" : "",
-    dir: origin === "local" && dir.trim() === "" ? "ruta absoluta del proyecto" : "",
+    dir: (origin === "local" || origin === "external") && dir.trim() === "" ? "ruta absoluta del proyecto" : "",
     command: origin === "manual" && command.trim() === "" ? "binario absoluto" : "",
     gitRepo: origin === "git" && repo.trim() === "" ? "pega la URL del repositorio" : "",
   };
@@ -189,6 +190,29 @@ export function CreateDialog({
   }
 
   function submit() {
+    if (origin === "external") {
+      const input: CreateAppIn = {
+        name: name.trim() || undefined,
+        runtime: "external",
+        dir: dir.trim() || undefined,
+        domain: domain.trim() || undefined,
+        port: port.trim() === "" ? undefined : Number(port),
+      };
+      setBusy(true);
+      createApp(input)
+        .then((app) => {
+          setBusy(false);
+          onCreated(app);
+          setOpen(false);
+          reset();
+          onOpen(app);
+        })
+        .catch((e) => {
+          setBusy(false);
+          fail(e);
+        });
+      return;
+    }
     const input: CreateAppIn = {
       repo: origin === "git" ? repo.trim() : undefined,
       name: name.trim() || undefined,
@@ -425,6 +449,20 @@ export function CreateDialog({
                 </span>
               </Field>
             )}
+            {origin === "external" && (
+              <Field label="carpeta del repo" hint="para verla y sugerir el comando" error={tried ? errs.dir : ""}>
+                <PathInput
+                  value={dir}
+                  onChange={setDir}
+                  mode="dir"
+                  placeholder="C:\Users\x\dev\mi-app"
+                  ariaLabel="carpeta del repo"
+                />
+                <span className="font-mono text-[9px] normal-case text-muted-foreground/70">
+                  rkt NO arranca nada: solo enruta el dominio al puerto. El dev server corre en tu terminal.
+                </span>
+              </Field>
+            )}
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="nombre" hint="[a-z0-9-]" error={tried ? errs.name : ""}>
@@ -480,15 +518,17 @@ export function CreateDialog({
 
             {advanced && (
               <div className="grid grid-cols-1 gap-3 border border-border bg-card/40 p-3 sm:grid-cols-2">
-                <Field label="comando" hint="anula la detección">
-                  <PathInput
-                    value={command}
-                    onChange={setCommand}
-                    mode="file"
-                    placeholder="C:\apps\mi-app\mi-app.exe"
-                    ariaLabel="comando avanzado"
-                  />
-                </Field>
+                {origin !== "external" && (
+                  <Field label="comando" hint="anula la detección">
+                    <PathInput
+                      value={command}
+                      onChange={setCommand}
+                      mode="file"
+                      placeholder="C:\apps\mi-app\mi-app.exe"
+                      ariaLabel="comando avanzado"
+                    />
+                  </Field>
+                )}
                 <Field label="directorio" hint="por defecto C:\apps\<nombre>">
                   <PathInput
                     value={dir}
@@ -562,15 +602,23 @@ export function CreateDialog({
               </p>
             )}
 
+            {origin === "external" && (
+              <p className="border border-border bg-card/40 px-3 py-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
+                app externa: sin build, sin deploy, sin supervisor. rkt solo enruta el dominio al puerto.
+                Levantá el dev server en la carpeta con el puerto indicado.
+              </p>
+            )}
+
             <div className="border border-border">
               {[
                 ["origen", ORIGINS.find((o) => o.id === origin)?.label ?? origin],
                 ["nombre", name],
                 ...(repo.trim() ? [["repositorio", repo.trim()]] : []),
                 ...(dir.trim() ? [["directorio", dir.trim()]] : []),
-                ["comando", command.trim() || (plan?.start.join(" ") ?? "lo detecta rkt")],
+                ["comando", origin === "external" ? "lo corrés vos (dev server externo)" : command.trim() || (plan?.start.join(" ") ?? "lo detecta rkt")],
                 ["dominio", domain.trim() || "sin dominio (puedes asignarlo después)"],
                 ...(origin === "git" ? [["auto-deploy", auto ? "sí, en cada push a main" : "no"]] : []),
+                ...(origin === "external" && port.trim() ? [["puerto", port.trim()]] : []),
               ].map(([k, v]) => (
                 <div key={k} className="flex items-baseline gap-3 border-b border-border/60 px-3 py-2 last:border-0">
                   <span className="micro w-28 shrink-0">{k}</span>
@@ -579,7 +627,7 @@ export function CreateDialog({
               ))}
             </div>
 
-            {origin !== "manual" && (
+            {(origin === "git" || origin === "local") && (
               <label className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
                 <Checkbox checked={buildNow} onCheckedChange={(v) => setBuildNow(v === true)} />
                 {origin === "git" ? "desplegar al crear" : "compilar al crear"}

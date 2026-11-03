@@ -47,6 +47,7 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 |---|---|
 | `apps list [--json]` | `name, command, dir` |
 | `apps add [repo] [flags]` | Wizard si faltan flags: infiere nombre, preset, puerto, dominio, comando. Flags = override. Ej: `apps add https://github.com/o/app2.git` |
+| `apps add --external --name dev --dir C:\repo --domain dev.localhost [--port 3010]` | Registra app externa: solo proxy (sin build/deploy/supervisor). El dev server lo corrés vos. |
 | `apps rm <name>` | Elimina app (avisa revisar routes huérfanas) |
 | `routes list [--json]` | `hosts, target` |
 | `routes add --host (repetible) --target <url>` | Agrega ruta (hot) |

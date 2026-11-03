@@ -24,6 +24,7 @@ export function AppSettings() {
   const fail = useUI((u) => u.fail);
   const { canWrite } = useAuth();
   const meta = metas.find((m) => m.name === name);
+  const external = !!meta?.external;
   const [form, setForm] = useState({
     command: "",
     args: "",
@@ -62,6 +63,16 @@ export function AppSettings() {
   const set = (k: TextKey | "port" | "domain" | "memory_mb", v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   async function save() {
+    if (external) {
+      await updateApp(name, {
+        dir: form.dir || undefined,
+        env_file: form.env_file || "",
+        port: form.port.trim() === "" ? undefined : Number(form.port),
+        domain: form.domain.trim(),
+        memory_mb: form.memory_mb.trim() === "" ? undefined : Number(form.memory_mb),
+      });
+      return;
+    }
     await updateApp(name, {
       command: form.command || undefined,
       args: form.args.trim() === "" ? [] : form.args.trim().split(/\s+/),
@@ -217,7 +228,7 @@ export function AppSettings() {
                   </Button>
                 }
                 title={`Eliminar ${name}`}
-                description="quita la app de la flota; las rutas quedan huérfanas"
+                description="quita la app y sus rutas de la flota"
                 submitLabel="eliminar app"
                 canSubmit={confirmDel === name}
                 onSubmit={async () => {
@@ -258,10 +269,16 @@ export function AppSettings() {
           </div>
           <div>
             <p className="micro mb-1 text-signal">despliegue</p>
-            <Row label="repo" value={meta?.deploy?.repo} />
-            <Row label="ref" value={meta?.deploy?.ref} />
-            <Row label="auto" value={meta?.deploy?.auto ? "sí" : "no"} />
-            <Row label="build" value={(meta?.deploy?.build ?? []).join(" · ")} />
+            {external ? (
+              <Row label="runtime" value="externo · solo proxy (sin build/deploy)" />
+            ) : (
+              <>
+                <Row label="repo" value={meta?.deploy?.repo} />
+                <Row label="ref" value={meta?.deploy?.ref} />
+                <Row label="auto" value={meta?.deploy?.auto ? "sí" : "no"} />
+                <Row label="build" value={(meta?.deploy?.build ?? []).join(" · ")} />
+              </>
+            )}
           </div>
         </div>
       </Section>

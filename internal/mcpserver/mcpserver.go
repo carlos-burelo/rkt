@@ -295,6 +295,7 @@ type eventsArg struct {
 type appsAddArg struct {
 	Repo    string `json:"repo,omitempty" jsonschema:"repo git https o dir local (sugiere valores)"`
 	Name    string `json:"name,omitempty" jsonschema:"nombre [a-z0-9-] (default: slug del repo)"`
+	Runtime string `json:"runtime,omitempty" jsonschema:"managed (default) | external (solo proxy, sin proceso)"`
 	Domain  string `json:"domain,omitempty" jsonschema:"dominio (default: <nombre>.<base_domain>)"`
 	Port    int    `json:"port,omitempty" jsonschema:"puerto local (default: libre del pool)"`
 	Command string `json:"command,omitempty" jsonschema:"binario absoluto (default: detectado del plan)"`
@@ -342,7 +343,14 @@ func (s *Server) doAppsAdd(a appsAddArg) (string, error) {
 	}
 	defer db.Close()
 	gh, _ := githubNew(cfg)
-	app, domains, port, err := cfgfile.CreateApp(db, gh, a.Repo, a.Name, a.Domain, a.Port, a.Command, a.Dir, a.Auto)
+	var app config.App
+	var domains []string
+	var port string
+	if a.Runtime == config.RuntimeExternal {
+		app, domains, port, err = cfgfile.CreateExternalApp(db, a.Name, a.Domain, a.Dir, a.Port)
+	} else {
+		app, domains, port, err = cfgfile.CreateApp(db, gh, a.Repo, a.Name, a.Domain, a.Port, a.Command, a.Dir, a.Auto)
+	}
 	if err != nil {
 		return "", err
 	}

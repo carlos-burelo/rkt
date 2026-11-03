@@ -24,12 +24,18 @@ func AddApp(db *store.DB, app config.App, domains []string, port string) error {
 		if a.Name == app.Name {
 			return fmt.Errorf("apps: %q ya existe", app.Name)
 		}
+		if port != "" && a.Env["PORT"] == port {
+			return fmt.Errorf("apps: puerto %s ya usado por %q", port, a.Name)
+		}
 	}
 	if app.RestartDelay == "" {
 		app.RestartDelay = "5s"
 	}
 	if app.MinUptime == "" {
 		app.MinUptime = "10s"
+	}
+	if app.Runtime == "" {
+		app.Runtime = config.RuntimeManaged
 	}
 	if err := app.ValidateApp(len(fleet.Apps)); err != nil {
 		return fmt.Errorf("inválido, no guardado: %w", err)
@@ -216,6 +222,42 @@ func CreateApp(db *store.DB, gh *github.Manager, repo, name, domain string, port
 		app.Deploy = &config.Deploy{
 			Repo: repo, Ref: ref, Build: build, Auto: auto,
 		}
+	}
+	return app, domains, portS, nil
+}
+
+// CreateExternalApp registra una app que solo usa el proxy: sin command,
+// sin deploy, sin supervisor. El dev server lo corre el humano en Dir.
+func CreateExternalApp(db *store.DB, name, domain, dir string, port int) (config.App, []string, string, error) {
+	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+		return config.App{}, nil, "", fmt.Errorf("directorio no existe: %s", dir)
+	}
+	sug, err := discover.Suggest(db, nil, dir)
+	if err != nil {
+		return config.App{}, nil, "", err
+	}
+	if name == "" {
+		name = sug.Name
+	}
+	if name == "" {
+		return config.App{}, nil, "", fmt.Errorf("sin nombre (pasa name)")
+	}
+	portS := ""
+	if port > 0 {
+		portS = strconv.Itoa(port)
+	} else if sug.Port > 0 {
+		portS = strconv.Itoa(sug.Port)
+	}
+	if portS == "" {
+		return config.App{}, nil, "", fmt.Errorf("sin puerto libre en port_pool")
+	}
+	domains := []string{}
+	if domain != "" {
+		domains = []string{domain}
+	}
+	app := config.App{
+		Name: name, Runtime: config.RuntimeExternal, Dir: dir,
+		Env: map[string]string{"PORT": portS},
 	}
 	return app, domains, portS, nil
 }

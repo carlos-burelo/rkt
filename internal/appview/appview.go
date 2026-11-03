@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"rkt-proxy/internal/buildpack"
 	"rkt-proxy/internal/config"
 )
 
@@ -49,12 +50,18 @@ func App(cfg *config.Config, a config.App) map[string]any {
 			dnsOK = false
 		}
 	}
+	runCommand := ""
+	if a.External() {
+		runCommand = buildpack.DevHint(a.Dir, Port(a))
+	}
 	return map[string]any{
-		"name": a.Name, "command": a.Command, "args": a.Args,
+		"name": a.Name, "runtime": a.Runtime, "external": a.External(),
+		"command": a.Command, "args": a.Args,
 		"dir": a.Dir, "static": static, "env_file": a.EnvFile,
 		"restart_delay": a.RestartDelay, "min_uptime": a.MinUptime,
 		"memory_mb": a.MemoryMB, "port": Port(a),
 		"deploy": deploy, "domains": domains, "dns_ok": dnsOK,
+		"run_command": runCommand,
 	}
 }
 

@@ -77,23 +77,34 @@ func (g *Github) EnsureParsed() error {
 	return nil
 }
 
-type App struct {
-	Name         string            `yaml:"name"`
-	Command      string            `yaml:"command"`
-	Args         []string          `yaml:"args"`
-	Dir          string            `yaml:"dir"`
-	EnvFile      string            `yaml:"env_file"`
-	Env          map[string]string `yaml:"env"`
-	RestartDelay string            `yaml:"restart_delay"`
-	MinUptime    string            `yaml:"min_uptime"`
-	MemoryMB     uint64            `yaml:"memory_mb"`
-	// Static dir servido por el propio binario (sitios: astro/vite/export).
-	Static string  `yaml:"static,omitempty"`
-	Deploy *Deploy `yaml:"deploy"`
+// Runtime de una app: managed (supervisor + pipeline) o external (solo
+// registro de proxy; el proceso dev lo corre el humano). Sin modo global.
+const (
+	RuntimeManaged  = "managed"
+	RuntimeExternal = "external"
+)
 
-	delay time.Duration `yaml:"-"`
-	minUp time.Duration `yaml:"-"`
+type App struct {
+	Name         string            `yaml:"name" json:"name"`
+	Runtime      string            `yaml:"runtime,omitempty" json:"runtime,omitempty"`
+	Command      string            `yaml:"command" json:"command"`
+	Args         []string          `yaml:"args" json:"args"`
+	Dir          string            `yaml:"dir" json:"dir"`
+	EnvFile      string            `yaml:"env_file" json:"env_file"`
+	Env          map[string]string `yaml:"env" json:"env"`
+	RestartDelay string            `yaml:"restart_delay" json:"restart_delay"`
+	MinUptime    string            `yaml:"min_uptime" json:"min_uptime"`
+	MemoryMB     uint64            `yaml:"memory_mb" json:"memory_mb"`
+	// Static dir servido por el propio binario (sitios: astro/vite/export).
+	Static string  `yaml:"static,omitempty" json:"static,omitempty"`
+	Deploy *Deploy `yaml:"deploy" json:"deploy"`
+
+	delay time.Duration `yaml:"-" json:"-"`
+	minUp time.Duration `yaml:"-" json:"-"`
 }
+
+// External true si la app solo usa el proxy; no la arranca el supervisor.
+func (a *App) External() bool { return a.Runtime == RuntimeExternal }
 
 // Delay espera base entre reinicios (parseado en Load).
 func (a *App) Delay() time.Duration { return a.delay }
@@ -263,13 +274,18 @@ func (cfg *Config) ApplyDefaults() {
 	}
 	for i := range cfg.Apps {
 		a := &cfg.Apps[i]
+		if a.Runtime == "" {
+			a.Runtime = RuntimeManaged
+		}
 		if a.RestartDelay == "" {
 			a.RestartDelay = "5s"
 		}
 		if a.MinUptime == "" {
 			a.MinUptime = "10s"
 		}
-		normalizeNodePM(a)
+		if !a.External() {
+			normalizeNodePM(a)
+		}
 		if a.Deploy != nil {
 			if a.Deploy.Ref == "" {
 				a.Deploy.Ref = "main"
@@ -403,12 +419,19 @@ func (cfg *Config) Validate() error {
 		}
 	}
 	seenApps := map[string]bool{}
+	seenPorts := map[string]string{}
 	for i := range cfg.Apps {
 		a := &cfg.Apps[i]
 		if seenApps[a.Name] {
 			return fmt.Errorf("apps name duplicado %q", a.Name)
 		}
 		seenApps[a.Name] = true
+		if p := a.Env["PORT"]; p != "" {
+			if prev, ok := seenPorts[p]; ok {
+				return fmt.Errorf("apps %q y %q comparten puerto %s", prev, a.Name, p)
+			}
+			seenPorts[p] = a.Name
+		}
 		if err := a.ValidateApp(i); err != nil {
 			return err
 		}
@@ -510,8 +533,23 @@ func (a *App) ValidateApp(idx int) error {
 	if !validAppName(a.Name) {
 		return fmt.Errorf("apps[%d] name inválido %q: [a-z0-9-]", idx, a.Name)
 	}
-	if strings.TrimSpace(a.Command) == "" {
-		return fmt.Errorf("apps[%s] sin command", a.Name)
+	switch a.Runtime {
+	case RuntimeManaged:
+		if strings.TrimSpace(a.Command) == "" {
+			return fmt.Errorf("apps[%s] sin command", a.Name)
+		}
+	case RuntimeExternal:
+		if strings.TrimSpace(a.Command) != "" || len(a.Args) > 0 || a.Static != "" || a.Deploy != nil {
+			return fmt.Errorf("apps[%s] externa no admite command/args/static/deploy", a.Name)
+		}
+		if strings.TrimSpace(a.Dir) == "" {
+			return fmt.Errorf("apps[%s] externa requiere dir", a.Name)
+		}
+		if strings.TrimSpace(a.Env["PORT"]) == "" {
+			return fmt.Errorf("apps[%s] externa requiere PORT", a.Name)
+		}
+	default:
+		return fmt.Errorf("apps[%s] runtime inválido %q (managed|external)", a.Name, a.Runtime)
 	}
 	if a.Deploy != nil && a.Dir == "" {
 		return fmt.Errorf("apps[%s] deploy requiere dir", a.Name)

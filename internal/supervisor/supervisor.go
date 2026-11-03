@@ -86,6 +86,9 @@ type Manager struct {
 func New(apps []config.App, global map[string]string, logsDir string, log *slog.Logger) *Manager {
 	m := &Manager{logsDir: logsDir, baseLog: log, global: global}
 	for _, a := range apps {
+		if a.External() {
+			continue
+		}
 		m.apps = append(m.apps, m.makeApp(m.effective(a)))
 	}
 	return m
@@ -120,9 +123,12 @@ func (m *Manager) Apply(specs []config.App, global map[string]string) {
 		return
 	}
 	m.global = global
-	eff := make([]config.App, len(specs))
-	for i, s := range specs {
-		eff[i] = m.effective(s)
+	eff := make([]config.App, 0, len(specs))
+	for _, s := range specs {
+		if s.External() {
+			continue
+		}
+		eff = append(eff, m.effective(s))
 	}
 	want := make(map[string]config.App, len(eff))
 	for _, s := range eff {

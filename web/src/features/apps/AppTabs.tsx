@@ -51,6 +51,8 @@ export function AppTabs() {
   const st = status?.apps.find((a) => a.name === name);
   const state = st?.failed ? "failed" : st?.running ? (st.http_ok === false ? "degraded" : "running") : "stopped";
   const domains = meta?.domains ?? [];
+  const external = !!meta?.external;
+  const tabs = TABS.filter((t) => !(external && t.id === "deploys"));
 
   return (
     <div className="space-y-4">
@@ -60,6 +62,11 @@ export function AppTabs() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="truncate font-mono text-[24px] leading-none font-medium tracking-[-0.04em]">{name || "(sin app)"}</h1>
+              {external && (
+                <span className="border border-info/40 bg-info/10 px-1.5 font-mono text-[9px] tracking-[0.08em] text-info uppercase">
+                  externa
+                </span>
+              )}
               <Dot status={state} />
               <StatusBadge status={state} />
             </div>
@@ -79,7 +86,7 @@ export function AppTabs() {
                 <ExternalLink className="h-3 w-3" /> Abrir
               </a>
             )}
-            {canWrite && name && (
+            {canWrite && name && !external && (
               <>
                 <Button variant="outline" size="sm" onClick={() => act(name, "restart")}>
                   <RotateCw className="h-3 w-3" /> Reiniciar
@@ -147,7 +154,7 @@ export function AppTabs() {
         {/* scroll horizontal: 6 tabs no caben a 390px sin desbordar */}
         <div className="-mx-1 overflow-x-auto px-1">
           <TabsList className="w-max gap-5 sm:w-full">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <TabsTrigger key={t.id} value={t.id}>
                 {t.label}
               </TabsTrigger>

@@ -21,6 +21,39 @@ func newTestDB(t *testing.T) *store.DB {
 
 // El alta desde "directorio local" debe inferir plan y comando igual
 // que desde un repo; era el bug de creación (400 sin binario).
+func TestCreateExternalApp(t *testing.T) {
+	db := newTestDB(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"scripts":{"dev":"vite"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app, doms, port, err := CreateExternalApp(db, "dev", "dev.localhost", dir, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if app.Runtime != "external" || app.Command != "" || app.Deploy != nil {
+		t.Fatalf("app externa mal: %+v", app)
+	}
+	if port == "" || len(doms) != 1 || doms[0] != "dev.localhost" {
+		t.Fatalf("port/domains = %q %v", port, doms)
+	}
+	if err := AddApp(db, app, doms, port); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := CreateExternalApp(db, "otra", "otra.localhost", dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	// mismo puerto explícito debe fallar al agregar
+	app2, doms2, _, _ := CreateExternalApp(db, "dup", "dup.localhost", dir, 3000)
+	app2.Env["PORT"] = port
+	if _, _, _, err := CreateExternalApp(db, "dup2", "dup2.localhost", dir, 3000); err != nil {
+		t.Fatal(err)
+	}
+	if err := AddApp(db, app2, doms2, port); err == nil {
+		t.Fatal("puerto duplicado debe fallar")
+	}
+}
+
 func TestCreateAppDirectorioLocalInfiere(t *testing.T) {
 	db := newTestDB(t)
 	if err := db.SetSetting(store.KeyNodeBin, `C:\Program Files\nodejs\node.exe`); err != nil {

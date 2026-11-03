@@ -59,6 +59,36 @@ export function AppOverview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, domains.join(",")]);
 
+  if (meta?.external) {
+    const cmd = meta.run_command || "pnpm dev";
+    return (
+      <div className="space-y-4">
+        <Section
+          title="App externa (solo proxy)"
+          description="sin build, sin deploy, sin supervisor · el dev server lo corre tu terminal"
+          accent={!running}
+        >
+          <div className="grid grid-cols-2 gap-px border border-border bg-border sm:grid-cols-4">
+            <Cell label="estado">{running ? "escuchando" : "sin backend"}</Cell>
+            <Cell label="puerto">{meta.port || "-"}</Cell>
+            <Cell label="host">{domains[0] || "-"}</Cell>
+            <Cell label="runtime">externo</Cell>
+          </div>
+          <div className="mt-3 border border-border bg-card/35 px-3 py-2">
+            <p className="micro">comando sugerido</p>
+            <div className="mt-1 flex items-center gap-2">
+              <code className="min-w-0 flex-1 truncate font-mono text-[11px]">{cmd}</code>
+              <CopyButton text={cmd} />
+            </div>
+            <p className="mt-1 font-mono text-[9px] text-muted-foreground">
+              correlo en {meta.dir || "la carpeta del repo"}; rkt solo enruta el dominio.
+            </p>
+          </div>
+        </Section>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div

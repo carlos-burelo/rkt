@@ -100,17 +100,18 @@ func insertApp(ex execer, a *config.App) error {
 		}
 	}
 	buildJSON, _ := json.Marshal(build)
-	_, err := ex.Exec(`INSERT INTO apps(name, command, args, dir, env_file, env,
+	_, err := ex.Exec(`INSERT INTO apps(name, runtime, command, args, dir, env_file, env,
 		restart_delay_ms, min_uptime_ms, memory_mb,
 		deploy_repo, deploy_ref, deploy_token_env, deploy_build, deploy_auto)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-		ON CONFLICT(name) DO UPDATE SET command=excluded.command, args=excluded.args,
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(name) DO UPDATE SET runtime=excluded.runtime,
+		command=excluded.command, args=excluded.args,
 		dir=excluded.dir, env_file=excluded.env_file, env=excluded.env,
 		restart_delay_ms=excluded.restart_delay_ms, min_uptime_ms=excluded.min_uptime_ms,
 		memory_mb=excluded.memory_mb, deploy_repo=excluded.deploy_repo,
 		deploy_ref=excluded.deploy_ref, deploy_token_env=excluded.deploy_token_env,
 		deploy_build=excluded.deploy_build, deploy_auto=excluded.deploy_auto`,
-		a.Name, a.Command, string(args), a.Dir, a.EnvFile, string(env),
+		a.Name, a.Runtime, a.Command, string(args), a.Dir, a.EnvFile, string(env),
 		a.Delay().Milliseconds(), a.MinUp().Milliseconds(), a.MemoryMB,
 		repo, ref, tokenEnv, string(buildJSON), auto)
 	return err
@@ -124,7 +125,7 @@ type FleetData struct {
 
 func (d *DB) LoadFleet() (*FleetData, error) {
 	out := &FleetData{}
-	rows, err := d.sql.Query(`SELECT name, command, args, dir, env_file, env,
+	rows, err := d.sql.Query(`SELECT name, runtime, command, args, dir, env_file, env,
 		restart_delay_ms, min_uptime_ms, memory_mb,
 		deploy_repo, deploy_ref, deploy_token_env, deploy_build, deploy_auto FROM apps`)
 	if err != nil {
@@ -136,9 +137,12 @@ func (d *DB) LoadFleet() (*FleetData, error) {
 		var argsS, envS, buildS string
 		var delayMs, minUpMs, memMB, auto int64
 		var repo, ref, tokenEnv string
-		if err := rows.Scan(&a.Name, &a.Command, &argsS, &a.Dir, &a.EnvFile, &envS,
+		if err := rows.Scan(&a.Name, &a.Runtime, &a.Command, &argsS, &a.Dir, &a.EnvFile, &envS,
 			&delayMs, &minUpMs, &memMB, &repo, &ref, &tokenEnv, &buildS, &auto); err != nil {
 			return nil, err
+		}
+		if a.Runtime == "" {
+			a.Runtime = config.RuntimeManaged
 		}
 		_ = json.Unmarshal([]byte(argsS), &a.Args)
 		a.Env = map[string]string{}

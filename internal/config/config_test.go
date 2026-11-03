@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -355,5 +356,42 @@ func TestGithubPollDefault(t *testing.T) {
 	}
 	if g.Poll() != 10*time.Second {
 		t.Fatalf("poll default = %v, quiero 10s", g.Poll())
+	}
+}
+
+func TestExternalAppValidate(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &Config{Apps: []App{{Name: "dev", Runtime: RuntimeExternal, Dir: dir, Env: map[string]string{"PORT": "3007"}}}}
+	cfg.ApplyDefaults()
+	app := cfg.Apps[0]
+	if err := app.ValidateApp(0); err != nil {
+		t.Fatalf("externa válida: %v", err)
+	}
+	bad := app
+	bad.Command = "npm"
+	if err := bad.ValidateApp(0); err == nil {
+		t.Fatal("externa con command debe fallar")
+	}
+	bad = app
+	bad.Dir = ""
+	if err := bad.ValidateApp(0); err == nil {
+		t.Fatal("externa sin dir debe fallar")
+	}
+	bad = app
+	bad.Env = nil
+	if err := bad.ValidateApp(0); err == nil {
+		t.Fatal("externa sin PORT debe fallar")
+	}
+}
+
+func TestPuertoDuplicadoFalla(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &Config{Apps: []App{
+		{Name: "a", Runtime: RuntimeExternal, Dir: dir, Env: map[string]string{"PORT": "3007"}},
+		{Name: "b", Runtime: RuntimeExternal, Dir: dir, Env: map[string]string{"PORT": "3007"}},
+	}}
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "comparten puerto") {
+		t.Fatalf("quiero error de puerto, got %v", err)
 	}
 }

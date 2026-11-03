@@ -50,9 +50,13 @@ export interface User {
 
 export interface AppMeta {
   name: string;
+  runtime?: "managed" | "external";
+  external?: boolean;
   command: string;
   args: string[];
   dir: string;
+  /** comando sugerido para app externa (solo texto) */
+  run_command?: string;
   /** env_file adicional (dotenv) */
   env_file?: string;
   /** dir servido como estático (astro/vite/export); vacío = proceso */

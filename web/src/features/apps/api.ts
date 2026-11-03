@@ -61,6 +61,7 @@ export async function deleteApp(name: string): Promise<{ hint?: string }> {
 export interface CreateAppIn {
   repo?: string;
   name?: string;
+  runtime?: "managed" | "external";
   domain?: string;
   port?: number;
   command?: string;
