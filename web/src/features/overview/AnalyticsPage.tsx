@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Analytics, fetchAnalytics } from "./api";
 import { Bars } from "../../shared/components/feedback";
-import { Dot } from "../../shared/components/ui";
 import { PageHeader, Stat, Section } from "../../shared/components/patterns";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -90,7 +89,6 @@ export function AnalyticsPage() {
                 </div>
                 {rows.map((r, i) => (
                   <div key={r.k} className="flex items-center gap-3 border-b bg-card/40 px-4 py-2 last:border-0">
-                    <Dot status="stopped" />
                     <span className="tnum w-6 shrink-0 font-mono text-[11px] text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
                     <span className="min-w-0 flex-1 truncate font-mono text-xs">{r.k}</span>
                     <span className="tnum font-mono text-[11px] text-muted-foreground">{r.v}</span>

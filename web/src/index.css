@@ -196,4 +196,21 @@ body {
       transparent 6px 12px
     );
   }
+  /* Tira vertical de manifiesto: estado por fila (terminal intermodal).
+     Color lo pone el componente vía bg-*: emerald/red/amber/zinc. */
+  .manifest-rail {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+  }
+  /* Placa terminal: cabecera mono + hairline, número tabular. */
+  .plate-top {
+    height: 2px;
+    background: oklch(1 0 0 / 10%);
+  }
+  .plate-top-signal {
+    background: oklch(0.646 0.19 42.5 / 70%);
+  }
 }

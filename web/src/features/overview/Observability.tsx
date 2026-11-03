@@ -47,7 +47,7 @@ export function Observability() {
             <Bars data={data.buckets.map((b) => b.req)} height={96} />
           </Section>
           <Section title="Errores 5xx por hora" description={data.buckets.reduce((a, b) => a + b.err, 0) === 0 ? "sin 5xx en ventana" : "requieren mirada en Logs"}>
-            <Bars data={data.buckets.map((b) => b.err)} height={64} />
+            <Bars data={data.buckets.map((b) => b.err)} height={64} tone={(v) => (v > 0 ? "bg-red-400/80" : "bg-muted")} />
           </Section>
         </>
       )}

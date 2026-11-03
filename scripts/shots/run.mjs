@@ -1,5 +1,5 @@
 // Capturas del dashboard a docs/shots/. Sin dependencias del repo:
-// login por API + Chromium headless + cookie de sesión.
+// login por UI + Chromium headless (cookie la pone el browser).
 // Uso: RKT_USER=.. RKT_PASS=.. [RKT_URL=..] pnpm shots
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -18,34 +18,39 @@ if (!USER || !PASS) {
 }
 
 const main = async () => {
-  // login por API (misma sesión cookie que el browser)
-  const loginRes = await fetch(BASE + "/api/v1/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user: USER, password: PASS }),
-  });
-  if (!loginRes.ok) throw new Error("login fallido (revisa user/pass)");
-  const setCookie = loginRes.headers.get("set-cookie") ?? "";
-  const token = /rkt_token=([^;]+)/.exec(setCookie)?.[1];
-  if (!token) throw new Error("login sin cookie");
+  // estado inicial: si pide setup, no hay admin que loguear
+  const stRes = await fetch(BASE + "/api/v1/auth/status");
+  if (!stRes.ok) throw new Error("servicio no responde (¿rkt dev corriendo?)");
+  const st = await stRes.json();
+  if (st.setup_required) {
+    throw new Error("sin usuarios: completa el wizard en /dashboard/ primero");
+  }
 
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
     viewport: { width: 1600, height: 900 },
-    baseURL: BASE + "/dashboard/",
   });
-  await ctx.addCookies([
-    { name: "rkt_token", value: token, domain: "127.0.0.1", path: "/" },
-  ]);
   const page = await ctx.newPage();
   page.on("console", (m) => {
     if (m.type() === "error") console.log(`[consola:${page.url()}]`, m.text());
   });
   page.on("pageerror", (e) => console.log(`[pageerror:${page.url()}]`, e.message));
 
+  // login por UI (como un humano: la cookie la pone el browser)
+  await page.goto(BASE + "/dashboard/login", { waitUntil: "networkidle" });
+  await page.getByPlaceholder("usuario").fill(USER);
+  await page.getByPlaceholder("password").fill(PASS);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.waitForURL("**/dashboard/overview", { timeout: 15000 });
+
+  // token para llamadas API directas (apps, rol)
+  const cookies = await ctx.cookies();
+  const token = cookies.find((c) => c.name === "rkt_token")?.value;
+  if (!token) throw new Error("login sin cookie rkt_token");
+
   mkdirSync(OUT, { recursive: true });
   const shot = async (name, route) => {
-    await page.goto(route, { waitUntil: "networkidle" });
+    await page.goto(`${BASE}/dashboard/${route}`, { waitUntil: "networkidle" });
     await page.waitForTimeout(2500); // deja asentar polls/skeletons
     await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: true });
     console.log("ok", name);

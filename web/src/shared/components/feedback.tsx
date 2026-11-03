@@ -47,11 +47,11 @@ export function Bars({
 }) {
   const max = Math.max(1, ...data);
   return (
-    <div className="flex items-end gap-0.5" style={{ height }} role="img" aria-label={`serie de ${data.length} puntos`}>
+    <div className="flex items-end gap-1 border-b border-border/50 pb-px" style={{ height }} role="img" aria-label={`serie de ${data.length} puntos`}>
       {data.map((v, i) => (
         <div
           key={i}
-          className={cn("min-w-1 flex-1 rounded-sm", tone ? tone(v, max) : v > 0 ? "bg-muted-foreground/60" : "bg-muted")}
+          className={cn("min-w-[3px] flex-1 rounded-[2px]", tone ? tone(v, max) : v > 0 ? "bg-muted-foreground/50" : "bg-muted")}
           style={{ height: `${Math.max(6, (v / max) * 100)}%` }}
           title={`${v}`}
         />

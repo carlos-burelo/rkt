@@ -54,7 +54,12 @@ export function Users() {
                 <Badge variant="outline" className="font-mono text-[11px]">tú</Badge>
               )}
             </span>
-            <Badge variant="secondary" className="tnum font-mono text-[11px] font-normal">{u.role}</Badge>
+            <Badge
+              variant={u.role === "admin" ? "default" : u.role === "operator" ? "outline" : "secondary"}
+              className="tnum font-mono text-[11px] font-normal"
+            >
+              {u.role}
+            </Badge>
             <span className="tnum hidden text-right font-mono text-[11px] text-muted-foreground sm:block"><Time iso={u.created_at} /></span>
             <span className="flex-1 sm:hidden" />
             <span className="text-right">

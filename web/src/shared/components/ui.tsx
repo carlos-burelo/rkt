@@ -58,11 +58,25 @@ export function Err({ msg }: { msg: string }) {
   );
 }
 
+// Tira de manifiesto por estado: bahía izquierda de 3px en cada fila.
+// Semáforo solo donde hay estado real (failed/running/degraded).
+export function StateRail({ status }: { status: string }) {
+  const cls =
+    status === "failed" || status === "bad"
+      ? "bg-red-400"
+      : status === "running" || status === "ok"
+        ? "bg-emerald-400"
+        : status === "degraded" || status === "warning"
+          ? "bg-amber-400"
+          : "bg-zinc-700/60";
+  return <span aria-hidden className={`manifest-rail ${cls}`} />;
+}
+
 const GLYPH_TONES = [
-  "bg-signal/15 text-signal",
   "bg-emerald-500/15 text-emerald-300",
   "bg-amber-500/15 text-amber-300",
   "bg-zinc-500/15 text-zinc-300",
+  "bg-sky-500/15 text-sky-300",
 ];
 
 export function Avatar({ name }: { name: string }) {

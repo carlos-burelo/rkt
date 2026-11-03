@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { ArrowRight, Search } from "lucide-react";
 import { dur, rel } from "../../shared/lib/time";
-import { Dot } from "../../shared/components/ui";
+import { Dot, StateRail } from "../../shared/components/ui";
 import { CopyButton } from "../../shared/components/feedback";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -69,9 +69,10 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
           <div
             key={d.id}
             onClick={() => setSel(d)}
-            className={`grid w-full cursor-pointer grid-cols-[2rem_1fr_auto] items-center gap-3 border-b bg-card/40 px-4 py-2.5 text-left last:border-0 hover:bg-accent/40 sm:grid-cols-[2rem_1fr_10rem_5rem_7rem] ${d.status === "running" ? "animate-row-arrive" : ""}`}
+            className={`relative grid w-full cursor-pointer grid-cols-[2rem_1fr_auto] items-center gap-3 border-b bg-card/40 py-2.5 pl-4 pr-4 text-left last:border-0 hover:bg-accent/40 sm:grid-cols-[2rem_1fr_10rem_5rem_7rem] ${d.status === "running" ? "animate-row-arrive" : ""}`}
             role="row"
           >
+            <StateRail status={d.status} />
             <Dot status={d.status} />
             <div className="min-w-0">
               <p className="truncate font-mono text-xs">

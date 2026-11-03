@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { Plus, Server } from "lucide-react";
+import { ArrowRight, Plus, Server } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GraphLink, groupByTarget } from "../proxy/graph";
 
@@ -23,8 +23,8 @@ export function FunnelMap({
           {links.length}
         </span>
         <span className="flex-1" />
-        <Link to="/proxy" className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-          Ver todo →
+        <Link to="/proxy" className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+          Ver todo <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
       <ul className="divide-y divide-border/60">

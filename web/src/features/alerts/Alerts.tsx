@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader, EmptyState, Section } from "../../shared/components/patterns";
-import { Dot } from "../../shared/components/ui";
+import { Dot, StateRail } from "../../shared/components/ui";
 import {
   Select, SelectValue, SelectTrigger, SelectContent, SelectItem,
 } from "@/components/ui/select";
@@ -47,7 +47,8 @@ export function Alerts() {
           <span className="text-right">disparo</span>
         </div>
         {rules.map((r) => (
-          <div key={r.id} className="flex items-center gap-3 border-b bg-card/40 px-4 py-2.5 last:border-0">
+          <div key={r.id} className="relative flex items-center gap-3 border-b bg-card/40 py-2.5 pl-4 pr-4 last:border-0">
+            <StateRail status={r.last_fired ? "degraded" : "stopped"} />
             <Dot status={r.last_fired ? "degraded" : "stopped"} />
             <span className="tnum font-mono text-xs text-muted-foreground">#{r.id}</span>
             <span className="truncate font-mono text-xs">{r.app}</span>

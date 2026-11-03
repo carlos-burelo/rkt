@@ -60,10 +60,10 @@ export function RadialMap({
         {/* nodo centro: edge */}
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
           <div
-            className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-signal text-[oklch(0.16_0.02_40)]"
-            style={{ boxShadow: "0 10px 34px -10px oklch(0.646 0.19 42.5 / 55%)" }}
+            className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-signal/50 bg-card"
+            style={{ boxShadow: "0 12px 24px -12px oklch(0 0 0 / 60%)" }}
           >
-            <Cloud className="h-6 w-6" strokeWidth={2.2} />
+            <Cloud className="h-6 w-6 text-signal" strokeWidth={2.2} />
           </div>
           <p className="mt-1.5 text-xs font-semibold">rkt edge</p>
           <p className="tnum font-mono text-[10px] text-muted-foreground">:80 / :443</p>

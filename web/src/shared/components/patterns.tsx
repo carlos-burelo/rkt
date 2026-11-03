@@ -30,18 +30,21 @@ export function Section({
   description,
   actions,
   children,
+  accent = false,
 }: {
   title: string;
   description?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
+  accent?: boolean;
 }) {
   return (
-    <Card className="gap-0 py-0">
+    <Card className="gap-0 overflow-hidden py-0">
+      {accent && <div aria-hidden className="manifest-strip h-1 w-full opacity-60" />}
       <CardHeader className="flex-row items-start gap-3 space-y-0 border-b px-5 py-4">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-medium">{title}</h3>
-          {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+          {description && <p className="mt-0.5 max-w-[75ch] text-xs text-muted-foreground">{description}</p>}
         </div>
         {actions}
       </CardHeader>
@@ -50,9 +53,9 @@ export function Section({
   );
 }
 
-// Stat: placa de escala fija para métricas. value tabular, label abajo,
-// sub opcional (delta honesto con onset). Todas las placas del mismo
-// grupo miden lo mismo.
+// Stat: placa terminal de escala fija. Número tabular arriba, etiqueta
+// abajo, sub mono honesto con ventana. Todas las placas del grupo miden
+// lo mismo; la tira superior solo marca signal/warn/bad/ok.
 export function Stat({
   value,
   label,
@@ -74,11 +77,24 @@ export function Stat({
           : tone === "signal"
             ? "text-signal"
             : "";
+  const topCls =
+    tone === "signal"
+      ? "plate-top plate-top-signal"
+      : tone === "bad"
+        ? "plate-top bg-red-400/70"
+        : tone === "warn"
+          ? "plate-top bg-amber-400/70"
+          : tone === "ok"
+            ? "plate-top bg-emerald-400/60"
+            : "plate-top";
   return (
-    <div className="rounded-lg border bg-card px-4 pb-3 pt-3.5">
-      <p className={`tnum text-2xl font-semibold tracking-tight ${toneCls}`}>{value}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{label}</p>
-      {sub && <p className="tnum mt-0.5 font-mono text-[11px] text-muted-foreground">{sub}</p>}
+    <div className="overflow-hidden rounded-lg border bg-card">
+      <div aria-hidden className={topCls} />
+      <div className="px-4 pb-3 pt-3">
+        <p className={`tnum text-2xl font-semibold tracking-tight ${toneCls}`}>{value}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{label}</p>
+        {sub && <p className="tnum mt-0.5 font-mono text-[11px] text-muted-foreground">{sub}</p>}
+      </div>
     </div>
   );
 }
@@ -115,12 +131,12 @@ export function EnvSecret({ value }: { value: string }) {
   );
 }
 
-// EmptyState con acción (todas las listas vacías lo usan).
+// EmptyState terminal: marco dashed + hint mono. Todas las listas vacías.
 export function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-2 p-10 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/70 bg-card/30 p-10 text-center">
       <p className="text-sm font-medium">{title}</p>
-      {hint && <p className="max-w-[60ch] text-xs text-muted-foreground">{hint}</p>}
+      {hint && <p className="tnum max-w-[60ch] font-mono text-[11px] text-muted-foreground">{hint}</p>}
       {action}
     </div>
   );

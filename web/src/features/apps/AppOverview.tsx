@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router";
+import { ExternalLink } from "lucide-react";
 import { dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
 import { Section, Time } from "../../shared/components/patterns";
@@ -57,8 +58,8 @@ export function AppOverview() {
             {domains.length === 0 && <p className="text-xs text-muted-foreground">Sin dominios — asigna uno en Domains.</p>}
             {domains.map((h) => (
               <p key={h} className="font-mono text-xs">
-                <a href={`https://${h}`} target="_blank" rel="noreferrer" className="hover:underline">
-                  https://{h} ⧉
+                <a href={`https://${h}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 hover:underline">
+                  https://{h} <ExternalLink className="h-3 w-3 text-muted-foreground" />
                 </a>
               </p>
             ))}

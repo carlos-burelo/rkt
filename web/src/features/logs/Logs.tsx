@@ -140,11 +140,13 @@ export function Logs() {
               </label>
             ))}
             <Button
-              variant={live ? "default" : "outline"}
+              variant="outline"
               size="sm"
               onClick={() => setLive(!live)}
+              className="inline-flex items-center gap-2"
             >
               {live ? <><Pause className="h-3.5 w-3.5" /> Live</> : <><Play className="h-3.5 w-3.5" /> Live</>}
+              <Dot status={live ? "running" : "stopped"} />
             </Button>
             <Button variant="outline" size="sm" onClick={load}>
               recargar

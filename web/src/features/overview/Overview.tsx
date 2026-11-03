@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router";
+import { ArrowRight } from "lucide-react";
 import { AppStatus, RktEvent, Deployment, AppMeta } from "../../shared/lib/types";
 import { rel } from "../../shared/lib/time";
-import { Avatar, Dot, StatusBadge } from "../../shared/components/ui";
+import { Avatar, StateRail, StatusBadge } from "../../shared/components/ui";
 import { Button } from "@/components/ui/button";
 import { Metrics } from "./Metrics";
 import { UsageStrip } from "./UsageStrip";
@@ -16,10 +17,12 @@ function FirstRun({ apps, metas, deps }: { apps: AppStatus[]; metas: AppMeta[]; 
   const done = [hasApp, hasDomain, hasDeploy].filter(Boolean).length;
   if (done === 3) return null;
   return (
-    <section className="rounded-xl border bg-card p-5">
+    <section className="overflow-hidden rounded-xl border bg-card">
+      <div aria-hidden className="manifest-strip h-1 w-full opacity-60" />
+      <div className="p-5">
       <div className="mb-1 flex items-center justify-between">
         <h3 className="text-sm font-medium">Primeros pasos</h3>
-        <span className="font-mono text-xs text-muted-foreground">{done}/3</span>
+        <span className="tnum font-mono text-xs text-muted-foreground">{done}/3</span>
       </div>
       <div className="mb-3 h-1.5 overflow-hidden rounded bg-secondary">
         <div className="h-full rounded bg-primary transition-all" style={{ width: `${(done / 3) * 100}%` }} />
@@ -41,6 +44,7 @@ function FirstRun({ apps, metas, deps }: { apps: AppStatus[]; metas: AppMeta[]; 
           Crear mi primera app
         </Button>
       )}
+      </div>
     </section>
   );
 }
@@ -102,23 +106,23 @@ export function Overview() {
             return (
               <div
                 key={a.name}
-                className="flex w-full items-center gap-3 border-b bg-card/40 px-4 py-3 text-left last:border-0"
+                className="relative flex w-full items-center gap-3 border-b bg-card/40 py-3 pl-4 pr-4 text-left last:border-0"
               >
+                <StateRail status={state} />
                 <Avatar name={a.name} />
                 <div className="min-w-0">
                   <button onClick={() => openApp(a.name)} className="font-mono text-sm hover:underline">
                     {a.name}
                   </button>
-                  <p className="truncate font-mono text-xs text-muted-foreground">
-                    {meta?.port ? `:${meta.port} ` : ""}{domain ?? "sin dominio"}
+                  <p className="tnum truncate font-mono text-[11px] text-muted-foreground">
+                    {meta?.port ? `bahía :${meta.port} · ` : ""}{domain ?? "sin dominio"}
                   </p>
                 </div>
-                <span className="hidden font-mono text-xs text-muted-foreground md:block">
+                <span className="tnum hidden font-mono text-[11px] text-muted-foreground md:block">
                   {dep ? `${dep.rev.slice(0, 8)} · ${rel(dep.finished_at || dep.started_at)}` : "sin deploys"}
                 </span>
                 <span className="flex-1" />
                 <StatusBadge status={state} />
-                <Dot status={state} />
                 <Button
                   variant="ghost" size="sm"
                   className="text-xs"
@@ -129,10 +133,10 @@ export function Overview() {
                 </Button>
                 <Button
                   variant="ghost" size="sm"
-                  className="text-xs"
+                  className="inline-flex items-center gap-1 text-xs"
                   onClick={() => openApp(a.name)}
                 >
-                  abrir ›
+                  abrir <ArrowRight className="h-3 w-3" />
                 </Button>
               </div>
             );

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
+import { ArrowRight, X } from "lucide-react";
 import { fetchProxy, ProxyRoute } from "./api";
 import { buildLinks } from "./graph";
 import { RadialMap } from "./ProxyMap";
-import { Dot } from "../../shared/components/ui";
+import { StateRail } from "../../shared/components/ui";
 import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectValue, SelectTrigger, SelectContent, SelectItem,
@@ -64,8 +65,8 @@ export function Proxy() {
                 <SelectItem value="off">Sin TLS</SelectItem>
               </SelectContent>
             </Select>
-            <Link to="/routes" className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-              Gestionar →
+            <Link to="/routes" className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+              Gestionar <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
         }
@@ -77,9 +78,9 @@ export function Proxy() {
           {selected && byHost.get(selected) && (
             <button
               onClick={() => setSelected(null)}
-              className="tnum w-fit rounded-full border px-3 py-1 font-mono text-[11px] text-muted-foreground hover:border-ring hover:text-foreground"
+              className="tnum inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[11px] text-muted-foreground hover:border-ring hover:text-foreground"
             >
-              ✕ limpiar filtro: {selected}
+              <X className="h-3 w-3" /> limpiar filtro: {selected}
             </button>
           )}
           <div className="overflow-hidden rounded-lg border" role="table" aria-label="rutas del proxy">
@@ -91,10 +92,10 @@ export function Proxy() {
             .map((r) => (
             <div
               key={r.hosts.join(",") + r.target}
-              className="flex items-center gap-3 border-b bg-card/40 px-4 py-3 last:border-0"
+              className="relative flex items-center gap-3 border-b bg-card/40 py-3 pl-4 pr-4 last:border-0"
               role="row"
             >
-              <Dot status={r.ok ? "ok" : "failed"} />
+              <StateRail status={r.ok ? "ok" : "failed"} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-mono text-xs">{r.hosts.join(", ")}</p>
                 <p className="tnum truncate font-mono text-[11px] text-muted-foreground">→ {r.target}</p>
