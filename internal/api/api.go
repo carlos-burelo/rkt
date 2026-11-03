@@ -24,6 +24,7 @@ import (
 
 // Deps dependencias inyectables. LogsDir = logx.DirFor(cfgPath).
 // Restart/Deploy/Rollback los provee el servicio (nil = deshabilitado).
+// Deploy/Rollback reciben actor (usuario de sesión).
 type Deps struct {
 	DB       *store.DB
 	Live     *config.Live
@@ -31,8 +32,8 @@ type Deps struct {
 	LogsDir  string
 	Apps     func() []health.AppStatus
 	Restart  func(name string) bool
-	Deploy   func(name string) (string, error)
-	Rollback func(name string) error
+	Deploy   func(name, actor string) (string, error)
+	Rollback func(name, actor string) error
 }
 
 // cloneFleet copia editable de la flota viva (Live se lee sin lock;
@@ -395,7 +396,7 @@ func NewHandler(d Deps) http.Handler {
 				writeErr(w, http.StatusServiceUnavailable, "deploy deshabilitado")
 				return
 			}
-			rev, err := d.Deploy(name)
+			rev, err := d.Deploy(name, mustUser(r))
 			if err != nil {
 				writeErr(w, http.StatusInternalServerError, err.Error())
 				return
@@ -409,7 +410,7 @@ func NewHandler(d Deps) http.Handler {
 				writeErr(w, http.StatusServiceUnavailable, "rollback deshabilitado")
 				return
 			}
-			if err := d.Rollback(name); err != nil {
+			if err := d.Rollback(name, mustUser(r)); err != nil {
 				writeErr(w, http.StatusInternalServerError, err.Error())
 				return
 			}
@@ -632,6 +633,12 @@ func NewHandler(d Deps) http.Handler {
 		}
 		authed.ServeHTTP(w, r)
 	})
+}
+
+// mustUser usuario autenticado (ruta ya pasó RequireAuth).
+func mustUser(r *http.Request) string {
+	u, _ := UserOf(r)
+	return u
 }
 
 // requireOperator exige rol operator+ (escribe 403 si no).

@@ -142,9 +142,9 @@ func (p *Program) Run() {
 			secret := cfg.Github.WebhookSecret
 			mux.Handle("/_rkt/hook/github", hook.NewHandler(hook.Deps{
 				Live: live, Secret: secret, Log: p.log,
-				DeployFn: func(name string) {
+				DeployFn: func(name, actor string) {
 					go func() {
-						if rev, err := p.deployApp(name); err != nil {
+						if rev, err := p.deployApp(name, actor); err != nil {
 							p.log.Error("deploy por hook fallido", "app", name, "err", err)
 						} else {
 							p.log.Info("deploy por hook ok", "app", name, "rev", rev)
@@ -334,7 +334,8 @@ func (nilFS) Open(name string) (fs.File, error) { return nil, fs.ErrNotExist }
 
 // deployApp ejecuta un deploy en el servicio: token del entorno del
 // SERVICIO (variable de máquina para SYSTEM), log a archivo.
-func (p *Program) deployApp(name string) (string, error) {
+// actor queda en historial (usuario api, hook, discover, auto, local).
+func (p *Program) deployApp(name, actor string) (string, error) {
 	cfg := p.live.Get()
 	var app *config.App
 	for i := range cfg.Apps {
@@ -366,7 +367,7 @@ func (p *Program) deployApp(name string) (string, error) {
 	var depID int64
 	prevRev := deploy.HeadRev(app.Dir)
 	if p.db != nil {
-		depID, _ = p.db.InsertDeployment(app.Name, "", out.Name())
+		depID, _ = p.db.InsertDeployment(app.Name, "", out.Name(), actor, app.Env)
 	}
 	rev, err := deploy.Run(*app, token, &supCtl{sup: p.sup}, out, p.log)
 	if p.db != nil && depID > 0 {
@@ -412,7 +413,8 @@ func (p *Program) appToken(app *config.App) (string, error) {
 }
 
 // rollbackApp devuelve live.prev a live (rollback manual).
-func (p *Program) rollbackApp(name string) error {
+// También deja fila en historial (hereda env actual + actor).
+func (p *Program) rollbackApp(name, actor string) error {
 	cfg := p.live.Get()
 	var app *config.App
 	for i := range cfg.Apps {
@@ -423,7 +425,21 @@ func (p *Program) rollbackApp(name string) error {
 	if app == nil {
 		return fmt.Errorf("app %q inexistente", name)
 	}
-	return deploy.Rollback(*app, &supCtl{sup: p.sup}, p.log)
+	var depID int64
+	if p.db != nil {
+		depID, _ = p.db.InsertDeployment(app.Name, "", "", actor, app.Env)
+	}
+	err := deploy.Rollback(*app, &supCtl{sup: p.sup}, p.log)
+	if p.db != nil && depID > 0 {
+		status, rev := "ok", deploy.HeadRev(app.Dir)
+		if err != nil {
+			status, rev = "failed", ""
+		}
+		if ferr := p.db.FinishDeployment(depID, status, "", rev); ferr != nil {
+			p.log.Warn("historial no actualizado", "err", ferr)
+		}
+	}
+	return err
 }
 
 // runDiscovery registra repos nuevos de todas las instalaciones.
@@ -433,7 +449,7 @@ func (p *Program) runDiscovery() {
 	}
 	if _, err := discover.Run(discover.Deps{
 		GH: p.ghm, DB: p.db, Log: p.log,
-		DeployFn: func(name string) (string, error) { return p.deployApp(name) },
+		DeployFn: func(name, actor string) (string, error) { return p.deployApp(name, actor) },
 	}); err != nil {
 		p.log.Warn("discovery fallida", "err", err)
 	}
@@ -479,7 +495,7 @@ func (p *Program) autoDeploy(live *config.Live) {
 				continue
 			}
 			p.log.Info("auto-deploy: cambio detectado", "app", a.Name, "rev", shortSHA(remote))
-			if rev, err := p.deployApp(a.Name); err != nil {
+			if rev, err := p.deployApp(a.Name, "auto"); err != nil {
 				p.log.Error("auto-deploy fallido", "app", a.Name, "err", err)
 			} else {
 				p.log.Info("auto-deploy ok", "app", a.Name, "rev", rev)

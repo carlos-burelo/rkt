@@ -75,7 +75,7 @@ type Deps struct {
 	GH       *github.Manager
 	DB       *store.DB
 	Log      *slog.Logger
-	DeployFn func(name string) (string, error)
+	DeployFn func(name, actor string) (string, error)
 	// DirBase dir padre de apps (default C:\apps). Tests lo aíslan.
 	DirBase string
 }
@@ -211,7 +211,7 @@ func register(d Deps, owner, repo, branch, tok string) error {
 	}
 	d.Log.Info("app auto-registrada", "app", name, "domain", domain, "port", port)
 	if d.DeployFn != nil {
-		if rev, err := d.DeployFn(name); err != nil {
+		if rev, err := d.DeployFn(name, "discover"); err != nil {
 			d.Log.Error("auto-deploy inicial fallido", "app", name, "err", err)
 		} else {
 			d.Log.Info("auto-deploy inicial ok", "app", name, "rev", rev)

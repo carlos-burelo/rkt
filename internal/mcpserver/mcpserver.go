@@ -380,7 +380,7 @@ func (s *Server) doDiscover() (string, error) {
 	}
 	registered, err := discover.Run(discover.Deps{
 		GH: gh, DB: db, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		DeployFn: func(name string) (string, error) {
+		DeployFn: func(name, actor string) (string, error) {
 			return postDeploy(base, name)
 		},
 	})

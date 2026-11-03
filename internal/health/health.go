@@ -35,14 +35,15 @@ type AppStatus struct {
 }
 
 // Deps cablea healthz: config viva, versión, estado apps y restart.
-// Apps/Restart nil = sin supervisor (proxy puro).
+// Apps/Restart nil = sin supervisor (proxy puro). Actor de deploy/
+// rollback por loopback siempre "local" (sin usuario).
 type Deps struct {
 	Live     *config.Live
 	Version  string
 	Apps     func() []AppStatus
 	Restart  func(name string) bool
-	Deploy   func(name string) (string, error)
-	Rollback func(name string) error
+	Deploy   func(name, actor string) (string, error)
+	Rollback func(name, actor string) error
 }
 
 // NewHandler responde GET /healthz, POST /restart/<name>,
@@ -119,7 +120,7 @@ func restart(w http.ResponseWriter, r *http.Request, fn func(name string) bool) 
 }
 
 // deployHandler ejecuta POST /deploy/<name> en el servicio (tarda minutos).
-func deployHandler(w http.ResponseWriter, r *http.Request, fn func(name string) (string, error)) {
+func deployHandler(w http.ResponseWriter, r *http.Request, fn func(name, actor string) (string, error)) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method != http.MethodPost {
 		http.Error(w, "solo POST", http.StatusMethodNotAllowed)
@@ -130,7 +131,7 @@ func deployHandler(w http.ResponseWriter, r *http.Request, fn func(name string) 
 		http.NotFound(w, r)
 		return
 	}
-	rev, err := fn(name)
+	rev, err := fn(name, "local")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -140,7 +141,7 @@ func deployHandler(w http.ResponseWriter, r *http.Request, fn func(name string) 
 }
 
 // rollbackHandler ejecuta POST /rollback/<name> (versión previa).
-func rollbackHandler(w http.ResponseWriter, r *http.Request, fn func(name string) error) {
+func rollbackHandler(w http.ResponseWriter, r *http.Request, fn func(name, actor string) error) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method != http.MethodPost {
 		http.Error(w, "solo POST", http.StatusMethodNotAllowed)
@@ -151,7 +152,7 @@ func rollbackHandler(w http.ResponseWriter, r *http.Request, fn func(name string
 		http.NotFound(w, r)
 		return
 	}
-	if err := fn(name); err != nil {
+	if err := fn(name, "local"); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return

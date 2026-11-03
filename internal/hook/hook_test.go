@@ -48,7 +48,7 @@ func TestPushMatchDeploys(t *testing.T) {
 	var mu sync.Mutex
 	var deployed []string
 	h := NewHandler(Deps{Live: liveEmpty(t), Secret: "s3cr3t", Log: log,
-		DeployFn: func(name string) {
+		DeployFn: func(name, actor string) {
 			mu.Lock()
 			deployed = append(deployed, name)
 			mu.Unlock()
@@ -85,7 +85,7 @@ func TestPushIgnored(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	calls := 0
 	h := NewHandler(Deps{Live: liveEmpty(t), Secret: "s3cr3t", Log: log,
-		DeployFn: func(string) { calls++ }})
+		DeployFn: func(string, string) { calls++ }})
 	signed := func(body string) *http.Request {
 		req := httptest.NewRequest(http.MethodPost, "/_rkt/hook/github", strings.NewReader(body))
 		req.Header.Set("X-Hub-Signature-256", sign(t, body, "s3cr3t"))
@@ -118,7 +118,7 @@ func TestPushIgnored(t *testing.T) {
 
 func TestAuth(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewHandler(Deps{Live: liveEmpty(t), Secret: "s3cr3t", Log: log, DeployFn: func(string) {}})
+	h := NewHandler(Deps{Live: liveEmpty(t), Secret: "s3cr3t", Log: log, DeployFn: func(string, string) {}})
 	body := `{"ref":"refs/heads/main","deleted":false,"repository":{"full_name":"o/r"}}`
 
 	rec := httptest.NewRecorder()
@@ -207,7 +207,7 @@ func TestInstallationEventFlow(t *testing.T) {
 	var gotID int64
 	var gotAction string
 	h := NewHandler(Deps{Live: liveEmpty(t), Secret: "s3cr3t", Log: log,
-		DeployFn: func(string) {},
+		DeployFn: func(string, string) {},
 		OnInstall: func(id int64, account, action string) {
 			gotID, gotAction = id, action
 		}})

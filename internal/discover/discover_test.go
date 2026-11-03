@@ -86,7 +86,7 @@ func testDeps(t *testing.T, srv *httptest.Server, pem string) (Deps, *store.DB, 
 	return Deps{
 		GH: gh, DB: db, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		DirBase: t.TempDir(),
-		DeployFn: func(name string) (string, error) {
+		DeployFn: func(name, actor string) (string, error) {
 			deployed = append(deployed, name)
 			return "rev1", nil
 		},

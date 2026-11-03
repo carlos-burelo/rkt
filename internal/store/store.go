@@ -5,6 +5,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -87,6 +88,9 @@ var migrations = []string{
 		expires_at TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user);`,
+	// v7: trazabilidad deploy (quién + con qué env).
+	`ALTER TABLE deployments ADD COLUMN triggered_by TEXT NOT NULL DEFAULT '';
+	ALTER TABLE deployments ADD COLUMN env_snapshot TEXT NOT NULL DEFAULT '{}';`,
 }
 
 // DB wrapper.
@@ -148,19 +152,28 @@ func (d *DB) migrate() error {
 
 // Deployment fila de historial.
 type Deployment struct {
-	ID         int64  `json:"id"`
-	App        string `json:"app"`
-	Rev        string `json:"rev"`
-	Status     string `json:"status"`
-	StartedAt  string `json:"started_at"`
-	FinishedAt string `json:"finished_at"`
+	ID          int64  `json:"id"`
+	App         string `json:"app"`
+	Rev         string `json:"rev"`
+	Status      string `json:"status"`
+	StartedAt   string `json:"started_at"`
+	FinishedAt  string `json:"finished_at"`
+	TriggeredBy string `json:"triggered_by"`
+	EnvSnapshot string `json:"env_snapshot"`
 }
 
-// InsertDeployment abre fila 'running', devuelve id.
-func (d *DB) InsertDeployment(app, rev, logPath string) (int64, error) {
+// InsertDeployment abre fila 'running', devuelve id. Guarda quién
+// dispara y snapshot del env (trazabilidad; rollback los hereda).
+func (d *DB) InsertDeployment(app, rev, logPath, triggeredBy string, env map[string]string) (int64, error) {
+	snap := "{}"
+	if env != nil {
+		if b, err := json.Marshal(env); err == nil {
+			snap = string(b)
+		}
+	}
 	res, err := d.sql.Exec(
-		`INSERT INTO deployments(app, rev, status, started_at, log_path) VALUES(?,?,?,?,?)`,
-		app, rev, "running", time.Now().UTC().Format(time.RFC3339), logPath)
+		`INSERT INTO deployments(app, rev, status, started_at, log_path, triggered_by, env_snapshot) VALUES(?,?,?,?,?,?,?)`,
+		app, rev, "running", time.Now().UTC().Format(time.RFC3339), logPath, triggeredBy, snap)
 	if err != nil {
 		return 0, err
 	}
@@ -177,14 +190,14 @@ func (d *DB) FinishDeployment(id int64, status, prevRev, rev string) error {
 
 // ListDeployments últimas N (app "" = todas).
 func (d *DB) ListDeployments(app string, n int) ([]Deployment, error) {
-	q := `SELECT id, app, rev, status, started_at, finished_at FROM deployments ORDER BY id DESC LIMIT ?`
+	q := `SELECT id, app, rev, status, started_at, finished_at, triggered_by, env_snapshot FROM deployments ORDER BY id DESC LIMIT ?`
 	var rows *sql.Rows
 	var err error
 	if app == "" {
 		rows, err = d.sql.Query(q, n)
 	} else {
 		rows, err = d.sql.Query(
-			`SELECT id, app, rev, status, started_at, finished_at FROM deployments WHERE app=? ORDER BY id DESC LIMIT ?`,
+			`SELECT id, app, rev, status, started_at, finished_at, triggered_by, env_snapshot FROM deployments WHERE app=? ORDER BY id DESC LIMIT ?`,
 			app, n)
 	}
 	if err != nil {
@@ -194,7 +207,7 @@ func (d *DB) ListDeployments(app string, n int) ([]Deployment, error) {
 	out := []Deployment{}
 	for rows.Next() {
 		var dep Deployment
-		if err := rows.Scan(&dep.ID, &dep.App, &dep.Rev, &dep.Status, &dep.StartedAt, &dep.FinishedAt); err != nil {
+		if err := rows.Scan(&dep.ID, &dep.App, &dep.Rev, &dep.Status, &dep.StartedAt, &dep.FinishedAt, &dep.TriggeredBy, &dep.EnvSnapshot); err != nil {
 			return nil, err
 		}
 		out = append(out, dep)

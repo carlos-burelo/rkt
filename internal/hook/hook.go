@@ -25,12 +25,12 @@ type Deps struct {
 	Live     *config.Live
 	Secret   string
 	Log      *slog.Logger
-	DeployFn func(name string)
+	DeployFn func(name, actor string)
 	// OnInstall recibe eventos installation* (id, cuenta, acción).
 	OnInstall func(id int64, account, action string)
 }
 
-// Handler sirve el webhook. deployFn(name) hace el deploy en fondo.
+// Handler sirve el webhook. deployFn(name, actor) hace deploy en fondo.
 func NewHandler(d Deps) http.Handler {
 	live, secret, deployFn, log := d.Live, d.Secret, d.DeployFn, d.Log
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +84,7 @@ func NewHandler(d Deps) http.Handler {
 		for _, name := range matchApps(live.Get(), ev.Repository.FullName, branch) {
 			matched = true
 			log.Info("hook: push detectado, desplegando", "app", name, "rev", branch)
-			go deployFn(name)
+			go deployFn(name, "hook")
 		}
 		if !matched {
 			log.Info("hook: push sin app (repo/rama no trackeados)",

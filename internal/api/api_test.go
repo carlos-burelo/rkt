@@ -42,13 +42,16 @@ func testDeps(t *testing.T) (Deps, *store.DB, func()) {
 		LogsDir: logsDir,
 		Apps:    func() []health.AppStatus { return []health.AppStatus{{Name: "w", Running: true}} },
 		Restart: func(name string) bool { return name == "w" },
-		Deploy: func(name string) (string, error) {
+		Deploy: func(name, actor string) (string, error) {
 			if name != "w" {
 				return "", fmt.Errorf("no")
 			}
+			if actor == "" {
+				return "", fmt.Errorf("sin actor")
+			}
 			return "rev1", nil
 		},
-		Rollback: func(name string) error {
+		Rollback: func(name, actor string) error {
 			if name != "w" {
 				return fmt.Errorf("no")
 			}
@@ -399,7 +402,7 @@ func TestDeploymentLog(t *testing.T) {
 	dir := t.TempDir()
 	lp := filepath.Join(dir, "w-1.log")
 	os.WriteFile(lp, []byte("b1\nb2\n"), 0o644)
-	id, err := db.InsertDeployment("w", "abc", lp)
+	id, err := db.InsertDeployment("w", "abc", lp, "tester", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
