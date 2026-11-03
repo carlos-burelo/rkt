@@ -12,6 +12,8 @@ import { DeployDrawer } from "../features/deployments/DeployDrawer";
 import { Overview } from "../features/overview/Overview";
 import { AnalyticsPage } from "../features/overview/AnalyticsPage";
 import { Observability } from "../features/overview/Observability";
+import { EnvAll } from "../features/env/EnvAll";
+import { CI } from "../features/ci/CI";
 import { Deployments } from "../features/deployments/Deployments";
 import { AppDetail } from "../features/apps/AppDetail";
 import { Logs } from "../features/logs/Logs";
@@ -26,7 +28,7 @@ import { listRoutes } from "../features/routes/api";
 import { getSettings } from "../features/settings/api";
 import { listUsers } from "../features/users/api";
 
-export type Page = "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "app" | "analytics" | "observability";
+export type Page = "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "app" | "analytics" | "observability" | "environment" | "ci";
 
 export function App() {
   const [who, setWho] = useState<Me | null>(null);
@@ -170,10 +172,12 @@ export function App() {
   const nav: { id: Page; label: string; admin?: boolean }[] = [
     { id: "overview", label: "Overview" },
     { id: "deployments", label: "Deployments" },
+    { id: "ci", label: "CI" },
     { id: "logs", label: "Logs" },
     { id: "analytics", label: "Analytics" },
     { id: "observability", label: "Observability" },
     { id: "routes", label: "Domains" },
+    { id: "environment", label: "Environment" },
     { id: "settings", label: "Settings" },
     { id: "users", label: "Users", admin: true },
   ];
@@ -332,6 +336,8 @@ export function App() {
           {page === "users" && isAdmin && <Users users={users} refresh={refresh} fail={fail} />}
           {page === "analytics" && <AnalyticsPage />}
           {page === "observability" && <Observability />}
+          {page === "environment" && <EnvAll fail={fail} />}
+          {page === "ci" && <CI deps={deps} onSelect={setSel} />}
             </>
           )}
           <ToastStack toasts={toasts} dismiss={(id) => setToasts((ts) => ts.filter((t) => t.id !== id))} />

@@ -26,7 +26,7 @@ export function CommandPalette({
   apps: { name: string; running: boolean; failed?: boolean }[];
   metas: AppMeta[];
   deps: Deployment[];
-  goPage: (p: "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability") => void;
+  goPage: (p: "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability" | "environment" | "ci") => void;
   openApp: (name: string) => void;
   openDeploy: (d: Deployment) => void;
   onAction: (app: string, a: "restart" | "deploy" | "rollback") => void;
@@ -45,13 +45,15 @@ export function CommandPalette({
 
   const targets: PaletteTarget[] = useMemo(() => {
     const out: PaletteTarget[] = [];
-    const pages: [string, "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability"][] = [
+    const pages: [string, "overview" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability" | "environment" | "ci"][] = [
       ["Overview", "overview"],
       ["Deployments", "deployments"],
+      ["CI", "ci"],
       ["Logs", "logs"],
       ["Analytics", "analytics"],
       ["Observability", "observability"],
       ["Domains", "routes"],
+      ["Environment", "environment"],
       ["Settings", "settings"],
       ["Users", "users"],
     ];
