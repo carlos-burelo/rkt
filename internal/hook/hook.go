@@ -315,7 +315,7 @@ func NewAppFormHandler() http.Handler {
 		if org != "" {
 			target = "https://github.com/organizations/" + org + "/settings/apps/new"
 		}
-		manifest := manifestJSON(name, domain)
+		manifest := manifestJSON(name, domain, q.Get("local") == "1", q.Get("tls") == "1")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = manifestTemplate.Execute(w, map[string]string{
 			"Name": name, "Target": target, "Manifest": string(manifest),
@@ -323,23 +323,32 @@ func NewAppFormHandler() http.Handler {
 	})
 }
 
-// manifestJSON construye el manifest oficial. Solo eventos válidos en
-// manifest (doc GitHub): installation* se rechazan al crear la App.
-func manifestJSON(name, domain string) []byte {
-	manifest, _ := json.Marshal(map[string]any{
+// manifestJSON construye el manifest oficial. En local (localhost/127.0.0.1)
+// GitHub no puede entregar webhooks: se omite hook_attributes y el deploy
+// usa polling. En prod exige dominio público con TLS.
+func manifestJSON(name, domain string, local, tls bool) []byte {
+	scheme := "https"
+	if local && !tls {
+		scheme = "http"
+	}
+	base := scheme + "://" + domain
+	m := map[string]any{
 		"name":         name,
-		"description":  "Deploy PaaS rkt (auto TLS + supervisor)",
-		"url":          "https://" + domain,
-		"redirect_url": "https://" + domain + "/_rkt/setup",
-		"setup_url":    "https://" + domain + "/_rkt/setup",
+		"description":  "Deploy PaaS rkt (auto TLS + supervisor). Acceso a todos los repositorios para clonar privados.",
+		"url":          base,
+		"redirect_url": base + "/_rkt/setup",
+		"setup_url":    base + "/_rkt/setup",
 		"public":       false,
 		"default_permissions": map[string]string{
 			"contents": "read", "metadata": "read",
 		},
-		"default_events": []string{"push"},
-		"hook_attributes": map[string]any{
-			"url": "https://" + domain + "/_rkt/hook/github", "active": true,
-		},
-	})
+	}
+	if !local {
+		m["default_events"] = []string{"push"}
+		m["hook_attributes"] = map[string]any{
+			"url": base + "/_rkt/hook/github", "active": true,
+		}
+	}
+	manifest, _ := json.Marshal(m)
 	return manifest
 }

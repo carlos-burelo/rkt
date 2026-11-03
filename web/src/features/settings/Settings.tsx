@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getSettings, setSetting } from "./api";
+import { getSettings, setSetting, getGithubStatus, GithubStatus } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader, Section } from "../../shared/components/patterns";
@@ -28,6 +28,7 @@ export function Settings() {
   const fail = useUI((u) => u.fail);
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const [gh, setGh] = useState<GithubStatus | null>(null);
 
   async function load() {
     try {
@@ -41,6 +42,7 @@ export function Settings() {
 
   useEffect(() => {
     load();
+    getGithubStatus().then(setGh).catch(() => setGh(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -51,6 +53,94 @@ export function Settings() {
         description="Ajustes de flota. Aplican en caliente salvo binarios, que exigen reinicio del servicio."
         meta={<span className="tnum font-mono text-[10px] text-muted-foreground">{Object.keys(settings).length} claves</span>}
       />
+      <Section
+        title="GitHub App"
+        accent={!!gh?.configured && gh.repository_selection !== "all"}
+        description="clona repos privados sin PAT · necesita acceso a todos los repositorios"
+        actions={
+          gh?.configured && gh.install_url ? (
+            <a
+              href={gh.install_url}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground"
+            >
+              administrar ↗
+            </a>
+          ) : undefined
+        }
+      >
+        {!gh && <p className="font-mono text-[10px] text-muted-foreground">consultando GitHub…</p>}
+        {gh && !gh.configured && (
+          <div className="space-y-2">
+            <p className="text-[12px] text-muted-foreground">
+              Sin App conectada. Crea la GitHub App desde aquí y en el paso de instalación elige{" "}
+              <b className="text-foreground">All repositories</b>.
+            </p>
+            {gh.setup_url ? (
+              <div className="space-y-2">
+                <a href={gh.setup_url} target="_blank" rel="noreferrer">
+                  <Button size="sm" variant="outline">
+                    crear GitHub App ↗
+                  </Button>
+                </a>
+                {gh.local && (
+                  <p className="font-mono text-[10px] text-muted-foreground">
+                    modo local (localhost): GitHub no entrega webhooks aquí; el auto-deploy usa polling.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="border border-warn/30 bg-warn/5 px-2 py-1.5 font-mono text-[10px] text-warn">
+                define <b>base_domain</b> arriba para habilitar el flujo (necesita dominio público con TLS).
+              </p>
+            )}
+          </div>
+        )}
+        {gh && gh.configured && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-px border border-border bg-border md:grid-cols-4">
+              <div className="bg-card/45 px-3 py-2">
+                <p className="micro">cuenta</p>
+                <p className="mt-1 truncate font-mono text-[11px]">{gh.account || "—"}</p>
+              </div>
+              <div className="bg-card/45 px-3 py-2">
+                <p className="micro">app</p>
+                <p className="mt-1 truncate font-mono text-[11px]">{gh.app_slug || gh.app_id}</p>
+              </div>
+              <div className="bg-card/45 px-3 py-2">
+                <p className="micro">repositorios</p>
+                <p className="mt-1 font-mono text-[11px]">{gh.repositories ?? "—"}</p>
+              </div>
+              <div className="bg-card/45 px-3 py-2">
+                <p className="micro">alcance</p>
+                <p className={`mt-1 font-mono text-[11px] ${gh.repository_selection === "all" ? "text-ok" : "text-warn"}`}>
+                  {gh.repository_selection === "all" ? "todos" : gh.repository_selection === "selected" ? "seleccionados" : "desconocido"}
+                </p>
+              </div>
+            </div>
+            {gh.repository_selection !== "all" ? (
+              <div className="border border-warn/35 bg-warn/5 px-3 py-2 text-[12px]">
+                <p className="font-mono text-[10px] tracking-[0.08em] text-warn uppercase">acceso parcial</p>
+                <p className="mt-1 text-muted-foreground">
+                  Los repos privados fuera de la selección fallarán al desplegar. Cambia a{" "}
+                  <b className="text-foreground">All repositories</b> en la instalación.
+                </p>
+                {gh.install_url && (
+                  <a href={gh.install_url} target="_blank" rel="noreferrer" className="mt-2 inline-block">
+                    <Button size="sm" variant="outline">
+                      cambiar acceso ↗
+                    </Button>
+                  </a>
+                )}
+              </div>
+            ) : (
+              <p className="font-mono text-[10px] text-ok">acceso total · repos privados habilitados</p>
+            )}
+            {gh.error && <p className="font-mono text-[10px] text-warn">github: {gh.error}</p>}
+          </div>
+        )}
+      </Section>
       <Section
         title="Claves de flota"
         description="guardar valida antes de persistir · sin valores por defecto inventados"

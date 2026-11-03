@@ -315,7 +315,7 @@ func TestManifestJSON(t *testing.T) {
 		DefaultEvents      []string          `json:"default_events"`
 		HookAttributes     map[string]any    `json:"hook_attributes"`
 	}
-	if err := json.Unmarshal(manifestJSON("mi-app", "vps.test"), &m); err != nil {
+	if err := json.Unmarshal(manifestJSON("mi-app", "vps.test", false, true), &m); err != nil {
 		t.Fatal(err)
 	}
 	if m.Name != "mi-app" || m.Public || m.DefaultPermissions["contents"] != "read" {
@@ -330,6 +330,24 @@ func TestManifestJSON(t *testing.T) {
 	}
 	if m.HookAttributes["url"] != "https://vps.test/_rkt/hook/github" {
 		t.Fatalf("hook mal: %+v", m.HookAttributes)
+	}
+}
+
+func TestManifestLocalSinWebhook(t *testing.T) {
+	var m struct {
+		URL            string         `json:"url"`
+		RedirectURL    string         `json:"redirect_url"`
+		DefaultEvents  []string       `json:"default_events"`
+		HookAttributes map[string]any `json:"hook_attributes"`
+	}
+	if err := json.Unmarshal(manifestJSON("rkt-local", "127.0.0.1:8080", true, false), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.URL != "http://127.0.0.1:8080" || m.RedirectURL != "http://127.0.0.1:8080/_rkt/setup" {
+		t.Fatalf("urls locales mal: %+v", m)
+	}
+	if m.HookAttributes != nil || len(m.DefaultEvents) != 0 {
+		t.Fatalf("local no debe pedir webhook/eventos: %+v %v", m.HookAttributes, m.DefaultEvents)
 	}
 }
 

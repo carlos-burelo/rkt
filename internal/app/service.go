@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -108,6 +109,13 @@ func New(cfgPath string, log *slog.Logger) *Program {
 
 // gh devuelve el manager de GitHub App (atómico: se reemplaza al crear la App).
 func (p *Program) gh() *github.Manager { return p.ghm.Load() }
+
+func boolStr(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
+}
 
 // Start lanza Run en goroutine (contrato kardianos/service).
 // isHealthPath separa el control por loopback de la SPA en la raíz.
@@ -433,15 +441,47 @@ func (p *Program) onManifest(c *github.ManifestCredentials) (string, error) {
 	return "/_rkt/setup?install=" + slug, nil
 }
 
+// setupOrigin devuelve el origen público para el manifest. Sin base_domain
+// cae a loopback (GitHub permite crear Apps con URLs locales; sin webhooks).
+func (p *Program) setupOrigin() (origin, domain string, local, tls bool) {
+	base := strings.TrimSpace(p.db.GetSetting(store.KeyBaseDomain))
+	if base != "" {
+		return "https://" + base, base, false, true
+	}
+	cfg := p.live.Get()
+	tls = cfg.ListenHTTPS != ""
+	addr := cfg.ListenHTTP
+	if tls {
+		addr = cfg.ListenHTTPS
+	}
+	port := ""
+	if i := strings.LastIndex(addr, ":"); i >= 0 {
+		port = addr[i+1:]
+	}
+	host := "localhost"
+	if (tls && port != "" && port != "443") || (!tls && port != "" && port != "80") {
+		host += ":" + port
+	}
+	scheme := "http"
+	if tls {
+		scheme = "https"
+	}
+	return scheme + "://" + host, host, true, tls
+}
+
 // githubStatus estado de la GitHub App para dashboard/API.
 func (p *Program) githubStatus() (map[string]any, error) {
 	out := map[string]any{"configured": false}
-	cfg := p.live.Get()
-	base := strings.TrimSpace(p.db.GetSetting(store.KeyBaseDomain))
-	if base != "" {
-		name := "rkt-" + strings.ReplaceAll(strings.Split(base, ".")[0], "_", "-")
-		out["setup_url"] = "https://" + base + "/_rkt/new-app?name=" + name + "&domain=" + base
+	origin, domain, local, tls := p.setupOrigin()
+	label := "local"
+	if !local {
+		label = strings.ReplaceAll(strings.Split(domain, ".")[0], "_", "-")
 	}
+	name := "rkt-" + label + "-" + strconv.FormatInt(time.Now().UnixNano()%10000, 10)
+	out["setup_url"] = origin + "/_rkt/new-app?name=" + url.QueryEscape(name) +
+		"&domain=" + url.QueryEscape(domain) + "&local=" + boolStr(local) + "&tls=" + boolStr(tls)
+	out["local"] = local
+	cfg := p.live.Get()
 	if cfg.Github == nil {
 		return out, nil
 	}

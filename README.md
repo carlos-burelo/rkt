@@ -227,9 +227,12 @@ a `/_rkt/setup`, rkt canjea el code, guarda PEM + settings y te da el link de
 instalación. **Instala eligiendo All repositories**: GitHub no permite forzar
 la selección desde el manifest, y sin acceso total los repos privados fallan.
 Ajustes → GitHub App muestra el alcance y el botón para cambiarlo. Repo nuevo
-= app + deploy solos. (Sin `--org` = App personal.) Cada poll compara `HEAD`
-local vs remoto y despliega solo si cambió (tokens de 1h cacheados; repos http
-usan App, resto `token_env`). Sin inbound: puro outbound a `api.github.com`.
+= app + deploy solos. (Sin `--org` = App personal.) En desarrollo local no
+hace falta dominio: el manifest usa `https://localhost` (CA local) o
+`http://localhost:<puerto>`, sin webhook; el auto-deploy va por polling. Cada
+poll compara `HEAD` local vs remoto y despliega solo si cambió (tokens de 1h
+cacheados; repos http usan App, resto `token_env`). Sin inbound: puro outbound
+a `api.github.com`.
 
 ## Webhook instantáneo (opcional)
 
