@@ -5,6 +5,8 @@ export interface ProxyRoute {
   target: string;
   ok: boolean;
   tls: string[];
+  /** por host: resuelve a loopback en esta máquina */
+  dns_ok?: boolean[];
 }
 
 export async function fetchProxy(): Promise<ProxyRoute[]> {

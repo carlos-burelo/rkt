@@ -9,6 +9,8 @@ export interface AppStatus {
   running: boolean;
   restarts: number;
   failed?: boolean;
+  /** respuesta HTTP real del puerto (false = proceso vivo pero mudo) */
+  http_ok?: boolean;
 }
 
 export interface Status {
@@ -56,6 +58,8 @@ export interface AppMeta {
   memory_mb: number;
   port: string;
   domains: string[];
+  /** los dominios resuelven a loopback desde esta máquina */
+  dns_ok?: boolean;
   deploy: { repo: string; ref: string; build: string[]; auto: boolean } | null;
 }
 

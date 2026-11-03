@@ -45,7 +45,7 @@ export function AppTabs() {
 
   const meta = metas.find((m) => m.name === name);
   const st = status?.apps.find((a) => a.name === name);
-  const state = st?.failed ? "failed" : st?.running ? "running" : "stopped";
+  const state = st?.failed ? "failed" : st?.running ? (st.http_ok === false ? "degraded" : "running") : "stopped";
   const domains = meta?.domains ?? [];
 
   return (
@@ -60,7 +60,7 @@ export function AppTabs() {
               <StatusBadge status={state} />
             </div>
             <p className="mt-2 font-mono text-[10px] text-muted-foreground">
-              unidad de flota · bahía {meta?.port ? `:${meta.port}` : "sin asignar"} ·{" "}
+              unidad de flota · puerto {meta?.port ? `:${meta.port}` : "sin asignar"} ·{" "}
               {domains.length > 0 ? `${domains.length} destino${domains.length > 1 ? "s" : ""}` : "sin destino"}
             </p>
           </div>
@@ -81,7 +81,7 @@ export function AppTabs() {
                   <RotateCw className="h-3 w-3" /> Reiniciar
                 </Button>
                 <Button size="sm" onClick={() => act(name, "deploy")}>Redesplegar</Button>
-                <Button variant="ghost" size="sm" onClick={() => act(name, "rollback")}>Revertir</Button>
+                <Button variant="destructive" size="sm" onClick={() => act(name, "rollback")}>Revertir</Button>
               </>
             )}
           </div>
@@ -97,9 +97,16 @@ export function AppTabs() {
           </Cell>
           <Cell label="destino">
             {domains[0] ? (
-              <a href={`https://${domains[0]}`} target="_blank" rel="noreferrer" className="hover:text-signal hover:underline">
-                {domains[0]}
-              </a>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <a href={`https://${domains[0]}`} target="_blank" rel="noreferrer" className="truncate hover:text-signal hover:underline">
+                  {domains[0]}
+                </a>
+                {meta?.dns_ok === false && (
+                  <span className="shrink-0 font-mono text-[9px] text-warn" title="el dominio no resuelve a 127.0.0.1 en esta máquina">
+                    no resuelve
+                  </span>
+                )}
+              </span>
             ) : (
               <span className="text-muted-foreground">sin dominio</span>
             )}

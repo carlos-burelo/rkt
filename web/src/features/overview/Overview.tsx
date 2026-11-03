@@ -122,11 +122,11 @@ export function Overview() {
     <div className="space-y-5">
       <PageHeader
         title="Resumen"
-        description="Manifiesto de flota. Lo que está en ruta, lo que varó y lo que salió último; sin visitantes ni métricas que rkt no mida."
+        description="Manifiesto de flota. Lo que está en marcha, lo que varó y lo que salió último; sin visitantes ni métricas que rkt no mida."
         meta={
           <span className="hidden items-center gap-2 font-mono text-[10px] text-muted-foreground sm:flex">
             <span className="h-1 w-1 bg-ok" />
-            {running}/{apps.length} en ruta
+            {running}/{apps.length} en marcha
             {failed > 0 && <span className="text-bad">· {failed} varado{failed > 1 ? "s" : ""}</span>}
           </span>
         }
@@ -142,7 +142,7 @@ export function Overview() {
               <div>
                 <h2 className="text-[14px] font-medium tracking-tight">Unidades</h2>
                 <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-                  app · bahía · destino · revisión
+                  app · puerto · destino · revisión
                 </p>
               </div>
               <span className="tnum font-mono text-[10px] text-muted-foreground">{apps.length} en manifiesto</span>
@@ -151,7 +151,7 @@ export function Overview() {
               <div className="hidden grid-cols-[1.5rem_minmax(0,1.5fr)_5rem_minmax(0,1.5fr)_7rem_5.5rem_4.5rem] items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 md:grid" aria-hidden>
                 <span className="micro">est</span>
                 <span className="micro">unidad</span>
-                <span className="micro">bahía</span>
+                <span className="micro">puerto</span>
                 <span className="micro">destino</span>
                 <span className="micro">rev</span>
                 <span className="micro text-right">hace</span>
@@ -291,7 +291,7 @@ export function Overview() {
           {apps.length > 0 && (
             <div className="grid grid-cols-2 gap-px border border-border bg-border">
               <Stat value={`${apps.length}`} label="unidades" sub="manifiesto" />
-              <Stat value={`${metas.reduce((n, m) => n + (m.domains?.length ?? 0), 0)}`} label="destinos" sub="hosts en ruta" />
+              <Stat value={`${metas.reduce((n, m) => n + (m.domains?.length ?? 0), 0)}`} label="destinos" sub="hosts en marcha" />
             </div>
           )}
         </aside>

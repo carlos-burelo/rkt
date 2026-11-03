@@ -33,6 +33,8 @@ type AppStatus struct {
 	Pid      int    `json:"pid,omitempty"`
 	Restarts int    `json:"restarts"`
 	Failed   bool   `json:"failed,omitempty"`
+	// HTTPOK respuesta real del puerto (false = proceso vivo pero mudo)
+	HTTPOK bool `json:"http_ok"`
 }
 
 // Deps cablea healthz: config viva, versión, estado apps y restart.

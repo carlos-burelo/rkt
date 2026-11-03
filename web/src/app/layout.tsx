@@ -160,7 +160,7 @@ export function ShellLayout() {
                     <span className="micro">terminal</span>
                   </span>
                   <span className="tnum truncate font-mono text-[10px] text-muted-foreground">
-                    {apps.length === 0 ? "terminal vacía" : `${running}/${apps.length} en ruta${failed > 0 ? ` · ${failed} varado${failed > 1 ? "s" : ""}` : ""}`}
+                    {apps.length === 0 ? "terminal vacía" : `${running}/${apps.length} en marcha${failed > 0 ? ` · ${failed} varado${failed > 1 ? "s" : ""}` : ""}`}
                   </span>
                 </div>
                 <span className="micro tnum hidden shrink-0 text-muted-foreground/60 group-data-[collapsible=icon]:hidden xl:inline">
@@ -349,7 +349,7 @@ export function ShellLayout() {
           <span className="hidden items-center gap-1.5 border border-border bg-card/40 px-2 py-1 md:flex">
             <Dot status={failed > 0 ? "failed" : "ok"} />
             <span className="tnum font-mono text-[10px] text-muted-foreground">
-              {failed > 0 ? `${failed} varado${failed > 1 ? "s" : ""}` : `${running}/${apps.length} en ruta`}
+              {failed > 0 ? `${failed} varado${failed > 1 ? "s" : ""}` : `${running}/${apps.length} en marcha`}
             </span>
           </span>
           {canWrite && (

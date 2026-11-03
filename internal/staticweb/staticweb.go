@@ -4,6 +4,7 @@
 package staticweb
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -43,14 +44,27 @@ func Handler(root string) http.Handler {
 	})
 }
 
+// validateRoot exige sitio compilado: mejor fallar que servir 200 vacío.
+func validateRoot(root string) error {
+	st, err := os.Stat(root)
+	if err != nil || !st.IsDir() {
+		return fmt.Errorf("no existe el directorio %s (compila primero)", root)
+	}
+	if _, err := os.Stat(filepath.Join(root, "index.html")); err != nil {
+		return fmt.Errorf("%s sin index.html (build incompleto)", root)
+	}
+	return nil
+}
+
 // Serve arranca el servidor en $PORT (el supervisor lo inyecta).
+// Falla si no hay sitio compilado: mejor unidad failed que 200 mentiroso.
 func Serve(root string) error {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3000"
 	}
-	if st, err := os.Stat(root); err != nil || !st.IsDir() {
-		log.Fatalf("static: no existe el directorio %s", root)
+	if err := validateRoot(root); err != nil {
+		log.Fatalf("static: %v", err)
 	}
 	log.Printf("static %s en :%s", root, port)
 	return http.ListenAndServe(":"+port, Handler(root))

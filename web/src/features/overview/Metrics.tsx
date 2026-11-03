@@ -4,7 +4,7 @@ import { Stat } from "../../shared/components/patterns";
 // Placas de flota a escala fija: mismo tamaño, número tabular arriba,
 // etiqueta abajo, sub honesto con ventana de medición.
 export function Metrics({ apps, deps }: { apps: AppStatus[]; deps: Deployment[] }) {
-  const running = apps.filter((a) => a.running && !a.failed).length;
+  const running = apps.filter((a) => a.running && !a.failed && a.http_ok !== false).length;
   const failed = apps.filter((a) => a.failed).length;
   const day = Date.now() - 24 * 3600 * 1000;
   const recent = deps.filter((d) => new Date(d.started_at).getTime() >= day);
@@ -14,7 +14,7 @@ export function Metrics({ apps, deps }: { apps: AppStatus[]; deps: Deployment[] 
 
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4" role="group" aria-label="estado de la flota">
-      <Stat value={`${running}/${apps.length}`} label="apps en ruta" sub="supervisor · ahora" tone={failed > 0 ? "warn" : "ok"} />
+      <Stat value={`${running}/${apps.length}`} label="apps en marcha" sub="supervisor · ahora" tone={failed > 0 ? "warn" : "ok"} />
       <Stat
         value={failed === 0 ? "0" : `${failed}`}
         label="varadas"

@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kardianos/service"
@@ -62,11 +64,18 @@ type Program struct {
 	alog         *accesslog.Logger
 	sup          *supervisor.Manager
 	mgr          *autocert.Manager
+	probeMu      sync.Mutex
+	probes       map[string]probeResult
+}
+
+type probeResult struct {
+	at time.Time
+	ok bool
 }
 
 // New crea el programa sin arrancarlo.
 func New(cfgPath string, log *slog.Logger) *Program {
-	return &Program{cfgPath: cfgPath, log: log, discoverKick: make(chan struct{}, 1)}
+	return &Program{cfgPath: cfgPath, log: log, discoverKick: make(chan struct{}, 1), probes: map[string]probeResult{}}
 }
 
 // Start lanza Run en goroutine (contrato kardianos/service).
@@ -338,13 +347,51 @@ func (p *Program) appStatuses() []health.AppStatus {
 		return nil
 	}
 	out := []health.AppStatus{}
+	live := p.live.Get()
 	for _, s := range p.sup.Snapshot() {
+		ok := true
+		if s.Running {
+			ok = p.probeApp(s.Name, live)
+		}
 		out = append(out, health.AppStatus{
 			Name: s.Name, Running: s.Running, Pid: s.Pid,
-			Restarts: s.Restarts, Failed: s.Failed,
+			Restarts: s.Restarts, Failed: s.Failed, HTTPOK: ok,
 		})
 	}
 	return out
+}
+
+// probeApp verifica HTTP al puerto de la app (cache 3s: evita martillar
+// con el polling del dashboard). Sin puerto no hay probe.
+func (p *Program) probeApp(name string, live *config.Config) bool {
+	var port string
+	for i := range live.Apps {
+		if live.Apps[i].Name == name {
+			port = live.Apps[i].Env["PORT"]
+		}
+	}
+	if port == "" {
+		return true
+	}
+	p.probeMu.Lock()
+	if v, ok := p.probes[name]; ok && time.Since(v.at) < 3*time.Second {
+		p.probeMu.Unlock()
+		return v.ok
+	}
+	p.probeMu.Unlock()
+
+	client := &http.Client{Timeout: 800 * time.Millisecond}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/")
+	ok := false
+	if err == nil {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 2048))
+		_ = resp.Body.Close()
+		ok = resp.StatusCode < 500
+	}
+	p.probeMu.Lock()
+	p.probes[name] = probeResult{at: time.Now(), ok: ok}
+	p.probeMu.Unlock()
+	return ok
 }
 
 // supCtl adapta Manager a deploy.Controller.
@@ -456,6 +503,13 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 	go func() {
 		defer out.Close()
 		err := deploy.RunSteps(steps, target.Dir, target.Env, out)
+		if err == nil && p.sup != nil {
+			// el build no basta: la unidad debe responder HTTP tras reiniciar
+			p.sup.Restart(target.Name)
+			if perr := deploy.WaitAppHTTP(target, 10*time.Second); perr != nil {
+				err = fmt.Errorf("build ok pero la app no responde: %w", perr)
+			}
+		}
 		status := "ok"
 		if err != nil {
 			status = "failed"
@@ -465,9 +519,6 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 			if ferr := p.db.FinishDeployment(depID, status, "", "local"); ferr != nil {
 				p.log.Warn("historial no actualizado", "err", ferr)
 			}
-		}
-		if err == nil && p.sup != nil {
-			p.sup.Restart(target.Name)
 		}
 	}()
 	return depID, nil

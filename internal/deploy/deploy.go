@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
@@ -31,6 +32,9 @@ import (
 
 // healthWait tope esperando app sana tras restart.
 const healthWait = 30 * time.Second
+
+// httpWait tope del probe HTTP post-restart (app debe responder).
+const httpWait = 15 * time.Second
 
 // Controller lo implementa quien posee los procesos (el servicio).
 type Controller interface {
@@ -97,9 +101,53 @@ func Run(app config.App, token string, ctl Controller, out io.Writer, log *slog.
 		log.Warn("rollback aplicado", "app", app.Name)
 		return "", fmt.Errorf("deploy fallido, rollback aplicado: %w", err)
 	}
+	// Verificación real: el proceso no basta. Si no responde HTTP, se revierte.
+	if err := WaitAppHTTP(app, httpWait); err != nil {
+		back := func() error {
+			if !hadLive {
+				_ = os.RemoveAll(live)
+				return fmt.Errorf("sin backup previo")
+			}
+			_ = os.RemoveAll(live)
+			return renameRetry(prev, live)
+		}
+		_ = ctl.SwapAndRestart(app.Name, back)
+		log.Warn("rollback por HTTP", "app", app.Name)
+		return "", fmt.Errorf("deploy fallido (sin respuesta HTTP), rollback aplicado: %w", err)
+	}
 	_ = os.RemoveAll(staging)
 	log.Info("deploy ok", "app", app.Name, "rev", rev)
 	return rev, nil
+}
+
+// WaitAppHTTP espera respuesta HTTP del puerto de la app (cualquier status
+// < 500 cuenta: 404 es una app viva, 502 no). Sin puerto no hay probe.
+func WaitAppHTTP(app config.App, timeout time.Duration) error {
+	port := app.Env["PORT"]
+	if port == "" {
+		return nil
+	}
+	url := "http://127.0.0.1:" + port + "/"
+	client := &http.Client{Timeout: 2 * time.Second}
+	deadline := time.Now().Add(timeout)
+	var last error
+	for {
+		resp, err := client.Get(url)
+		if err == nil {
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+			_ = resp.Body.Close()
+			if resp.StatusCode < 500 {
+				return nil
+			}
+			last = fmt.Errorf("HTTP %d", resp.StatusCode)
+		} else {
+			last = err
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("app %s no responde en %s: %v", app.Name, url, last)
+		}
+		time.Sleep(time.Second)
+	}
 }
 
 // WaitAppHealthy espera app corriendo y no failed (poll 1s).

@@ -95,9 +95,8 @@ function RouteRow({ r, onChanged }: { r: Route; onChanged: () => void }) {
             </Button>
           )}
           <Button
-            variant="ghost"
+            variant="destructive"
             size="xs"
-            className="text-muted-foreground hover:text-bad"
             onClick={() => delRoute(r.hosts[0]).then(onChanged).catch(fail)}
           >
             borrar

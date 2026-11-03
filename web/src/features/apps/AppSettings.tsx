@@ -150,7 +150,7 @@ export function AppSettings() {
                 className="h-7 min-w-0 flex-1 font-mono text-[11px]"
               />
               {form.domain !== "" && canWrite && (
-                <Button variant="ghost" size="xs" onClick={() => set("domain", "")}>
+                <Button variant="destructive" size="xs" onClick={() => set("domain", "")}>
                   quitar
                 </Button>
               )}

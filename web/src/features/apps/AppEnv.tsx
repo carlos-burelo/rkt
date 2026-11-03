@@ -34,9 +34,8 @@ export function AppEnv() {
             <EnvSecret value={env[k]} />
             {canWrite && (
               <Button
-                variant="ghost"
+                variant="destructive"
                 size="xs"
-                className="text-muted-foreground hover:text-bad"
                 onClick={() => delEnv(name, k).then(reload).catch(fail)}
               >
                 borrar

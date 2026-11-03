@@ -111,7 +111,17 @@ export function Proxy() {
                 >
                   <StateRail status={r.ok ? "ok" : "failed"} />
                   <div className="min-w-0">
-                    <p className="truncate font-mono text-[11px]">{r.hosts.join(", ")}</p>
+                    <p className="flex min-w-0 items-center gap-1.5 font-mono text-[11px]">
+                      <span className="truncate">{r.hosts.join(", ")}</span>
+                      {r.dns_ok?.some((v) => !v) && (
+                        <span
+                          className="shrink-0 font-mono text-[8px] tracking-[0.08em] uppercase text-warn"
+                          title="ese host no resuelve a 127.0.0.1 aquí: añádelo a hosts o usa .localhost"
+                        >
+                          no resuelve
+                        </span>
+                      )}
+                    </p>
                     <p className="tnum mt-0.5 truncate font-mono text-[9px] text-muted-foreground">→ {r.target}</p>
                   </div>
                   <span

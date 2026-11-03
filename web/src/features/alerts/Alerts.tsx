@@ -87,9 +87,8 @@ export function Alerts() {
             <div className="flex justify-end">
               {canWrite && (
                 <Button
-                  variant="ghost"
+                  variant="destructive"
                   size="xs"
-                  className="text-muted-foreground hover:text-bad"
                   onClick={() => delRule(r.id).then(load).catch(fail)}
                 >
                   borrar

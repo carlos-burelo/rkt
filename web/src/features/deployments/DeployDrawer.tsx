@@ -131,11 +131,11 @@ export function DeployDrawer() {
                   {canWrite && (
                     <>
                       {([
-                        ["restart", "reiniciar"],
-                        ["deploy", "redesplegar"],
-                        ["rollback", "revertir"],
-                      ] as const).map(([a, label]) => (
-                        <Button key={a} variant="outline" size="sm" onClick={() => act(dep.app, a)}>
+                        ["restart", "reiniciar", "outline"],
+                        ["deploy", "redesplegar", "outline"],
+                        ["rollback", "revertir", "destructive"],
+                      ] as const).map(([a, label, variant]) => (
+                        <Button key={a} variant={variant} size="sm" onClick={() => act(dep.app, a)}>
                           {label}
                         </Button>
                       ))}

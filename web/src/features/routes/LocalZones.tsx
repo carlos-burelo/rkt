@@ -141,9 +141,8 @@ export function LocalZones({ onChanged }: { onChanged: () => void }) {
               </span>
               {g.target && (
                 <Button
-                  variant="ghost"
-                  size="xs"
-                  className="text-muted-foreground hover:text-bad"
+                  variant="destructive"
+                  size="icon-xs"
                   onClick={() => remove(g.base)}
                   aria-label={`borrar ${g.base}`}
                   title="borrar dominio"
@@ -172,9 +171,8 @@ export function LocalZones({ onChanged }: { onChanged: () => void }) {
                   <span className="min-w-0 flex-1 truncate font-mono text-[10px]">{h.host}</span>
                   <span className="tnum hidden font-mono text-[9px] text-muted-foreground sm:block">{h.target}</span>
                   <Button
-                    variant="ghost"
-                    size="xs"
-                    className="text-muted-foreground hover:text-bad"
+                    variant="destructive"
+                    size="icon-xs"
                     onClick={() => remove(h.host)}
                     aria-label={`borrar ${h.host}`}
                     title="borrar subdominio"

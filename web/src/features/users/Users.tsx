@@ -82,9 +82,8 @@ export function Users() {
             </span>
             <div className="flex justify-end">
               <Button
-                variant="ghost"
+                variant="destructive"
                 size="xs"
-                className="text-muted-foreground hover:text-bad"
                 disabled={me?.user === u.name}
                 title={me?.user === u.name ? "no puedes borrarte a ti mismo" : "borrar"}
                 onClick={() => deleteUser(u.name).then(load).catch(fail)}

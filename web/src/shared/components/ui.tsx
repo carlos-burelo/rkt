@@ -4,9 +4,9 @@ import { stateLabel } from "../lib/labels";
 
 export type FleetState = "running" | "degraded" | "failed" | "stopped" | "ok";
 
-export function stateOf(a: { running: boolean; failed?: boolean; restarts?: number }): FleetState {
+export function stateOf(a: { running: boolean; failed?: boolean; restarts?: number; http_ok?: boolean }): FleetState {
   if (a.failed) return "failed";
-  if (a.running) return "running";
+  if (a.running) return a.http_ok === false ? "degraded" : "running";
   return "stopped";
 }
 

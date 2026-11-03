@@ -1126,10 +1126,11 @@ func NewHandler(d Deps) http.Handler {
 			Target string   `json:"target"`
 			OK     bool     `json:"ok"`
 			TLS    []string `json:"tls"`
+			DNSOK  []bool   `json:"dns_ok"`
 		}
 		out := []routeStatus{}
 		for _, x := range d.Live.Get().Routes {
-			rs := routeStatus{Hosts: x.Hosts, Target: x.Target, TLS: []string{}}
+			rs := routeStatus{Hosts: x.Hosts, Target: x.Target, TLS: []string{}, DNSOK: []bool{}}
 			if u, err := url.Parse(x.Target); err == nil && u.Host != "" {
 				rs.OK = health.BackendOK(u.Host)
 			}
@@ -1144,6 +1145,7 @@ func NewHandler(d Deps) http.Handler {
 					}
 				}
 				rs.TLS = append(rs.TLS, state)
+				rs.DNSOK = append(rs.DNSOK, resolvesLocal(h))
 			}
 			out = append(out, rs)
 		}
@@ -1213,6 +1215,26 @@ func mustUser(r *http.Request) string {
 	return u
 }
 
+// resolvesLocal: el host apunta a loopback desde esta máquina.
+// *.localhost lo resuelven los navegadores sin hosts; el resto se pregunta
+// al resolver del sistema (si no está en hosts, no es alcanzable).
+func resolvesLocal(host string) bool {
+	h := strings.ToLower(strings.TrimSpace(host))
+	if h == "localhost" || strings.HasSuffix(h, ".localhost") {
+		return true
+	}
+	ips, err := net.LookupHost(h)
+	if err != nil {
+		return false
+	}
+	for _, ip := range ips {
+		if ip == "127.0.0.1" || ip == "::1" {
+			return true
+		}
+	}
+	return false
+}
+
 // createAppFromRepo alta con inferencia vía cfgfile.CreateApp (hogar
 // único, también usado por MCP). Escribe vía AddApp y refresca Live.
 func createAppFromRepo(db *store.DB, live *config.Live, repo, name, domain string, port int, command, dir string, auto bool) (string, error) {
@@ -1268,11 +1290,17 @@ func sanitizeApp(a config.App, routes []config.Route) map[string]any {
 	if static == "" && len(a.Args) >= 2 && a.Args[0] == "__static" {
 		static = a.Args[1]
 	}
+	dnsOK := true
+	for _, h := range domains {
+		if !resolvesLocal(h) {
+			dnsOK = false
+		}
+	}
 	return map[string]any{
 		"name": a.Name, "command": a.Command, "args": a.Args,
 		"dir": a.Dir, "static": static, "env_file": a.EnvFile, "restart_delay": a.RestartDelay,
 		"min_uptime": a.MinUptime, "memory_mb": a.MemoryMB,
-		"port": port, "deploy": deploy, "domains": domains,
+		"port": port, "deploy": deploy, "domains": domains, "dns_ok": dnsOK,
 	}
 }
 
