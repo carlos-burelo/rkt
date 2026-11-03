@@ -898,6 +898,9 @@ func NewHandler(d Deps) http.Handler {
 	// Sugerencia de dominios (localhost/test/base) para el editor de rutas.
 	mux.HandleFunc("/api/v1/domains/suggest", d.handleDomainsSuggest)
 
+	// Zonas locales agrupadas (panel tipo DNS): base + subdominios.
+	mux.HandleFunc("/api/v1/domains/zones", d.handleZones)
+
 	// Usage 30d (rollup access.log, caché 5min). Sin cobro: solo uso.
 	mux.HandleFunc("/api/v1/usage", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

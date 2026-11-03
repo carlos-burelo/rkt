@@ -34,3 +34,26 @@ export async function suggestDomains(name: string): Promise<DomainSuggestion[]> 
   );
   return res.suggestions ?? [];
 }
+
+export interface ZoneHost {
+  host: string;
+  target: string;
+  is_base: boolean;
+}
+
+export interface ZoneGroup {
+  base: string;
+  suffix: string;
+  target: string;
+  hosts: ZoneHost[];
+}
+
+export interface Zones {
+  suffixes: string[];
+  groups: ZoneGroup[];
+}
+
+// listZones: rutas locales agrupadas (apex + subdominios).
+export function listZones(): Promise<Zones> {
+  return api<Zones>("/api/v1/domains/zones");
+}
