@@ -236,7 +236,7 @@ export function ShellLayout() {
 
           <SidebarGroup className="mt-4 py-0 group-data-[collapsible=icon]:p-0">
             <SidebarGroupLabel className="mb-1 flex h-4 items-center gap-2 px-2 font-mono text-[9px] tracking-[0.18em] uppercase text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
-              <span>Bahías</span>
+              <span>Puertos</span>
               <span aria-hidden className="h-px flex-1 bg-sidebar-border" />
               <span className="tnum text-[9px] text-sidebar-foreground/55">{apps.length}</span>
             </SidebarGroupLabel>
@@ -246,7 +246,7 @@ export function ShellLayout() {
                   <SidebarMenuButton
                     isActive={appFilter === ""}
                     onClick={() => setAppFilter("")}
-                    tooltip="todas las bahías"
+                    tooltip="todos los puertos"
                     className="h-7 rounded-[1px] px-2 font-mono text-[10px] text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:text-sidebar-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
                   >
                     <span className="hidden h-3.5 w-3.5 shrink-0 items-center justify-center text-muted-foreground/60 group-data-[collapsible=icon]:flex">
