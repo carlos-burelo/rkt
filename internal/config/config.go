@@ -156,14 +156,37 @@ type Config struct {
 	MaxBodyMB           int64           `yaml:"max_body_mb" json:"max_body_mb"`
 	Github              *Github         `yaml:"github" json:"github,omitempty"`
 	DenyPaths           []string        `yaml:"deny_paths" json:"deny_paths"`
-	Apps                []App           `yaml:"apps" json:"-"`
-	Routes              []Route         `yaml:"routes" json:"-"`
+	// GlobalEnv se aplica a todas las apps; la app puede sobrescribir claves.
+	GlobalEnv map[string]string `yaml:"global_env" json:"global_env,omitempty"`
+	Apps      []App             `yaml:"apps" json:"-"`
+	Routes    []Route           `yaml:"routes" json:"-"`
 
 	grace time.Duration `yaml:"-"`
 }
 
 // Grace ventana de reintento ante backend caído (parseado en Load).
 func (c *Config) Grace() time.Duration { return c.grace }
+
+// MergeEnv combina globales + overrides (gana el override). Devuelve un mapa
+// nuevo: el manifiesto guardado no se toca.
+func MergeEnv(global, override map[string]string) map[string]string {
+	if len(global) == 0 && len(override) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(global)+len(override))
+	for k, v := range global {
+		out[k] = v
+	}
+	for k, v := range override {
+		out[k] = v
+	}
+	return out
+}
+
+// RuntimeEnv entorno efectivo de una app: globales pisadas por las suyas.
+func (c *Config) RuntimeEnv(appEnv map[string]string) map[string]string {
+	return MergeEnv(c.GlobalEnv, appEnv)
+}
 
 func defaultConfig() Config {
 	return Config{

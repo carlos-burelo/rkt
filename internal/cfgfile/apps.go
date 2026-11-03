@@ -68,6 +68,11 @@ func SetEnv(db *store.DB, cfg *config.Config, appName, key, rawVal string) error
 	}
 	// expande solo el valor nuevo (el resto ya está expandido en DB)
 	scope := dotenv.EnvironMap()
+	for gk, gv := range cfg.GlobalEnv { // las globales también resuelven ${...}
+		if _, exists := scope[gk]; !exists {
+			scope[gk] = gv
+		}
+	}
 	for ek, ev := range a.Env {
 		if ek != key {
 			scope[ek] = ev
@@ -89,6 +94,31 @@ func SetEnv(db *store.DB, cfg *config.Config, appName, key, rawVal string) error
 		return fmt.Errorf("inválido, no guardado: %w", err)
 	}
 	return db.ImportFleet(cfg)
+}
+
+// SetGlobalEnv escribe una variable global de flota en la infra (expandida
+// contra el entorno del servicio y las demás globales).
+func SetGlobalEnv(db *store.DB, cfg *config.Config, key, rawVal string) error {
+	if key == "" {
+		return fmt.Errorf("clave vacía")
+	}
+	if cfg.GlobalEnv == nil {
+		cfg.GlobalEnv = map[string]string{}
+	}
+	scope := dotenv.EnvironMap()
+	for k, v := range cfg.GlobalEnv {
+		if k != key {
+			scope[k] = v
+		}
+	}
+	cfg.GlobalEnv[key] = dotenv.Expand(map[string]string{key: rawVal}, scope)[key]
+	return SaveInfra(db, cfg)
+}
+
+// UnsetGlobalEnv borra una global de la infra.
+func UnsetGlobalEnv(db *store.DB, cfg *config.Config, key string) error {
+	delete(cfg.GlobalEnv, key)
+	return SaveInfra(db, cfg)
 }
 
 // CreateApp arma App+domains+port con inferencia (Suggest+PresetBuild).

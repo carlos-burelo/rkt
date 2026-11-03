@@ -142,7 +142,7 @@ func (p *Program) Run() {
 	live := config.NewLive(cfg)
 	p.live = live
 
-	p.sup = supervisor.New(cfg.Apps, filepath.Join(logx.DirFor(p.cfgPath), "apps"), p.log)
+	p.sup = supervisor.New(cfg.Apps, cfg.GlobalEnv, filepath.Join(logx.DirFor(p.cfgPath), "apps"), p.log)
 	if p.db != nil {
 		db := p.db
 		p.sup.OnEvent = func(kind, app, msg string) {
@@ -239,7 +239,7 @@ func (p *Program) Run() {
 	}()
 	if cfg.Healthz.Enabled {
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.sup.Restart, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal})
-		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Apply: p.sup.Apply, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus})
+		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.sup.Restart, Apply: func(apps []config.App, global map[string]string) { p.sup.Apply(apps, global) }, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus})
 		sub, err := fs.Sub(web.Dist, "dist")
 		if err != nil {
 			p.log.Error("dashboard sin dist", "err", err)
@@ -451,7 +451,14 @@ func (p *Program) deployApp(name, actor string) (string, error) {
 	if app.Deploy == nil {
 		return "", fmt.Errorf("app %q sin bloque deploy", name)
 	}
-	return p.runDeploy(*app, actor)
+	return p.runDeploy(p.runtimeApp(*app, cfg), actor)
+}
+
+// runtimeApp copia la app con su entorno efectivo (globales pisadas por las
+// propias) para builds/deploys. El manifiesto guardado no se muta.
+func (p *Program) runtimeApp(app config.App, cfg *config.Config) config.App {
+	app.Env = cfg.RuntimeEnv(app.Env)
+	return app
 }
 
 // retryDeployment re-corre el rev exacto de un deploy previo
@@ -480,7 +487,7 @@ func (p *Program) retryDeployment(id int64, actor string) (string, error) {
 			return "", fmt.Errorf("app %q sin bloque deploy", appName)
 		}
 		app.Deploy.Ref = rev
-		return p.runDeploy(app, actor+" (retry #"+strconv.FormatInt(id, 10)+")")
+		return p.runDeploy(p.runtimeApp(app, cfg), actor+" (retry #"+strconv.FormatInt(id, 10)+")")
 	}
 	return "", fmt.Errorf("app %q inexistente", appName)
 }
@@ -518,10 +525,10 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 		return 0, err
 	}
 	var depID int64
+	target := p.runtimeApp(*app, cfg)
 	if p.db != nil {
-		depID, _ = p.db.InsertDeployment(app.Name, "local", out.Name(), actor, app.Env)
+		depID, _ = p.db.InsertDeployment(app.Name, "local", out.Name(), actor, target.Env)
 	}
-	target := *app
 	go func() {
 		defer out.Close()
 		err := deploy.RunSteps(steps, target.Dir, target.Env, out)
@@ -568,7 +575,7 @@ func (p *Program) deployAppAsync(name, actor string) (int64, error) {
 	if app.Deploy == nil {
 		return 0, fmt.Errorf("app %q sin bloque deploy", name)
 	}
-	id, _, err := p.startDeploy(*app, actor, true)
+	id, _, err := p.startDeploy(p.runtimeApp(*app, cfg), actor, true)
 	return id, err
 }
 
@@ -854,7 +861,7 @@ func (p *Program) watchMerged(live *config.Live, db *store.DB) {
 		live.Swap(next)
 		if p.sup != nil {
 			// manifiesto en caliente: nuevas/actualizadas arrancan solas
-			p.sup.Apply(next.Apps)
+			p.sup.Apply(next.Apps, next.GlobalEnv)
 		}
 		p.log.Info("config recargada",
 			"routes", len(next.Routes),

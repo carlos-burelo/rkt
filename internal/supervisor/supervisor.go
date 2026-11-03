@@ -70,6 +70,8 @@ type Manager struct {
 	mu       sync.Mutex
 	apps     []*app
 	stopping bool
+	// global se fusiona en el env de cada app al arrancar (la app gana).
+	global map[string]string
 	// logsDir y base para recrear apps al aplicar config nueva.
 	logsDir string
 	baseLog *slog.Logger
@@ -79,12 +81,19 @@ type Manager struct {
 }
 
 // New valida rutas de log pero no arranca nada. logsDir/<name>.log.
-func New(apps []config.App, logsDir string, log *slog.Logger) *Manager {
-	m := &Manager{logsDir: logsDir, baseLog: log}
+// global es el entorno compartido (nil = sin globales).
+func New(apps []config.App, global map[string]string, logsDir string, log *slog.Logger) *Manager {
+	m := &Manager{logsDir: logsDir, baseLog: log, global: global}
 	for _, a := range apps {
-		m.apps = append(m.apps, m.makeApp(a))
+		m.apps = append(m.apps, m.makeApp(m.effective(a)))
 	}
 	return m
+}
+
+// effective aplica el entorno global sin mutar el manifiesto guardado.
+func (m *Manager) effective(a config.App) config.App {
+	a.Env = config.MergeEnv(m.global, a.Env)
+	return a
 }
 
 // makeApp construye el runner de una spec (sin arrancarlo).
@@ -102,14 +111,20 @@ func (m *Manager) makeApp(a config.App) *app {
 // Apply reconcilia la flota viva con specs nuevas: detiene las retiradas,
 // reinicia las que cambiaron y arranca las nuevas. Las iguales no se tocan.
 // Es el único camino para aplicar cambios de manifiesto en caliente.
-func (m *Manager) Apply(specs []config.App) {
+// global entra en el env efectivo: cambiarlo reinicia las apps afectadas.
+func (m *Manager) Apply(specs []config.App, global map[string]string) {
 	m.mu.Lock()
 	if m.stopping {
 		m.mu.Unlock()
 		return
 	}
-	want := make(map[string]config.App, len(specs))
-	for _, s := range specs {
+	m.global = global
+	eff := make([]config.App, len(specs))
+	for i, s := range specs {
+		eff[i] = m.effective(s)
+	}
+	want := make(map[string]config.App, len(eff))
+	for _, s := range eff {
 		want[s.Name] = s
 	}
 	prev := make(map[string]*app, len(m.apps))
@@ -117,9 +132,9 @@ func (m *Manager) Apply(specs []config.App) {
 		prev[a.cfg.Name] = a
 	}
 
-	next := make([]*app, 0, len(specs))
+	next := make([]*app, 0, len(eff))
 	var start []*app
-	for _, s := range specs {
+	for _, s := range eff {
 		old, ok := prev[s.Name]
 		if ok && specsEqual(old.cfg, s) {
 			next = append(next, old)

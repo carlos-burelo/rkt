@@ -13,11 +13,15 @@ func (d *DB) SaveInfra(data []byte) error {
 	if d == nil || d.sql == nil {
 		return errors.New("db cerrada")
 	}
-	_, err := d.sql.Exec(
+	if _, err := d.sql.Exec(
 		`INSERT INTO infra (id, data, updated_at) VALUES (1, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at`,
-		string(data), time.Now().UTC().Format(time.RFC3339))
-	return err
+		string(data), time.Now().UTC().Format(time.RFC3339)); err != nil {
+		return err
+	}
+	// La infra (globales, settings) también es config viva: que watchMerged
+	// la recargue, no solo los cambios de flota.
+	return d.bumpVersion()
 }
 
 // LoadInfra devuelve el JSON de infra (nil si nunca se guardó).

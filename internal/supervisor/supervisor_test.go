@@ -62,7 +62,7 @@ func TestStartCapturesOutput(t *testing.T) {
 	cmd, args := shell(t, "echo hola-mundo")
 	apps := loadApps(t, "apps:\n  - name: eco\n    command: \""+cmd+"\"\n    args: [\""+strings.Join(args, "\", \"")+"\"]\n    restart_delay: 5s\n")
 	dir := t.TempDir()
-	m := New(apps, dir, testLog(t))
+	m := New(apps, nil, dir, testLog(t))
 	m.Start()
 	defer m.Stop()
 	path := filepath.Join(dir, "eco.log")
@@ -79,7 +79,7 @@ func TestRestartOnCrash(t *testing.T) {
 		argYaml += "\"" + a + "\", "
 	}
 	apps := loadApps(t, "apps:\n  - name: muere\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 50ms\n")
-	m := New(apps, t.TempDir(), testLog(t))
+	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	defer m.Stop()
 	waitFor(t, 10*time.Second, func() bool {
@@ -101,7 +101,7 @@ func TestStopKillsRunning(t *testing.T) {
 		argYaml += "\"" + strings.ReplaceAll(a, `"`, `\"`) + "\", "
 	}
 	apps := loadApps(t, "apps:\n  - name: largo\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 5s\n")
-	m := New(apps, t.TempDir(), testLog(t))
+	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	waitFor(t, 5*time.Second, func() bool {
 		s := m.Snapshot()
@@ -120,7 +120,7 @@ func TestCrashloopGuard(t *testing.T) {
 		argYaml += "\"" + a + "\", "
 	}
 	apps := loadApps(t, "apps:\n  - name: loop\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 1ms\n")
-	m := New(apps, t.TempDir(), testLog(t))
+	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	defer m.Stop()
 	waitFor(t, 10*time.Second, func() bool {
@@ -144,7 +144,7 @@ func TestEnvOverride(t *testing.T) {
 	}
 	apps := loadApps(t, "apps:\n  - name: envtest\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    env:\n      RKT_TEST_VAR: valor123\n    restart_delay: 5s\n")
 	dir := t.TempDir()
-	m := New(apps, dir, testLog(t))
+	m := New(apps, nil, dir, testLog(t))
 	m.Start()
 	defer m.Stop()
 	waitFor(t, 5*time.Second, func() bool {
@@ -180,7 +180,7 @@ func TestSlowDeathsDontTripGuard(t *testing.T) {
 	}
 	// muere cada ~300ms pero min_uptime 100ms: reinicia sin contar crash
 	apps := loadApps(t, "apps:\n  - name: lenta\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 50ms\n    min_uptime: 100ms\n")
-	m := New(apps, t.TempDir(), testLog(t))
+	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	defer m.Stop()
 	waitFor(t, 10*time.Second, func() bool {
@@ -207,7 +207,7 @@ func TestMemoryLimitKills(t *testing.T) {
 	// mata directo: runtimes que tragan OOM no reiniciarían.)
 	apps := loadApps(t, "apps:\n  - name: glotona\n    command: '"+py+"'\n    args: [\"-c\", \"bytearray(300_000_000)\"]\n    restart_delay: 200ms\n    min_uptime: 1ms\n    memory_mb: 100\n")
 	dir := t.TempDir()
-	m := New(apps, dir, testLog(t))
+	m := New(apps, nil, dir, testLog(t))
 	m.Start()
 	defer m.Stop()
 	waitFor(t, 30*time.Second, func() bool {
@@ -240,7 +240,7 @@ func TestRestartImmediate(t *testing.T) {
 	}
 	// delay 30s: si Restart tarda, el test lo delata
 	apps := loadApps(t, "apps:\n  - name: largo\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 30s\n    min_uptime: 1ms\n")
-	m := New(apps, t.TempDir(), testLog(t))
+	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	defer m.Stop()
 	waitFor(t, 5*time.Second, func() bool {
@@ -269,7 +269,7 @@ func TestRestartRevivesFailed(t *testing.T) {
 		argYaml += "\"" + a + "\", "
 	}
 	apps := loadApps(t, "apps:\n  - name: loop\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 1ms\n    min_uptime: 2s\n")
-	m := New(apps, t.TempDir(), testLog(t))
+	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	defer m.Stop()
 	waitFor(t, 10*time.Second, func() bool {
@@ -297,7 +297,7 @@ func TestSwapAndRestart(t *testing.T) {
 		argYaml += "\"" + a + "\", "
 	}
 	apps := loadApps(t, "apps:\n  - name: largo\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 30s\n    min_uptime: 1ms\n")
-	m := New(apps, t.TempDir(), testLog(t))
+	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
 	defer m.Stop()
 	waitFor(t, 5*time.Second, func() bool {
@@ -333,7 +333,7 @@ func TestOnEventDied(t *testing.T) {
 		argYaml += "\"" + a + "\", "
 	}
 	apps := loadApps(t, "apps:\n  - name: muere\n    command: \""+cmd+"\"\n    args: ["+argYaml+"]\n    restart_delay: 5s\n    min_uptime: 1ms\n")
-	m := New(apps, t.TempDir(), testLog(t))
+	m := New(apps, nil, t.TempDir(), testLog(t))
 	var mu sync.Mutex
 	var kinds []string
 	m.OnEvent = func(kind, app, msg string) {

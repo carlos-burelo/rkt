@@ -51,6 +51,13 @@ type envDelArg struct {
 	App string `json:"app" jsonschema:"nombre de la app"`
 	Key string `json:"key" jsonschema:"CLAVE"`
 }
+type envGlobalArg struct {
+	Key   string `json:"key" jsonschema:"CLAVE a definir"`
+	Value string `json:"value" jsonschema:"valor (admite ${VAR})"`
+}
+type envGlobalListArg struct {
+	IncludeSecrets bool `json:"include_secrets,omitempty" jsonschema:"incluir valores (default false)"`
+}
 type deployWaitArg struct {
 	ID       int64  `json:"id,omitempty" jsonschema:"id del deployment (o usa app)"`
 	App      string `json:"app,omitempty" jsonschema:"esperar el último deployment de la app"`
@@ -158,6 +165,54 @@ func (s *Server) doEnvDelete(a envDelArg) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%s: %s borrada (aplica en ≤10s)", a.App, a.Key), nil
+}
+
+func (s *Server) doEnvGlobalList(a envGlobalListArg) (string, error) {
+	cfg, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	keys := make([]string, 0, len(cfg.GlobalEnv))
+	for k := range cfg.GlobalEnv {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	if a.IncludeSecrets {
+		out := make(map[string]string, len(keys))
+		for _, k := range keys {
+			out[k] = cfg.GlobalEnv[k]
+		}
+		return jsonText(map[string]any{"keys": keys, "values": out, "count": len(keys)})
+	}
+	return jsonText(map[string]any{"keys": keys, "count": len(keys)})
+}
+
+func (s *Server) doEnvGlobalSet(a envGlobalArg) (string, error) {
+	cfg, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	if err := cfgfile.SetGlobalEnv(db, cfg, a.Key, a.Value); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("global %s guardada (las apps la heredan al reiniciar)", a.Key), nil
+}
+
+func (s *Server) doEnvGlobalDelete(a envGlobalArg) (string, error) {
+	cfg, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	if _, ok := cfg.GlobalEnv[a.Key]; !ok {
+		return "", fmt.Errorf("no existe la global %s", a.Key)
+	}
+	if err := cfgfile.UnsetGlobalEnv(db, cfg, a.Key); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("global %s eliminada", a.Key), nil
 }
 
 func (s *Server) doRoutesAdd(a routesAddArg) (string, error) {
@@ -863,6 +918,18 @@ func (s *Server) registerMore(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{Name: "env_delete", Description: "Borra una variable de entorno de una app."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a envDelArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEnvDelete(a))
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "env_global_list", Description: "Variables globales de la flota (claves; valores solo con include_secrets)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a envGlobalListArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doEnvGlobalList(a))
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "env_global_set", Description: "Crea/actualiza una variable global; todas las apps la heredan al reiniciar."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a envGlobalArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doEnvGlobalSet(a))
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "env_global_delete", Description: "Elimina una variable global de la flota."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a envGlobalArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doEnvGlobalDelete(a))
 		})
 	mcp.AddTool(srv, &mcp.Tool{Name: "routes_add", Description: "Crea una ruta hosts → target."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a routesAddArg) (*mcp.CallToolResult, any, error) {

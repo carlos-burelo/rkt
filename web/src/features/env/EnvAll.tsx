@@ -1,20 +1,28 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Lock, Search } from "lucide-react";
+import { ArrowRight, Globe2, Lock, Search } from "lucide-react";
 import { useNavigate } from "react-router";
 import { listApps, getEnv } from "../apps/api";
 import { AppMeta } from "../../shared/lib/types";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Avatar } from "../../shared/components/ui";
-import { PageHeader, EmptyState } from "../../shared/components/patterns";
+import { PageHeader, EmptyState, Section, EnvSecret } from "../../shared/components/patterns";
 import { useUI } from "../../app/ui";
+import { useAuth } from "../auth/store";
+import { useGlobalEnv } from "./hooks";
+import { delGlobalEnv, setGlobalEnv } from "./api";
 
-// EnvAll vista agrupada por app con buscador global.
-// Valores ocultos (detalle en cada app); aquí solo inventario.
+// EnvAll: variables globales de la flota + inventario por app.
+// Los valores se revelan a demanda; la edición de globales vive aquí.
 export function EnvAll() {
   const fail = useUI((u) => u.fail);
+  const canWrite = useAuth((a) => a.canWrite);
   const navigate = useNavigate();
+  const global = useGlobalEnv();
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<{ app: string; vars: Record<string, string> }[]>([]);
+  const [key, setKey] = useState("");
+  const [val, setVal] = useState("");
 
   useEffect(() => {
     listApps()
@@ -35,23 +43,96 @@ export function EnvAll() {
   }, []);
 
   const f = q.toLowerCase();
-  const total = rows.reduce((n, r) => n + Object.keys(r.vars).length, 0);
+  const globalKeys = Object.keys(global.env).sort();
+  const ownTotal = rows.reduce((n, r) => n + Object.keys(r.vars).length, 0);
   const visible = rows.filter(({ app, vars }) => {
     if (f === "") return true;
     return app.toLowerCase().includes(f) || Object.keys(vars).some((k) => k.toLowerCase().includes(f));
   });
 
+  const save = () => {
+    const k = key.trim();
+    if (!k) return;
+    setGlobalEnv(k, val)
+      .then(() => {
+        setKey("");
+        setVal("");
+        global.reload();
+      })
+      .catch(fail);
+  };
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="Entorno"
-        description="Inventario por app. Los valores viven enmascarados; la edición ocurre en la ficha de cada unidad."
+        description="Globales para toda la flota y propias de cada proyecto. Las del proyecto sobrescriben a las globales."
         meta={
           <span className="tnum font-mono text-[10px] text-muted-foreground">
-            {rows.length} apps · {total} vars
+            {globalKeys.length} globales · {ownTotal} propias · {rows.length} apps
           </span>
         }
       />
+
+      <Section
+        title="Globales"
+        accent
+        description="se inyectan en todas las apps · la app puede anular una clave"
+        actions={<span className="tnum font-mono text-[9px] text-muted-foreground">{globalKeys.length} vars</span>}
+      >
+        <div className="border border-border">
+          {globalKeys.map((k, i) => (
+            <div key={k} className="flex items-center gap-2 border-b border-border/60 bg-card/35 px-2.5 py-1.5 last:border-0">
+              <span className="folio w-5 shrink-0">{String(i + 1).padStart(2, "0")}</span>
+              <Globe2 className="h-3 w-3 shrink-0 text-muted-foreground/60" aria-label="global" />
+              <span className="w-44 shrink-0 truncate font-mono text-[11px]">{k}</span>
+              <EnvSecret value={global.env[k]} />
+              {canWrite && (
+                <Button variant="destructive" size="xs" onClick={() => delGlobalEnv(k).then(global.reload).catch(fail)}>
+                  borrar
+                </Button>
+              )}
+            </div>
+          ))}
+          {globalKeys.length === 0 && (
+            <p className="bg-card/30 px-3 py-5 text-center font-mono text-[10px] text-muted-foreground">
+              sin globales · agrega la primera abajo
+            </p>
+          )}
+        </div>
+
+        {canWrite && (
+          <div className="mt-3 border border-border bg-secondary/15 p-2.5">
+            <p className="micro mb-2">nueva global</p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <label className="field-label w-44 shrink-0">
+                clave
+                <Input
+                  value={key}
+                  onChange={(e) => setKey(e.target.value)}
+                  placeholder="CLAVE"
+                  className="h-7 font-mono text-[11px]"
+                />
+              </label>
+              <label className="field-label min-w-0 flex-1">
+                valor
+                <Input
+                  value={val}
+                  onChange={(e) => setVal(e.target.value)}
+                  placeholder="valor (admite ${VAR})"
+                  className="h-7 font-mono text-[11px]"
+                />
+              </label>
+              <div className="flex items-end">
+                <Button variant="outline" size="sm" onClick={save}>
+                  guardar
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Section>
+
       <div className="flex items-center gap-2 border border-border bg-card/35 p-2">
         <div className="relative min-w-0 flex-1 sm:max-w-md">
           <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -68,6 +149,7 @@ export function EnvAll() {
 
       {visible.map(({ app, vars }) => {
         const keys = Object.keys(vars).filter((k) => f === "" || k.toLowerCase().includes(f) || app.toLowerCase().includes(f));
+        const inherited = globalKeys.filter((k) => !(k in vars)).length;
         return (
           <section key={app} className="border border-border">
             <button
@@ -76,19 +158,24 @@ export function EnvAll() {
             >
               <Avatar name={app} />
               <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{app}</span>
-              <span className="tnum font-mono text-[9px] text-muted-foreground">{Object.keys(vars).length} vars</span>
+              <span className="tnum font-mono text-[9px] text-muted-foreground">
+                {Object.keys(vars).length} propias · {inherited} heredadas
+              </span>
               <ArrowRight className="h-3 w-3 text-muted-foreground/40" />
             </button>
             {keys.map((k) => (
               <div key={k} className="flex items-center gap-2 border-b border-border/60 bg-card/35 px-3 py-1.5 last:border-0">
                 <Lock className="h-3 w-3 shrink-0 text-muted-foreground/60" aria-label="secreto" />
                 <span className="w-52 shrink-0 truncate font-mono text-[11px]">{k}</span>
+                {k in global.env && (
+                  <span className="border border-warn/40 px-1 font-mono text-[9px] text-warn">anula global</span>
+                )}
                 <span className="flex-1" />
-                <span className="font-mono text-[9px] text-muted-foreground/60">secreto · editar en app</span>
+                <span className="font-mono text-[9px] text-muted-foreground/60">editar en app</span>
               </div>
             ))}
             {keys.length === 0 && (
-              <p className="bg-card/30 px-3 py-3 font-mono text-[10px] text-muted-foreground">sin vars para este filtro</p>
+              <p className="bg-card/30 px-3 py-3 font-mono text-[10px] text-muted-foreground">sin propias para este filtro</p>
             )}
           </section>
         );

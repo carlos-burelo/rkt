@@ -286,3 +286,24 @@ routes:
 		t.Fatal("max_body_mb negativo debe fallar")
 	}
 }
+
+func TestMergeEnvGlobalYOverride(t *testing.T) {
+	cfg := &Config{GlobalEnv: map[string]string{"A": "global", "B": "global"}}
+	got := cfg.RuntimeEnv(map[string]string{"B": "propia", "C": "propia"})
+	want := map[string]string{"A": "global", "B": "propia", "C": "propia"}
+	for k, v := range want {
+		if got[k] != v {
+			t.Fatalf("%s = %q, quiere %q", k, got[k], v)
+		}
+	}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, quiere %d", len(got), len(want))
+	}
+	// el override no muta los mapas originales
+	if cfg.GlobalEnv["B"] != "global" {
+		t.Fatal("MergeEnv no debe mutar el global")
+	}
+	if MergeEnv(nil, nil) != nil {
+		t.Fatal("sin entradas debe ser nil")
+	}
+}

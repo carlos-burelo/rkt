@@ -54,6 +54,9 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 | `env list <app>` | Vars inline (`KEY=valor` por línea) |
 | `env set <app> CLAVE=valor` | Escribe (+expande `${}`) |
 | `env unset <app> CLAVE` | Borra |
+| `env global` | Lista las variables de toda la flota |
+| `env global set CLAVE=valor` | Escribe una global (las apps la heredan) |
+| `env global unset CLAVE` | Borra una global |
 | `settings list` | `node_bin, python_bin, base_domain, port_pool, site_name, quota_reqs, quota_bytes` |
 | `settings set CLAVE=valor` | Escribe setting (solo conocidas) |
 | `users list` | Usuarios dashboard (`name, role, created_at`) |
@@ -126,6 +129,7 @@ local y registra deployment), `env_set` (solo escritura),
 `restart`, `rollback`, `deploy`, `retry`, `apps_remove` (baja con rutas).
 
 Catálogo extendido (control total): `app_get`, `app_env_keys`, `env_delete`,
+`env_global_list|set|delete` (variables de toda la flota; la app las anula),
 `routes_add|update|remove`, `domains_suggest`, `verify_domain` (DNS + HTTP
 real por Host), `hosts_list|add|remove`, `deployment_get`, `deploy_wait`,
 `git_status`, `diff_rev`, `disk_usage`, `log_search`, `usage_summary`,

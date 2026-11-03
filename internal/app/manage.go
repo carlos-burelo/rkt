@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -589,8 +590,50 @@ func cmdEnv(args []string, cfgPath string) {
 		delete(a.Env, args[2])
 		persist(cfgPath, db, cfg)
 		fmt.Printf("%s eliminada (restart requerido)\n", args[2])
+	case "global":
+		cfg, db := merged(cfgPath)
+		defer db.Close()
+		if len(args) == 1 {
+			if len(cfg.GlobalEnv) == 0 {
+				fmt.Println("(sin variables globales)")
+				return
+			}
+			keys := make([]string, 0, len(cfg.GlobalEnv))
+			for k := range cfg.GlobalEnv {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				fmt.Printf("%s=%s\n", k, cfg.GlobalEnv[k])
+			}
+			return
+		}
+		switch args[1] {
+		case "set":
+			if len(args) != 3 {
+				log.Fatal("uso: env global set CLAVE=valor")
+			}
+			k, v, ok := strings.Cut(args[2], "=")
+			if !ok || strings.TrimSpace(k) == "" {
+				log.Fatalf("env global set: %q no es CLAVE=valor", args[2])
+			}
+			if err := cfgfile.SetGlobalEnv(db, cfg, strings.TrimSpace(k), v); err != nil {
+				log.Fatalf("env global set: %v", err)
+			}
+			fmt.Printf("%s=%s global (las apps la heredan al reiniciar)\n", strings.TrimSpace(k), v)
+		case "unset":
+			if len(args) != 3 {
+				log.Fatal("uso: env global unset CLAVE")
+			}
+			if err := cfgfile.UnsetGlobalEnv(db, cfg, args[2]); err != nil {
+				log.Fatalf("env global unset: %v", err)
+			}
+			fmt.Printf("%s global eliminada\n", args[2])
+		default:
+			log.Fatalf("env global: subcomando %q (set|unset)", args[1])
+		}
 	default:
-		log.Fatalf("env: subcomando %q (list|set|unset)", args[0])
+		log.Fatalf("env: subcomando %q (list|set|unset|global)", args[0])
 	}
 }
 

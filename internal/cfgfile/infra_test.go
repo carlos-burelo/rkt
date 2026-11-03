@@ -76,3 +76,40 @@ func TestMigraYAMLUnaVez(t *testing.T) {
 		t.Fatalf("fleet = %+v %v", fleet, err)
 	}
 }
+
+func TestSetGlobalEnvPersistencia(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "rkt.dev.yaml")
+	db := openDB(t, cfgPath)
+	cfg, err := LoadBase(db, cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// expansión: B referencia a A, A referencia el entorno del servicio
+	t.Setenv("RKT_TEST_BASE", "base")
+	if err := SetGlobalEnv(db, cfg, "A", "${RKT_TEST_BASE}-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetGlobalEnv(db, cfg, "B", "${A}-b"); err != nil {
+		t.Fatal(err)
+	}
+	reload, err := LoadBase(db, cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reload.GlobalEnv["A"] != "base-a" || reload.GlobalEnv["B"] != "base-a-b" {
+		t.Fatalf("globales = %+v", reload.GlobalEnv)
+	}
+	if err := UnsetGlobalEnv(db, reload, "A"); err != nil {
+		t.Fatal(err)
+	}
+	reload, err = LoadBase(db, cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reload.GlobalEnv["A"]; ok {
+		t.Fatalf("A debió borrarse: %+v", reload.GlobalEnv)
+	}
+	if reload.GlobalEnv["B"] != "base-a-b" {
+		t.Fatalf("B no debe cambiar: %+v", reload.GlobalEnv)
+	}
+}

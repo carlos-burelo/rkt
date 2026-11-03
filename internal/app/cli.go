@@ -204,7 +204,8 @@ Operate (contra el servicio en marcha):
 Gestión (flota en SQLite, con backup implícito):
   apps list|add|rm                       --name --command [--preset next|node|python] [--repo --domain --port --auto]
   routes list|add|rm                     --host (repetible) --target
-  env list|set|unset                      env set <app> CLAVE=valor
+  env list|set|unset <app> [CLAVE[=valor]] env por app
+  env global [set CLAVE=valor|unset CLAVE]  variables de toda la flota
   settings list|set                      settings set CLAVE=valor
   users list|add|del|passwd              usuarios dashboard (primer add = admin)
   config export [file]|import <file>     respaldo/restaura en git
