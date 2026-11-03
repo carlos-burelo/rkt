@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { fetchProxy, ProxyRoute } from "./api";
+import { buildLinks } from "./graph";
+import { RadialMap } from "./ProxyMap";
 import { Dot } from "../../shared/components/ui";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader, EmptyState } from "../../shared/components/patterns";
@@ -10,22 +13,81 @@ import { useUI } from "../../app/ui";
 export function Proxy() {
   const fail = useUI((u) => u.fail);
   const [rows, setRows] = useState<ProxyRoute[] | null>(null);
+  const [fState, setFState] = useState("all");
+  const [fTls, setFTls] = useState("all");
+  const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProxy().then(setRows).catch(fail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const links = useMemo(() => (rows ? buildLinks(rows) : []), [rows]);
+  const filteredLinks = useMemo(
+    () =>
+      links.filter(
+        (l) =>
+          (fState === "all" || (fState === "ok" ? l.ok : !l.ok)) &&
+          (fTls === "all" || (fTls === "tls" ? l.tls !== "off" : l.tls === "off")),
+      ),
+    [links, fState, fTls],
+  );
+  const byHost = useMemo(() => new Map(links.map((l) => [l.host, l])), [links]);
+
   return (
     <div className="space-y-3">
       <PageHeader
         title="Proxy"
-        description="Alcance real por ruta (dial TCP al backend + cert ACME). Vercel no muestra esto."
+        description="Mapa real por ruta (dial TCP al backend + cert ACME). Toca un host para aislar su haz."
+        actions={
+          <div className="flex items-center gap-2">
+            <label className="sr-only" htmlFor="f-estado">estado</label>
+            <select
+              id="f-estado"
+              value={fState}
+              onChange={(e) => setFState(e.target.value)}
+              className="rounded-md border border-input bg-background px-2 py-1.5 text-xs"
+            >
+              <option value="all">Todos los estados</option>
+              <option value="ok">En ruta</option>
+              <option value="down">Varados</option>
+            </select>
+            <label className="sr-only" htmlFor="f-tls">tls</label>
+            <select
+              id="f-tls"
+              value={fTls}
+              onChange={(e) => setFTls(e.target.value)}
+              className="rounded-md border border-input bg-background px-2 py-1.5 text-xs"
+            >
+              <option value="all">Todos los TLS</option>
+              <option value="tls">Con TLS</option>
+              <option value="off">Sin TLS</option>
+            </select>
+            <Link to="/routes" className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+              Gestionar →
+            </Link>
+          </div>
+        }
       />
       {!rows && <p className="text-sm text-muted-foreground">cargando…</p>}
       {rows && (
-        <div className="overflow-hidden rounded-lg border" role="table" aria-label="rutas del proxy">
-          {rows.map((r) => (
+        <>
+          <RadialMap links={filteredLinks} selected={selected} onSelect={setSelected} />
+          {selected && byHost.get(selected) && (
+            <button
+              onClick={() => setSelected(null)}
+              className="tnum w-fit rounded-full border px-3 py-1 font-mono text-[11px] text-muted-foreground hover:border-ring hover:text-foreground"
+            >
+              ✕ limpiar filtro: {selected}
+            </button>
+          )}
+          <div className="overflow-hidden rounded-lg border" role="table" aria-label="rutas del proxy">
+          {(selected ? rows.filter((r) => r.hosts.includes(selected)) : rows)
+            .filter((r) => {
+              const l = byHost.get(r.hosts[0]);
+              return !l || filteredLinks.includes(l) || r.hosts.some((h) => filteredLinks.some((f) => f.host === h));
+            })
+            .map((r) => (
             <div
               key={r.hosts.join(",") + r.target}
               className="flex items-center gap-3 border-b bg-card/40 px-4 py-3 last:border-0"
@@ -51,7 +113,8 @@ export function Proxy() {
           {rows.length === 0 && (
             <EmptyState title="Sin routes" hint="Agrega tu primer dominio en Domains." />
           )}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

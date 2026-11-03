@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { Route } from "../../shared/lib/types";
 import { addRoute, delRoute, putRoute, tlsStatus, listRoutes } from "./api";
+import { fetchProxy } from "../proxy/api";
+import { buildLinks, GraphLink } from "../proxy/graph";
+import { FunnelMap } from "./FunnelMap";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -102,10 +105,33 @@ export function Routes() {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [hosts, setHosts] = useState("");
   const [target, setTarget] = useState("");
+  const [mapLinks, setMapLinks] = useState<GraphLink[]>([]);
+  const newHostRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     try {
-      setRoutes(await listRoutes());
+      const [rs, px] = await Promise.all([
+        listRoutes(),
+        fetchProxy().catch(() => null),
+      ]);
+      setRoutes(rs);
+      if (px) {
+        setMapLinks(buildLinks(px));
+      } else {
+        // sin /proxy (p.ej. permiso lectura parcial): grafo honesto sin estado
+        setMapLinks(
+          rs.flatMap((r) =>
+            r.hosts.map((h) => ({
+              host: h,
+              target: r.target,
+              short: r.target.replace(/^https?:\/\//, "").replace(/^127\.0\.0\.1/, "local"),
+              ok: true,
+              tls: "off",
+              stale: true,
+            })),
+          ),
+        );
+      }
     } catch (e) {
       fail(e);
     }
@@ -122,6 +148,7 @@ export function Routes() {
         title="Domains"
         description="Host → backend con TLS real. Editar el target recarga el proxy al instante."
       />
+      <FunnelMap links={mapLinks} onAdd={() => newHostRef.current?.focus()} />
       <div className="overflow-hidden rounded-lg border">
         {routes.map((r) => (
           <RouteRow key={r.hosts.join(",") + r.target} r={r} onChanged={load} />
@@ -134,6 +161,7 @@ export function Routes() {
         <Section title="Nueva ruta" description="Alta inmediata: el proxy recarga al instante. TLS se emite al primer request.">
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input value={hosts} onChange={(e) => setHosts(e.target.value)} placeholder="host1, host2"
+              ref={newHostRef}
               className="flex-1 font-mono text-xs" />
             <Input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="http://127.0.0.1:3000"
               className="tnum flex-1 font-mono text-xs" />
