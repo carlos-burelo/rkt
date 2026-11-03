@@ -18,6 +18,7 @@ import {
   SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Avatar, BrandMark, Dot, Err, Kbd, stateOf } from "../shared/components/ui";
+import { roleLabel } from "../shared/lib/labels";
 import { InstallButton } from "../shared/components/InstallButton";
 import { CommandPalette } from "../shared/components/CommandPalette";
 import { useAuth } from "../features/auth/store";
@@ -139,7 +140,9 @@ export function ShellLayout() {
   }
 
   return (
-    <SidebarProvider>
+    // Sidebar en un solo modo: expandida en escritorio, drawer en móvil.
+    // Sin rail colapsado (el modo icono desalineaba y desbordaba).
+    <SidebarProvider open onOpenChange={() => {}}>
       <Toaster theme="dark" position="bottom-right" />
       <Sidebar collapsible="icon" className="border-r border-sidebar-border">
         <SidebarHeader className="gap-0 border-b border-sidebar-border px-3 py-3">
@@ -293,7 +296,7 @@ export function ShellLayout() {
                   <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
                     <span className="truncate text-[11px] font-medium">{who?.user}</span>
                     <span className="tnum truncate font-mono text-[9px] text-muted-foreground">
-                      {who?.role} · v{status?.version ?? "…"}
+                      {roleLabel(who?.role ?? "")} · v{status?.version ?? "…"}
                     </span>
                   </div>
                   <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/50 group-data-[collapsible=icon]:hidden" />
@@ -307,12 +310,11 @@ export function ShellLayout() {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
-        <SidebarRail />
       </Sidebar>
 
       <SidebarInset className="min-w-0 bg-transparent">
         <header className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-border bg-background/92 px-3 backdrop-blur-md md:px-4">
-          <SidebarTrigger className="h-7 w-7 text-muted-foreground hover:bg-accent hover:text-foreground" />
+          <SidebarTrigger className="h-7 w-7 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden" />
           <span aria-hidden className="hidden h-3 w-px bg-border sm:block" />
           <nav aria-label="ruta" className="flex min-w-0 items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
             <span className="shrink-0 tracking-[0.08em] text-foreground/60">{brand}</span>
