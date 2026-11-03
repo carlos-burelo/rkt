@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Section } from "../../shared/components/patterns";
+import { PathInput } from "../../shared/components/PathPicker";
 import { updateApp, deleteApp } from "./api";
 import { useFleet } from "../overview/hooks";
 import { useUI } from "../../app/ui";
@@ -31,13 +32,15 @@ export function AppSettings() {
     });
   }, [meta]);
 
-  const fields = [
-    { label: "command", key: "command" as const, hint: "binario o comando de arranque" },
-    { label: "dir", key: "dir" as const, hint: "directorio de trabajo" },
-    { label: "restart_delay", key: "restart_delay" as const, hint: "espera entre reinicios" },
-    { label: "min_uptime", key: "min_uptime" as const, hint: "uptime mínimo para contar sano" },
-    { label: "repo", key: "repo" as const, hint: "git https o ruta local" },
-    { label: "ref", key: "ref" as const, hint: "rama o tag" },
+type StringField = "command" | "dir" | "restart_delay" | "min_uptime" | "repo" | "ref";
+
+  const fields: { label: string; key: StringField; hint: string; pick?: "dir" | "file" }[] = [
+    { label: "command", key: "command", hint: "binario o comando de arranque", pick: "file" },
+    { label: "dir", key: "dir", hint: "directorio de trabajo", pick: "dir" },
+    { label: "restart_delay", key: "restart_delay", hint: "espera entre reinicios" },
+    { label: "min_uptime", key: "min_uptime", hint: "uptime mínimo para contar sano" },
+    { label: "repo", key: "repo", hint: "git https o ruta local" },
+    { label: "ref", key: "ref", hint: "rama o tag" },
   ];
 
   return (
@@ -74,12 +77,23 @@ export function AppSettings() {
                 <span>{f.label}</span>
                 <span className="normal-case tracking-normal text-muted-foreground/55">{f.hint}</span>
               </span>
-              <Input
-                value={form[f.key]}
-                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                disabled={!canWrite}
-                className="h-7 font-mono text-[11px]"
-              />
+              {f.pick ? (
+                <PathInput
+                  value={form[f.key]}
+                  onChange={(v) => setForm({ ...form, [f.key]: v })}
+                  mode={f.pick}
+                  disabled={!canWrite}
+                  ariaLabel={f.label}
+                  className="h-7 min-w-0 flex-1 font-mono text-[11px]"
+                />
+              ) : (
+                <Input
+                  value={form[f.key]}
+                  onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                  disabled={!canWrite}
+                  className="h-7 font-mono text-[11px]"
+                />
+              )}
             </label>
           ))}
         </div>

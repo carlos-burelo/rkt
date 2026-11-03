@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PathInput } from "../../shared/components/PathPicker";
 import { createApp, CreateAppIn } from "./api";
 
 type Origin = "git" | "local" | "manual";
@@ -231,12 +232,12 @@ export function CreateDialog({
             )}
             {origin === "local" && (
               <Field label="directorio" hint="ruta en esta máquina" error={tried ? errs.dir : ""}>
-                <Input
-                  autoFocus
+                <PathInput
                   value={dir}
-                  onChange={(e) => setDir(e.target.value)}
+                  onChange={setDir}
+                  mode="dir"
                   placeholder="C:\proyectos\mi-app"
-                  className="font-mono text-[11px]"
+                  ariaLabel="directorio"
                 />
               </Field>
             )}
@@ -265,12 +266,12 @@ export function CreateDialog({
 
             {origin === "manual" && (
               <Field label="comando" hint="binario absoluto" error={tried ? errs.command : ""}>
-                <Input
-                  autoFocus
+                <PathInput
                   value={command}
-                  onChange={(e) => setCommand(e.target.value)}
+                  onChange={setCommand}
+                  mode="file"
                   placeholder="C:\apps\mi-app\mi-app.exe"
-                  className="font-mono text-[11px]"
+                  ariaLabel="comando"
                 />
               </Field>
             )}
@@ -294,19 +295,21 @@ export function CreateDialog({
             {advanced && (
               <div className="grid grid-cols-1 gap-3 border border-border bg-card/40 p-3 sm:grid-cols-2">
                 <Field label="comando" hint="anula la detección">
-                  <Input
+                  <PathInput
                     value={command}
-                    onChange={(e) => setCommand(e.target.value)}
+                    onChange={setCommand}
+                    mode="file"
                     placeholder="C:\apps\mi-app\mi-app.exe"
-                    className="font-mono text-[11px]"
+                    ariaLabel="comando avanzado"
                   />
                 </Field>
                 <Field label="directorio" hint="por defecto C:\apps\<nombre>">
-                  <Input
+                  <PathInput
                     value={dir}
-                    onChange={(e) => setDir(e.target.value)}
+                    onChange={setDir}
+                    mode="dir"
                     placeholder="C:\apps\mi-app"
-                    className="font-mono text-[11px]"
+                    ariaLabel="directorio avanzado"
                   />
                 </Field>
                 <Field label="puerto" hint="opcional">
