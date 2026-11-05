@@ -1,7 +1,7 @@
 // Comandos de gestión sobre SQLite (la flota vive en DB; el YAML solo
 // conserva infra estable). Toda mutación valida y persiste atómico.
 // routes/redirect aplican por hot-reload; apps/env exigen restart.
-package app
+package cli
 
 import (
 	"bufio"
@@ -267,21 +267,12 @@ func cmdApps(args []string, cfgPath string) {
 		}
 		cfg, db := merged(cfgPath)
 		defer db.Close()
-		kept := []config.App{}
-		found := false
-		for _, a := range cfg.Apps {
-			if a.Name == args[1] {
-				found = true
-				continue
-			}
-			kept = append(kept, a)
+		dropped, err := cfgfile.RemoveApp(cfg, args[1], false)
+		if err != nil {
+			log.Fatalf("apps: %v", err)
 		}
-		if !found {
-			log.Fatalf("apps: %q inexistente", args[1])
-		}
-		cfg.Apps = kept
 		persist(cfgPath, db, cfg)
-		fmt.Printf("app %s eliminada de DB (restart requerido). Revisa huérfanas: routes list\n", args[1])
+		fmt.Printf("app %s eliminada de DB (restart requerido), %d rutas retiradas\n", args[1], dropped)
 	default:
 		log.Fatalf("apps: subcomando %q (list|add|rm)", args[0])
 	}
@@ -523,7 +514,9 @@ func cmdRoutes(args []string, cfgPath string) {
 		}
 		cfg, db := merged(cfgPath)
 		defer db.Close()
-		cfg.Routes = append(cfg.Routes, config.Route{Hosts: hosts, Target: *target})
+		if err := cfgfile.AddRoute(cfg, hosts, *target); err != nil {
+			log.Fatalf("routes add: %v", err)
+		}
 		persist(cfgPath, db, cfg)
 		fmt.Printf("route %s -> %s (hot-reload la aplica)\n", hosts, *target)
 	case "rm":
@@ -532,28 +525,13 @@ func cmdRoutes(args []string, cfgPath string) {
 		}
 		cfg, db := merged(cfgPath)
 		defer db.Close()
-		kept := []config.Route{}
-		removed := false
-		for _, r := range cfg.Routes {
-			hosts := []string{}
-			for _, h := range r.Hosts {
-				if strings.EqualFold(h, args[1]) {
-					removed = true
-					continue
-				}
-				hosts = append(hosts, h)
-			}
-			if len(hosts) > 0 {
-				r.Hosts = hosts
-				kept = append(kept, r)
-			} else if len(r.Hosts) > 0 {
-				removed = true
-			}
+		removed, err := cfgfile.RemoveRouteHost(cfg, args[1])
+		if err != nil {
+			log.Fatalf("routes rm: %v", err)
 		}
 		if !removed {
 			log.Fatalf("routes: host %q no encontrado", args[1])
 		}
-		cfg.Routes = kept
 		persist(cfgPath, db, cfg)
 		fmt.Printf("host %s eliminado (hot-reload)\n", args[1])
 	default:
@@ -600,8 +578,9 @@ func cmdEnv(args []string, cfgPath string) {
 		}
 		cfg, db := merged(cfgPath)
 		defer db.Close()
-		a := findAppPtr(cfg, args[1])
-		delete(a.Env, args[2])
+		if err := cfgfile.UnsetEnv(cfg, args[1], args[2]); err != nil {
+			log.Fatalf("env unset: %v", err)
+		}
 		persist(cfgPath, db, cfg)
 		fmt.Printf("%s eliminada (restart requerido)\n", args[2])
 	case "global":

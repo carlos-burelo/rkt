@@ -1,4 +1,6 @@
-package app
+// Package cli interpreta comandos y opera contra el servicio o SQLite.
+// No contiene runtime: la composición del servicio vive en internal/app.
+package cli
 
 import (
 	"context"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/kardianos/service"
 
+	"rkt-proxy/internal/app"
 	"rkt-proxy/internal/build"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/logx"
@@ -49,7 +52,7 @@ func Run(cfgPath string) {
 			"StartImmediately": true,
 		},
 	}
-	prg := New(cfgPath, logger)
+	prg := app.New(cfgPath, logger)
 	s, err := service.New(prg, svcConfig)
 	if err != nil {
 		log.Fatal(err)
@@ -274,7 +277,7 @@ func RunForeground(cfgPath string) {
 		log.Fatal(err)
 	}
 	defer closeLog()
-	prg := New(cfgPath, logger)
+	prg := app.New(cfgPath, logger)
 	ctx, sigstop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer sigstop()
 	go func() {

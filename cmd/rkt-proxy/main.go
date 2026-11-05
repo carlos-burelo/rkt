@@ -8,11 +8,11 @@ package main
 import (
 	"flag"
 
-	"rkt-proxy/internal/app"
+	"rkt-proxy/internal/cli"
 )
 
 func main() {
 	configPath := flag.String("config", "rkt.db", "ruta ancla de datos (DB y logs en <dir>/logs)")
 	flag.Parse()
-	app.Run(*configPath)
+	cli.Run(*configPath)
 }
