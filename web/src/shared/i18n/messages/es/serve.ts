@@ -3,7 +3,7 @@ export const serve = {
   "serve.field.host": "host",
   "serve.field.hosts": "hosts",
   "serve.field.hostsHint": "separados por coma",
-  "serve.field.target": "target",
+  "serve.field.target": "destino",
   "serve.field.targetHint": "http(s)://127.0.0.1:puerto",
   "serve.field.backend": "backend",
   "serve.field.cert": "cert",
@@ -22,9 +22,9 @@ export const serve = {
   "serve.routes.desc":
     "Rutas host → backend con TLS. Editar el target recarga el proxy sin reinicio.",
   "serve.routes.visitTitle": "visitar {host}",
-  "serve.routes.editTitle": "Target de {host}",
+  "serve.routes.editTitle": "Destino de {host}",
   "serve.routes.editDesc": "el proxy recarga sin reinicio · solo loopback",
-  "serve.routes.targetAria": "target de {host}",
+  "serve.routes.targetAria": "destino de {host}",
   "serve.routes.deleteTitle": "borrar ruta {host}",
   "serve.routes.new": "nueva ruta",
   "serve.routes.newTitle": "Nueva ruta",
@@ -49,9 +49,9 @@ export const serve = {
   "serve.zones.domainAria": "nombre del dominio local",
   "serve.zones.zone": "zona",
   "serve.zones.zoneAria": "zona local",
-  "serve.zones.targetAria": "target del dominio",
+  "serve.zones.targetAria": "destino del dominio",
   "serve.zones.empty":
-    "sin zonas locales todavía. crea una con «nueva zona» (ej. mi-app.localhost) y añade subdominios.",
+    "Sin zonas locales. Crea una con «nueva zona» (ej. mi-app.localhost) y añade subdominios.",
   "serve.zones.noApex": "sin apex",
   "serve.zones.deleteAria": "borrar {host}",
   "serve.zones.deleteDomain": "borrar dominio",
@@ -64,7 +64,7 @@ export const serve = {
   "serve.zones.subHint": "se añade .{base}",
   "serve.zones.subPlaceholder": "api",
   "serve.zones.subAria": "nuevo subdominio de {base}",
-  "serve.zones.noApexHint": "esta zona no tiene apex; usará el target por defecto {target}",
+  "serve.zones.noApexHint": "Esta zona no tiene apex; usará el destino por defecto {target}",
   "serve.zones.invalidSub": "subdominio inválido: minúsculas, números y guiones",
 
   // Flujo de rutas (FunnelMap)
@@ -89,19 +89,19 @@ export const serve = {
   "serve.proxy.loading": "cargando mapa…",
   "serve.proxy.clearFilter": "limpiar filtro: {host}",
   "serve.proxy.tableAria": "rutas del proxy",
-  "serve.proxy.colHostTarget": "host → target",
+  "serve.proxy.colHostTarget": "host → destino",
   "serve.proxy.dnsTitle": "ese host no resuelve a 127.0.0.1 aquí: añádelo a hosts o usa .localhost",
   "serve.proxy.dnsUnresolved": "no resuelve",
-  "serve.proxy.backendOk": "backend ok",
-  "serve.proxy.backendDown": "backend caído",
+  "serve.proxy.backendOk": "servicio disponible",
+  "serve.proxy.backendDown": "servicio caído",
   "serve.proxy.emptyTitle": "Sin rutas",
   "serve.proxy.emptyHint": "Añade el primer dominio en «{domains}».",
 
   // Mapa radial (ProxyMap)
   "serve.map.topology": "topología del proxy",
   "serve.map.realDial": "dial TCP",
-  "serve.map.aria.one": "topología proxy: edge con {n} ruta",
-  "serve.map.aria.other": "topología proxy: edge con {n} rutas",
+  "serve.map.aria.one": "topología del proxy: {n} ruta",
+  "serve.map.aria.other": "topología del proxy: {n} rutas",
 
   // Entorno (EnvAll)
   "serve.env.desc":

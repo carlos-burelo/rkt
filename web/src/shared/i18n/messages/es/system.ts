@@ -18,7 +18,7 @@ export const system = {
     ". Para repos de una organización, instálala también en esa org.",
   "system.settings.createApp": "Crear GitHub App",
   "system.settings.localMode":
-    "modo local (localhost): GitHub no entrega webhooks aquí; el auto-deploy usa polling.",
+    "Modo local (localhost): GitHub no entrega webhooks aquí; el despliegue automático usa sondeo periódico.",
   "system.settings.baseDomainBefore": "define",
   "system.settings.baseDomainAfter":
     "arriba para habilitar el flujo (necesita dominio público con TLS).",
@@ -34,26 +34,26 @@ export const system = {
   "system.settings.installAll": "Instalar con todos los repositorios",
   "system.settings.partial": "acceso parcial",
   "system.settings.partialBefore":
-    "Los repos privados fuera de la selección fallarán al desplegar. Cambia a",
+    "Los repositorios privados fuera de la selección fallarán al desplegar. Cambia a",
   "system.settings.partialAfter": "en la instalación.",
   "system.settings.changeAccess": "Cambiar acceso",
-  "system.settings.fullAccess": "acceso total · repos privados habilitados",
-  "system.settings.githubError": "github: {error}",
+  "system.settings.fullAccess": "acceso total · repositorios privados habilitados",
+  "system.settings.githubError": "GitHub: {error}",
   "system.settings.keysTitle": "Configuración general",
   "system.settings.keysDesc": "Los cambios se validan antes de guardar.",
-  "system.settings.colFolio": "folio",
+  "system.settings.colFolio": "id",
   "system.settings.colKey": "clave",
   "system.settings.colValue": "valor",
-  "system.settings.desc.node_bin": "Binario node para presets next/node.",
-  "system.settings.desc.python_bin": "Binario python para preset python.",
+  "system.settings.desc.node_bin": "Binario de Node para los presets Next/Node.",
+  "system.settings.desc.python_bin": "Binario de Python para el preset Python.",
   "system.settings.desc.base_domain": "Dominio base para sugerir <app>.<base>.",
   "system.settings.desc.port_pool": "Rango de puertos locales (ej 3000-3999).",
-  "system.settings.desc.site_name": "Nombre visible en rail y cabecera.",
+  "system.settings.desc.site_name": "Nombre visible en la barra lateral y la cabecera.",
   "system.settings.desc.quota_reqs":
     "Tope de peticiones 30d para el medidor (0 = sin tope).",
   "system.settings.desc.quota_bytes":
     "Tope de tráfico 30d para el medidor (0 = sin tope).",
-  "system.settings.validatedHint": "se valida antes de persistir",
+  "system.settings.validatedHint": "se valida antes de guardar",
   "system.settings.editTitle": "Editar {key}",
   "system.settings.pathOnDisk": "ruta en disco",
   "system.settings.valueAria": "valor de {key}",
@@ -64,7 +64,7 @@ export const system = {
 
   // Usuarios
   "system.users.description":
-    "Solo admin. Viewer lee, operator modifica apps, admin gestiona usuarios y configuración.",
+    "Solo administrador. Lectura: consulta; operador: modifica apps; administrador: usuarios y configuración.",
   "system.users.accounts.one": "{n} cuenta",
   "system.users.accounts.other": "{n} cuentas",
   "system.users.new": "nuevo usuario",
