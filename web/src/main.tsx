@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import { App } from "./app/App";
+import { I18nProvider } from "./shared/i18n";
 
 // SW con scope absoluto desde la raíz: un deep link (p. ej.
 // /app/x/logs) no debe resolver assets/manifest relativos a esa ruta.
@@ -36,6 +37,8 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <I18nProvider>
+      <App />
+    </I18nProvider>
   </StrictMode>,
 );

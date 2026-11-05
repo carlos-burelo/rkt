@@ -7,6 +7,7 @@ import { ShellLayout } from "./layout";
 import { Login } from "../features/auth/Login";
 import { Setup } from "../features/auth/Setup";
 import { Overview } from "../features/overview/Overview";
+import { useI18n } from "../shared/i18n";
 import { Proxy } from "../features/proxy/Proxy";
 import { Deployments } from "../features/deployments/Deployments";
 import { CI } from "../features/ci/CI";
@@ -84,22 +85,23 @@ function AppLogsTab() {
 
 // Fallback de render: un error de vista no debe blanquear la app entera.
 function RouteError() {
+  const { t } = useI18n();
   const err = useRouteError();
-  const msg = err instanceof Error ? err.message : String(err ?? "error desconocido");
+  const msg = err instanceof Error ? err.message : String(err ?? t("shell.unknownError"));
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-lg border border-bad/40 bg-card/60 p-4">
         <div className="flex items-center gap-2">
           <span aria-hidden className="h-1.5 w-1.5 bg-bad" />
-          <p className="micro text-bad">error de interfaz</p>
+          <p className="micro text-bad">{t("shell.interfaceError")}</p>
         </div>
         <p className="mt-2 font-mono text-[11px] leading-relaxed break-words text-muted-foreground">{msg}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button size="sm" onClick={() => window.location.reload()}>
-            recargar
+            {t("shell.reload")}
           </Button>
           <Button size="sm" variant="outline" onClick={() => { window.location.href = "/overview"; }}>
-            ir al resumen
+            {t("shell.goOverview")}
           </Button>
         </div>
       </div>

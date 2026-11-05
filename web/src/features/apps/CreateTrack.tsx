@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "../../shared/i18n";
 
 // Panel de seguimiento en vivo de un build/deploy lanzado al crear la app.
 export function CreateTrack({
@@ -18,6 +19,7 @@ export function CreateTrack({
   onClose: () => void;
   onOpen: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-3">
       <DialogHeader>
@@ -28,32 +30,34 @@ export function CreateTrack({
               status === "running" ? "animate-pulse bg-signal" : status === "ok" ? "bg-ok" : "bg-bad"
             }`}
           />
-          <span className="micro">{kind === "build" ? "compilando" : "desplegando"}</span>
+          <span className="micro">{t(kind === "build" ? "create.track.build" : "create.track.deploy")}</span>
           <span className="flex-1" />
           <span className="tnum font-mono text-[9px] text-muted-foreground">
-            {status === "running" ? "en curso" : status === "ok" ? "ok" : "fallido"}
+            {t(status === "running" ? "create.track.running" : status === "ok" ? "create.track.ok" : "create.track.failed")}
           </span>
         </div>
         <DialogTitle className="mt-1 font-mono text-[18px]">{app}</DialogTitle>
         <DialogDescription className="font-mono text-[10px] leading-relaxed">
-          {status === "running"
-            ? "log en vivo · puedes cerrar y seguir en Despliegues"
-            : status === "ok"
-              ? "listo · la app quedó publicada y respondiendo"
-              : "falló · revisa el log; no se publicó"}
+          {t(
+            status === "running"
+              ? "create.track.runningHint"
+              : status === "ok"
+                ? "create.track.okHint"
+                : "create.track.failedHint",
+          )}
         </DialogDescription>
       </DialogHeader>
       <pre className="max-h-64 overflow-auto border border-border bg-background p-3 font-mono text-[10px] leading-relaxed whitespace-pre-wrap">
-        {log || "esperando salida…"}
+        {log || t("create.track.waiting")}
       </pre>
       <div className="flex items-center gap-2 border-t border-border pt-3">
         <Button variant="ghost" size="sm" onClick={onClose}>
-          {status === "running" ? "cerrar (sigue)" : "cerrar"}
+          {t(status === "running" ? "create.track.closeRunning" : "common.close")}
         </Button>
         <span className="flex-1" />
         {status === "ok" && (
           <Button size="sm" onClick={onOpen}>
-            abrir app <ArrowRight className="h-3 w-3" />
+            {t("create.track.openApp")} <ArrowRight className="h-3 w-3" />
           </Button>
         )}
       </div>

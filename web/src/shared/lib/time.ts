@@ -1,16 +1,19 @@
-// Tiempo relativo corto (es). Sin deps.
+import { getLocale } from "../i18n";
+
+// Tiempo relativo corto, localizado con Intl (sin strings hardcodeados).
 export function rel(iso: string): string {
   if (!iso) return "—";
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return iso;
   const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
-  if (s < 60) return `hace ${s}s`;
+  const rtf = new Intl.RelativeTimeFormat(getLocale(), { numeric: "auto", style: "short" });
+  if (s < 60) return rtf.format(-s, "second");
   const m = Math.floor(s / 60);
-  if (m < 60) return `hace ${m}min`;
+  if (m < 60) return rtf.format(-m, "minute");
   const h = Math.floor(m / 60);
-  if (h < 24) return `hace ${h}h`;
+  if (h < 24) return rtf.format(-h, "hour");
   const d = Math.floor(h / 24);
-  return `hace ${d}d`;
+  return rtf.format(-d, "day");
 }
 
 export function dur(startIso: string, endIso: string): string {

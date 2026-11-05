@@ -3,54 +3,56 @@ import {
   Bell, Globe, FlaskConical, Settings, Users,
 } from "lucide-react";
 
-// Navegación del shell en un solo hogar. `admin` oculta el item a no-admin.
+// Navegación del shell. `labelKey` se traduce en el componente; `admin`
+// oculta el item a no-admin.
 export const GROUPS = [
   {
-    label: "Operar",
+    labelKey: "nav.group.operate",
     items: [
-      { to: "/overview", label: "Resumen", icon: LayoutGrid },
-      { to: "/deployments", label: "Despliegues", icon: Rocket },
-      { to: "/ci", label: "CI", icon: Hammer },
-      { to: "/logs", label: "Registros", icon: Terminal },
+      { to: "/overview", labelKey: "nav.overview", icon: LayoutGrid },
+      { to: "/deployments", labelKey: "nav.deployments", icon: Rocket },
+      { to: "/ci", labelKey: "nav.ci", icon: Hammer },
+      { to: "/logs", labelKey: "nav.logs", icon: Terminal },
     ],
   },
   {
-    label: "Servir",
+    labelKey: "nav.group.serve",
     items: [
-      { to: "/routes", label: "Dominios", icon: Globe },
-      { to: "/proxy", label: "Proxy", icon: Network },
-      { to: "/environment", label: "Entorno", icon: FlaskConical },
+      { to: "/routes", labelKey: "nav.routes", icon: Globe },
+      { to: "/proxy", labelKey: "nav.proxy", icon: Network },
+      { to: "/environment", labelKey: "nav.environment", icon: FlaskConical },
     ],
   },
   {
-    label: "Observar",
+    labelKey: "nav.group.observe",
     items: [
-      { to: "/analytics", label: "Analítica", icon: BarChart3 },
-      { to: "/observability", label: "Observabilidad", icon: Activity },
-      { to: "/alerts", label: "Alertas", icon: Bell },
+      { to: "/analytics", labelKey: "nav.analytics", icon: BarChart3 },
+      { to: "/observability", labelKey: "nav.observability", icon: Activity },
+      { to: "/alerts", labelKey: "nav.alerts", icon: Bell },
     ],
   },
   {
-    label: "Sistema",
+    labelKey: "nav.group.system",
     items: [
-      { to: "/settings", label: "Ajustes", icon: Settings },
-      { to: "/users", label: "Usuarios", icon: Users, admin: true },
+      { to: "/settings", labelKey: "nav.settings", icon: Settings },
+      { to: "/users", labelKey: "nav.users", icon: Users, admin: true },
     ],
   },
 ] as const;
 
+// clave del título por primer segmento de ruta.
 export const PAGE_LABEL: Record<string, string> = {
-  overview: "Resumen",
-  deployments: "Despliegues",
-  ci: "CI",
-  logs: "Registros",
-  routes: "Dominios",
-  proxy: "Proxy",
-  environment: "Entorno",
-  analytics: "Analítica",
-  observability: "Observabilidad",
-  alerts: "Alertas",
-  settings: "Ajustes",
-  users: "Usuarios",
-  app: "App",
+  overview: "nav.overview",
+  deployments: "nav.deployments",
+  ci: "nav.ci",
+  logs: "nav.logs",
+  routes: "nav.routes",
+  proxy: "nav.proxy",
+  environment: "nav.environment",
+  analytics: "nav.analytics",
+  observability: "nav.observability",
+  alerts: "nav.alerts",
+  settings: "nav.settings",
+  users: "nav.users",
+  app: "nav.app",
 };

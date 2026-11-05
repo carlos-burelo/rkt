@@ -1,0 +1,20 @@
+export const nav = {
+  "nav.group.operate": "Operar",
+  "nav.group.serve": "Servir",
+  "nav.group.observe": "Observar",
+  "nav.group.system": "Sistema",
+
+  "nav.overview": "Resumen",
+  "nav.deployments": "Despliegues",
+  "nav.ci": "CI",
+  "nav.logs": "Registros",
+  "nav.routes": "Dominios",
+  "nav.proxy": "Proxy",
+  "nav.environment": "Entorno",
+  "nav.analytics": "Analítica",
+  "nav.observability": "Observabilidad",
+  "nav.alerts": "Alertas",
+  "nav.settings": "Ajustes",
+  "nav.users": "Usuarios",
+  "nav.app": "App",
+};

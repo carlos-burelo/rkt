@@ -7,6 +7,7 @@ import { deploymentLog, getDeployment } from "../deployments/api";
 import { SLUG, slugOf, looksGit, type Origin, type Step } from "./createDialog.model";
 import { CreateTrack } from "./CreateTrack";
 import { OriginStep, DetailsStep, ReviewStep } from "./CreateSteps";
+import { useI18n } from "../../shared/i18n";
 
 // Alta guiada por pasos: origen → detalles → revisión. Una sola acción
 // primaria por paso; el backend infiere lo que falta (cfgfile.CreateApp).
@@ -25,6 +26,7 @@ export function CreateDialog({
   goDomains: () => void;
   fail: (e: unknown) => void;
 }) {
+  const { t } = useI18n();
   const [step, setStep] = useState<Step>(1);
   const [origin, setOrigin] = useState<Origin>("git");
   const [repo, setRepo] = useState("");
@@ -108,11 +110,11 @@ export function CreateDialog({
   }
 
   const errs = {
-    repo: origin === "git" && repo.trim() !== "" && !looksGit(repo) ? "usa https:// o git@…" : "",
-    name: !SLUG.test(name) ? "minúsculas, números y guiones" : "",
-    dir: (origin === "local" || origin === "external") && dir.trim() === "" ? "ruta absoluta del proyecto" : "",
-    command: origin === "manual" && command.trim() === "" ? "binario absoluto" : "",
-    gitRepo: origin === "git" && repo.trim() === "" ? "pega la URL del repositorio" : "",
+    repo: origin === "git" && repo.trim() !== "" && !looksGit(repo) ? t("create.error.repoUrl") : "",
+    name: !SLUG.test(name) ? t("create.error.name") : "",
+    dir: (origin === "local" || origin === "external") && dir.trim() === "" ? t("create.error.dir") : "",
+    command: origin === "manual" && command.trim() === "" ? t("create.error.command") : "",
+    gitRepo: origin === "git" && repo.trim() === "" ? t("create.error.gitRepo") : "",
   };
   const step2ok = !errs.repo && !errs.name && !errs.dir && !errs.command && !errs.gitRepo;
 
@@ -237,19 +239,15 @@ export function CreateDialog({
         <DialogHeader>
           <div className="flex items-center gap-2 pr-8">
             <span aria-hidden className="h-1 w-4 bg-signal" />
-            <span className="micro">alta de unidad</span>
+            <span className="micro">{t("create.title")}</span>
             <span className="flex-1" />
-            <span className="tnum font-mono text-[9px] text-muted-foreground">paso {step} de 3</span>
+            <span className="tnum font-mono text-[9px] text-muted-foreground">{t("create.step", { step })}</span>
           </div>
           <DialogTitle className="mt-1 text-[18px] tracking-[-0.02em]">
-            {step === 1 ? "¿De dónde sale la app?" : step === 2 ? "Detalles de la unidad" : "Revisa y crea"}
+            {t(step === 1 ? "create.step1Title" : step === 2 ? "create.step2Title" : "create.step3Title")}
           </DialogTitle>
           <DialogDescription className="font-mono text-[10px] leading-relaxed">
-            {step === 1
-              ? "rkt infiere comando, puerto y dominio cuando el origen lo permite."
-              : step === 2
-                ? "solo el nombre es obligatorio; el resto lo completa el descubrimiento."
-                : "esto escribe el manifiesto y recarga el proxy. Nada se despliega hasta que lo pidas."}
+            {t(step === 1 ? "create.step1Desc" : step === 2 ? "create.step2Desc" : "create.step3Desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -308,7 +306,7 @@ export function CreateDialog({
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
           {step > 1 && (
             <Button variant="ghost" size="sm" onClick={() => setStep((s) => (s - 1) as Step)} disabled={busy}>
-              <ArrowLeft className="h-3 w-3" /> atrás
+              <ArrowLeft className="h-3 w-3" /> {t("common.back")}
             </Button>
           )}
           {step === 1 && (
@@ -320,17 +318,17 @@ export function CreateDialog({
                 goDomains();
               }}
             >
-              ir a Dominios
+              {t("create.goDomains")}
             </Button>
           )}
           <span className="flex-1" />
           {step < 3 ? (
             <Button size="sm" onClick={next}>
-              continuar <ArrowRight className="h-3 w-3" />
+              {t("common.next")} <ArrowRight className="h-3 w-3" />
             </Button>
           ) : (
             <Button size="sm" onClick={submit} disabled={busy || !name.trim()}>
-              <Check className="h-3 w-3" /> {busy ? "creando…" : "crear aplicación"}
+              <Check className="h-3 w-3" /> {t(busy ? "create.creating" : "create.submit")}
             </Button>
           )}
         </div>

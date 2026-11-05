@@ -4,11 +4,11 @@ import { FolderGit2, FolderOpen, Laptop, Terminal } from "lucide-react";
 export type Origin = "git" | "local" | "external" | "manual";
 export type Step = 1 | 2 | 3;
 
-export const ORIGINS: { id: Origin; label: string; hint: string; icon: typeof FolderGit2 }[] = [
-  { id: "git", label: "Repositorio Git", hint: "Clona el repo y detecta comando, puerto y dominio.", icon: FolderGit2 },
-  { id: "local", label: "Directorio local", hint: "Sirve un proyecto que ya vive en esta máquina.", icon: FolderOpen },
-  { id: "external", label: "Dev externo", hint: "Solo proxy: registra dominio/puerto; el dev server lo corrés vos.", icon: Laptop },
-  { id: "manual", label: "Manual", hint: "Sin repo: defines el binario y el directorio a mano.", icon: Terminal },
+export const ORIGINS: { id: Origin; labelKey: string; hintKey: string; icon: typeof FolderGit2 }[] = [
+  { id: "git", labelKey: "create.origin.git", hintKey: "create.origin.gitHint", icon: FolderGit2 },
+  { id: "local", labelKey: "create.origin.local", hintKey: "create.origin.localHint", icon: FolderOpen },
+  { id: "external", labelKey: "create.origin.external", hintKey: "create.origin.externalHint", icon: Laptop },
+  { id: "manual", labelKey: "create.origin.manual", hintKey: "create.origin.manualHint", icon: Terminal },
 ];
 
 export const SLUG = /^[a-z0-9][a-z0-9-]*$/;

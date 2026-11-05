@@ -5,6 +5,7 @@ import { PathInput } from "../../shared/components/PathPicker";
 import { DomainSuggest } from "../../shared/components/DomainSuggest";
 import { Field, ORIGINS, type Origin } from "./createDialog.model";
 import type { DetectOut, GithubRepo } from "./api";
+import { useI18n } from "../../shared/i18n";
 
 export interface StepErrors {
   repo: string;
@@ -22,6 +23,7 @@ export function OriginStep({
   origin: Origin;
   setOrigin: (o: Origin) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-1.5">
       {ORIGINS.map((o) => {
@@ -45,8 +47,8 @@ export function OriginStep({
               <Icon className="h-3.5 w-3.5" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[12px] font-medium">{o.label}</span>
-              <span className="mt-0.5 block font-mono text-[10px] leading-relaxed text-muted-foreground">{o.hint}</span>
+              <span className="block text-[12px] font-medium">{t(o.labelKey)}</span>
+              <span className="mt-0.5 block font-mono text-[10px] leading-relaxed text-muted-foreground">{t(o.hintKey)}</span>
             </span>
             <span className={`mt-1 h-1.5 w-1.5 shrink-0 ${on ? "bg-signal" : "bg-border"}`} aria-hidden />
           </button>
@@ -116,27 +118,28 @@ export function DetailsStep({
   tried: boolean;
   next: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-3">
       {origin === "git" && (
-        <Field label="repositorio" hint="https:// o git@" error={tried ? errs.gitRepo || errs.repo : ""}>
+        <Field label={t("create.repo")} hint={t("create.repoHint")} error={tried ? errs.gitRepo || errs.repo : ""}>
           <div className="flex items-center gap-1">
             <Input
               autoFocus
               value={repo}
               onChange={(e) => setRepo(e.target.value)}
-              placeholder="https://github.com/usuario/app"
+              placeholder={t("create.repoPlaceholder")}
               className="font-mono text-[11px]"
               onKeyDown={(e) => {
                 if (e.key === "Enter") next();
               }}
             />
             <Button type="button" size="sm" variant="outline" onClick={toggleRepos}>
-              GitHub
+              {t("create.github")}
             </Button>
           </div>
           <span className="font-mono text-[9px] normal-case text-muted-foreground/70">
-            se clona en segundo plano; el comando se detecta del proyecto
+            {t("create.repoCloneHint")}
           </span>
           {repoPick && (
             <div className="mt-1 border border-border bg-card/40">
@@ -144,18 +147,18 @@ export function DetailsStep({
                 <Input
                   value={repoQ}
                   onChange={(e) => setRepoQ(e.target.value)}
-                  placeholder="buscar repo u org…"
+                  placeholder={t("create.repoSearch")}
                   className="h-7 font-mono text-[10px]"
                   autoFocus
                 />
               </div>
               <div className="max-h-52 overflow-auto">
                 {ghRepos === null && (
-                  <p className="px-2 py-3 font-mono text-[9px] text-muted-foreground">cargando repositorios de la App…</p>
+                  <p className="px-2 py-3 font-mono text-[9px] text-muted-foreground">{t("create.repoLoading")}</p>
                 )}
                 {ghRepos !== null && reposFiltered.length === 0 && (
                   <p className="px-2 py-3 font-mono text-[9px] text-muted-foreground">
-                    sin repos visibles · instala la App con All repositories
+                    {t("create.repoEmpty")}
                   </p>
                 )}
                 {reposFiltered.map((r) => (
@@ -171,7 +174,7 @@ export function DetailsStep({
                     <span className="min-w-0 flex-1 truncate font-mono text-[10px]">{r.full_name}</span>
                     <span className="shrink-0 font-mono text-[8px] text-muted-foreground">{r.default_branch}</span>
                     {r.private && (
-                      <span className="shrink-0 border border-warn/40 px-1 font-mono text-[8px] text-warn">privado</span>
+                      <span className="shrink-0 border border-warn/40 px-1 font-mono text-[8px] text-warn">{t("create.private")}</span>
                     )}
                   </button>
                 ))}
@@ -181,51 +184,51 @@ export function DetailsStep({
         </Field>
       )}
       {origin === "local" && (
-        <Field label="directorio" hint="ruta en esta máquina" error={tried ? errs.dir : ""}>
+        <Field label={t("create.dir")} hint={t("create.dirHint")} error={tried ? errs.dir : ""}>
           <PathInput
             value={dir}
             onChange={setDir}
             mode="dir"
-            placeholder="C:\proyectos\mi-app"
-            ariaLabel="directorio"
+            placeholder={t("create.dirPlaceholder")}
+            ariaLabel={t("create.dir")}
           />
           <span className="font-mono text-[9px] normal-case text-muted-foreground/70">
-            el comando se infiere del proyecto; si falla, define comando o configura node_bin/python_bin en Ajustes
+            {t("create.dirInferHint")}
           </span>
         </Field>
       )}
       {origin === "external" && (
-        <Field label="carpeta del repo" hint="para verla y sugerir el comando" error={tried ? errs.dir : ""}>
+        <Field label={t("create.repoDir")} hint={t("create.repoDirHint")} error={tried ? errs.dir : ""}>
           <PathInput
             value={dir}
             onChange={setDir}
             mode="dir"
-            placeholder="C:\Users\x\dev\mi-app"
-            ariaLabel="carpeta del repo"
+            placeholder={t("create.repoDirPlaceholder")}
+            ariaLabel={t("create.repoDir")}
           />
           <span className="font-mono text-[9px] normal-case text-muted-foreground/70">
-            rkt NO arranca nada: solo enruta el dominio al puerto. El dev server corre en tu terminal.
+            {t("create.externalHint")}
           </span>
         </Field>
       )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="nombre" hint="[a-z0-9-]" error={tried ? errs.name : ""}>
+        <Field label={t("create.name")} hint={t("create.nameHint")} error={tried ? errs.name : ""}>
           <Input
             value={name}
             onChange={(e) => {
               setNameTouched(true);
               setName(e.target.value);
             }}
-            placeholder="mi-app"
+            placeholder={t("create.namePlaceholder")}
             className="font-mono text-[11px]"
           />
         </Field>
-        <Field label="dominio" hint="opcional">
+        <Field label={t("create.domain")} hint={t("common.optional")}>
           <Input
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
-            placeholder="app.midominio.com"
+            placeholder={t("create.domainPlaceholder")}
             className="font-mono text-[11px]"
           />
         </Field>
@@ -234,13 +237,13 @@ export function DetailsStep({
       <DomainSuggest name={name} onPick={setDomain} />
 
       {origin === "manual" && (
-        <Field label="comando" hint="binario absoluto" error={tried ? errs.command : ""}>
+        <Field label={t("create.command")} hint={t("create.commandHint")} error={tried ? errs.command : ""}>
           <PathInput
             value={command}
             onChange={setCommand}
             mode="file"
-            placeholder="C:\apps\mi-app\mi-app.exe"
-            ariaLabel="comando"
+            placeholder={t("create.commandPlaceholder")}
+            ariaLabel={t("create.command")}
           />
         </Field>
       )}
@@ -248,7 +251,7 @@ export function DetailsStep({
       {origin === "git" && (
         <label className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
           <Checkbox checked={auto} onCheckedChange={(v) => setAuto(v === true)} />
-          desplegar en cada push a main
+          {t("create.autoDeploy")}
         </label>
       )}
 
@@ -258,37 +261,37 @@ export function DetailsStep({
         className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground"
         aria-expanded={advanced}
       >
-        {advanced ? "ocultar avanzado" : "avanzado · comando, directorio y puerto"}
+        {t(advanced ? "create.hideAdvanced" : "create.advanced")}
       </button>
 
       {advanced && (
         <div className="grid grid-cols-1 gap-3 border border-border bg-card/40 p-3 sm:grid-cols-2">
           {origin !== "external" && (
-            <Field label="comando" hint="anula la detección">
+            <Field label={t("create.command")} hint={t("create.commandOverride")}>
               <PathInput
                 value={command}
                 onChange={setCommand}
                 mode="file"
-                placeholder="C:\apps\mi-app\mi-app.exe"
-                ariaLabel="comando avanzado"
+                placeholder={t("create.commandPlaceholder")}
+                ariaLabel={t("create.command")}
               />
             </Field>
           )}
-          <Field label="directorio" hint="por defecto C:\apps\<nombre>">
+          <Field label={t("create.dir")} hint={t("create.dirDefault")}>
             <PathInput
               value={dir}
               onChange={setDir}
               mode="dir"
-              placeholder="C:\apps\mi-app"
-              ariaLabel="directorio avanzado"
+              placeholder={t("create.dirPlaceholder")}
+              ariaLabel={t("create.dir")}
             />
           </Field>
-          <Field label="puerto" hint="opcional">
+          <Field label={t("create.port")} hint={t("common.optional")}>
             <Input
               value={port}
               onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))}
               inputMode="numeric"
-              placeholder="3000"
+              placeholder={t("create.portPlaceholder")}
               className="tnum font-mono text-[11px]"
             />
           </Field>
@@ -326,44 +329,45 @@ export function ReviewStep({
   buildNow: boolean;
   setBuildNow: (v: boolean) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-3">
       {origin === "local" && (
         <div className="border border-border bg-card/40">
           <div className="flex flex-wrap items-center gap-2 border-b border-border bg-secondary/20 px-3 py-1.5">
             <span aria-hidden className="h-1.5 w-1.5 bg-signal" />
-            <span className="micro">detección</span>
+            <span className="micro">{t("create.analysis")}</span>
             <span className="flex-1" />
             {planBusy ? (
-              <span className="font-mono text-[9px] text-muted-foreground">analizando…</span>
+              <span className="font-mono text-[9px] text-muted-foreground">{t("create.analyzing")}</span>
             ) : plan ? (
               <span className="border border-signal/40 bg-signal/10 px-1.5 font-mono text-[9px] tracking-[0.08em] uppercase text-signal">
                 {plan.framework}
                 {plan.pm ? ` · ${plan.pm}` : ""}
               </span>
             ) : (
-              <span className="font-mono text-[9px] text-warn">sin plan detectado</span>
+              <span className="font-mono text-[9px] text-warn">{t("create.noPlan")}</span>
             )}
           </div>
           <div className="space-y-1.5 px-3 py-2">
             {plan && (
               <>
                 <p className="font-mono text-[10px] text-muted-foreground">
-                  instala: {plan.install.length ? plan.install.join(" · ") : "nada"}
+                  {t("create.install")}: {plan.install.length ? plan.install.join(" · ") : t("create.nothing")}
                 </p>
                 <p className="font-mono text-[10px] text-muted-foreground">
-                  compila: {plan.build.length ? plan.build.join(" · ") : "nada"}
+                  {t("create.build")}: {plan.build.length ? plan.build.join(" · ") : t("create.nothing")}
                 </p>
                 <p className="truncate font-mono text-[10px] text-muted-foreground">
                   {plan.static_dir
-                    ? `sirve estático: ${plan.static_abs}`
-                    : `arranca: ${plan.start.join(" ") || "—"}`}
+                    ? `${t("create.static")}: ${plan.static_abs}`
+                    : `${t("create.start")}: ${plan.start.join(" ") || "—"}`}
                 </p>
               </>
             )}
             {!plan && !planBusy && (
               <p className="font-mono text-[10px] leading-relaxed text-muted-foreground">
-                no reconocí el proyecto; podrás definir comando en avanzado o en Ajustes.
+                {t("create.noPlanHint")}
               </p>
             )}
           </div>
@@ -372,27 +376,31 @@ export function ReviewStep({
 
       {origin === "git" && (
         <p className="font-mono text-[10px] leading-relaxed text-muted-foreground">
-          el plan se detecta al clonar; el despliegue muestra cada paso.
+          {t("create.gitPlanHint")}
         </p>
       )}
 
       {origin === "external" && (
         <p className="border border-border bg-card/40 px-3 py-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
-          app externa: sin build, sin deploy, sin supervisor. rkt solo enruta el dominio al puerto.
-          Levantá el dev server en la carpeta con el puerto indicado.
+          {t("create.externalReview")}
         </p>
       )}
 
       <div className="border border-border">
         {[
-          ["origen", ORIGINS.find((o) => o.id === origin)?.label ?? origin],
-          ["nombre", name],
-          ...(repo.trim() ? [["repositorio", repo.trim()]] : []),
-          ...(dir.trim() ? [["directorio", dir.trim()]] : []),
-          ["comando", origin === "external" ? "lo corrés vos (dev server externo)" : command.trim() || (plan?.start.join(" ") ?? "lo detecta rkt")],
-          ["dominio", domain.trim() || "sin dominio (puedes asignarlo después)"],
-          ...(origin === "git" ? [["auto-deploy", auto ? "sí, en cada push a main" : "no"]] : []),
-          ...(origin === "external" && port.trim() ? [["puerto", port.trim()]] : []),
+          [t("create.review.origin"), ORIGINS.find((o) => o.id === origin) ? t(ORIGINS.find((o) => o.id === origin)!.labelKey) : origin],
+          [t("create.review.name"), name],
+          ...(repo.trim() ? [[t("create.review.repo"), repo.trim()]] : []),
+          ...(dir.trim() ? [[t("create.review.dir"), dir.trim()]] : []),
+          [
+            t("create.review.command"),
+            origin === "external"
+              ? t("create.review.externalCommand")
+              : command.trim() || (plan?.start.join(" ") ?? t("create.review.detectedCommand")),
+          ],
+          [t("create.review.domain"), domain.trim() || t("create.review.noDomain")],
+          ...(origin === "git" ? [[t("create.review.auto"), t(auto ? "create.review.autoYes" : "create.review.autoNo")]] : []),
+          ...(origin === "external" && port.trim() ? [[t("create.review.port"), port.trim()]] : []),
         ].map(([k, v]) => (
           <div key={k} className="flex items-baseline gap-3 border-b border-border/60 px-3 py-2 last:border-0">
             <span className="micro w-28 shrink-0">{k}</span>
@@ -404,7 +412,7 @@ export function ReviewStep({
       {(origin === "git" || origin === "local") && (
         <label className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
           <Checkbox checked={buildNow} onCheckedChange={(v) => setBuildNow(v === true)} />
-          {origin === "git" ? "desplegar al crear" : "compilar al crear"}
+          {t(origin === "git" ? "create.deployNow" : "create.buildNow")}
         </label>
       )}
     </div>
