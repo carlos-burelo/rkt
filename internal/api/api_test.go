@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -664,6 +665,40 @@ func TestAppPutDelete(t *testing.T) {
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w", opTok))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("post-delete: quiere 404, got %d", rec.Code)
+	}
+}
+
+// Dos PUT concurrentes a campos distintos no pueden pisarse: sin lock,
+// ambos clonan la misma versión y el último save pierde el cambio del otro.
+func TestConcurrentAppPutsNoLostUpdate(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	tok := loginAs(t, h, db, "op", store.RoleOperator)
+
+	put := func(body string, wg *sync.WaitGroup) {
+		defer wg.Done()
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/apps/w", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+tok)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("put %s: %d %s", body, rec.Code, rec.Body.String())
+		}
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(2)
+		go put(`{"restart_delay":"9s"}`, &wg)
+		go put(`{"min_uptime":"20s"}`, &wg)
+	}
+	wg.Wait()
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w", tok))
+	body := rec.Body.String()
+	if !strings.Contains(body, `"restart_delay":"9s"`) || !strings.Contains(body, `"min_uptime":"20s"`) {
+		t.Fatalf("lost update: %s", body)
 	}
 }
 

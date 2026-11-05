@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"rkt-proxy/internal/cfgfile"
+	"rkt-proxy/internal/config"
 )
 
 // handleGlobalEnv variables compartidas por toda la flota (la app gana).
@@ -34,14 +35,11 @@ func (d *Deps) handleGlobalEnv(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "key vacía")
 			return
 		}
-		cp := d.Live.Get().Clone()
-		if err := cfgfile.SetGlobalEnv(d.DB, cp, key, in.Value); err != nil {
+		if err := d.mutateInfra(true, func(cp *config.Config) error {
+			return cfgfile.SetGlobalEnvValue(cp, key, in.Value)
+		}); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
-		}
-		d.Live.Swap(cp)
-		if d.Apply != nil {
-			d.Apply(cp.Apps, cp.GlobalEnv)
 		}
 		writeJSON(w, map[string]string{"ok": "true", "hint": "las apps heredan la global al reiniciar"})
 	case http.MethodDelete:
@@ -50,14 +48,12 @@ func (d *Deps) handleGlobalEnv(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "falta ?key=")
 			return
 		}
-		cp := d.Live.Get().Clone()
-		if err := cfgfile.UnsetGlobalEnv(d.DB, cp, key); err != nil {
+		if err := d.mutateInfra(true, func(cp *config.Config) error {
+			cfgfile.UnsetGlobalEnvValue(cp, key)
+			return nil
+		}); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
-		}
-		d.Live.Swap(cp)
-		if d.Apply != nil {
-			d.Apply(cp.Apps, cp.GlobalEnv)
 		}
 		writeJSON(w, map[string]string{"ok": "true"})
 	default:

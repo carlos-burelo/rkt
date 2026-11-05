@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
@@ -50,6 +51,47 @@ type Deps struct {
 	cache *memo
 	// th limita intentos de login/setup por IP. Lo inicializa NewHandler.
 	th *loginThrottle
+	// mu serializa mutaciones de flota: clone→mutar→guardar→swap de dos
+	// requests concurrentes no puede pisarse (lost update).
+	mu *sync.Mutex
+}
+
+// mutateFleet ejecuta una mutación de apps/rutas bajo lock y persiste con
+// un único camino: clonar, mutar, validar+guardar, publicar en Live.
+func (d *Deps) mutateFleet(apply bool, fn func(*config.Config) error) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	cp := d.Live.Get().Clone()
+	if err := fn(cp); err != nil {
+		return err
+	}
+	if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
+		return err
+	}
+	d.Live.Swap(cp)
+	if apply && d.Apply != nil {
+		d.Apply(cp.Apps, cp.GlobalEnv)
+	}
+	return nil
+}
+
+// mutateInfra igual que mutateFleet pero persiste infra (env global,
+// settings estructurales) en la tabla infra.
+func (d *Deps) mutateInfra(apply bool, fn func(*config.Config) error) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	cp := d.Live.Get().Clone()
+	if err := fn(cp); err != nil {
+		return err
+	}
+	if err := cfgfile.SaveInfra(d.DB, cp); err != nil {
+		return err
+	}
+	d.Live.Swap(cp)
+	if apply && d.Apply != nil {
+		d.Apply(cp.Apps, cp.GlobalEnv)
+	}
+	return nil
 }
 
 // memo caché TTL para agregados costosos (weblog). Clave = ruta+query.
@@ -99,6 +141,7 @@ func (c *memo) get(key string, ttl time.Duration, fn func() (any, error)) ([]byt
 func NewHandler(d Deps) http.Handler {
 	d.cache = newMemo()
 	d.th = &loginThrottle{}
+	d.mu = &sync.Mutex{}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/v1/auth/status", d.handleAuthStatus)

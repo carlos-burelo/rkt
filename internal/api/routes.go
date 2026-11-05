@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"rkt-proxy/internal/cfgfile"
+	"rkt-proxy/internal/config"
 )
 
 // handleRoutes CRUD de rutas host→target. Misma semántica que el CLI:
@@ -33,16 +34,12 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "JSON inválido")
 			return
 		}
-		cp := d.Live.Get().Clone()
-		if err := cfgfile.AddRoute(cp, in.Hosts, in.Target); err != nil {
+		if err := d.mutateFleet(false, func(cp *config.Config) error {
+			return cfgfile.AddRoute(cp, in.Hosts, in.Target)
+		}); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		d.Live.Swap(cp) // hot-reload inmediato
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, map[string]string{"ok": "true"})
 	case http.MethodDelete:
@@ -54,9 +51,12 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "falta ?host=")
 			return
 		}
-		cp := d.Live.Get().Clone()
-		removed, err := cfgfile.RemoveRouteHost(cp, host)
-		if err != nil {
+		removed := false
+		if err := d.mutateFleet(false, func(cp *config.Config) error {
+			ok, err := cfgfile.RemoveRouteHost(cp, host)
+			removed = ok
+			return err
+		}); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -64,11 +64,6 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusNotFound, "host no encontrado")
 			return
 		}
-		if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		d.Live.Swap(cp) // hot-reload inmediato
 		writeJSON(w, map[string]string{"ok": "true"})
 	case http.MethodPut:
 		if !requireOperator(w, r) {
@@ -82,9 +77,12 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "JSON inválido")
 			return
 		}
-		cp := d.Live.Get().Clone()
-		found, err := cfgfile.SetRouteTarget(cp, pin.Host, pin.Target)
-		if err != nil {
+		found := false
+		if err := d.mutateFleet(false, func(cp *config.Config) error {
+			ok, err := cfgfile.SetRouteTarget(cp, pin.Host, pin.Target)
+			found = ok
+			return err
+		}); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -92,11 +90,6 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusNotFound, "host no encontrado")
 			return
 		}
-		if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		d.Live.Swap(cp) // hot-reload inmediato
 		writeJSON(w, map[string]string{"ok": "true"})
 	default:
 		writeErr(w, http.StatusMethodNotAllowed, "GET|POST|PUT|DELETE")

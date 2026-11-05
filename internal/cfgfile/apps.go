@@ -89,8 +89,17 @@ func fleetToConfig(fleet *store.FleetData) *config.Config {
 	return cfg
 }
 
-// SetEnv escribe var expandida en la app.
+// SetEnv escribe var expandida en la app y persiste.
 func SetEnv(db *store.DB, cfg *config.Config, appName, key, rawVal string) error {
+	if err := SetEnvValue(cfg, appName, key, rawVal); err != nil {
+		return err
+	}
+	return db.ImportFleet(cfg)
+}
+
+// SetEnvValue expande y aplica la variable sobre la copia, sin persistir.
+// Único hogar de la expansión, también usado por API con su propio lock.
+func SetEnvValue(cfg *config.Config, appName, key, rawVal string) error {
 	a := findAppOrNil(cfg, appName)
 	if a == nil {
 		return fmt.Errorf("app %q inexistente", appName)
@@ -125,12 +134,19 @@ func SetEnv(db *store.DB, cfg *config.Config, appName, key, rawVal string) error
 	if err := a.ValidateApp(0); err != nil {
 		return fmt.Errorf("inválido, no guardado: %w", err)
 	}
-	return db.ImportFleet(cfg)
+	return nil
 }
 
-// SetGlobalEnv escribe una variable global de flota en la infra (expandida
-// contra el entorno del servicio y las demás globales).
+// SetGlobalEnv escribe una global expandida y persiste la infra.
 func SetGlobalEnv(db *store.DB, cfg *config.Config, key, rawVal string) error {
+	if err := SetGlobalEnvValue(cfg, key, rawVal); err != nil {
+		return err
+	}
+	return SaveInfra(db, cfg)
+}
+
+// SetGlobalEnvValue expande y aplica una global sin persistir.
+func SetGlobalEnvValue(cfg *config.Config, key, rawVal string) error {
 	if key == "" {
 		return fmt.Errorf("clave vacía")
 	}
@@ -144,13 +160,18 @@ func SetGlobalEnv(db *store.DB, cfg *config.Config, key, rawVal string) error {
 		}
 	}
 	cfg.GlobalEnv[key] = dotenv.Expand(map[string]string{key: rawVal}, scope)[key]
+	return nil
+}
+
+// UnsetGlobalEnv borra una global y persiste la infra.
+func UnsetGlobalEnv(db *store.DB, cfg *config.Config, key string) error {
+	UnsetGlobalEnvValue(cfg, key)
 	return SaveInfra(db, cfg)
 }
 
-// UnsetGlobalEnv borra una global de la infra.
-func UnsetGlobalEnv(db *store.DB, cfg *config.Config, key string) error {
+// UnsetGlobalEnvValue borra una global sin persistir.
+func UnsetGlobalEnvValue(cfg *config.Config, key string) {
 	delete(cfg.GlobalEnv, key)
-	return SaveInfra(db, cfg)
 }
 
 // execOwn inyectable (test de fallo al resolver el binario).

@@ -44,7 +44,9 @@ func (d *Deps) handleApps(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "JSON inválido")
 			return
 		}
+		d.mu.Lock()
 		name, err := createAppFromRepo(d.DB, d.Live, d.githubManager(), in.Runtime, in.Repo, in.Name, in.Domain, in.Port, in.Command, in.Dir, in.Auto)
+		d.mu.Unlock()
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
@@ -106,37 +108,25 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "JSON inválido")
 			return
 		}
-		cp := d.Live.Get().Clone()
-		if err := cfgfile.UpdateApp(cp, name, in); err != nil {
+		if err := d.mutateFleet(true, func(cp *config.Config) error {
+			return cfgfile.UpdateApp(cp, name, in)
+		}); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
-		}
-		if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		d.Live.Swap(cp)
-		if d.Apply != nil {
-			d.Apply(cp.Apps, cp.GlobalEnv)
 		}
 		writeJSON(w, map[string]string{"ok": "true"})
 	case action == "" && r.Method == http.MethodDelete:
 		if !requireOperator(w, r) {
 			return
 		}
-		cp := d.Live.Get().Clone()
-		dropped, err := cfgfile.RemoveApp(cp, name, false)
-		if err != nil {
+		dropped := 0
+		if err := d.mutateFleet(true, func(cp *config.Config) error {
+			n, err := cfgfile.RemoveApp(cp, name, false)
+			dropped = n
+			return err
+		}); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
-		}
-		if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		d.Live.Swap(cp)
-		if d.Apply != nil {
-			d.Apply(cp.Apps, cp.GlobalEnv)
 		}
 		writeJSON(w, map[string]any{
 			"ok": "true", "routes_dropped": dropped,
@@ -227,12 +217,12 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "key vacía")
 			return
 		}
-		cp := d.Live.Get().Clone()
-		if err := cfgfile.SetEnv(d.DB, cp, name, strings.TrimSpace(in.Key), in.Value); err != nil {
+		if err := d.mutateFleet(false, func(cp *config.Config) error {
+			return cfgfile.SetEnvValue(cp, name, strings.TrimSpace(in.Key), in.Value)
+		}); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		d.Live.Swap(cp) // inmediato (watchMerged lo reconfirma)
 		writeJSON(w, map[string]string{"ok": "true"})
 	case action == "env" && r.Method == http.MethodDelete:
 		if !requireOperator(w, r) {
@@ -243,16 +233,12 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "falta ?key=")
 			return
 		}
-		cp := d.Live.Get().Clone()
-		if err := cfgfile.UnsetEnv(cp, name, key); err != nil {
+		if err := d.mutateFleet(false, func(cp *config.Config) error {
+			return cfgfile.UnsetEnv(cp, name, key)
+		}); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		d.Live.Swap(cp) // inmediato (watchMerged lo reconfirma)
 		writeJSON(w, map[string]string{"ok": "true"})
 	default:
 		writeErr(w, http.StatusNotFound, "ruta inválida")
