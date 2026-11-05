@@ -914,7 +914,7 @@ Criterios:
 | 2026-11-05 | Checklist actualizada tras el bloque P1/P2 | este commit | revisión manual |
 | 2026-11-05 | Cierre P1/P2: tests de dominios/usuarios/alertas, contexto de logs, eventos y capturas light | `601fe5e` | `go test ./...`, `tsc`, Vitest, capturas |
 | 2026-11-05 | X-04: paridad MCP de entorno y alertas | `58aa1ff` | `go test ./internal/mcpserver`, `tsc` |
-| 2026-11-05 | Gate de cobertura: store 90%, hosts 98% y tests de `WithTx` | este commit | bucle de cobertura local |
+| 2026-11-05 | Gate de cobertura: store 90%, hosts 98% y tests de `WithTx` | `2eeaebc` | bucle de cobertura local |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.
