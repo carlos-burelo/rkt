@@ -91,3 +91,23 @@ func TestDoAppUsage(t *testing.T) {
 		t.Fatal("app inexistente debe fallar")
 	}
 }
+
+func TestAlertTools(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	seedConfig(t, cfgPath, `{"routes":[]}`)
+	s := New(cfgPath)
+	if _, err := s.doAlertsAdd(alertAddArg{App: "*", Kind: "failed", Threshold: 1, WindowMin: 60}); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	enabled := false
+	if _, err := s.doAlertsUpdate(alertUpdateArg{ID: 1, Enabled: &enabled, Kind: "latency_p95"}); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	out, err := s.doAlertsTest(1)
+	if err != nil || !strings.Contains(out, "latency_p95") {
+		t.Fatalf("test: %q %v", out, err)
+	}
+	if _, err := s.doAlertChannelsList(); err != nil {
+		t.Fatalf("channels: %v", err)
+	}
+}

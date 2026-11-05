@@ -19,6 +19,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"rkt-proxy/internal/alerts"
 	"rkt-proxy/internal/appview"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
@@ -79,6 +80,15 @@ type alertAddArg struct {
 }
 type alertDelArg struct {
 	ID int64 `json:"id" jsonschema:"id de la regla"`
+}
+type alertUpdateArg struct {
+	ID        int64    `json:"id" jsonschema:"id de la regla"`
+	App       string   `json:"app,omitempty" jsonschema:"app o *"`
+	Kind      string   `json:"kind,omitempty" jsonschema:"failed|error_rate|latency_p95|memory_mb|down_min|disk_pct"`
+	Threshold *float64 `json:"threshold,omitempty" jsonschema:"umbral"`
+	WindowMin *int     `json:"window_min,omitempty" jsonschema:"ventana minutos"`
+	Enabled   *bool    `json:"enabled,omitempty" jsonschema:"activar/desactivar"`
+	ChannelID *int64   `json:"channel_id,omitempty" jsonschema:"canal (0 = sin canal)"`
 }
 type userAddArg struct {
 	Name     string `json:"name" jsonschema:"usuario"`
@@ -695,6 +705,83 @@ func (s *Server) doAlertsRemove(id int64) (string, error) {
 	return fmt.Sprintf("regla #%d borrada", id), nil
 }
 
+func (s *Server) doAlertsUpdate(a alertUpdateArg) (string, error) {
+	_, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	rules, err := db.ListRules()
+	if err != nil {
+		return "", err
+	}
+	var rule *store.AlertRule
+	for i := range rules {
+		if rules[i].ID == a.ID {
+			rule = &rules[i]
+		}
+	}
+	if rule == nil {
+		return "", fmt.Errorf("regla #%d inexistente", a.ID)
+	}
+	app, kind := rule.App, rule.Kind
+	th, win := rule.Threshold, rule.WindowMin
+	enabled, channel := rule.Enabled, rule.ChannelID
+	if a.App != "" {
+		app = a.App
+	}
+	if a.Kind != "" {
+		kind = a.Kind
+	}
+	if a.Threshold != nil {
+		th = *a.Threshold
+	}
+	if a.WindowMin != nil {
+		win = *a.WindowMin
+	}
+	if a.Enabled != nil {
+		enabled = *a.Enabled
+	}
+	if a.ChannelID != nil {
+		channel = *a.ChannelID
+	}
+	if err := db.UpdateRule(a.ID, app, kind, th, win, enabled, channel); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("regla #%d actualizada", a.ID), nil
+}
+
+func (s *Server) doAlertsTest(id int64) (string, error) {
+	_, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	rules, err := db.ListRules()
+	if err != nil {
+		return "", err
+	}
+	for _, rule := range rules {
+		if rule.ID == id {
+			return alerts.Describe(rule, alerts.Metrics{}), nil
+		}
+	}
+	return "", fmt.Errorf("regla #%d inexistente", id)
+}
+
+func (s *Server) doAlertChannelsList() (string, error) {
+	_, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	chans, err := db.ListChannels()
+	if err != nil {
+		return "", err
+	}
+	return jsonText(chans)
+}
+
 func (s *Server) doDiscoverStatus() (string, error) {
 	cfg, db, err := s.load()
 	if err != nil {
@@ -982,6 +1069,15 @@ func (s *Server) registerMore(srv *mcp.Server) {
 		func(ctx context.Context, req *mcp.CallToolRequest, a alertDelArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAlertsRemove(a.ID))
 		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "alerts_update", Description: "Edita una regla de alerta (app, kind, umbral, ventana, enabled, canal)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a alertUpdateArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doAlertsUpdate(a))
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "alerts_test", Description: "Describe el disparo de una regla sin ejecutarlo."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a alertDelArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doAlertsTest(a.ID))
+		})
+	add("alert_channels_list", "Canales webhook configurados.", s.doAlertChannelsList)
 	add("discover_status", "Estado de GitHub App/base_domain para auto-registro.", s.doDiscoverStatus)
 	add("users_list", "Usuarios (sin hashes) y roles.", s.doUsersList)
 	mcp.AddTool(srv, &mcp.Tool{Name: "users_add", Description: "Crea usuario local (password ≥12). Queda en el historial del agente."},

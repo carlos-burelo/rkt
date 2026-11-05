@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -24,6 +25,7 @@ import (
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/deploy"
 	"rkt-proxy/internal/discover"
+	"rkt-proxy/internal/dotenv"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/logx"
@@ -307,6 +309,10 @@ type envSetArg struct {
 	Key   string `json:"key,omitempty" jsonschema:"CLAVE"`
 	Value string `json:"value,omitempty" jsonschema:"valor (admite ${VAR})"`
 }
+type envImportArg struct {
+	App string `json:"app,omitempty" jsonschema:"app (vacío = global)"`
+	Raw string `json:"raw" jsonschema:"contenido .env"`
+}
 type deploymentLogsArg struct {
 	App string `json:"app,omitempty" jsonschema:"nombre de la app"`
 	N   int    `json:"n,omitempty" jsonschema:"últimas líneas (default 50)"`
@@ -353,6 +359,38 @@ func (s *Server) doAppsAdd(a appsAddArg) (string, error) {
 		"app": app.Name, "domains": domains, "port": port,
 	})
 	return string(out), nil
+}
+
+// doEnvImport aplica un .env con el parser canónico.
+func (s *Server) doEnvImport(a envImportArg) (string, error) {
+	parsed, err := dotenv.Parse(a.Raw)
+	if err != nil {
+		return "", err
+	}
+	_, db, err := cfgfile.LoadMerged(s.cfgPath)
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	if a.App == "" {
+		_, err = cfgfile.MutateInfra(db, func(cp *config.Config) error {
+			return cfgfile.ApplyEnvPatch(cp, "", parsed, nil)
+		})
+	} else {
+		_, err = cfgfile.MutateFleet(db, func(cp *config.Config) error {
+			return cfgfile.ApplyEnvPatch(cp, a.App, parsed, nil)
+		})
+	}
+	if err != nil {
+		return "", err
+	}
+	keys := make([]string, 0, len(parsed))
+	for k := range parsed {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	b, _ := json.Marshal(map[string]any{"ok": true, "keys": keys})
+	return string(b), nil
 }
 
 // doEnvSet escribe var (sin lectura: los secretos no vuelven al contexto).
@@ -694,6 +732,10 @@ func (s *Server) Run(ctx context.Context) error {
 	mcp.AddTool(srv, &mcp.Tool{Name: "env_set", Description: "Escribe var de entorno (restart requerido). Solo escritura: no lee secretos."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a envSetArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEnvSet(a.App, a.Key, a.Value))
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "env_import", Description: "Importa un .env (global o de una app) con el parser canónico."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a envImportArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doEnvImport(a))
 		})
 	mcp.AddTool(srv, &mcp.Tool{Name: "discover", Description: "Auto-registro inmediato desde GitHub App (sin esperar el poll)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {

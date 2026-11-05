@@ -6,8 +6,8 @@
 | Estado | aceptado |
 | Fecha | 2026-11-05 |
 | Ámbito | backend, API, dashboard, MCP |
-| Fase activa | P1/P2 cerrado; X-04 (MCP) pendiente |
-| Siguiente tarea | X-04 — paridad MCP de mutaciones nuevas |
+| Fase activa | P1/P2 cerrado; monitorización/protocolos/buildpack en espera |
+| Siguiente tarea | SRV-01 (solo cuando se autorice la fase posterior) |
 | Ampliación | SRV, PROTO, BLD y MOCK aprobados; no iniciar hasta cerrar P1 |
 | Relacionados | [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md), [CLI](CLI.md) |
 
@@ -802,7 +802,7 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 - [x] **X-02** CI ejecuta Vitest, i18n-check, build y smoke de capturas.
 - [x] **X-03** Convertir capturas en smoke con aserciones: sin errores de
   consola y elementos clave presentes.
-- [ ] **X-04** Matriz de paridad MCP: cada mutación nueva con tool y mismo
+- [x] **X-04** Matriz de paridad MCP: cada mutación nueva con tool y mismo
   servicio; tests.
 - [x] **X-05** i18n guard cubre los namespaces nuevos; cero textos crudos.
 - [x] **X-06** Capturas light/dark de cada módulo nuevo.
