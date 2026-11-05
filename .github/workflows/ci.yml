@@ -41,6 +41,10 @@ jobs:
         run: pnpm --dir web exec tsc --noEmit
         shell: pwsh
 
+      - name: Tests del dashboard
+        run: pnpm --dir web test
+        shell: pwsh
+
       - name: Guard i18n
         run: node scripts/i18n-check.mjs
         shell: pwsh

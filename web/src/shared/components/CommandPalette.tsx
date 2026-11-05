@@ -58,7 +58,6 @@ export function CommandPalette({
     const out: PaletteTarget[] = [];
     const pages: [string, "overview" | "proxy" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability" | "environment" | "ci" | "alerts"][] = [
       [t("nav.overview"), "overview"],
-      [t("nav.proxy"), "proxy"],
       [t("nav.deployments"), "deployments"],
       [t("nav.ci"), "ci"],
       [t("nav.logs"), "logs"],

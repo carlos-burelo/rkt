@@ -19,10 +19,10 @@ func appTarget(app *config.App) string {
 	return "http://127.0.0.1:" + port
 }
 
-// SetAppDomain reemplaza los hosts que apuntan al puerto de la app por
-// host (vacío = sin dominio). Un app tiene un dominio propio, no rutas
-// paralelas: el resto de hosts hacia ese puerto se retira.
-func SetAppDomain(cp *config.Config, appName, host string) error {
+// SetAppDomains reemplaza el conjunto de hosts que apuntan al puerto de la
+// app. Una app puede tener varios hosts; viven en una sola ruta. Lista vacía
+// retira todas las rutas del target. El primer host es el principal visual.
+func SetAppDomains(cp *config.Config, appName string, hosts []string) error {
 	app := FindApp(cp, appName)
 	if app == nil {
 		return fmt.Errorf("app %q inexistente", appName)
@@ -31,20 +31,33 @@ func SetAppDomain(cp *config.Config, appName, host string) error {
 	if target == "" {
 		return fmt.Errorf("app %q sin puerto (define port primero)", appName)
 	}
-	host = normalizeHost(host)
-	if host == "" {
-		cp.Routes = dropTarget(cp.Routes, target)
-		return nil
+	normalized := make([]string, 0, len(hosts))
+	seen := map[string]bool{}
+	for _, raw := range hosts {
+		host := normalizeHost(raw)
+		if host == "" {
+			continue
+		}
+		if strings.ContainsAny(host, " /\\") {
+			return fmt.Errorf("dominio inválido: %q", raw)
+		}
+		if u, err := url.Parse("http://" + host); err != nil || u.Host != host {
+			return fmt.Errorf("dominio inválido: %q", raw)
+		}
+		if seen[host] {
+			continue
+		}
+		seen[host] = true
+		normalized = append(normalized, host)
 	}
-	if strings.ContainsAny(host, " /\\") {
-		return fmt.Errorf("dominio inválido: %q", host)
+	routes := dropTarget(cp.Routes, target)
+	if len(normalized) > 0 {
+		routes = append(routes, config.Route{Hosts: normalized, Target: target})
 	}
-	// valida que sea host (sin esquema ni path)
-	if u, err := url.Parse("http://" + host); err != nil || u.Host != host {
-		return fmt.Errorf("dominio inválido: %q", host)
+	if err := config.ValidateRoutes(routes); err != nil {
+		return fmt.Errorf("inválido, no guardado: %w", err)
 	}
-	cp.Routes = dropTarget(cp.Routes, target)
-	cp.Routes = append(cp.Routes, config.Route{Hosts: []string{host}, Target: target})
+	cp.Routes = routes
 	return nil
 }
 

@@ -14,6 +14,7 @@
 package deploy
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -49,8 +50,13 @@ type Controller interface {
 	Snapshot() []supervisor.Status
 }
 
-// Run despliega. Devuelve rev publicado. out = salida del build.
+// Run despliega sin cancelación (CLI/tests). El servicio usa RunContext.
 func Run(app config.App, token string, ctl Controller, out io.Writer, log *slog.Logger) (string, error) {
+	return RunContext(context.Background(), app, token, ctl, out, log)
+}
+
+// RunContext despliega y devuelve la rev publicada.
+func RunContext(ctx context.Context, app config.App, token string, ctl Controller, out io.Writer, log *slog.Logger) (string, error) {
 	d := app.Deploy
 	live := app.Dir
 	staging := live + ".staging"
@@ -64,11 +70,11 @@ func Run(app config.App, token string, ctl Controller, out io.Writer, log *slog.
 	}
 
 	_ = os.RemoveAll(staging)
-	if err := gitClone(d, token, staging, log); err != nil {
+	if err := gitClone(ctx, d, token, staging, log); err != nil {
 		return "", err
 	}
-	rev := gitRev(staging)
-	if err := RunSteps(d.Build, staging, app.Env, out); err != nil {
+	rev := gitRev(ctx, staging)
+	if err := RunStepsContext(ctx, d.Build, staging, app.Env, out); err != nil {
 		_ = os.RemoveAll(staging)
 		return "", err
 	}
@@ -258,27 +264,27 @@ func gitArgs(token string, sub ...string) []string {
 	return append(args, sub...)
 }
 
-func gitClone(d *config.Deploy, token, staging string, log *slog.Logger) error {
+func gitClone(ctx context.Context, d *config.Deploy, token, staging string, log *slog.Logger) error {
 	log.Info("clonando", "repo", d.Repo, "ref", d.Ref)
 	if isSHA(d.Ref) {
-		if out, err := exec.Command("git", gitArgs(token, "clone", d.Repo, staging)...).CombinedOutput(); err != nil {
+		if out, err := exec.CommandContext(ctx, "git", gitArgs(token, "clone", d.Repo, staging)...).CombinedOutput(); err != nil {
 			return fmt.Errorf("clone: %v: %s", err, OneLine(out))
 		}
-		if out, err := exec.Command("git", gitArgs(token, "-C", staging, "checkout", d.Ref)...).CombinedOutput(); err != nil {
+		if out, err := exec.CommandContext(ctx, "git", gitArgs(token, "-C", staging, "checkout", d.Ref)...).CombinedOutput(); err != nil {
 			_ = os.RemoveAll(staging)
 			return fmt.Errorf("checkout %s: %v: %s", d.Ref, err, OneLine(out))
 		}
 		return nil
 	}
 	args := gitArgs(token, "clone", "--depth", "1", "--branch", d.Ref, d.Repo, staging)
-	if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+	if out, err := exec.CommandContext(ctx, "git", args...).CombinedOutput(); err != nil {
 		return fmt.Errorf("clone: %v: %s", err, OneLine(out))
 	}
 	return nil
 }
 
-func gitRev(dir string) string {
-	out, err := exec.Command("git", "-C", dir, "rev-parse", "--short", "HEAD").Output()
+func gitRev(ctx context.Context, dir string) string {
+	out, err := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--short", "HEAD").Output()
 	if err != nil {
 		return "?"
 	}
@@ -294,20 +300,24 @@ func HeadRev(dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// RunSteps ejecuta pasos de build en orden en dir. Único hogar del shell
-// y de los marcadores ▶/✔/✘ que el dashboard usa como checklist.
+// RunSteps ejecuta pasos de build sin cancelación (CLI/tests).
 func RunSteps(steps []string, dir string, env map[string]string, out io.Writer) error {
+	return RunStepsContext(context.Background(), steps, dir, env, out)
+}
+
+// RunStepsContext ejecuta pasos de build en orden en dir.
+func RunStepsContext(ctx context.Context, steps []string, dir string, env map[string]string, out io.Writer) error {
 	for _, step := range steps {
-		if err := runStep(step, dir, env, out); err != nil {
+		if err := runStepContext(ctx, step, dir, env, out); err != nil {
 			return fmt.Errorf("build %q: %w", step, err)
 		}
 	}
 	return nil
 }
 
-// runStep ejecuta un paso de build en el shell de la plataforma.
-func runStep(step, dir string, env map[string]string, out io.Writer) error {
-	cmd := platform.Shell(step)
+// runStepContext ejecuta un paso de build en el shell de la plataforma.
+func runStepContext(ctx context.Context, step, dir string, env map[string]string, out io.Writer) error {
+	cmd := platform.ShellContext(ctx, step)
 	cmd.Dir = dir
 	cmd.Env = dotenv.EnvironList(env)
 	cmd.Stdout = out

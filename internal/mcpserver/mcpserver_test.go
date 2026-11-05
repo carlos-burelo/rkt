@@ -218,8 +218,8 @@ func TestDoInspectYUpdate(t *testing.T) {
 	if err != nil || !strings.Contains(list, `"name":"sitio"`) {
 		t.Fatalf("apps_list = %q %v", list, err)
 	}
-	dom := "sitio.localhost"
-	if _, err := s.doAppUpdate(appUpdateArg{App: "sitio", Domain: &dom}); err != nil {
+	domains := []string{"sitio.localhost"}
+	if _, err := s.doAppUpdate(appUpdateArg{App: "sitio", Domains: &domains}); err != nil {
 		t.Fatalf("app_update: %v", err)
 	}
 	routes, err := s.doRoutesList()

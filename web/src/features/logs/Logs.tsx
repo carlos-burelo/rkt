@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Pause, Play, Search } from "lucide-react";
-import { AppStatus, Deployment } from "../../shared/lib/types";
+import { Download, Pause, Play, Search } from "lucide-react";import { AppStatus, Deployment } from "../../shared/lib/types";
 import { deploymentLog } from "../deployments/api";
 import { streamLog } from "../../shared/lib/http";
 import { fetchLog } from "./api";
 import { Bars } from "../../shared/components/feedback";
+import { CopyButton } from "../../shared/components/feedback";
 import { Dot, Avatar } from "../../shared/components/ui";
 import { PageHeader, Section } from "../../shared/components/patterns";
 import { Button } from "@/components/ui/button";
@@ -95,6 +95,34 @@ function splitScope(msg: string): { scope: string; text: string } {
   return m ? { scope: m[1], text: m[2] } : { scope: "", text: msg };
 }
 
+function Highlight({ text, q }: { text: string; q: string }) {
+  const needle = q.trim();
+  if (needle === "") return <>{text}</>;
+  const rx = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(rx)) {
+    const i = m.index ?? 0;
+    if (i > last) out.push(text.slice(last, i));
+    out.push(
+      <mark key={`${i}-${m[0]}`} className="bg-warn/25 text-warn">
+        {m[0]}
+      </mark>,
+    );
+    last = i + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return <>{out}</>;
+}
+
+function ago(ts?: number): string {
+  if (!ts) return "";
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  return `${Math.round(s / 3600)}h`;
+}
+
 function LevelToggle({
   level,
   on,
@@ -141,6 +169,8 @@ export function Logs() {
   const [log, setLog] = useState("");
   const [follow, setFollow] = useState(true);
   const [compact, setCompact] = useState(true);
+  const [wrap, setWrap] = useState(false);
+  const [absolute, setAbsolute] = useState(true);
   const [build, setBuild] = useState(t("ops.logs.pickDeployment"));
   const logRef = useRef<HTMLDivElement>(null);
   const latest = deps.find((d: Deployment) => appFilter === "" || d.app === appFilter);
@@ -292,6 +322,14 @@ export function Logs() {
                 <Checkbox checked={compact} onCheckedChange={(v) => setCompact(v === true)} />
                 {t("ops.logs.compact")}
               </label>
+              <label className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
+                <Checkbox checked={wrap} onCheckedChange={(v) => setWrap(v === true)} />
+                {t("ops.logs.wrap")}
+              </label>
+              <label className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
+                <Checkbox checked={absolute} onCheckedChange={(v) => setAbsolute(v === true)} />
+                {t("ops.logs.absolute")}
+              </label>
               <span className="tnum font-mono text-[9px] text-muted-foreground">
                 {tn("ops.logs.visibleLines", log === "" ? 0 : log.split("\n").length, {
                   vis: lines.vis.length,
@@ -336,7 +374,7 @@ export function Logs() {
                       <span className="tnum w-8 shrink-0 self-start text-right text-[9px] text-muted-foreground/30 select-none">
                         {String(i + 1).padStart(3, "0")}
                       </span>
-                      <span className="tnum w-14 shrink-0 self-start text-[9px] text-muted-foreground/55">{p.time}</span>
+                      <span className="tnum w-14 shrink-0 self-start text-[9px] text-muted-foreground/55">{absolute ? p.time : ago(p.timestamp)}</span>
                       <span
                         aria-label={t("ops.logs.lineLevel", { level: t(LEVEL_KEY[lv]) })}
                         title={t(LEVEL_KEY[lv])}
@@ -354,12 +392,12 @@ export function Logs() {
                       )}
                       <span
                         className={`min-w-0 flex-1 font-mono text-[11px] ${
-                          compact ? "truncate" : "break-words whitespace-pre-wrap"
+                          wrap ? "break-words whitespace-pre-wrap" : "truncate"
                         } ${
                           lv === "error" ? "text-bad/90" : lv === "warning" ? "text-warn/85" : "text-foreground/80"
                         }`}
                       >
-                        {compact ? (p.structured ? text : p.raw) : p.raw}
+                        {compact ? (p.structured ? <Highlight text={text} q={q} /> : <Highlight text={p.raw} q={q} />) : <Highlight text={p.raw} q={q} />}
                       </span>
                       {compact && p.structured && p.fields.length > 0 && (
                         <span className="hidden max-w-[52%] shrink-0 items-center gap-1 overflow-hidden sm:flex">
@@ -388,7 +426,7 @@ export function Logs() {
                       {count > 1 && (
                         <span className="tnum shrink-0 font-mono text-[9px] text-muted-foreground/60">×{count}</span>
                       )}
-                    </div>
+                      <CopyButton text={p.raw} />                    </div>
                   );
                 })}
                 {lines.vis.length === 0 && (

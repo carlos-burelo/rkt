@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/dnscheck"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/store"
@@ -441,29 +443,75 @@ func TestEnvCRUD(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("viewer env: quiere 403, got %d", rec.Code)
 	}
+	// lista solo claves
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w/env", opTok))
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"K":"v"`) {
-		t.Fatalf("get: %d %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"K"`) || strings.Contains(rec.Body.String(), `"v"`) {
+		t.Fatalf("get keys: %d %s", rec.Code, rec.Body.String())
 	}
-	// set + unset
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/apps/w/env",
-		strings.NewReader(`{"key":"N","value":"1"}`))
+	// valor por clave
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w/env/K", opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"value":"v"`) {
+		t.Fatalf("get value: %d %s", rec.Code, rec.Body.String())
+	}
+	// patch set + unset
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/apps/w/env",
+		strings.NewReader(`{"set":{"N":"1"},"unset":["K"]}`))
 	req.Header.Set("Authorization", "Bearer "+opTok)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("set: %d %s", rec.Code, rec.Body.String())
+		t.Fatalf("patch: %d %s", rec.Code, rec.Body.String())
 	}
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w/env", opTok))
-	if !strings.Contains(rec.Body.String(), `"N":"1"`) {
-		t.Fatalf("set no aplicado: %s", rec.Body.String())
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/env", opTok))
+	if !strings.Contains(rec.Body.String(), `"N"`) || strings.Contains(rec.Body.String(), `"K"`) {
+		t.Fatalf("patch no aplicado: %s", rec.Body.String())
 	}
+	// import .env canónico
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/apps/w/env/import",
+		strings.NewReader(`{"raw":"A=1\nB=${A}-2\n"}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/apps/w/env?key=N", opTok))
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"A"`) {
+		t.Fatalf("import: %d %s", rec.Code, rec.Body.String())
+	}
+	// PORT no se toca por entorno
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/apps/w/env",
+		strings.NewReader(`{"set":{"PORT":"9"}}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PORT: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGlobalEnv(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	opTok := loginAs(t, h, db, "op", store.RoleOperator)
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/env/global",
+		strings.NewReader(`{"set":{"G":"1"},"unset":[]}`))
+	req.Header.Set("Authorization", "Bearer "+opTok)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("unset: %d", rec.Code)
+		t.Fatalf("patch global: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/env/global/G", opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"value":"1"`) {
+		t.Fatalf("get global: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/env", opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"G"`) {
+		t.Fatalf("index: %d %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -792,7 +840,7 @@ func TestAppsCreateExternal(t *testing.T) {
 	}
 }
 
-func TestDomainsTLS(t *testing.T) {
+func TestDomainDetail(t *testing.T) {
 	d, db, done := testDeps(t)
 	defer done()
 	d.TLS = func(host string) (bool, string) {
@@ -801,18 +849,27 @@ func TestDomainsTLS(t *testing.T) {
 		}
 		return false, ""
 	}
+	d.DNS = func(_ context.Context, host string) dnscheck.Result {
+		return dnscheck.Result{A: []string{"127.0.0.1"}, Resolves: true}
+	}
 	h := NewHandler(d)
 	opTok := loginAs(t, h, db, "op", store.RoleOperator)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/domains/a.test/tls", opTok))
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "2027-01-01") {
-		t.Fatalf("tls: %d %s", rec.Code, rec.Body.String())
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/domains/a.test", opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "2027-01-01") ||
+		!strings.Contains(rec.Body.String(), `"dns_ok":true`) {
+		t.Fatalf("dominio: %d %s", rec.Code, rec.Body.String())
 	}
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/domains/otro.test/tls", opTok))
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"managed":false`) {
-		t.Fatalf("tls off: %d %s", rec.Code, rec.Body.String())
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/domains/otro.test", opTok))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("dominio sin ruta: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodPost, "/api/v1/domains/a.test", opTok))
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("método: %d %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -999,5 +1056,100 @@ func TestUsageAppInexistente(t *testing.T) {
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/nope/usage", tok))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("uso de app inexistente = %d", rec.Code)
+	}
+}
+
+func TestAlertLifecycle(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	tok := loginAs(t, h, db, "op", store.RoleOperator)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alert-channels", strings.NewReader(`{"name":"ops","url":"https://example.com/hook"}`))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("canal: %d %s", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/alerts", strings.NewReader(`{"app":"w","kind":"latency_p95","threshold":200,"window_min":15,"channel_id":1}`))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("regla: %d %s", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/alerts/1", strings.NewReader(`{"app":"w","kind":"memory_mb","threshold":128,"window_min":10,"enabled":false}`))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("editar: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodPost, "/api/v1/alerts/1/test", tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "memory_mb") {
+		t.Fatalf("test: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/alerts/1/fires", tok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("fires: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/alerts", tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"enabled":false`) {
+		t.Fatalf("lista: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAppStartStop(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	tok := loginAs(t, h, db, "op", store.RoleOperator)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodPost, "/api/v1/apps/w/stop", tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"disabled":true`) {
+		t.Fatalf("stop: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodPost, "/api/v1/apps/w/start", tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"disabled":false`) {
+		t.Fatalf("start: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCancelDeployment(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	d.Cancel = func(id int64) bool { return id == 7 }
+	h := NewHandler(d)
+	tok := loginAs(t, h, db, "op", store.RoleOperator)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodPost, "/api/v1/deployments/7/cancel", tok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cancel: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodPost, "/api/v1/deployments/8/cancel", tok))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("cancel inexistente: %d", rec.Code)
+	}
+}
+
+func TestDomainPreflight(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	d.DNS = func(_ context.Context, host string) dnscheck.Result {
+		return dnscheck.Result{A: []string{"127.0.0.1"}, Resolves: true}
+	}
+	h := NewHandler(d)
+	tok := loginAs(t, h, db, "op", store.RoleOperator)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/domains/preflight?host=nuevo.localhost", tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"dns_ok":true`) {
+		t.Fatalf("preflight: %d %s", rec.Code, rec.Body.String())
 	}
 }

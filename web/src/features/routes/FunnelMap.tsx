@@ -29,7 +29,7 @@ export function FunnelMap({
           {tn("serve.hosts.count", links.length)} · {tn("serve.funnel.destinations", groups.length)}
         </span>
         <span className="flex-1" />
-        <Link to="/proxy" className="inline-flex items-center gap-1 font-mono text-[9px] text-muted-foreground hover:text-foreground">
+        <Link to="/routes?tab=diagnostico" className="inline-flex items-center gap-1 font-mono text-[9px] text-muted-foreground hover:text-foreground">
           {t("serve.funnel.viewTopology")} <ArrowRight className="h-3 w-3" />
         </Link>
       </header>

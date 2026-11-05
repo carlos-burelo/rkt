@@ -161,7 +161,7 @@ func TestOverlayGithubYSeed(t *testing.T) {
 	}
 }
 
-func TestSetAppDomainYPort(t *testing.T) {
+func TestSetAppDomainsYPort(t *testing.T) {
 	_, db := testCfg(t)
 	cp := &config.Config{
 		Apps: []config.App{{Name: "w", Env: map[string]string{"PORT": "3001"}}},
@@ -170,27 +170,27 @@ func TestSetAppDomainYPort(t *testing.T) {
 			{Hosts: []string{"otro.test"}, Target: "http://127.0.0.1:9999"},
 		},
 	}
-	if err := SetAppDomain(cp, "w", "https://nuevo.test/"); err != nil {
+	if err := SetAppDomains(cp, "w", []string{"https://nuevo.test/", "alias.test", "nuevo.test"}); err != nil {
 		t.Fatal(err)
 	}
-	if len(cp.Routes) != 2 || cp.Routes[1].Hosts[0] != "nuevo.test" {
+	if len(cp.Routes) != 2 || len(cp.Routes[1].Hosts) != 2 || cp.Routes[1].Hosts[0] != "nuevo.test" || cp.Routes[1].Hosts[1] != "alias.test" {
 		t.Fatalf("routes = %+v", cp.Routes)
 	}
-	if err := SetAppDomain(cp, "w", ""); err != nil {
+	if err := SetAppDomains(cp, "w", nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(cp.Routes) != 1 {
 		t.Fatalf("sin dominio debe quedar solo la otra: %+v", cp.Routes)
 	}
-	if err := SetAppDomain(cp, "w", "a b"); err == nil {
+	if err := SetAppDomains(cp, "w", []string{"a b"}); err == nil {
 		t.Fatal("dominio con espacio debe fallar")
 	}
-	if err := SetAppDomain(cp, "nope", "x.test"); err == nil {
+	if err := SetAppDomains(cp, "nope", []string{"x.test"}); err == nil {
 		t.Fatal("app inexistente debe fallar")
 	}
 	// app sin puerto
 	cp.Apps = append(cp.Apps, config.App{Name: "sinport"})
-	if err := SetAppDomain(cp, "sinport", "x.test"); err == nil {
+	if err := SetAppDomains(cp, "sinport", []string{"x.test"}); err == nil {
 		t.Fatal("app sin puerto debe fallar")
 	}
 	if err := SetAppPort(cp, "w", 0); err == nil {
@@ -494,9 +494,9 @@ func TestRamasCfgfileRestantes(t *testing.T) {
 	if err := SetEnv(db, "b", "K", "v"); err == nil {
 		t.Fatal("SetEnv con app inexistente debía fallar")
 	}
-	// SetAppDomain con host que url.Parse no puede normalizar
+	// SetAppDomains con host que url.Parse no puede normalizar
 	cp := &config.Config{Apps: []config.App{{Name: "w", Env: map[string]string{"PORT": "3001"}}}}
-	if err := SetAppDomain(cp, "w", "a.test#x"); err == nil {
+	if err := SetAppDomains(cp, "w", []string{"a.test#x"}); err == nil {
 		t.Fatal("host con fragmento debía fallar")
 	}
 	// LoadBase: infra válida en JSON pero inválida para Finalize

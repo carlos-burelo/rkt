@@ -129,6 +129,25 @@ func TestAppsYResolvesLocal(t *testing.T) {
 	}
 }
 
+func TestOwnerPorTarget(t *testing.T) {
+	cfg := &config.Config{
+		Apps: []config.App{
+			{Name: "a", Env: map[string]string{"PORT": "3001"}},
+			{Name: "b", Env: map[string]string{"PORT": "3002"}},
+			{Name: "sin"},
+		},
+	}
+	if got := Owner(cfg, "http://127.0.0.1:3002"); got != "b" {
+		t.Fatalf("owner = %q", got)
+	}
+	if got := Owner(cfg, "http://127.0.0.1:9999"); got != "" {
+		t.Fatalf("owner ajeno = %q", got)
+	}
+	if got := Owner(cfg, ""); got != "" {
+		t.Fatalf("owner vacío = %q", got)
+	}
+}
+
 func TestAppExternal(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"scripts":{"dev":"vite"},"devDependencies":{"vite":"^5"}}`), 0o644); err != nil {

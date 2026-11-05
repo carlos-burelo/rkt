@@ -32,21 +32,21 @@ func (d *Deps) handleApps(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var in struct {
-			Repo    string `json:"repo"`
-			Name    string `json:"name"`
-			Runtime string `json:"runtime"`
-			Domain  string `json:"domain"`
-			Port    int    `json:"port"`
-			Command string `json:"command"`
-			Dir     string `json:"dir"`
-			Auto    bool   `json:"auto"`
+			Repo    string   `json:"repo"`
+			Name    string   `json:"name"`
+			Runtime string   `json:"runtime"`
+			Domains []string `json:"domains"`
+			Port    int      `json:"port"`
+			Command string   `json:"command"`
+			Dir     string   `json:"dir"`
+			Auto    bool     `json:"auto"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
 			writeErr(w, http.StatusBadRequest, "JSON inválido")
 			return
 		}
 		d.mu.Lock()
-		name, err := createAppFromRepo(d.DB, d.Live, d.githubManager(), in.Runtime, in.Repo, in.Name, in.Domain, in.Port, in.Command, in.Dir, in.Auto)
+		name, err := createAppFromRepo(d.DB, d.Live, d.githubManager(), in.Runtime, in.Repo, in.Name, in.Domains, in.Port, in.Command, in.Dir, in.Auto)
 		d.mu.Unlock()
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
@@ -71,7 +71,7 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "app inexistente")
 		return
 	}
-	if a.External() && (action == "deploy" || action == "restart" || action == "rollback" || action == "build" || action == "retry" || action == "diff") {
+	if a.External() && (action == "deploy" || action == "restart" || action == "rollback" || action == "build" || action == "retry" || action == "diff" || action == "start" || action == "stop") {
 		writeErr(w, http.StatusConflict, "app externa: solo proxy; corre el dev server en "+a.Dir)
 		return
 	}
@@ -171,6 +171,18 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, map[string]string{"ok": "true"})
+	case (action == "start" || action == "stop") && r.Method == http.MethodPost:
+		if !requireOperator(w, r) {
+			return
+		}
+		disabled := action == "stop"
+		if err := d.mutateFleet(true, func(cp *config.Config) error {
+			return cfgfile.UpdateApp(cp, name, cfgfile.AppPatch{Disabled: &disabled})
+		}); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "disabled": disabled})
 	case action == "deploy" && r.Method == http.MethodPost:
 		if !requireOperator(w, r) {
 			return
@@ -212,50 +224,13 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 		if !requireOperator(w, r) {
 			return
 		}
-		env := a.Env
-		if env == nil {
-			env = map[string]string{}
-		}
-		writeJSON(w, env)
-	case action == "env" && r.Method == http.MethodPut:
-		if !requireOperator(w, r) {
-			return
-		}
-		var in struct {
-			Key   string `json:"key"`
-			Value string `json:"value"`
-		}
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
-			writeErr(w, http.StatusBadRequest, "JSON inválido")
-			return
-		}
-		if strings.TrimSpace(in.Key) == "" {
-			writeErr(w, http.StatusBadRequest, "key vacía")
-			return
-		}
-		if err := d.mutateFleet(false, func(cp *config.Config) error {
-			return cfgfile.SetEnvValue(cp, name, strings.TrimSpace(in.Key), in.Value)
-		}); err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		writeJSON(w, map[string]string{"ok": "true"})
-	case action == "env" && r.Method == http.MethodDelete:
-		if !requireOperator(w, r) {
-			return
-		}
-		key := r.URL.Query().Get("key")
-		if key == "" {
-			writeErr(w, http.StatusBadRequest, "falta ?key=")
-			return
-		}
-		if err := d.mutateFleet(false, func(cp *config.Config) error {
-			return cfgfile.UnsetEnv(cp, name, key)
-		}); err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		writeJSON(w, map[string]string{"ok": "true"})
+		writeJSON(w, envKeys(a.Env))
+	case action == "env" && r.Method == http.MethodPatch:
+		d.patchAppEnv(w, r, name)
+	case action == "env/import" && r.Method == http.MethodPost:
+		d.handleEnvImport(w, r, name)
+	case strings.HasPrefix(action, "env/") && r.Method == http.MethodGet:
+		d.handleEnvValue(w, r, strings.TrimPrefix(action, "env/"), name)
 	default:
 		writeErr(w, http.StatusNotFound, "ruta inválida")
 	}
@@ -263,8 +238,8 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 
 // createAppFromRepo alta con inferencia vía cfgfile.CreateAndAdd (hogar
 // único, también usado por MCP). Refresca la config viva.
-func createAppFromRepo(db *store.DB, live *config.Live, gh *github.Manager, runtime, repo, name, domain string, port int, command, dir string, auto bool) (string, error) {
-	app, _, _, err := cfgfile.CreateAndAdd(db, gh, runtime, repo, name, domain, port, command, dir, auto)
+func createAppFromRepo(db *store.DB, live *config.Live, gh *github.Manager, runtime, repo, name string, domains []string, port int, command, dir string, auto bool) (string, error) {
+	app, _, _, err := cfgfile.CreateAndAdd(db, gh, runtime, repo, name, domains, port, command, dir, auto)
 	if err != nil {
 		return "", err
 	}

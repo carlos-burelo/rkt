@@ -23,7 +23,7 @@ interface UI {
   setCreateOpen: (b: boolean) => void;
   setSel: (d: Deployment | null) => void;
   fail: (e: unknown) => void;
-  act: (app: string, a: "restart" | "deploy" | "rollback") => Promise<void>;
+  act: (app: string, a: "restart" | "deploy" | "rollback" | "start" | "stop") => Promise<void>;
   retry: (id: number) => void;
 }
 

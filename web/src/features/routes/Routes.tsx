@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import { ArrowRight, ExternalLink, Plus } from "lucide-react";
 import { Route, Status } from "../../shared/lib/types";
-import { addRoute, delRoute, putRoute, tlsStatus, listRoutes } from "./api";
-import { fetchProxy } from "../proxy/api";
+import { addRoute, delRoute, putRoute, domainDetail, preflightDomain, listRoutes } from "./api";
+import { useProxyStatus } from "../proxy/hooks";
 import { buildLinks, GraphLink } from "../proxy/graph";
+import { Proxy } from "../proxy/Proxy";
+import { DomainDrawer } from "./DomainDrawer";
 import { FunnelMap } from "./FunnelMap";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CopyButton } from "../../shared/components/feedback";
 import { ConfirmButton } from "../../shared/components/ConfirmButton";
 import { Avatar } from "../../shared/components/ui";
@@ -19,34 +23,51 @@ import { useFleet } from "../overview/hooks";
 import { publicUrl, publicHost } from "../../shared/lib/url";
 import { useI18n } from "../../shared/i18n";
 
-function TLSBadge({ host }: { host: string }) {
+function TLSBadge({ host, onOpen }: { host: string; onOpen: () => void }) {
   const { t } = useI18n();
   const [txt, setTxt] = useState("…");
-  const [ok, setOk] = useState(false);
+  const [state, setState] = useState<"off" | "ok" | "warn" | "bad">("off");
   useEffect(() => {
-    tlsStatus(host)
-      .then((s) => {
-        setOk(s.managed);
-        setTxt(s.expires || "?");
+    domainDetail(host)
+      .then((d) => {
+        if (!d.tls.managed) {
+          setState("off");
+          setTxt("");
+          return;
+        }
+        setTxt(d.tls.expires || t("common.yes"));
+        const days = d.tls.expires ? Math.ceil((new Date(d.tls.expires).getTime() - Date.now()) / 86400000) : 999;
+        setState(Number.isNaN(days) ? "ok" : days <= 0 ? "bad" : days <= 14 ? "warn" : "ok");
       })
       .catch(() => {
-        setOk(false);
+        setState("off");
         setTxt("?");
       });
-  }, [host]);
+  }, [host, t]);
+  const cls =
+    state === "bad"
+      ? "border-bad/40 bg-bad/10 text-bad"
+      : state === "warn"
+        ? "border-warn/40 bg-warn/10 text-warn"
+        : state === "ok"
+          ? "border-ok/30 bg-ok/10 text-ok"
+          : "border-border bg-transparent text-muted-foreground";
   return (
-    <span
-      title={txt}
-      className={`inline-flex h-5 w-fit items-center border px-1.5 font-mono text-[10px] tracking-[0.08em] uppercase ${
-        ok ? "border-ok/30 bg-ok/10 text-ok" : "border-border bg-transparent text-muted-foreground"
-      }`}
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+      title={t("serve.domain.open")}
+      className={`inline-flex h-5 w-fit items-center border px-1.5 font-mono text-[10px] tracking-[0.08em] uppercase hover:border-input ${cls}`}
     >
-      {ok ? t("serve.tls.value", { version: txt }) : t("serve.tls.none")}
-    </span>
+      {state === "off" ? t("serve.tls.none") : t("serve.tls.value", { version: txt })}
+    </button>
   );
 }
 
-function RouteRow({ r, onChanged, status }: { r: Route; onChanged: () => void; status: Status | null }) {
+function RouteRow({ r, onChanged, status, onOpen }: { r: Route; onChanged: () => void; status: Status | null; onOpen: () => void }) {
   const { t } = useI18n();
   const canWrite = useAuth((a) => a.canWrite);
   const fail = useUI((u) => u.fail);
@@ -78,7 +99,7 @@ function RouteRow({ r, onChanged, status }: { r: Route; onChanged: () => void; s
         </div>
         <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground md:hidden">→ {r.target}</p>
       </div>
-      <TLSBadge host={r.hosts[0]} />
+      <TLSBadge host={r.hosts[0]} onOpen={onOpen} />
       <ArrowRight className="hidden h-3 w-3 text-muted-foreground/30 md:block" />
       <span className="tnum col-span-2 min-w-0 truncate font-mono text-[11px] text-muted-foreground md:col-span-1">
         {r.target}
@@ -126,33 +147,20 @@ export function Routes() {
   const canWrite = useAuth((a) => a.canWrite);
   const fail = useUI((u) => u.fail);
   const { status } = useFleet();
+  const { rows: proxyRows, reload: reloadProxy } = useProxyStatus();
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") === "diagnostico" ? "diagnostico" : "rutas";
   const [routes, setRoutes] = useState<Route[]>([]);
   const [hosts, setHosts] = useState("");
   const [target, setTarget] = useState("");
   const [mapLinks, setMapLinks] = useState<GraphLink[]>([]);
   const [addOpen, setAddOpen] = useState(false);
+  const [dnsMsg, setDnsMsg] = useState("");
+  const [selectedHost, setSelectedHost] = useState<string | null>(null);
 
   async function load() {
     try {
-      const [rs, px] = await Promise.all([listRoutes(), fetchProxy().catch(() => null)]);
-      setRoutes(rs);
-      if (px) {
-        setMapLinks(buildLinks(px));
-      } else {
-        // sin /proxy (p.ej. permiso lectura parcial): grafo honesto sin estado
-        setMapLinks(
-          rs.flatMap((r) =>
-            r.hosts.map((h) => ({
-              host: h,
-              target: r.target,
-              short: r.target.replace(/^https?:\/\//, "").replace(/^127\.0\.0\.1/, "local"),
-              ok: true,
-              tls: "off",
-              stale: true,
-            })),
-          ),
-        );
-      }
+      setRoutes(await listRoutes());
     } catch (e) {
       fail(e);
     }
@@ -162,6 +170,25 @@ export function Routes() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (proxyRows) {
+      setMapLinks(buildLinks(proxyRows));
+      return;
+    }
+    setMapLinks(
+      routes.flatMap((r) =>
+        r.hosts.map((h) => ({
+          host: h,
+          target: r.target,
+          short: r.target.replace(/^https?:\/\//, "").replace(/^127\.0\.0\.1/, "local"),
+          ok: true,
+          tls: "off",
+          stale: true,
+        })),
+      ),
+    );
+  }, [proxyRows, routes]);
 
   const hostCount = routes.reduce((n, r) => n + r.hosts.length, 0);
 
@@ -176,7 +203,7 @@ export function Routes() {
           </span>
         }
         actions={
-          canWrite ? (
+          canWrite && tab === "rutas" ? (
             <FormDialog
               open={addOpen}
               onOpenChange={setAddOpen}
@@ -216,33 +243,74 @@ export function Routes() {
                   className="tnum h-8 font-mono text-[12px]"
                 />
               </Field>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  disabled={hosts.trim() === ""}
+                  onClick={() => {
+                    const host = hosts.split(",")[0]?.trim() ?? "";
+                    setDnsMsg(t("serve.domain.checking"));
+                    preflightDomain(host)
+                      .then((r) => setDnsMsg(r.dns_ok ? t("serve.domain.preflightOk", { host }) : t("serve.domain.preflightWarn", { host })))
+                      .catch(() => setDnsMsg(t("serve.domain.preflightError")));
+                  }}
+                >
+                  {t("serve.domain.check")}
+                </Button>
+                {dnsMsg !== "" && <span className="font-mono text-[10px] text-muted-foreground">{dnsMsg}</span>}
+              </div>
             </FormDialog>
           ) : undefined
         }
       />
-      <LocalZones onChanged={load} />
+      <Tabs value={tab} onValueChange={(v) => setParams(v === "diagnostico" ? { tab: "diagnostico" } : {}, { replace: true })}>
+        <TabsList className="w-max">
+          <TabsTrigger value="rutas">{t("serve.routes.tab")}</TabsTrigger>
+          <TabsTrigger value="diagnostico">{t("serve.routes.diagnostics")}</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      <FunnelMap links={mapLinks} onAdd={() => setAddOpen(true)} />
+      {tab === "diagnostico" && <Proxy embedded />}
 
-      <div className="border border-border" role="table" aria-label={t("serve.routes.tableAria")}>
-        <div
-          className="hidden grid-cols-[1.5rem_minmax(0,1.4fr)_auto_1.5rem_minmax(0,1.4fr)_auto] items-center gap-2 border-b border-border bg-secondary/25 px-3 py-1.5 md:grid"
-          aria-hidden
-        >
-          <span className="micro">{t("serve.field.stateShort")}</span>
-          <span className="micro">{t("serve.field.host")}</span>
-          <span className="micro">{t("serve.field.tls")}</span>
-          <span />
-          <span className="micro">{t("serve.field.target")}</span>
-          <span />
-        </div>
-        {routes.map((r) => (
-          <RouteRow key={r.hosts.join(",") + r.target} r={r} onChanged={load} status={status} />
-        ))}
-        {routes.length === 0 && (
-          <EmptyState title={t("serve.routes.emptyTitle")} hint={t("serve.routes.emptyHint")} />
-        )}
-      </div>
+      {tab === "rutas" && (
+        <>
+          <LocalZones onChanged={load} />
+
+          <FunnelMap links={mapLinks} onAdd={() => setAddOpen(true)} />
+
+          <div className="border border-border" role="table" aria-label={t("serve.routes.tableAria")}>
+            <div
+              className="hidden grid-cols-[1.5rem_minmax(0,1.4fr)_auto_1.5rem_minmax(0,1.4fr)_auto] items-center gap-2 border-b border-border bg-secondary/25 px-3 py-1.5 md:grid"
+              aria-hidden
+            >
+              <span className="micro">{t("serve.field.stateShort")}</span>
+              <span className="micro">{t("serve.field.host")}</span>
+              <span className="micro">{t("serve.field.tls")}</span>
+              <span />
+              <span className="micro">{t("serve.field.target")}</span>
+              <span />
+            </div>
+            {routes.map((r) => (
+              <RouteRow
+                key={r.hosts.join(",") + r.target}
+                r={r}
+                onChanged={() => {
+                  load();
+                  reloadProxy();
+                }}
+                status={status}
+                onOpen={() => setSelectedHost(r.hosts[0])}
+              />
+            ))}
+            {routes.length === 0 && (
+              <EmptyState title={t("serve.routes.emptyTitle")} hint={t("serve.routes.emptyHint")} />
+            )}
+          </div>
+        </>
+      )}
+      <DomainDrawer host={selectedHost} onClose={() => setSelectedHost(null)} />
     </div>
   );
 }

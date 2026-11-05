@@ -31,9 +31,14 @@ export async function fetchAnalytics(host: string, days = 7): Promise<Analytics>
 
 export interface Obs {
   hours: number;
-  buckets: { ts: string; req: number; err: number }[];
+  buckets: { ts: string; req: number; err: number; p50?: string; p95?: string; p99?: string }[];
+  classes?: Record<string, number>;
+  by_app?: { app: string; req: number; err: number; bytes: number; p95?: string }[];
   restarts: number;
   down: string[];
+  p50?: string;
+  p95?: string;
+  p99?: string;
 }
 
 export async function fetchObs(hours = 6): Promise<Obs> {

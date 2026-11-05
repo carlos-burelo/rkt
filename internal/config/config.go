@@ -96,6 +96,10 @@ type App struct {
 	RestartDelay string            `yaml:"restart_delay" json:"restart_delay"`
 	MinUptime    string            `yaml:"min_uptime" json:"min_uptime"`
 	MemoryMB     uint64            `yaml:"memory_mb" json:"memory_mb"`
+	// Disabled persiste una app detenida: el supervisor no la arranca.
+	Disabled bool `yaml:"disabled,omitempty" json:"disabled,omitempty"`
+	// HealthPath ruta HTTP de la sonda local (default "/").
+	HealthPath string `yaml:"health_path,omitempty" json:"health_path,omitempty"`
 	// Static dir servido por el propio binario (sitios: astro/vite/export).
 	Static string  `yaml:"static,omitempty" json:"static,omitempty"`
 	Deploy *Deploy `yaml:"deploy" json:"deploy"`
@@ -283,6 +287,9 @@ func (cfg *Config) ApplyDefaults() {
 		}
 		if a.MinUptime == "" {
 			a.MinUptime = "10s"
+		}
+		if a.HealthPath == "" {
+			a.HealthPath = "/"
 		}
 		if !a.External() {
 			normalizeNodePM(a)
@@ -601,6 +608,11 @@ func (a *App) ValidateApp(idx int) error {
 	if a.Dir != "" && a.Deploy == nil {
 		if st, err := os.Stat(a.Dir); err != nil || !st.IsDir() {
 			return fmt.Errorf("apps[%s] dir inexistente %q", a.Name, a.Dir)
+		}
+	}
+	if a.HealthPath != "" {
+		if !strings.HasPrefix(a.HealthPath, "/") || strings.ContainsAny(a.HealthPath, " \t\r\n") {
+			return fmt.Errorf("apps[%s] health_path inválido %q (debe empezar por /)", a.Name, a.HealthPath)
 		}
 	}
 	d, err := time.ParseDuration(a.RestartDelay)

@@ -28,7 +28,9 @@ type AppPatch struct {
 	MinUptime    *string      `json:"min_uptime"`
 	MemoryMB     *uint64      `json:"memory_mb"`
 	Port         *int         `json:"port"`
-	Domain       *string      `json:"domain"`
+	Domains      *[]string    `json:"domains"`
+	Disabled     *bool        `json:"disabled"`
+	HealthPath   *string      `json:"health_path"`
 	Deploy       *DeployPatch `json:"deploy"`
 }
 
@@ -64,6 +66,12 @@ func UpdateApp(cp *config.Config, name string, p AppPatch) error {
 	if p.MemoryMB != nil {
 		app.MemoryMB = *p.MemoryMB
 	}
+	if p.Disabled != nil {
+		app.Disabled = *p.Disabled
+	}
+	if p.HealthPath != nil {
+		app.HealthPath = *p.HealthPath
+	}
 	if p.Deploy != nil {
 		app.Deploy = &config.Deploy{
 			Repo: p.Deploy.Repo, Ref: p.Deploy.Ref,
@@ -75,8 +83,8 @@ func UpdateApp(cp *config.Config, name string, p AppPatch) error {
 			return err
 		}
 	}
-	if p.Domain != nil {
-		if err := SetAppDomain(work, name, *p.Domain); err != nil {
+	if p.Domains != nil {
+		if err := SetAppDomains(work, name, *p.Domains); err != nil {
 			return err
 		}
 	}

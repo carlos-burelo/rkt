@@ -5,6 +5,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/dnscheck"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/store"
@@ -36,10 +38,14 @@ type Deps struct {
 	DeployAsync func(name, actor string) (int64, error)
 	Rollback    func(name, actor string) error
 	Retry       func(id int64, actor string) (string, error)
+	// Cancel detiene un despliegue en curso (nil = sin soporte).
+	Cancel func(id int64) bool
 	// Build compila una app local con su plan y devuelve el id de la salida.
 	Build func(name, actor string) (int64, error)
 	// TLS interroga cache de certs (nil = sin TLS).
 	TLS func(host string) (managed bool, expires string)
+	// DNS resuelve un host para el detalle de dominio (nil = resolver real).
+	DNS func(ctx context.Context, host string) dnscheck.Result
 	// Github estado vivo de la GitHub App (nil = no configurada).
 	Github func() (map[string]any, error)
 	// GithubRepos repos accesibles a las instalaciones (selector de app).
@@ -136,6 +142,11 @@ func NewHandler(d Deps) http.Handler {
 	d.cache = newMemo()
 	d.th = &loginThrottle{}
 	d.mu = &sync.Mutex{}
+	if d.DNS == nil {
+		d.DNS = func(ctx context.Context, host string) dnscheck.Result {
+			return dnscheck.Check(ctx, nil, host)
+		}
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/v1/auth/status", d.handleAuthStatus)
@@ -145,6 +156,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("/api/v1/auth/me", d.handleMe)
 	mux.HandleFunc("/api/v1/users", d.handleUsers)
 	mux.HandleFunc("/api/v1/users/", d.handleUser)
+	mux.HandleFunc("/api/v1/audit", d.handleAudit)
 
 	mux.HandleFunc("/api/v1/status", d.handleStatus)
 	mux.HandleFunc("/api/v1/deployments", d.handleDeployments)
@@ -156,8 +168,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("/api/v1/apps", d.handleApps)
 	mux.HandleFunc("/api/v1/apps/", d.handleAppDetail)
 
-	// Env global: variables compartidas por todas las apps (la app gana).
-	mux.HandleFunc("/api/v1/env/global", d.handleGlobalEnv)
+	// Env global y por app: listas solo con claves; valores por clave.
+	mux.HandleFunc("/api/v1/env", d.handleEnvIndex)
+	mux.HandleFunc("/api/v1/env/", d.handleEnvSub)
 
 	// GitHub App: estado, alcance de repos e instalación.
 	mux.HandleFunc("/api/v1/github", d.handleGithub)
@@ -195,13 +208,18 @@ func NewHandler(d Deps) http.Handler {
 	// Observability flota: serie req/errores por hora + restarts + caídas.
 	mux.HandleFunc("/api/v1/observability", d.handleObservability)
 
-	// TLS de un dominio (desde cache ACME; sin manager = no manejado).
-	mux.HandleFunc("/api/v1/domains/", d.handleDomainTLS)
+	// Preflight DNS antes de crear una ruta.
+	mux.HandleFunc("/api/v1/domains/preflight", d.handleDomainPreflight)
+
+	// Detalle de un dominio (ruta, app, TLS y DNS).
+	mux.HandleFunc("/api/v1/domains/", d.handleDomainDetail)
 
 	// Alertas: lista viewer, alta/baja operator. Evaluación en tick
 	// del servicio (kind=alert en events).
 	mux.HandleFunc("/api/v1/alerts", d.handleAlerts)
 	mux.HandleFunc("/api/v1/alerts/", d.handleAlert)
+	mux.HandleFunc("/api/v1/alert-channels", d.handleAlertChannels)
+	mux.HandleFunc("/api/v1/alert-channels/", d.handleAlertChannel)
 
 	// Proxy: routes con alcance real (dial) + TLS por host.
 	mux.HandleFunc("/api/v1/proxy", d.handleProxy)

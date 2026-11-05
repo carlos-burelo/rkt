@@ -226,6 +226,9 @@ func (d *Deps) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.th.ok(ip)
+	if err := d.DB.UpdateLastLogin(in.User); err == nil {
+		_ = d.DB.AddAudit(in.User, "login", in.User, ip)
+	}
 	tok, err := d.DB.NewSession(in.User, store.SessionTTL)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -281,6 +284,7 @@ func (d *Deps) handleUsers(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		_ = d.DB.AddAudit(mustUser(r), "user.create", in.Name, netutil.ClientIP(r))
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, map[string]string{"ok": "true"})
 	default:
@@ -288,25 +292,157 @@ func (d *Deps) handleUsers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleUser borra un usuario por nombre (solo admin).
+// handleUser gestiona /users/{name}: PUT rol/estado, DELETE, password y
+// sesiones. `me` se resuelve al usuario de la sesión.
 func (d *Deps) handleUser(w http.ResponseWriter, r *http.Request) {
+	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/users/"), "/")
+	parts := strings.Split(rest, "/")
+	name := parts[0]
+	action := ""
+	if len(parts) > 1 {
+		action = parts[1]
+	}
+	sessionID := ""
+	if len(parts) > 2 {
+		sessionID = parts[2]
+	}
+	me, role := UserOf(r)
+	if name == "" || name == "me" {
+		name = me
+	}
+	self := name == me
+	admin := roleLevel(role) >= roleLevel(store.RoleAdmin)
+
+	switch {
+	case action == "" && r.Method == http.MethodPut:
+		if !admin {
+			writeErr(w, http.StatusForbidden, "requiere rol admin")
+			return
+		}
+		var in struct {
+			Role     string `json:"role"`
+			Disabled *bool  `json:"disabled"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
+			writeErr(w, http.StatusBadRequest, "JSON inválido")
+			return
+		}
+		if in.Role != "" {
+			if err := d.DB.SetUserRole(name, in.Role); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			_ = d.DB.AddAudit(me, "user.role", name, netutil.ClientIP(r))
+		}
+		if in.Disabled != nil {
+			if self && *in.Disabled {
+				writeErr(w, http.StatusBadRequest, "no puedes deshabilitar tu propia cuenta")
+				return
+			}
+			if err := d.DB.SetUserDisabled(name, *in.Disabled); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			_ = d.DB.AddAudit(me, "user.disabled", name, netutil.ClientIP(r))
+		}
+		writeJSON(w, map[string]string{"ok": "true"})
+	case action == "" && r.Method == http.MethodDelete:
+		if !admin {
+			writeErr(w, http.StatusForbidden, "requiere rol admin")
+			return
+		}
+		if self {
+			writeErr(w, http.StatusBadRequest, "no puedes borrar tu propia cuenta")
+			return
+		}
+		if err := d.DB.DeleteUser(name); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		_ = d.DB.AddAudit(me, "user.delete", name, netutil.ClientIP(r))
+		writeJSON(w, map[string]string{"ok": "true"})
+	case action == "password" && r.Method == http.MethodPut:
+		if !self && !admin {
+			writeErr(w, http.StatusForbidden, "requiere rol admin")
+			return
+		}
+		var in struct {
+			Current string `json:"current"`
+			Next    string `json:"next"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
+			writeErr(w, http.StatusBadRequest, "JSON inválido")
+			return
+		}
+		if self {
+			if _, err := d.DB.CheckPassword(name, in.Current); err != nil {
+				writeErr(w, http.StatusUnauthorized, "contraseña actual incorrecta")
+				return
+			}
+		}
+		if err := d.DB.SetPassword(name, in.Next); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		_ = d.DB.AddAudit(me, "user.password", name, netutil.ClientIP(r))
+		if self {
+			tok, err := d.DB.NewSession(name, store.SessionTTL)
+			if err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			http.SetCookie(w, &http.Cookie{
+				Name: "rkt_token", Value: tok, Path: "/",
+				HttpOnly: true, SameSite: http.SameSiteLaxMode,
+				MaxAge: int(store.SessionTTL.Seconds()),
+			})
+			writeJSON(w, map[string]any{"ok": true, "token": tok})
+			return
+		}
+		writeJSON(w, map[string]string{"ok": "true"})
+	case action == "sessions" && r.Method == http.MethodGet:
+		if !self && !admin {
+			writeErr(w, http.StatusForbidden, "requiere rol admin")
+			return
+		}
+		sessions, err := d.DB.ListSessions(name)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		current := store.TokenHash(bearerOf(r))
+		writeJSON(w, map[string]any{"sessions": sessions, "current": current})
+	case action == "sessions" && sessionID != "" && r.Method == http.MethodDelete:
+		if !self && !admin {
+			writeErr(w, http.StatusForbidden, "requiere rol admin")
+			return
+		}
+		if err := d.DB.RevokeSession(name, sessionID); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		_ = d.DB.AddAudit(me, "session.revoke", name, netutil.ClientIP(r))
+		writeJSON(w, map[string]string{"ok": "true"})
+	default:
+		writeErr(w, http.StatusNotFound, "ruta de usuario inválida")
+	}
+}
+
+// handleAudit lista la auditoría (admin).
+func (d *Deps) handleAudit(w http.ResponseWriter, r *http.Request) {
 	if !requireAdmin(w, r) {
 		return
 	}
-	if r.Method != http.MethodDelete {
-		writeErr(w, http.StatusMethodNotAllowed, "solo DELETE")
+	if r.Method != http.MethodGet {
+		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
 		return
 	}
-	name := strings.TrimPrefix(r.URL.Path, "/api/v1/users/")
-	if name == "" || strings.Contains(name, "/") {
-		writeErr(w, http.StatusBadRequest, "nombre inválido")
+	rows, err := d.DB.ListAudit(100)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := d.DB.DeleteUser(name); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, map[string]string{"ok": "true"})
+	writeJSON(w, rows)
 }
 
 // mustUser usuario autenticado (ruta ya pasó RequireAuth).

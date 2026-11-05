@@ -5,12 +5,17 @@ export async function listApps(): Promise<AppMeta[]> {
   return api<AppMeta[]>("/api/v1/apps");
 }
 
-export async function appAction(name: string, action: "restart" | "deploy" | "rollback"): Promise<void> {
+export async function appAction(name: string, action: "restart" | "deploy" | "rollback" | "start" | "stop"): Promise<void> {
   await api(`/api/v1/apps/${name}/${action}`, { method: "POST" });
 }
 
-export async function getEnv(app: string): Promise<Record<string, string>> {
-  return api<Record<string, string>>(`/api/v1/apps/${app}/env`);
+export async function getEnvKeys(app: string): Promise<string[]> {
+  return api<string[]>(`/api/v1/apps/${app}/env`);
+}
+
+export async function getEnvValue(app: string, key: string): Promise<string> {
+  const res = await api<{ value: string }>(`/api/v1/apps/${app}/env/${encodeURIComponent(key)}`);
+  return res.value;
 }
 
 export async function getUsage(app: string, windowSec = 300): Promise<AppUsage> {
@@ -28,12 +33,16 @@ export async function listGithubRepos(): Promise<GithubRepo[]> {
   return api<GithubRepo[]>("/api/v1/github/repos");
 }
 
-export async function setEnv(app: string, key: string, value: string): Promise<void> {
-  await api(`/api/v1/apps/${app}/env`, { method: "PUT", body: JSON.stringify({ key, value }) });
+export async function patchAppEnv(app: string, set: Record<string, string>, unset: string[] = []): Promise<void> {
+  await api(`/api/v1/apps/${app}/env`, { method: "PATCH", body: JSON.stringify({ set, unset }) });
 }
 
-export async function delEnv(app: string, key: string): Promise<void> {
-  await api(`/api/v1/apps/${app}/env?key=${encodeURIComponent(key)}`, { method: "DELETE" });
+export async function importAppEnv(app: string, raw: string): Promise<string[]> {
+  const res = await api<{ keys: string[] }>(`/api/v1/apps/${app}/env/import`, {
+    method: "POST",
+    body: JSON.stringify({ raw }),
+  });
+  return res.keys ?? [];
 }
 
 export interface AppPatch {
@@ -43,10 +52,12 @@ export interface AppPatch {
   env_file?: string;
   static?: string;
   port?: number;
-  domain?: string;
+  domains?: string[];
   restart_delay?: string;
   min_uptime?: string;
   memory_mb?: number;
+  disabled?: boolean;
+  health_path?: string;
   deploy?: { repo: string; ref: string; build: string[]; auto: boolean } | null;
 }
 
@@ -62,7 +73,7 @@ export interface CreateAppIn {
   repo?: string;
   name?: string;
   runtime?: "managed" | "external";
-  domain?: string;
+  domains?: string[];
   port?: number;
   command?: string;
   dir?: string;

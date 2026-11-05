@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router";
-import { ExternalLink, RotateCw } from "lucide-react";
+import { ExternalLink, Play, RotateCw, Square } from "lucide-react";
 import { toast } from "sonner";
 import { Dot, StatusBadge } from "../../shared/components/ui";
 import { stateLabel } from "../../shared/lib/labels";
@@ -52,7 +52,7 @@ export function AppTabs() {
 
   const meta = metas.find((m) => m.name === name);
   const st = status?.apps.find((a) => a.name === name);
-  const state = st?.failed ? "failed" : st?.running ? (st.http_ok === false ? "degraded" : "running") : "stopped";
+  const state = meta?.disabled ? "stopped" : st?.failed ? "failed" : st?.running ? (st.http_ok === false ? "degraded" : "running") : "stopped";
   const domains = meta?.domains ?? [];
   const external = !!meta?.external;
   const tabs = TABS.filter((tab) => !(external && tab.id === "deploys"));
@@ -95,6 +95,15 @@ export function AppTabs() {
             )}
             {canWrite && name && !external && (
               <>
+                {meta?.disabled ? (
+                  <Button variant="outline" size="sm" onClick={() => act(name, "start")}>
+                    <Play className="h-3 w-3" /> {t("apps.actions.start")}
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => act(name, "stop")}>
+                    <Square className="h-3 w-3" /> {t("apps.actions.stop")}
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={() => act(name, "restart")}>
                   <RotateCw className="h-3 w-3" /> {t("apps.actions.restart")}
                 </Button>

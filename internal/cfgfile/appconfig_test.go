@@ -19,9 +19,9 @@ func fleetWithApp(port string) *config.Config {
 	}
 }
 
-func TestSetAppDomainReemplazaHostsDelPuerto(t *testing.T) {
+func TestSetAppDomainsReemplazaHostsDelPuerto(t *testing.T) {
 	cp := fleetWithApp("3001")
-	if err := SetAppDomain(cp, "coatlin", "https://coatl-in.localhost/"); err != nil {
+	if err := SetAppDomains(cp, "coatlin", []string{"https://coatl-in.localhost/"}); err != nil {
 		t.Fatal(err)
 	}
 	var own, other int
@@ -41,9 +41,9 @@ func TestSetAppDomainReemplazaHostsDelPuerto(t *testing.T) {
 	}
 }
 
-func TestSetAppDomainVacioQuitaDominio(t *testing.T) {
+func TestSetAppDomainsVacioQuitaDominio(t *testing.T) {
 	cp := fleetWithApp("3001")
-	if err := SetAppDomain(cp, "coatlin", ""); err != nil {
+	if err := SetAppDomains(cp, "coatlin", nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(cp.Routes) != 1 || cp.Routes[0].Hosts[0] != "otra.test" {

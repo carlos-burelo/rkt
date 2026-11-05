@@ -1,25 +1,30 @@
 package app
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"rkt-proxy/internal/alerts"
+	"rkt-proxy/internal/appusage"
+	"rkt-proxy/internal/appview"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/deploy"
 	"rkt-proxy/internal/discover"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/logx"
+	"rkt-proxy/internal/procstat"
 	"rkt-proxy/internal/store"
 	"rkt-proxy/internal/weblog"
 )
 
-// alertLoop evalúa reglas cada minuto: failed por app desde events,
-// error_rate global desde access.log (entries no traen app).
-// Disparo = evento kind=alert + cooldown de ventana.
+// alertLoop evalúa reglas cada minuto con datos reales (events,
+// access.log, supervisor) y entrega webhooks con reintentos.
 func (p *Program) alertLoop(live *config.Live, db *store.DB) {
-	_ = live
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
 	for range t.C {
@@ -29,45 +34,155 @@ func (p *Program) alertLoop(live *config.Live, db *store.DB) {
 		}
 		now := time.Now().UTC()
 		evs, _ := db.ListEvents(500, "", "")
+		entries := weblog.ParseFile(filepath.Join(logx.DirFor(p.cfgPath), "access.log"))
+		cfg := live.Get()
+		statuses := map[string]int{}
+		for _, s := range p.sup.Snapshot() {
+			statuses[s.Name] = s.Pid
+		}
 		for _, r := range rules {
-			since := now.Add(-time.Duration(r.WindowMin) * time.Minute)
-			failed := 0
-			for _, e := range evs {
-				t, err := time.Parse(time.RFC3339, e.Ts)
-				if err != nil || t.Before(since) {
-					continue
-				}
-				if r.App != "*" && e.App != r.App {
-					continue
-				}
-				if e.Kind == "died" || e.Kind == "failed" {
-					failed++
-				}
+			if !r.Enabled {
+				continue
 			}
-			rate := 0.0
-			if r.Kind == "error_rate" {
-				total, errs := 0, 0
-				for _, e := range weblog.ParseFile(filepath.Join(logx.DirFor(p.cfgPath), "access.log")) {
-					if e.Time.Before(since) {
-						continue
-					}
-					total++
-					if e.Status >= 500 {
-						errs++
-					}
-				}
-				if total > 0 {
-					rate = float64(errs) / float64(total)
-				}
-			}
-			if alerts.Fired(r, failed, rate, now) {
-				msg := alerts.Describe(r)
-				if err := db.InsertEvent("alert", r.App, msg); err == nil {
+			m := p.metricsFor(r, cfg, entries, evs, statuses, now)
+			if alerts.Fired(r, m, now) {
+				msg := alerts.Describe(r, m)
+				fireID, err := db.AddFire(r.ID, m.Value(r.Kind), r.Threshold, msg)
+				if err == nil {
+					_ = db.InsertEvent("alert", r.App, msg)
 					_ = db.MarkFired(r.ID, now)
+					if r.ChannelID > 0 {
+						_, _ = db.EnqueueDelivery(fireID, r.ChannelID)
+					}
 					p.log.Warn("alerta disparada", "regla", r.ID, "msg", msg)
 				}
 			}
 		}
+		p.deliverAlerts(db, now)
+	}
+}
+
+func (p *Program) metricsFor(r store.AlertRule, cfg *config.Config, entries []weblog.Entry, evs []store.Event, statuses map[string]int, now time.Time) alerts.Metrics {
+	since := now.Add(-time.Duration(r.WindowMin) * time.Minute)
+	var m alerts.Metrics
+	hosts := map[string]bool{}
+	if r.App != "*" {
+		if a := cfgfile.FindApp(cfg, r.App); a != nil {
+			for _, h := range appview.Domains(cfg, *a) {
+				hosts[h] = true
+			}
+		}
+	}
+	var durs []time.Duration
+	for _, e := range entries {
+		if e.Time.Before(since) {
+			continue
+		}
+		if r.App != "*" && !hosts[e.Host] {
+			continue
+		}
+		if e.Status >= 500 {
+			m.Failed++
+		}
+		if e.Dur > 0 {
+			durs = append(durs, e.Dur)
+		}
+	}
+	if m.Failed > 0 {
+		// error_rate usa el total de la misma ventana, no solo 5xx.
+		total := 0
+		for _, e := range entries {
+			if e.Time.After(since) && (r.App == "*" || hosts[e.Host]) {
+				total++
+			}
+		}
+		if total > 0 {
+			m.ErrRate = float64(m.Failed) / float64(total)
+		}
+	}
+	for _, e := range evs {
+		t, err := time.Parse(time.RFC3339, e.Ts)
+		if err != nil || t.Before(since) || (r.App != "*" && e.App != r.App) {
+			continue
+		}
+		if e.Kind == "died" || e.Kind == "failed" {
+			m.Failed++
+		}
+	}
+	if len(durs) > 0 {
+		sortDurations(durs)
+		i := int(float64(len(durs)) * 0.95)
+		if i >= len(durs) {
+			i = len(durs) - 1
+		}
+		m.P95ms = float64(durs[i].Milliseconds())
+	}
+	if r.App != "*" {
+		if pid := statuses[r.App]; pid > 0 {
+			if s, err := procstat.Read(pid); err == nil {
+				m.MemoryMB = float64(s.RSSBytes) / 1048576
+			}
+		} else {
+			m.DownMin = r.WindowMin
+		}
+		if quota, _ := strconv.ParseInt(p.db.GetSetting(store.KeyQuotaBytes), 10, 64); quota > 0 {
+			if a := cfgfile.FindApp(cfg, r.App); a != nil {
+				if rep, err := appusage.Collect(appusage.Input{App: *a, Cfg: cfg, LogsDir: logx.DirFor(p.cfgPath)}); err == nil {
+					m.DiskPct = float64(rep.DiskBytes) / float64(quota) * 100
+				}
+			}
+		}
+	}
+	return m
+}
+
+func sortDurations(d []time.Duration) {
+	for i := 1; i < len(d); i++ {
+		for j := i; j > 0 && d[j] < d[j-1]; j-- {
+			d[j], d[j-1] = d[j-1], d[j]
+		}
+	}
+}
+
+func (p *Program) deliverAlerts(db *store.DB, now time.Time) {
+	pending, err := db.PendingDeliveries(20)
+	if err != nil {
+		return
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	for _, d := range pending {
+		ts, _ := time.Parse(time.RFC3339, d.NextAt)
+		if d.NextAt != "" && now.Before(ts) {
+			continue
+		}
+		body, _ := json.Marshal(map[string]any{
+			"source": "rkt", "fire_id": d.FireID, "channel_id": d.ChannelID, "ts": now.Format(time.RFC3339),
+		})
+		req, err := http.NewRequest(http.MethodPost, d.URL, bytes.NewReader(body))
+		if err != nil {
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req)
+		attempts := d.Attempts + 1
+		if err != nil || resp.StatusCode >= 300 {
+			msg := "sin respuesta"
+			if err != nil {
+				msg = err.Error()
+			} else {
+				resp.Body.Close()
+				msg = "http " + strconv.Itoa(resp.StatusCode)
+			}
+			status := "pending"
+			next := now.Add(time.Duration(attempts*30) * time.Second).Format(time.RFC3339)
+			if attempts >= 5 {
+				status, next = "failed", ""
+			}
+			_ = db.MarkDelivery(d.ID, status, attempts, next, msg)
+			continue
+		}
+		resp.Body.Close()
+		_ = db.MarkDelivery(d.ID, "sent", attempts, "", "")
 	}
 }
 

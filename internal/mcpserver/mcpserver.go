@@ -293,14 +293,14 @@ type eventsArg struct {
 	App  string `json:"app,omitempty" jsonschema:"filtra por app (vacío = todas)"`
 }
 type appsAddArg struct {
-	Repo    string `json:"repo,omitempty" jsonschema:"repo git https o dir local (sugiere valores)"`
-	Name    string `json:"name,omitempty" jsonschema:"nombre [a-z0-9-] (default: slug del repo)"`
-	Runtime string `json:"runtime,omitempty" jsonschema:"managed (default) | external (solo proxy, sin proceso)"`
-	Domain  string `json:"domain,omitempty" jsonschema:"dominio (default: <nombre>.<base_domain>)"`
-	Port    int    `json:"port,omitempty" jsonschema:"puerto local (default: libre del pool)"`
-	Command string `json:"command,omitempty" jsonschema:"binario absoluto (default: detectado del plan)"`
-	Dir     string `json:"dir,omitempty" jsonschema:"dir app (default: estándar por OS)"`
-	Auto    bool   `json:"auto,omitempty" jsonschema:"auto-deploy"`
+	Repo    string   `json:"repo,omitempty" jsonschema:"repo git https o dir local (sugiere valores)"`
+	Name    string   `json:"name,omitempty" jsonschema:"nombre [a-z0-9-] (default: slug del repo)"`
+	Runtime string   `json:"runtime,omitempty" jsonschema:"managed (default) | external (solo proxy, sin proceso)"`
+	Domains []string `json:"domains,omitempty" jsonschema:"dominios iniciales (default: <nombre>.<base_domain>)"`
+	Port    int      `json:"port,omitempty" jsonschema:"puerto local (default: libre del pool)"`
+	Command string   `json:"command,omitempty" jsonschema:"binario absoluto (default: detectado del plan)"`
+	Dir     string   `json:"dir,omitempty" jsonschema:"dir app (default: estándar por OS)"`
+	Auto    bool     `json:"auto,omitempty" jsonschema:"auto-deploy"`
 }
 type envSetArg struct {
 	App   string `json:"app,omitempty" jsonschema:"nombre de la app"`
@@ -323,16 +323,18 @@ type removeAppArg struct {
 	KeepRoutes bool   `json:"keep_routes,omitempty" jsonschema:"conservar rutas huérfanas (default: borrarlas)"`
 }
 type appUpdateArg struct {
-	App       string    `json:"app" jsonschema:"nombre de la app"`
-	Domain    *string   `json:"domain,omitempty" jsonschema:"dominio (vacío = quitarlo)"`
-	Port      *int      `json:"port,omitempty" jsonschema:"puerto local (retargeta rutas)"`
-	Static    *string   `json:"static,omitempty" jsonschema:"dir servido como estático"`
-	EnvFile   *string   `json:"env_file,omitempty" jsonschema:"dotenv adicional"`
-	Command   *string   `json:"command,omitempty" jsonschema:"binario de arranque"`
-	Dir       *string   `json:"dir,omitempty" jsonschema:"directorio de trabajo"`
-	Args      *[]string `json:"args,omitempty" jsonschema:"argumentos del proceso"`
-	MemoryMB  *uint64   `json:"memory_mb,omitempty" jsonschema:"límite RAM en MB (0 = sin tope)"`
-	MinUptime *string   `json:"min_uptime,omitempty" jsonschema:"uptime mínimo sano (ej 10s)"`
+	App        string    `json:"app" jsonschema:"nombre de la app"`
+	Domains    *[]string `json:"domains,omitempty" jsonschema:"hosts de la app (vacío = quitar todos)"`
+	Port       *int      `json:"port,omitempty" jsonschema:"puerto local (retargeta rutas)"`
+	Static     *string   `json:"static,omitempty" jsonschema:"dir servido como estático"`
+	EnvFile    *string   `json:"env_file,omitempty" jsonschema:"dotenv adicional"`
+	Command    *string   `json:"command,omitempty" jsonschema:"binario de arranque"`
+	Dir        *string   `json:"dir,omitempty" jsonschema:"directorio de trabajo"`
+	Args       *[]string `json:"args,omitempty" jsonschema:"argumentos del proceso"`
+	MemoryMB   *uint64   `json:"memory_mb,omitempty" jsonschema:"límite RAM en MB (0 = sin tope)"`
+	MinUptime  *string   `json:"min_uptime,omitempty" jsonschema:"uptime mínimo sano (ej 10s)"`
+	Disabled   *bool     `json:"disabled,omitempty" jsonschema:"app detenida (true) o activa (false)"`
+	HealthPath *string   `json:"health_path,omitempty" jsonschema:"ruta de salud (default /)"`
 }
 
 // doAppsAdd registra app con inferencia (igual que `apps add` sin flags).
@@ -343,7 +345,7 @@ func (s *Server) doAppsAdd(a appsAddArg) (string, error) {
 	}
 	defer db.Close()
 	gh, _ := githubNew(cfg)
-	app, domains, port, err := cfgfile.CreateAndAdd(db, gh, a.Runtime, a.Repo, a.Name, a.Domain, a.Port, a.Command, a.Dir, a.Auto)
+	app, domains, port, err := cfgfile.CreateAndAdd(db, gh, a.Runtime, a.Repo, a.Name, a.Domains, a.Port, a.Command, a.Dir, a.Auto)
 	if err != nil {
 		return "", err
 	}
@@ -522,6 +524,27 @@ func (s *Server) doBuild(app string) (string, error) {
 	}
 }
 
+// doAppSetDisabled detiene o arranca una app (persistente).
+func (s *Server) doAppSetDisabled(name string, disabled bool) (string, error) {
+	if name == "" {
+		return "", fmt.Errorf("falta app")
+	}
+	_, db, err := cfgfile.LoadMerged(s.cfgPath)
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
+		return cfgfile.UpdateApp(cp, name, cfgfile.AppPatch{Disabled: &disabled})
+	}); err != nil {
+		return "", err
+	}
+	if disabled {
+		return "app detenida (el servicio la aplica en ≤10s)", nil
+	}
+	return "app activa (el servicio la arranca en ≤10s)", nil
+}
+
 // doAppUpdate cambia dominio/puerto/proceso; el servicio aplica ≤10s.
 func (s *Server) doAppUpdate(a appUpdateArg) (string, error) {
 	if a.App == "" {
@@ -535,7 +558,7 @@ func (s *Server) doAppUpdate(a appUpdateArg) (string, error) {
 	patch := cfgfile.AppPatch{
 		Command: a.Command, Args: a.Args, Dir: a.Dir, Static: a.Static,
 		EnvFile: a.EnvFile, MemoryMB: a.MemoryMB, MinUptime: a.MinUptime,
-		Port: a.Port, Domain: a.Domain,
+		Port: a.Port, Domains: a.Domains, Disabled: a.Disabled, HealthPath: a.HealthPath,
 	}
 	if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
 		return cfgfile.UpdateApp(cp, a.App, patch)
@@ -647,6 +670,14 @@ func (s *Server) Run(ctx context.Context) error {
 	mcp.AddTool(srv, &mcp.Tool{Name: "rollback", Description: "Vuelve una app a live.prev (tarda: swap+restart+health)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doRollback(a.App))
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "stop", Description: "Detiene una app de forma persistente (no arranca hasta start)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a appArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doAppSetDisabled(a.App, true))
+		})
+	mcp.AddTool(srv, &mcp.Tool{Name: "start", Description: "Arranca una app detenida y limpia disabled."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a appArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doAppSetDisabled(a.App, false))
 		})
 	mcp.AddTool(srv, &mcp.Tool{Name: "deploy", Description: "Publica una app desde git (tarda minutos: clone+build+swap). Vigila con deployments_list."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appArg) (*mcp.CallToolResult, any, error) {

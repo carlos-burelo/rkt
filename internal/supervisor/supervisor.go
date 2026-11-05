@@ -125,7 +125,7 @@ func (m *Manager) Apply(specs []config.App, global map[string]string) {
 	m.global = global
 	eff := make([]config.App, 0, len(specs))
 	for _, s := range specs {
-		if s.External() {
+		if s.External() || s.Disabled {
 			continue
 		}
 		eff = append(eff, m.effective(s))
@@ -223,6 +223,9 @@ func equalMap(a, b map[string]string) bool {
 // Start lanza todas en goroutines. No bloquea.
 func (m *Manager) Start() {
 	for _, a := range m.snapshotApps() {
+		if a.cfg.Disabled {
+			continue
+		}
 		a.onEvent = m.OnEvent
 		go a.loop()
 	}
@@ -252,6 +255,9 @@ func (m *Manager) Restart(name string) bool {
 	for _, a := range apps {
 		if a.cfg.Name != name {
 			continue
+		}
+		if a.cfg.Disabled {
+			return false
 		}
 		a.mu.Lock()
 		a.failed = false

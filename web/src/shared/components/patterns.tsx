@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CopyButton } from "./feedback";
 import { rel } from "../lib/time";
 import { cn } from "@/lib/utils";
@@ -201,24 +201,44 @@ export function Time({ iso, className }: { iso: string; className?: string }) {
   );
 }
 
-// EnvSecret valor enmascarado con revelar + copiar (higiene secretos).
-export function EnvSecret({ value }: { value: string }) {
+// EnvSecret valor enmascarado con revelar + copiar. Si no llega el valor,
+// lo pide al backend la primera vez que se revela.
+export function EnvSecret({ value, load }: { value?: string; load?: () => Promise<string> }) {
   const { t } = useI18n();
   const [show, setShow] = useState(false);
+  const [val, setVal] = useState<string | null>(value ?? null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    setVal(value ?? null);
+  }, [value]);
   const toggle = show ? t("shared.envSecret.hide") : t("shared.envSecret.show");
+  const reveal = async () => {
+    if (!show && val === null && load) {
+      try {
+        setVal(await load());
+        setErr(false);
+      } catch {
+        setErr(true);
+        return;
+      }
+    }
+    setShow(!show);
+  };
   return (
     <span className="flex min-w-0 flex-1 items-center gap-1.5">
       <span className="tnum min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
-        {show ? value : "••••••••"}
+        {show ? (val ?? "") : "••••••••"}
       </span>
       <button
-        onClick={() => setShow(!show)}
-        className="shrink-0 rounded-[1px] px-1 font-mono text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+        onClick={reveal}
+        className={`shrink-0 rounded-[1px] px-1 font-mono text-[10px] hover:bg-accent hover:text-foreground ${
+          err ? "text-bad" : "text-muted-foreground"
+        }`}
         title={toggle}
       >
-        {toggle}
+        {err ? t("common.error") : toggle}
       </button>
-      <CopyButton text={value} />
+      {val !== null && <CopyButton text={val} />}
     </span>
   );
 }

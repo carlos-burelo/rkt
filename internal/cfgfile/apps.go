@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 
 	"rkt-proxy/internal/config"
@@ -18,20 +19,28 @@ import (
 
 // CreateAndAdd es el alta canónica: infiere (repo/dir) o registra externa,
 // valida y persiste app+rutas. API, MCP y CLI no reimplementan el flujo.
-func CreateAndAdd(db *store.DB, gh *github.Manager, runtime, repo, name, domain string, port int, command, dir string, auto bool) (config.App, []string, string, error) {
+// domains vacío deja que la inferencia elija el dominio inicial.
+func CreateAndAdd(db *store.DB, gh *github.Manager, runtime, repo, name string, domains []string, port int, command, dir string, auto bool) (config.App, []string, string, error) {
 	var (
 		app     config.App
-		domains []string
+		initial []string
 		portS   string
 		err     error
 	)
+	primary := ""
+	if len(domains) > 0 {
+		primary = domains[0]
+	}
 	if runtime == config.RuntimeExternal {
-		app, domains, portS, err = CreateExternalApp(db, name, domain, dir, port)
+		app, initial, portS, err = CreateExternalApp(db, name, primary, dir, port)
 	} else {
-		app, domains, portS, err = CreateApp(db, gh, repo, name, domain, port, command, dir, auto)
+		app, initial, portS, err = CreateApp(db, gh, repo, name, primary, port, command, dir, auto)
 	}
 	if err != nil {
 		return config.App{}, nil, "", err
+	}
+	if len(domains) == 0 {
+		domains = initial
 	}
 	if _, err := MutateFleet(db, func(cp *config.Config) error {
 		return AddAppConfig(cp, app, domains, portS)
@@ -72,12 +81,16 @@ func AddAppConfig(cfg *config.Config, app config.App, domains []string, port str
 		return fmt.Errorf("inválido, no guardado: %w", err)
 	}
 	routes := cfg.Routes
+	hosts := make([]string, 0, len(domains))
 	for _, h := range domains {
 		if port == "" {
 			return fmt.Errorf("domain sin port")
 		}
+		hosts = append(hosts, h)
+	}
+	if len(hosts) > 0 {
 		routes = append(routes, config.Route{
-			Hosts: []string{h}, Target: "http://127.0.0.1:" + port,
+			Hosts: hosts, Target: "http://127.0.0.1:" + port,
 		})
 	}
 	if err := config.ValidateRoutes(routes); err != nil {
@@ -85,6 +98,94 @@ func AddAppConfig(cfg *config.Config, app config.App, domains []string, port str
 	}
 	cfg.Apps = append(cfg.Apps, app)
 	cfg.Routes = routes
+	return nil
+}
+
+// PatchEnv aplica set/unset atómico sobre el entorno global (appName "")
+// o de una app. Un solo camino para API, CLI y MCP.
+func PatchEnv(db *store.DB, appName string, set map[string]string, unset []string) error {
+	if appName == "" {
+		_, err := MutateInfra(db, func(cfg *config.Config) error {
+			return ApplyEnvPatch(cfg, "", set, unset)
+		})
+		return err
+	}
+	_, err := MutateFleet(db, func(cfg *config.Config) error {
+		return ApplyEnvPatch(cfg, appName, set, unset)
+	})
+	return err
+}
+
+// ApplyEnvPatch muta una copia y publica solo si todo valida.
+func ApplyEnvPatch(cfg *config.Config, appName string, set map[string]string, unset []string) error {
+	keys := make([]string, 0, len(set))
+	for k := range set {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range unset {
+		if err := ValidateEnvKey(k); err != nil {
+			return err
+		}
+	}
+	for _, k := range keys {
+		if err := ValidateEnvKey(k); err != nil {
+			return err
+		}
+	}
+	if appName == "" {
+		work := cfg.Clone()
+		if work.GlobalEnv == nil {
+			work.GlobalEnv = map[string]string{}
+		}
+		for _, k := range unset {
+			delete(work.GlobalEnv, k)
+		}
+		for _, k := range keys {
+			if err := SetGlobalEnvValue(work, k, set[k]); err != nil {
+				return err
+			}
+		}
+		cfg.GlobalEnv = work.GlobalEnv
+		return nil
+	}
+	work := cfg.Clone()
+	app := FindApp(work, appName)
+	if app == nil {
+		return fmt.Errorf("app %q inexistente", appName)
+	}
+	if app.Env == nil {
+		app.Env = map[string]string{}
+	}
+	for _, k := range unset {
+		delete(app.Env, k)
+	}
+	for _, k := range keys {
+		if err := SetEnvValue(work, appName, k, set[k]); err != nil {
+			return err
+		}
+	}
+	if err := app.ValidateApp(0); err != nil {
+		return fmt.Errorf("inválido, no guardado: %w", err)
+	}
+	cfg.Apps = work.Apps
+	return nil
+}
+
+// ValidateEnvKey nombre de variable canónico. PORT se gestiona con `port`.
+func ValidateEnvKey(k string) error {
+	if k == "" {
+		return fmt.Errorf("clave vacía")
+	}
+	if k == "PORT" {
+		return fmt.Errorf("PORT se cambia con el campo port, no como variable")
+	}
+	for i, c := range k {
+		ok := c == '_' || c >= 'A' && c <= 'Z' || i > 0 && c >= '0' && c <= '9'
+		if !ok {
+			return fmt.Errorf("clave inválida %q: usa A-Z, 0-9 y _ (sin empezar por número)", k)
+		}
+	}
 	return nil
 }
 

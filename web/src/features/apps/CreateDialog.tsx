@@ -146,7 +146,7 @@ export function CreateDialog({
         name: name.trim() || undefined,
         runtime: "external",
         dir: dir.trim() || undefined,
-        domain: domain.trim() || undefined,
+        domains: domain.trim() ? [domain.trim()] : undefined,
         port: port.trim() === "" ? undefined : Number(port),
       };
       setBusy(true);
@@ -169,7 +169,7 @@ export function CreateDialog({
       name: name.trim() || undefined,
       command: command.trim() || undefined,
       dir: dir.trim() || undefined,
-      domain: domain.trim() || undefined,
+      domains: domain.trim() ? [domain.trim()] : undefined,
       port: port.trim() === "" ? undefined : Number(port),
       auto: origin === "git" ? auto : false,
     };

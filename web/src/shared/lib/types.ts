@@ -47,6 +47,25 @@ export interface User {
   name: string;
   role: string;
   created_at: string;
+  updated_at?: string;
+  last_login?: string;
+  disabled?: boolean;
+}
+
+export interface UserSession {
+  id: string;
+  user: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface AuditEntry {
+  id: number;
+  ts: string;
+  actor: string;
+  action: string;
+  target: string;
+  ip: string;
 }
 
 export interface AppMeta {
@@ -65,6 +84,10 @@ export interface AppMeta {
   restart_delay: string;
   min_uptime: string;
   memory_mb: number;
+  /** app detenida de forma persistente */
+  disabled?: boolean;
+  /** ruta de salud de la sonda */
+  health_path?: string;
   port: string;
   domains: string[];
   /** los dominios resuelven a loopback desde esta máquina */

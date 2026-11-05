@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/settings"
 )
 
 // execer lo cumplen *sql.DB, *sql.Tx y *Tx.
@@ -24,21 +25,20 @@ type queryer interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
-// Settings conocidos de flota (únicos literales canónicos).
+// Settings conocidos de flota (hogar canónico: internal/settings).
 const (
-	KeyNodeBin    = "node_bin"
-	KeyPythonBin  = "python_bin"
-	KeyBaseDomain = "base_domain"
-	KeyPortPool   = "port_pool"
-	KeySiteName   = "site_name"
-	KeyQuotaReqs  = "quota_reqs"
-	KeyQuotaBytes = "quota_bytes"
+	KeyNodeBin    = settings.KeyNodeBin
+	KeyPythonBin  = settings.KeyPythonBin
+	KeyBaseDomain = settings.KeyBaseDomain
+	KeyPortPool   = settings.KeyPortPool
+	KeySiteName   = settings.KeySiteName
+	KeyQuotaReqs  = settings.KeyQuotaReqs
+	KeyQuotaBytes = settings.KeyQuotaBytes
+	KeyPublicIP   = settings.KeyPublicIP
 )
 
 // KnownSettings lista para `settings list` y export.
-func KnownSettings() []string {
-	return []string{KeyNodeBin, KeyPythonBin, KeyBaseDomain, KeyPortPool, KeySiteName, KeyQuotaReqs, KeyQuotaBytes}
-}
+func KnownSettings() []string { return settings.Keys() }
 
 func getSetting(q queryer, key string) (string, error) {
 	var v string

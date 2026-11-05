@@ -1,5 +1,5 @@
 import {
-  LayoutGrid, Network, Rocket, Hammer, Terminal, BarChart3, Activity,
+  LayoutGrid, Rocket, Hammer, Terminal, BarChart3, Activity,
   Bell, Globe, FlaskConical, Settings, Users,
 } from "lucide-react";
 
@@ -19,7 +19,6 @@ export const GROUPS = [
     labelKey: "nav.group.serve",
     items: [
       { to: "/routes", labelKey: "nav.routes", icon: Globe },
-      { to: "/proxy", labelKey: "nav.proxy", icon: Network },
       { to: "/environment", labelKey: "nav.environment", icon: FlaskConical },
     ],
   },
@@ -47,7 +46,6 @@ export const PAGE_LABEL: Record<string, string> = {
   ci: "nav.ci",
   logs: "nav.logs",
   routes: "nav.routes",
-  proxy: "nav.proxy",
   environment: "nav.environment",
   analytics: "nav.analytics",
   observability: "nav.observability",

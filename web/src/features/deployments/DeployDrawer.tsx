@@ -1,13 +1,14 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
+import { toast } from "sonner";
 import { rel, dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
 import { deployStateLabel } from "../../shared/lib/labels";
 import { CopyButton } from "../../shared/components/feedback";
 import { Button } from "@/components/ui/button";
 import { streamLog, bust } from "../../shared/lib/http";
-import { diffDeployment, getDeployment, type DiffFile } from "./api";
+import { diffDeployment, getDeployment, cancelDeployment, type DiffFile } from "./api";
 import { Timeline } from "./Timeline";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
@@ -207,6 +208,19 @@ export function DeployDrawer() {
                       <Button variant="ghost" size="sm" onClick={() => retry(dep.id)}>
                         {t("deployments.retryId", { id: dep.id })}
                       </Button>
+                      {dep.status === "running" && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            cancelDeployment(dep.id)
+                              .then(() => toast.success(t("deployments.cancelled", { id: dep.id })))
+                              .catch((e) => toast.error(e instanceof Error ? e.message : t("common.error")));
+                          }}
+                        >
+                          {t("deployments.cancel")}
+                        </Button>
+                      )}
                     </>
                   )}
                 </div>

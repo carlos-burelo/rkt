@@ -3,6 +3,7 @@
 package platform
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,6 +37,14 @@ func Shell(step string) *exec.Cmd {
 	}
 	// Ruta absoluta: el PATH de un servicio puede venir vacío o mínimo.
 	return exec.Command("/bin/sh", "-c", step)
+}
+
+// ShellContext arranca el shell de la plataforma con cancelación.
+func ShellContext(ctx context.Context, step string) *exec.Cmd {
+	if runtime.GOOS == "windows" {
+		return exec.CommandContext(ctx, "cmd.exe", "/C", step)
+	}
+	return exec.CommandContext(ctx, "/bin/sh", "-c", step)
 }
 
 // OpenBrowser abre una URL (best effort). El caller decide si ignora el error.

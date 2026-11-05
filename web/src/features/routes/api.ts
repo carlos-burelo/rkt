@@ -17,8 +17,36 @@ export async function putRoute(host: string, target: string): Promise<void> {
   await api("/api/v1/routes", { method: "PUT", body: JSON.stringify({ host, target }) });
 }
 
-export async function tlsStatus(host: string): Promise<{ managed: boolean; expires: string }> {
-  return api<{ managed: boolean; expires: string }>(`/api/v1/domains/${encodeURIComponent(host)}/tls`);
+export interface DomainDetail {
+  host: string;
+  target: string;
+  app?: string;
+  tls: { managed: boolean; expires?: string };
+  dns: {
+    a: string[];
+    aaaa: string[];
+    cname?: string;
+    resolves: boolean;
+    error?: string;
+  };
+  expected?: string;
+  dns_ok: boolean;
+  checked_at: string;
+}
+
+export async function domainDetail(host: string): Promise<DomainDetail> {
+  return api<DomainDetail>(`/api/v1/domains/${encodeURIComponent(host)}`);
+}
+
+export interface DomainPreflight {
+  host: string;
+  dns: DomainDetail["dns"];
+  expected?: string;
+  dns_ok: boolean;
+}
+
+export async function preflightDomain(host: string): Promise<DomainPreflight> {
+  return api<DomainPreflight>(`/api/v1/domains/preflight?host=${encodeURIComponent(host)}`);
 }
 
 export interface DomainSuggestion {

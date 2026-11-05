@@ -27,7 +27,19 @@ func Domains(cfg *config.Config, a config.App) []string {
 			out = append(out, r.Hosts...)
 		}
 	}
+	sort.Strings(out)
 	return out
+}
+
+// Owner nombre de la app cuyo puerto sirve el target ("" si no es una app).
+func Owner(cfg *config.Config, target string) string {
+	for _, a := range cfg.Apps {
+		port := Port(a)
+		if port != "" && "http://127.0.0.1:"+port == target {
+			return a.Name
+		}
+	}
+	return ""
 }
 
 // App describe una unidad para clientes (sin secretos de Env).
@@ -60,6 +72,7 @@ func App(cfg *config.Config, a config.App) map[string]any {
 		"dir": a.Dir, "static": static, "env_file": a.EnvFile,
 		"restart_delay": a.RestartDelay, "min_uptime": a.MinUptime,
 		"memory_mb": a.MemoryMB, "port": Port(a),
+		"disabled": a.Disabled, "health_path": a.HealthPath,
 		"deploy": deploy, "domains": domains, "dns_ok": dnsOK,
 		"run_command": runCommand,
 	}

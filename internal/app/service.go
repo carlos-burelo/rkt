@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -76,6 +77,9 @@ type Program struct {
 	deployMu    sync.Mutex
 	lastDeploy  map[string]time.Time
 	rollingBack map[string]bool
+	// cancelMu protege los canceladores de despliegues en curso.
+	cancelMu      sync.Mutex
+	deployCancels map[int64]context.CancelFunc
 	// stateMu sincroniza los recursos que Stop lee mientras Run los crea.
 	stateMu sync.Mutex
 }
@@ -296,7 +300,7 @@ func (p *Program) Run() {
 	}()
 	if cfg.Healthz.Enabled {
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.restartApp, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal})
-		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) { p.sup.Apply(apps, global) }, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh})
+		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) { p.sup.Apply(apps, global) }, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh})
 		sub, err := fs.Sub(web.Dist, "dist")
 		if err != nil {
 			p.log.Error("dashboard sin dist", "err", err)
@@ -413,14 +417,18 @@ func portOpen(port string) bool {
 // probeApp verifica HTTP al puerto de la app (cache 3s: evita martillar
 // con el polling del dashboard). Sin puerto no hay probe.
 func (p *Program) probeApp(name string, live *config.Config) bool {
-	var port string
+	var port, path string
 	for i := range live.Apps {
 		if live.Apps[i].Name == name {
 			port = live.Apps[i].Env["PORT"]
+			path = live.Apps[i].HealthPath
 		}
 	}
 	if port == "" {
 		return true
+	}
+	if path == "" {
+		path = "/"
 	}
 	p.probeMu.Lock()
 	if v, ok := p.probes[name]; ok && time.Since(v.at) < 3*time.Second {
@@ -430,7 +438,7 @@ func (p *Program) probeApp(name string, live *config.Config) bool {
 	p.probeMu.Unlock()
 
 	client := &http.Client{Timeout: 800 * time.Millisecond}
-	resp, err := client.Get("http://127.0.0.1:" + port + "/")
+	resp, err := client.Get("http://127.0.0.1:" + port + path)
 	ok := false
 	if err == nil {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 2048))
@@ -608,6 +616,18 @@ func (p *Program) runDeploy(app config.App, actor string) (string, error) {
 	return rev, err
 }
 
+// cancelDeploy cancela un despliegue en curso por id.
+func (p *Program) cancelDeploy(id int64) bool {
+	p.cancelMu.Lock()
+	cancel, ok := p.deployCancels[id]
+	p.cancelMu.Unlock()
+	if !ok {
+		return false
+	}
+	cancel()
+	return true
+}
+
 // deployAppAsync arranca el deploy en segundo plano y devuelve el id de la
 // salida para seguirlo en vivo (creación de apps estilo Vercel).
 func (p *Program) deployAppAsync(name, actor string) (int64, error) {
@@ -661,11 +681,31 @@ func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, 
 	if p.db != nil {
 		depID, _ = p.db.InsertDeployment(app.Name, "", out.Name(), actor, app.Env)
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	if depID > 0 {
+		p.cancelMu.Lock()
+		if p.deployCancels == nil {
+			p.deployCancels = map[int64]context.CancelFunc{}
+		}
+		p.deployCancels[depID] = cancel
+		p.cancelMu.Unlock()
+	}
+	dropCancel := func() {
+		cancel()
+		if depID > 0 {
+			p.cancelMu.Lock()
+			delete(p.deployCancels, depID)
+			p.cancelMu.Unlock()
+		}
+	}
 	finish := func(rev string, runErr error) {
 		if p.db != nil && depID > 0 {
 			status := "ok"
 			if runErr != nil {
 				status = "failed"
+				if errors.Is(runErr, context.Canceled) {
+					status = "cancelled"
+				}
 			}
 			if ferr := p.db.FinishDeployment(depID, status, prevRev, rev); ferr != nil {
 				p.log.Warn("historial no actualizado", "err", ferr)
@@ -675,9 +715,10 @@ func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, 
 	if async {
 		release = false
 		go func() {
+			defer dropCancel()
 			defer p.endOp(app.Name)
 			defer out.Close()
-			rev, runErr := deploy.Run(app, token, &supCtl{sup: p.sup}, out, p.log)
+			rev, runErr := deploy.RunContext(ctx, app, token, &supCtl{sup: p.sup}, out, p.log)
 			if runErr != nil {
 				fmt.Fprintf(out, "\n✗ deploy fallido: %v\n", runErr)
 			} else {
@@ -688,7 +729,8 @@ func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, 
 		return depID, "", nil
 	}
 	defer out.Close()
-	rev, err := deploy.Run(app, token, &supCtl{sup: p.sup}, out, p.log)
+	defer dropCancel()
+	rev, err := deploy.RunContext(ctx, app, token, &supCtl{sup: p.sup}, out, p.log)
 	if err != nil {
 		fmt.Fprintf(out, "\n✗ deploy fallido: %v\n", err)
 	} else {

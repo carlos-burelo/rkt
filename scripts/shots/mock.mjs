@@ -155,7 +155,18 @@ const obsBuckets = Array.from({ length: 6 }, (_, i) => ({
   err: [12, 8, 19, 6, 14, 4][i],
 }));
 
-const obs = { hours: 6, buckets: obsBuckets, restarts: 3, down: ["billing-worker"] };
+const obs = {
+  hours: 6, buckets: obsBuckets,
+  classes: { "2xx": 9120, "3xx": 180, "4xx": 156, "5xx": 63 },
+  by_app: [
+    { app: "checkout", req: 4210, err: 18, bytes: 18400000, p95: "28ms" },
+    { app: "api-core", req: 3120, err: 41, bytes: 9200000, p95: "64ms" },
+    { app: "docs", req: 1630, err: 2, bytes: 4100000, p95: "19ms" },
+    { app: "admin", req: 559, err: 2, bytes: 1200000, p95: "31ms" },
+  ],
+  p50: "12ms", p95: "28ms", p99: "91ms",
+  restarts: 3, down: ["billing-worker"],
+};
 
 const settings = {
   node_bin: "C:/Program Files/nodejs/node.exe",
@@ -165,19 +176,36 @@ const settings = {
   site_name: "rkt",
   quota_reqs: "50000",
   quota_bytes: "2147483648",
+  public_ip: "203.0.113.7",
 };
 
 const users = [
-  { name: "xavi", role: "admin", created_at: iso(60 * 24 * 90) },
-  { name: "mira", role: "operator", created_at: iso(60 * 24 * 31) },
-  { name: "tomas", role: "viewer", created_at: iso(60 * 24 * 12) },
+  { name: "xavi", role: "admin", created_at: iso(60 * 24 * 90), last_login: iso(2), disabled: false },
+  { name: "mira", role: "operator", created_at: iso(60 * 24 * 31), last_login: iso(60 * 24), disabled: false },
+  { name: "tomas", role: "viewer", created_at: iso(60 * 24 * 12), last_login: iso(60 * 24 * 8), disabled: true },
+];
+
+const channels = [
+  { id: 1, name: "ops-webhook", url: "https://hooks.example.com/rkt", enabled: true, created_at: iso(60 * 24 * 10) },
+];
+
+const fires = [
+  { id: 9, rule_id: 4, ts: iso(7), value: 3, threshold: 1, message: "regla #4 · failed 3 ≥ 1", resolved_at: "" },
+  { id: 8, rule_id: 4, ts: iso(60 * 3), value: 1, threshold: 1, message: "regla #4 · failed 1 ≥ 1", resolved_at: "" },
+];
+
+const audit = [
+  { id: 4, ts: iso(2), actor: "xavi", action: "login", target: "xavi", ip: "127.0.0.1" },
+  { id: 3, ts: iso(31), actor: "xavi", action: "user.role", target: "mira", ip: "127.0.0.1" },
+  { id: 2, ts: iso(60 * 8), actor: "xavi", action: "session.revoke", target: "tomas", ip: "127.0.0.1" },
+  { id: 1, ts: iso(60 * 24 * 3), actor: "xavi", action: "user.create", target: "tomas", ip: "127.0.0.1" },
 ];
 
 const alerts = [
-  { id: 4, app: "billing-worker", kind: "failed", threshold: 1, window_min: 60, last_fired: iso(7), created_at: iso(60 * 24 * 20) },
-  { id: 3, app: "api-core", kind: "error_rate", threshold: 0.02, window_min: 15, last_fired: iso(31), created_at: iso(60 * 24 * 16) },
-  { id: 2, app: "*", kind: "error_rate", threshold: 0.05, window_min: 60, last_fired: "", created_at: iso(60 * 24 * 9) },
-  { id: 1, app: "*", kind: "failed", threshold: 2, window_min: 30, last_fired: "", created_at: iso(60 * 24 * 4) },
+  { id: 4, app: "billing-worker", kind: "failed", threshold: 1, window_min: 60, enabled: true, channel_id: 1, last_fired: iso(7), created_at: iso(60 * 24 * 20) },
+  { id: 3, app: "api-core", kind: "error_rate", threshold: 0.02, window_min: 15, enabled: true, channel_id: 1, last_fired: iso(31), created_at: iso(60 * 24 * 16) },
+  { id: 2, app: "*", kind: "latency_p95", threshold: 250, window_min: 60, enabled: true, channel_id: 0, last_fired: "", created_at: iso(60 * 24 * 9) },
+  { id: 1, app: "*", kind: "failed", threshold: 2, window_min: 30, enabled: false, channel_id: 0, last_fired: "", created_at: iso(60 * 24 * 4) },
 ];
 
 const envs = {
@@ -233,6 +261,7 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
     if (p === "/api/v1/deployments") return json(route, deps);
     if (p.startsWith("/api/v1/deployments/") && p.endsWith("/log")) return json(route, { log: buildLog });
     if (p.startsWith("/api/v1/deployments/") && p.endsWith("/retry")) return json(route, { rev: "9f3c2a1" });
+    if (p.startsWith("/api/v1/deployments/") && p.endsWith("/cancel")) return json(route, { ok: "true" });
     if (p === "/api/v1/events") return json(route, evs);
     if (p === "/api/v1/apps") return json(route, metas);
     if (p === "/api/v1/apps" && method === "POST") return json(route, { app: "nueva-app" });
@@ -250,14 +279,47 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
     }
     if (p.startsWith("/api/v1/apps/") && p.endsWith("/env")) {
       const name = decodeURIComponent(p.split("/")[4] ?? "");
-      return json(route, envs[name] ?? {});
+      if (method === "GET") return json(route, Object.keys(envs[name] ?? {}));
+      return json(route, { ok: true, restart: true });
     }
+    if (p.startsWith("/api/v1/apps/") && p.endsWith("/env/import")) return json(route, { ok: true, keys: ["IMPORTED"] });
+    if (p.startsWith("/api/v1/apps/") && p.includes("/env/")) {
+      const parts = p.split("/");
+      const name = decodeURIComponent(parts[4] ?? "");
+      const key = decodeURIComponent(parts[6] ?? "");
+      return json(route, { key, value: envs[name]?.[key] ?? "" });
+    }
+    if (p.startsWith("/api/v1/apps/") && /\/apps\/[^/]+\/(start|stop)$/.test(p)) return json(route, { ok: true });
     if (p.startsWith("/api/v1/apps/") && method !== "GET") return json(route, {});
     if (p === "/api/v1/proxy") return json(route, proxy);
     if (p === "/api/v1/routes") return json(route, method === "GET" ? routes : {});
     if (p === "/api/v1/domains/zones") return json(route, { suffixes: ["localhost", "test"], groups: [] });
-    if (p === "/api/v1/env/global") return json(route, {});
-    if (p.startsWith("/api/v1/domains/") && p.endsWith("/tls")) return json(route, { managed: true, expires: "2026-12-14" });
+    if (p === "/api/v1/domains/suggest") return json(route, { suggestions: [] });
+    if (p === "/api/v1/env") {
+      const apps = {};
+      for (const [name, vars] of Object.entries(envs)) apps[name] = Object.keys(vars);
+      return json(route, { global: ["LOG_LEVEL", "SENTRY_DSN"], apps });
+    }
+    if (p === "/api/v1/env/global") return json(route, { ok: true, restart: true });
+    if (p === "/api/v1/env/global/import") return json(route, { ok: true, keys: ["IMPORTED"] });
+    if (p.startsWith("/api/v1/env/global/")) {
+      const key = decodeURIComponent(p.split("/").pop() ?? "");
+      return json(route, { key, value: { LOG_LEVEL: "info", SENTRY_DSN: "https://..." }[key] ?? "" });
+    }
+    if (p.startsWith("/api/v1/domains/")) {
+      const host = decodeURIComponent(p.slice("/api/v1/domains/".length));
+      const routeDef = routes.find((r) => r.hosts.includes(host));
+      return json(route, {
+        host,
+        target: routeDef?.target ?? "http://127.0.0.1:3001",
+        app: metas.find((m) => (m.domains ?? []).includes(host))?.name ?? "",
+        tls: { managed: true, expires: host.includes("docs") ? "2026-10-14" : "2026-12-14" },
+        dns: { a: ["127.0.0.1"], aaaa: [], resolves: true },
+        expected: "127.0.0.1",
+        dns_ok: true,
+        checked_at: new Date().toISOString(),
+      });
+    }
     if (p === "/api/v1/analytics") return json(route, analytics);
     if (p === "/api/v1/usage") return json(route, usage);
     if (p === "/api/v1/observability") return json(route, obs);
@@ -265,8 +327,22 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
     if (p === "/api/v1/github") return json(route, { configured: false });
     if (p === "/api/v1/github/repos") return json(route, []);
     if (p === "/api/v1/users") return json(route, users);
-    if (p === "/api/v1/alerts") return json(route, alerts);
-    if (p.startsWith("/api/v1/alerts/")) return json(route, {});
+    if (p === "/api/v1/audit") return json(route, audit);
+    if (p.startsWith("/api/v1/users/") && p.endsWith("/sessions")) {
+      return json(route, {
+        current: "sess-current",
+        sessions: [
+          { id: "sess-current", user: "xavi", created_at: iso(2), expires_at: new Date(Date.now() + 30 * 86400000).toISOString() },
+          { id: "sess-old", user: "xavi", created_at: iso(60 * 24 * 9), expires_at: new Date(Date.now() + 12 * 86400000).toISOString() },
+        ],
+      });
+    }
+    if (p === "/api/v1/alerts") return json(route, method === "GET" ? alerts : { id: 5 });
+    if (p === "/api/v1/alert-channels") return json(route, method === "GET" ? channels : { id: 2 });
+    if (p.startsWith("/api/v1/alert-channels/")) return json(route, { ok: true });
+    if (p.endsWith("/fires")) return json(route, fires);
+    if (p.endsWith("/test")) return json(route, { ok: true, message: "regla de prueba" });
+    if (p.startsWith("/api/v1/alerts/")) return json(route, { ok: true });
     if (p === "/api/v1/logs/stream") {
       const body = `event: init\ndata: ${JSON.stringify({ log: logText })}\n\nevent: end\ndata: {"status":"done"}\n\n`;
       return route.fulfill({ status: 200, contentType: "text/event-stream", body });

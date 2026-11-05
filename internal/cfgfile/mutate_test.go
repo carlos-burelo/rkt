@@ -26,9 +26,10 @@ func mutateCfg(t *testing.T) *config.Config {
 
 func TestUpdateAppCanonico(t *testing.T) {
 	cfg := mutateCfg(t)
-	cmd, delay, port, domain := "nuevo.exe", "9s", 4000, "w2.test"
+	cmd, delay, port := "nuevo.exe", "9s", 4000
+	domains := []string{"w2.test", "alias.test"}
 	err := UpdateApp(cfg, "w", AppPatch{
-		Command: &cmd, RestartDelay: &delay, Port: &port, Domain: &domain,
+		Command: &cmd, RestartDelay: &delay, Port: &port, Domains: &domains,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +43,7 @@ func TestUpdateAppCanonico(t *testing.T) {
 	}
 	found := false
 	for _, r := range cfg.Routes {
-		if r.Target == "http://127.0.0.1:4000" && len(r.Hosts) == 1 && r.Hosts[0] == domain {
+		if r.Target == "http://127.0.0.1:4000" && len(r.Hosts) == 2 && r.Hosts[0] == domains[0] && r.Hosts[1] == domains[1] {
 			found = true
 		}
 	}

@@ -106,6 +106,22 @@ func (d *Deps) handleDeploymentDetail(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]string{"rev": rev})
 		return
 	}
+	if len(parts) == 2 && parts[1] == "cancel" && r.Method == http.MethodPost {
+		if !requireOperator(w, r) {
+			return
+		}
+		id, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil || id <= 0 || d.Cancel == nil {
+			writeErr(w, http.StatusBadRequest, "id inválido o cancelación deshabilitada")
+			return
+		}
+		if !d.Cancel(id) {
+			writeErr(w, http.StatusConflict, "el despliegue no está en curso")
+			return
+		}
+		writeJSON(w, map[string]string{"ok": "true"})
+		return
+	}
 	if len(parts) == 1 && r.Method == http.MethodGet {
 		id, err := strconv.ParseInt(parts[0], 10, 64)
 		if err != nil || id <= 0 {

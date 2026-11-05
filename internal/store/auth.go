@@ -30,6 +30,17 @@ type User struct {
 	Name      string `json:"name"`
 	Role      string `json:"role"`
 	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	LastLogin string `json:"last_login"`
+	Disabled  bool   `json:"disabled"`
+}
+
+// Session fila pública (id = hash del bearer, nunca el bearer).
+type Session struct {
+	ID        string `json:"id"`
+	User      string `json:"user"`
+	CreatedAt string `json:"created_at"`
+	ExpiresAt string `json:"expires_at"`
 }
 
 func validRole(r string) bool {
@@ -92,7 +103,7 @@ func (d *DB) CreateUser(name, password, role string) error {
 
 // ListUsers sin hashes.
 func (d *DB) ListUsers() ([]User, error) {
-	rows, err := d.sql.Query(`SELECT name, role, created_at FROM users ORDER BY name`)
+	rows, err := d.sql.Query(`SELECT name, role, created_at, updated_at, last_login, disabled FROM users ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +111,7 @@ func (d *DB) ListUsers() ([]User, error) {
 	out := []User{}
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.Name, &u.Role, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.Name, &u.Role, &u.CreatedAt, &u.UpdatedAt, &u.LastLogin, &u.Disabled); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -150,13 +161,136 @@ func (d *DB) SetPassword(name, password string) error {
 // CheckPassword compara password (tiempo constante en hash bcrypt).
 func (d *DB) CheckPassword(name, password string) (string, error) {
 	var hash, role string
-	if err := d.sql.QueryRow(`SELECT pass_hash, role FROM users WHERE name=?`, name).Scan(&hash, &role); err != nil {
+	var disabled bool
+	if err := d.sql.QueryRow(`SELECT pass_hash, role, disabled FROM users WHERE name=?`, name).Scan(&hash, &role, &disabled); err != nil {
 		return "", fmt.Errorf("credenciales inválidas")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
 		return "", fmt.Errorf("credenciales inválidas")
 	}
+	if disabled {
+		return "", fmt.Errorf("usuario deshabilitado")
+	}
 	return role, nil
+}
+
+// UpdateLastLogin registra el acceso correcto.
+func (d *DB) UpdateLastLogin(name string) error {
+	_, err := d.sql.Exec(`UPDATE users SET last_login=? WHERE name=?`, time.Now().UTC().Format(time.RFC3339), name)
+	return err
+}
+
+// ListSessions sesiones de un usuario.
+func (d *DB) ListSessions(user string) ([]Session, error) {
+	rows, err := d.sql.Query(`SELECT token_hash, user, created_at, expires_at FROM sessions WHERE user=? ORDER BY created_at DESC`, user)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Session{}
+	for rows.Next() {
+		var s Session
+		if err := rows.Scan(&s.ID, &s.User, &s.CreatedAt, &s.ExpiresAt); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// RevokeSession borra una sesión del usuario por hash (no toca otras cuentas).
+func (d *DB) RevokeSession(user, id string) error {
+	res, err := d.sql.Exec(`DELETE FROM sessions WHERE user=? AND token_hash=?`, user, id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("sesión inexistente")
+	}
+	return nil
+}
+
+// RevokeAllSessions borra todas las sesiones de un usuario.
+func (d *DB) RevokeAllSessions(user string) error {
+	_, err := d.sql.Exec(`DELETE FROM sessions WHERE user=?`, user)
+	return err
+}
+
+// SetUserRole cambia rol (protege al último admin).
+func (d *DB) SetUserRole(name, role string) error {
+	if !validRole(role) {
+		return fmt.Errorf("rol inválido")
+	}
+	var current string
+	var admins int
+	if err := d.sql.QueryRow(`SELECT role, (SELECT COUNT(*) FROM users WHERE role='admin') FROM users WHERE name=?`, name).
+		Scan(&current, &admins); err != nil {
+		return fmt.Errorf("usuario %q inexistente", name)
+	}
+	if current == RoleAdmin && role != RoleAdmin && admins <= 1 {
+		return fmt.Errorf("no se puede degradar el último admin")
+	}
+	_, err := d.sql.Exec(`UPDATE users SET role=?, updated_at=? WHERE name=?`, role, time.Now().UTC().Format(time.RFC3339), name)
+	return err
+}
+
+// SetUserDisabled habilita/deshabilita y revoca sesiones al deshabilitar.
+func (d *DB) SetUserDisabled(name string, disabled bool) error {
+	var role string
+	var admins int
+	if err := d.sql.QueryRow(`SELECT role, (SELECT COUNT(*) FROM users WHERE role='admin') FROM users WHERE name=?`, name).
+		Scan(&role, &admins); err != nil {
+		return fmt.Errorf("usuario %q inexistente", name)
+	}
+	if disabled && role == RoleAdmin && admins <= 1 {
+		return fmt.Errorf("no se puede deshabilitar el último admin")
+	}
+	if _, err := d.sql.Exec(`UPDATE users SET disabled=?, updated_at=? WHERE name=?`, disabled, time.Now().UTC().Format(time.RFC3339), name); err != nil {
+		return err
+	}
+	if disabled {
+		_, _ = d.sql.Exec(`DELETE FROM sessions WHERE user=?`, name)
+	}
+	return nil
+}
+
+// Audit registra una acción administrativa.
+type Audit struct {
+	ID     int64  `json:"id"`
+	Ts     string `json:"ts"`
+	Actor  string `json:"actor"`
+	Action string `json:"action"`
+	Target string `json:"target"`
+	IP     string `json:"ip"`
+}
+
+// AddAudit inserta una fila.
+func (d *DB) AddAudit(actor, action, target, ip string) error {
+	_, err := d.sql.Exec(`INSERT INTO audit(ts, actor, action, target, ip) VALUES(?,?,?,?,?)`,
+		time.Now().UTC().Format(time.RFC3339), actor, action, target, ip)
+	return err
+}
+
+// ListAudit últimas N filas.
+func (d *DB) ListAudit(limit int) ([]Audit, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := d.sql.Query(`SELECT id, ts, actor, action, target, ip FROM audit ORDER BY id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Audit{}
+	for rows.Next() {
+		var a Audit
+		if err := rows.Scan(&a.ID, &a.Ts, &a.Actor, &a.Action, &a.Target, &a.IP); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }
 
 // NewSession crea bearer para usuario (raw solo se devuelve una vez).
@@ -193,14 +327,20 @@ func (d *DB) SessionUser(token string) (string, string, bool) {
 		return "", "", false
 	}
 	var role string
-	if err := d.sql.QueryRow(`SELECT role FROM users WHERE name=?`, user).Scan(&role); err != nil {
+	var disabled bool
+	if err := d.sql.QueryRow(`SELECT role, disabled FROM users WHERE name=?`, user).Scan(&role, &disabled); err != nil || disabled {
 		return "", "", false
 	}
 	return user, role, true
 }
 
+// TokenHash id público de una sesión (hash sha256 del bearer).
+func TokenHash(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
 // DeleteSession logout (por bearer raw).
 func (d *DB) DeleteSession(token string) {
-	sum := sha256.Sum256([]byte(token))
-	_, _ = d.sql.Exec(`DELETE FROM sessions WHERE token_hash=?`, hex.EncodeToString(sum[:]))
+	_, _ = d.sql.Exec(`DELETE FROM sessions WHERE token_hash=?`, TokenHash(token))
 }

@@ -110,6 +110,49 @@ var migrations = []string{
 	);`,
 	// v10: apps externas (solo proxy, sin supervisor/deploy).
 	`ALTER TABLE apps ADD COLUMN runtime TEXT NOT NULL DEFAULT 'managed';`,
+	// v11: alertas editables, canales, historial y outbox de entrega.
+	`ALTER TABLE alert_rules ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
+	ALTER TABLE alert_rules ADD COLUMN channel_id INTEGER NOT NULL DEFAULT 0;
+	CREATE TABLE IF NOT EXISTS alert_channels (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL DEFAULT '',
+		url TEXT NOT NULL DEFAULT '',
+		enabled INTEGER NOT NULL DEFAULT 1,
+		created_at TEXT NOT NULL DEFAULT ''
+	);
+	CREATE TABLE IF NOT EXISTS alert_fires (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		rule_id INTEGER NOT NULL,
+		ts TEXT NOT NULL DEFAULT '',
+		value REAL NOT NULL DEFAULT 0,
+		threshold REAL NOT NULL DEFAULT 0,
+		message TEXT NOT NULL DEFAULT '',
+		resolved_at TEXT NOT NULL DEFAULT ''
+	);
+	CREATE TABLE IF NOT EXISTS alert_deliveries (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		fire_id INTEGER NOT NULL,
+		channel_id INTEGER NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		attempts INTEGER NOT NULL DEFAULT 0,
+		next_at TEXT NOT NULL DEFAULT '',
+		last_error TEXT NOT NULL DEFAULT ''
+	);
+	CREATE INDEX IF NOT EXISTS idx_alert_fires_rule ON alert_fires(rule_id);
+	CREATE INDEX IF NOT EXISTS idx_alert_deliveries_status ON alert_deliveries(status);`,
+	// v12: usuarios deshabilitables, último acceso y auditoría mínima.
+	`ALTER TABLE users ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';
+	ALTER TABLE users ADD COLUMN last_login TEXT NOT NULL DEFAULT '';
+	ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0;
+	CREATE TABLE IF NOT EXISTS audit (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		ts TEXT NOT NULL DEFAULT '',
+		actor TEXT NOT NULL DEFAULT '',
+		action TEXT NOT NULL DEFAULT '',
+		target TEXT NOT NULL DEFAULT '',
+		ip TEXT NOT NULL DEFAULT ''
+	);
+	CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit(ts);`,
 }
 
 // DB wrapper.

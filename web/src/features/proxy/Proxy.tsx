@@ -1,28 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { ArrowRight, X } from "lucide-react";
-import { fetchProxy, ProxyRoute } from "./api";
+import { useProxyStatus } from "./hooks";
 import { buildLinks } from "./graph";
 import { RadialMap } from "./ProxyMap";
 import { StateRail } from "../../shared/components/ui";
 import { PageHeader, EmptyState, Segmented } from "../../shared/components/patterns";
-import { useUI } from "../../app/ui";
 import { useI18n } from "../../shared/i18n";
 
 // Proxy: lo que Vercel esconde. Cada host, a dónde va, si el backend
-// responde (dial) y estado del cert. Solo lectura.
-export function Proxy() {
+// responde (dial) y estado del cert. Solo lectura. Dentro de Dominios se
+// renderiza como pestaña de diagnóstico (embedded).
+export function Proxy({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
-  const fail = useUI((u) => u.fail);
-  const [rows, setRows] = useState<ProxyRoute[] | null>(null);
+  const { rows, err } = useProxyStatus();
   const [fState, setFState] = useState<"all" | "ok" | "down">("all");
   const [fTls, setFTls] = useState<"all" | "tls" | "off">("all");
   const [selected, setSelected] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchProxy().then(setRows).catch(fail);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const links = useMemo(() => (rows ? buildLinks(rows) : []), [rows]);
   const filteredLinks = useMemo(
@@ -38,49 +32,79 @@ export function Proxy() {
   const visibleRows = (selected ? rows?.filter((r) => r.hosts.includes(selected)) : rows) ?? [];
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title={t("nav.proxy")}
-        description={t("serve.proxy.desc")}
-        meta={
+    <div className={embedded ? "space-y-3" : "space-y-4"}>
+      {!embedded && (
+        <PageHeader
+          title={t("nav.proxy")}
+          description={t("serve.proxy.desc")}
+          meta={
+            <span className="tnum font-mono text-[10px] text-muted-foreground">
+              {t("serve.proxy.meta", {
+                ok: links.filter((l) => l.ok).length,
+                total: links.length,
+              })}
+            </span>
+          }
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <Segmented
+                value={fState}
+                onChange={setFState}
+                label={t("serve.proxy.filterState")}
+                items={[
+                  { value: "all", label: t("common.all") },
+                  { value: "ok", label: t("serve.proxy.onRoute") },
+                  { value: "down", label: t("serve.proxy.stranded") },
+                ]}
+              />
+              <Segmented
+                value={fTls}
+                onChange={setFTls}
+                label={t("serve.proxy.filterTls")}
+                items={[
+                  { value: "all", label: t("serve.proxy.tlsAll") },
+                  { value: "tls", label: t("serve.proxy.withTls") },
+                  { value: "off", label: t("serve.tls.none") },
+                ]}
+              />
+              <Link
+                to="/routes"
+                className="inline-flex items-center gap-1 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground"
+              >
+                {t("serve.proxy.manage")} <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+          }
+        />
+      )}
+      {embedded && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Segmented
+            value={fState}
+            onChange={setFState}
+            label={t("serve.proxy.filterState")}
+            items={[
+              { value: "all", label: t("common.all") },
+              { value: "ok", label: t("serve.proxy.onRoute") },
+              { value: "down", label: t("serve.proxy.stranded") },
+            ]}
+          />
+          <Segmented
+            value={fTls}
+            onChange={setFTls}
+            label={t("serve.proxy.filterTls")}
+            items={[
+              { value: "all", label: t("serve.proxy.tlsAll") },
+              { value: "tls", label: t("serve.proxy.withTls") },
+              { value: "off", label: t("serve.tls.none") },
+            ]}
+          />
           <span className="tnum font-mono text-[10px] text-muted-foreground">
-            {t("serve.proxy.meta", {
-              ok: links.filter((l) => l.ok).length,
-              total: links.length,
-            })}
+            {t("serve.proxy.meta", { ok: links.filter((l) => l.ok).length, total: links.length })}
           </span>
-        }
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Segmented
-              value={fState}
-              onChange={setFState}
-              label={t("serve.proxy.filterState")}
-              items={[
-                { value: "all", label: t("common.all") },
-                { value: "ok", label: t("serve.proxy.onRoute") },
-                { value: "down", label: t("serve.proxy.stranded") },
-              ]}
-            />
-            <Segmented
-              value={fTls}
-              onChange={setFTls}
-              label={t("serve.proxy.filterTls")}
-              items={[
-                { value: "all", label: t("serve.proxy.tlsAll") },
-                { value: "tls", label: t("serve.proxy.withTls") },
-                { value: "off", label: t("serve.tls.none") },
-              ]}
-            />
-            <Link
-              to="/routes"
-              className="inline-flex items-center gap-1 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground"
-            >
-              {t("serve.proxy.manage")} <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
-        }
-      />
+        </div>
+      )}
+      {err !== "" && <p className="font-mono text-[10px] text-bad">{err}</p>}
       {!rows && <p className="font-mono text-[10px] text-muted-foreground">{t("serve.proxy.loading")}</p>}
       {rows && (
         <>

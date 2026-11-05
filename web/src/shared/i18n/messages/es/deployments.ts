@@ -50,6 +50,8 @@ export const deployments = {
   "deployments.action.redeploy": "redesplegar",
   "deployments.action.rollback": "revertir",
   "deployments.retryId": "reintentar #{id}",
+  "deployments.cancel": "cancelar",
+  "deployments.cancelled": "despliegue #{id} cancelado",
   "deployments.lifecycle": "ciclo de vida",
   "deployments.changes": "Cambios",
   "deployments.changesCount.one": "{n} archivo",

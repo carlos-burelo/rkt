@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"rkt-proxy/internal/settings"
 	"rkt-proxy/internal/store"
 )
 
@@ -36,6 +37,10 @@ func (d *Deps) handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if !known {
 			writeErr(w, http.StatusBadRequest, "setting desconocido")
+			return
+		}
+		if err := settings.Validate(in.Key, in.Value); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		if err := d.DB.SetSetting(in.Key, in.Value); err != nil {

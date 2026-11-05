@@ -26,3 +26,7 @@ export async function diffDeployment(app: string, from: string, to: string): Pro
 export async function retryDeployment(id: number): Promise<string> {
   return (await api<{ rev: string }>(`/api/v1/deployments/${id}/retry`, { method: "POST" })).rev;
 }
+
+export async function cancelDeployment(id: number): Promise<void> {
+  await api(`/api/v1/deployments/${id}/cancel`, { method: "POST" });
+}

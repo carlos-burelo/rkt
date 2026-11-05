@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { ArrowRight, ChevronRight, RotateCw } from "lucide-react";
 import { AppStatus, RktEvent, Deployment, AppMeta } from "../../shared/lib/types";
@@ -12,6 +13,7 @@ import { useUI } from "../../app/ui";
 import { useFleet } from "./hooks";
 import { PageHeader, Section, Stat } from "../../shared/components/patterns";
 import { publicUrl, publicHost } from "../../shared/lib/url";
+import { fetchProxy } from "../proxy/api";
 import { useI18n } from "../../shared/i18n";
 
 function FirstRun({ apps, metas, deps }: { apps: AppStatus[]; metas: AppMeta[]; deps: Deployment[] }) {
@@ -125,6 +127,30 @@ export function Overview() {
   const setSel = useUI((u) => u.setSel);
   const apps = status?.apps ?? [];
   const openApp = (name: string) => navigate(`/app/${name}`);
+  const [tlsSoon, setTlsSoon] = useState<{ host: string; date: string }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    fetchProxy()
+      .then((rows) => {
+        if (!alive) return;
+        const soon: { host: string; date: string }[] = [];
+        const now = Date.now();
+        for (const r of rows) {
+          r.hosts.forEach((host, i) => {
+            const tls = r.tls[i] ?? "off";
+            if (tls === "off" || tls === "auto") return;
+            const d = new Date(tls).getTime();
+            if (Number.isNaN(d)) return;
+            if (d - now <= 14 * 86400000) soon.push({ host, date: tls });
+          });
+        }
+        setTlsSoon(soon);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   if (loading)
     return <p className="font-mono text-[11px] text-muted-foreground">{t("overview.loading")}</p>;
@@ -191,6 +217,20 @@ export function Overview() {
               {t("overview.attention.alerts")} <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
+        </section>
+      )}
+
+      {tlsSoon.length > 0 && (
+        <section className="flex flex-wrap items-center gap-3 border border-warn/30 bg-warn/[0.05] px-3 py-2">
+          <p className="min-w-0 flex-1 font-mono text-[11px] text-warn">
+            {tn("overview.tlsSoon", tlsSoon.length)} · {tlsSoon.map((x) => `${x.host} (${x.date})`).join(", ")}
+          </p>
+          <Link
+            to="/routes"
+            className="inline-flex items-center gap-1 font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground"
+          >
+            {t("overview.tlsSoonAction")} <ArrowRight className="h-3 w-3" />
+          </Link>
         </section>
       )}
 

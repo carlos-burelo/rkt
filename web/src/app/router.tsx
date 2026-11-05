@@ -8,7 +8,6 @@ import { Login } from "../features/auth/Login";
 import { Setup } from "../features/auth/Setup";
 import { Overview } from "../features/overview/Overview";
 import { useI18n } from "../shared/i18n";
-import { Proxy } from "../features/proxy/Proxy";
 import { Deployments } from "../features/deployments/Deployments";
 import { CI } from "../features/ci/CI";
 import { Logs } from "../features/logs/Logs";
@@ -123,7 +122,7 @@ export const router = createBrowserRouter(
           children: [
             { index: true, element: <Navigate to="/overview" replace /> },
             { path: "overview", element: <Overview /> },
-            { path: "proxy", element: <Proxy /> },
+            { path: "proxy", element: <Navigate to="/routes?tab=diagnostico" replace /> },
             { path: "deployments", element: <Deployments /> },
             { path: "ci", element: <CI /> },
             { path: "logs", element: <Logs /> },

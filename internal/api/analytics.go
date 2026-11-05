@@ -4,7 +4,9 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"rkt-proxy/internal/appview"
@@ -81,7 +83,8 @@ func (d *Deps) handleAnalytics(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(b)
 }
 
-// handleObservability serie req/errores por hora + restarts + caídas.
+// handleObservability serie req/errores por hora + latencia, clases,
+// tráfico por app, restarts y caídas. Todo derivado de access.log/events.
 func (d *Deps) handleObservability(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
@@ -98,21 +101,76 @@ func (d *Deps) handleObservability(w http.ResponseWriter, r *http.Request) {
 			Ts  string `json:"ts"`
 			Req int    `json:"req"`
 			Err int    `json:"err"`
+			P50 string `json:"p50,omitempty"`
+			P95 string `json:"p95,omitempty"`
+			P99 string `json:"p99,omitempty"`
+		}
+		type appObs struct {
+			App   string `json:"app"`
+			Req   int    `json:"req"`
+			Err   int    `json:"err"`
+			Bytes int64  `json:"bytes"`
+			P95   string `json:"p95,omitempty"`
 		}
 		buckets := make([]bucket, hours)
+		durs := make([][]time.Duration, hours)
 		for i := range buckets {
 			buckets[i].Ts = since.Add(time.Duration(i+1) * time.Hour).Format("15:04")
 		}
-		for _, e := range es {
-			i := int(e.Time.Sub(since).Hours())
-			if i < 0 || i >= hours {
-				continue
-			}
-			buckets[i].Req++
-			if e.Status >= 500 {
-				buckets[i].Err++
+		classes := map[string]int{}
+		var allDurs []time.Duration
+		hostApp := map[string]string{}
+		if d.Live != nil {
+			for _, rt := range d.Live.Get().Routes {
+				owner := appview.Owner(d.Live.Get(), rt.Target)
+				for _, h := range rt.Hosts {
+					hostApp[strings.ToLower(h)] = owner
+				}
 			}
 		}
+		appMap := map[string]*appObs{}
+		appDurs := map[string][]time.Duration{}
+		for _, e := range es {
+			i := int(e.Time.Sub(since).Hours())
+			if i >= 0 && i < hours {
+				buckets[i].Req++
+				if e.Status >= 500 {
+					buckets[i].Err++
+				}
+				if e.Dur > 0 {
+					durs[i] = append(durs[i], e.Dur)
+					allDurs = append(allDurs, e.Dur)
+				}
+			}
+			classes[statusClass(e.Status)]++
+			app := hostApp[strings.ToLower(e.Host)]
+			if app == "" {
+				continue
+			}
+			ao := appMap[app]
+			if ao == nil {
+				ao = &appObs{App: app}
+				appMap[app] = ao
+			}
+			ao.Req++
+			ao.Bytes += e.Bytes
+			if e.Status >= 500 {
+				ao.Err++
+			}
+			if e.Dur > 0 {
+				appDurs[app] = append(appDurs[app], e.Dur)
+			}
+		}
+		for i := range buckets {
+			buckets[i].P50, buckets[i].P95, buckets[i].P99 = percentiles(durs[i])
+		}
+		p50, p95, p99 := percentiles(allDurs)
+		byApp := make([]appObs, 0, len(appMap))
+		for name, ao := range appMap {
+			_, ao.P95, _ = percentiles(appDurs[name])
+			byApp = append(byApp, *ao)
+		}
+		sort.Slice(byApp, func(i, j int) bool { return byApp[i].Req > byApp[j].Req })
 		restarts := 0
 		if evs, err := d.DB.ListEvents(500, "", ""); err == nil {
 			for _, e := range evs {
@@ -134,8 +192,9 @@ func (d *Deps) handleObservability(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		return map[string]any{
-			"hours": hours, "buckets": buckets,
-			"restarts": restarts, "down": down,
+			"hours": hours, "buckets": buckets, "classes": classes,
+			"by_app": byApp, "restarts": restarts, "down": down,
+			"p50": p50, "p95": p95, "p99": p99,
 		}, nil
 	})
 	if err != nil {
@@ -144,6 +203,36 @@ func (d *Deps) handleObservability(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(b)
+}
+
+func statusClass(status int) string {
+	switch {
+	case status >= 200 && status < 300:
+		return "2xx"
+	case status >= 300 && status < 400:
+		return "3xx"
+	case status >= 400 && status < 500:
+		return "4xx"
+	case status >= 500:
+		return "5xx"
+	default:
+		return "other"
+	}
+}
+
+func percentiles(ds []time.Duration) (string, string, string) {
+	if len(ds) == 0 {
+		return "", "", ""
+	}
+	sort.Slice(ds, func(i, j int) bool { return ds[i] < ds[j] })
+	at := func(p float64) string {
+		i := int(float64(len(ds)) * p)
+		if i >= len(ds) {
+			i = len(ds) - 1
+		}
+		return ds[i].String()
+	}
+	return at(0.50), at(0.95), at(0.99)
 }
 
 // handleProxy muestra el alcance real de cada ruta: backend, TLS y DNS.

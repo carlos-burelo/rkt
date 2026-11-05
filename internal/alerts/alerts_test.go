@@ -9,60 +9,66 @@ import (
 
 func TestFired(t *testing.T) {
 	now := time.Now().UTC()
-	r := store.AlertRule{ID: 1, Kind: "failed", Threshold: 2, WindowMin: 60}
-	if Fired(r, 1, 0, now) {
+	r := store.AlertRule{ID: 1, Kind: "failed", Threshold: 2, WindowMin: 60, Enabled: true}
+	if Fired(r, Metrics{Failed: 1}, now) {
 		t.Fatal("1 < 2 no dispara")
 	}
-	if !Fired(r, 2, 0, now) {
+	if !Fired(r, Metrics{Failed: 2}, now) {
 		t.Fatal("2 >= 2 dispara")
 	}
-	r2 := store.AlertRule{ID: 2, Kind: "error_rate", Threshold: 0.1, WindowMin: 60}
-	if Fired(r2, 0, 0.05, now) {
-		t.Fatal("5% < 10% no dispara")
+	if Fired(store.AlertRule{Kind: "failed", Threshold: 1}, Metrics{Failed: 9}, now) {
+		t.Fatal("regla desactivada no dispara")
 	}
-	if !Fired(r2, 0, 0.2, now) {
-		t.Fatal("20% >= 10% dispara")
+	r2 := store.AlertRule{ID: 2, Kind: "error_rate", Threshold: 0.1, WindowMin: 60, Enabled: true}
+	if Fired(r2, Metrics{ErrRate: 0.05}, now) || !Fired(r2, Metrics{ErrRate: 0.2}, now) {
+		t.Fatal("error_rate mal evaluado")
 	}
-	// cooldown: disparada hace 10min con ventana 60 no re-dispara
-	r3 := store.AlertRule{ID: 3, Kind: "failed", Threshold: 1, WindowMin: 60,
-		LastFired: now.Add(-10 * time.Minute).Format("2006-01-02T15:04:05Z")}
-	if Fired(r3, 9, 0, now) {
+	r3 := store.AlertRule{ID: 3, Kind: "failed", Threshold: 1, WindowMin: 60, Enabled: true,
+		LastFired: now.Add(-10 * time.Minute).Format(time.RFC3339)}
+	if Fired(r3, Metrics{Failed: 9}, now) {
 		t.Fatal("cooldown debe frenar")
 	}
-	r3.LastFired = now.Add(-2 * time.Hour).Format("2006-01-02T15:04:05Z")
-	if !Fired(r3, 9, 0, now) {
+	r3.LastFired = now.Add(-2 * time.Hour).Format(time.RFC3339)
+	if !Fired(r3, Metrics{Failed: 9}, now) {
 		t.Fatal("ventana pasada sí dispara")
 	}
-	if Describe(r) == "" {
-		t.Fatal("describe vacío")
+	r3.LastFired = "no-es-fecha"
+	if !Fired(r3, Metrics{Failed: 9}, now) {
+		t.Fatal("LastFired inválido no bloquea")
 	}
 }
 
-func TestFiredBordes(t *testing.T) {
+func TestFiredKinds(t *testing.T) {
 	now := time.Now().UTC()
-	// LastFired inválido se ignora (no bloquea)
-	r := store.AlertRule{Kind: "failed", Threshold: 1, WindowMin: 60, LastFired: "no-es-fecha"}
-	if !Fired(r, 1, 0, now) {
-		t.Fatal("LastFired inválido no debe bloquear")
+	cases := []struct {
+		kind string
+		m    Metrics
+		want float64
+	}{
+		{"latency_p95", Metrics{P95ms: 120}, 120},
+		{"memory_mb", Metrics{MemoryMB: 512}, 512},
+		{"down_min", Metrics{DownMin: 15}, 15},
+		{"disk_pct", Metrics{DiskPct: 91}, 91},
 	}
-	// error_rate
-	r2 := store.AlertRule{Kind: "error_rate", Threshold: 0.2, WindowMin: 60}
-	if Fired(r2, 99, 0.1, now) || !Fired(r2, 0, 0.2, now) {
-		t.Fatal("error_rate mal evaluado")
+	for _, c := range cases {
+		r := store.AlertRule{ID: 9, Kind: c.kind, Threshold: c.want - 1, WindowMin: 60, Enabled: true}
+		if !Fired(r, c.m, now) {
+			t.Fatalf("%s no disparó", c.kind)
+		}
+		if c.m.Value(c.kind) != c.want {
+			t.Fatalf("%s Value = %v", c.kind, c.m.Value(c.kind))
+		}
 	}
-	// tipo desconocido nunca dispara
-	if Fired(store.AlertRule{Kind: "otro", Threshold: 0}, 99, 1, now) {
-		t.Fatal("tipo desconocido no debe disparar")
+	r := store.AlertRule{Kind: "otro", Threshold: 0, Enabled: true}
+	if Fired(r, Metrics{}, now) || (Metrics{}).Value("otro") != 0 {
+		t.Fatal("kind desconocido no dispara")
 	}
-	// cooldown vigente
-	r3 := store.AlertRule{Kind: "failed", Threshold: 1, WindowMin: 60, LastFired: now.Add(-10 * time.Minute).Format(time.RFC3339)}
-	if Fired(r3, 5, 0, now) {
-		t.Fatal("cooldown debe bloquear")
-	}
-	if Describe(store.AlertRule{ID: 7, Kind: "failed"}) == "" {
-		t.Fatal("describe failed vacío")
-	}
-	if d := Describe(store.AlertRule{ID: 8, Kind: "error_rate"}); d == "" {
-		t.Fatal("describe error_rate vacío")
+}
+
+func TestDescribe(t *testing.T) {
+	for _, kind := range []string{"failed", "error_rate", "latency_p95", "memory_mb", "down_min", "disk_pct"} {
+		if Describe(store.AlertRule{ID: 7, Kind: kind, Threshold: 3}, Metrics{}) == "" {
+			t.Fatalf("describe %s vacío", kind)
+		}
 	}
 }

@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { useUI } from "../../app/ui";
-import { getGlobalEnv } from "./api";
+import { getEnvIndex } from "./api";
 
-// useGlobalEnv lee las variables compartidas por todas las apps.
-export function useGlobalEnv(): { env: Record<string, string>; reload: () => void } {
+// useGlobalEnv solo claves: los valores se piden al revelar.
+export function useGlobalEnv(): { keys: string[]; appKeys: Record<string, string[]>; reload: () => void } {
   const fail = useUI((u) => u.fail);
   const online = useUI((u) => u.online);
-  const [env, setEnvMap] = useState<Record<string, string>>({});
+  const [keys, setKeys] = useState<string[]>([]);
+  const [appKeys, setAppKeys] = useState<Record<string, string[]>>({});
   const [gen, setGen] = useState(0);
   const reload = useCallback(() => setGen((g) => g + 1), []);
   useEffect(() => {
     if (!online) return;
-    getGlobalEnv().then(setEnvMap).catch(fail);
+    getEnvIndex()
+      .then((idx) => {
+        setKeys(idx.global);
+        setAppKeys(idx.apps);
+      })
+      .catch(fail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online, gen]);
-  return { env, reload };
+  return { keys, appKeys, reload };
 }
