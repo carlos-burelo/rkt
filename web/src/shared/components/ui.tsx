@@ -12,17 +12,22 @@ export function stateOf(a: { running: boolean; failed?: boolean; restarts?: numb
 
 const DOT: Record<string, string> = {
   ok: "bg-ok",
-  running: "bg-ok animate-status-pulse",
-  degraded: "bg-warn",
-  failed: "bg-bad",
-  stopped: "bg-muted-foreground/45",
+  running: "bg-ok",
+  degraded: "rotate-45 bg-warn",
+  failed: "rounded-full bg-bad",
+  stopped: "border border-muted-foreground/50 bg-transparent",
 };
 
-export function Dot({ status, className }: { status: string; className?: string }) {
+export function Dot({ status, className, pulse = false }: { status: string; className?: string; pulse?: boolean }) {
   const key = status === "ok" ? "ok" : status === "running" ? "running" : status;
   return (
     <span
-      className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-[1px]", DOT[key] ?? DOT.stopped, className)}
+      className={cn(
+        "inline-block h-2 w-2 shrink-0 rounded-[1px]",
+        DOT[key] ?? DOT.stopped,
+        pulse && "animate-status-pulse",
+        className,
+      )}
       title={stateLabel(status)}
       aria-label={`estado ${stateLabel(status)}`}
     />
@@ -51,7 +56,7 @@ export function StatusBadge({ status, className }: { status: string; className?:
 export function Err({ msg }: { msg: string }) {
   if (!msg) return null;
   return (
-    <p className="mb-4 flex items-start gap-2 border border-bad/30 bg-bad/8 px-3 py-2 font-mono text-[11px] leading-relaxed text-bad">
+    <p role="alert" className="mb-4 flex items-start gap-2 border border-bad/30 bg-bad/8 px-3 py-2 font-mono text-[11px] leading-relaxed text-bad">
       <span aria-hidden className="mt-px shrink-0">!</span>
       <span>{msg}</span>
     </p>
@@ -59,16 +64,16 @@ export function Err({ msg }: { msg: string }) {
 }
 
 // Tira de manifiesto por estado: una línea de 1px en el canto de la fila.
-// El punto de estado vive en la columna de estado, no en la tira.
+// Solida = sana, discontinua = degradada, rota = fallida, tenue = detenida.
 export function StateRail({ status }: { status: string }) {
   const cls =
     status === "failed" || status === "bad"
-      ? "bg-bad"
+      ? "rail-bad"
       : status === "running" || status === "ok"
-        ? "bg-ok"
+        ? "rail-ok"
         : status === "degraded" || status === "warning"
-          ? "bg-warn"
-          : "bg-muted-foreground/30";
+          ? "rail-warn"
+          : "rail-idle";
   return <span aria-hidden className={`manifest-rail ${cls}`} />;
 }
 

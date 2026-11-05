@@ -2,13 +2,11 @@ import { BrandMark } from "../../shared/components/ui";
 
 // Marco de acceso: la terminal se presenta como manifiesto, no como landing.
 export function AccessShell({
-  kicker,
   title,
   description,
   children,
   footer,
 }: {
-  kicker: string;
   title: string;
   description: string;
   children: React.ReactNode;
@@ -17,7 +15,6 @@ export function AccessShell({
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
       <aside className="relative hidden overflow-hidden border-r border-border bg-ink/70 lg:flex lg:w-[44%] lg:flex-col lg:justify-between lg:p-10">
-        <div aria-hidden className="grid-paper pointer-events-none absolute inset-0 opacity-60" />
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-signal/60" />
         <div className="relative">
           <div className="flex items-center gap-3">
@@ -30,8 +27,7 @@ export function AccessShell({
             </div>
           </div>
           <div className="mt-16 max-w-sm">
-            <p className="folio">tus apps, en un solo sitio</p>
-            <h2 className="mt-3 text-[32px] leading-[1.05] font-semibold tracking-[-0.04em] text-balance">
+            <h2 className="text-[32px] leading-[1.05] font-semibold tracking-[-0.04em] text-balance">
               Cada app con su puerto, su dominio y un supervisor que la mantiene en marcha.
             </h2>
             <p className="mt-4 max-w-[36ch] text-[12px] leading-relaxed text-muted-foreground">
@@ -75,9 +71,8 @@ export function AccessShell({
           <header className="border-b border-border pb-4">
             <div className="flex items-center gap-2.5">
               <span aria-hidden className="h-1 w-4 bg-signal" />
-              <span className="micro">{kicker}</span>
+              <h1 className="text-[24px] leading-none font-semibold tracking-[-0.03em]">{title}</h1>
             </div>
-            <h1 className="mt-2 text-[24px] leading-none font-semibold tracking-[-0.03em]">{title}</h1>
             <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">{description}</p>
           </header>
           <div className="mt-5">{children}</div>

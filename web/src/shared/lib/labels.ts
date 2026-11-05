@@ -16,6 +16,19 @@ export function stateLabel(status: string): string {
   return STATE_ES[status] ?? status;
 }
 
+// Una salida es masculina y "running" significa en curso, no en marcha.
+const DEPLOY_STATE_ES: Record<string, string> = {
+  ok: "correcto",
+  running: "en curso",
+  failed: "fallido",
+  pending: "pendiente",
+  stopped: "detenido",
+};
+
+export function deployStateLabel(status: string): string {
+  return DEPLOY_STATE_ES[status] ?? stateLabel(status);
+}
+
 const ROLE_ES: Record<string, string> = {
   viewer: "lectura",
   operator: "operador",

@@ -8,6 +8,7 @@ import { FunnelMap } from "./FunnelMap";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CopyButton } from "../../shared/components/feedback";
+import { ConfirmButton } from "../../shared/components/ConfirmButton";
 import { Avatar } from "../../shared/components/ui";
 import { PageHeader, EmptyState } from "../../shared/components/patterns";
 import { FormDialog, Field } from "../../shared/components/FormDialog";
@@ -34,7 +35,7 @@ function TLSBadge({ host }: { host: string }) {
   return (
     <span
       title={txt}
-      className={`inline-flex h-5 w-fit items-center border px-1.5 font-mono text-[9px] tracking-[0.08em] uppercase ${
+      className={`inline-flex h-5 w-fit items-center border px-1.5 font-mono text-[10px] tracking-[0.08em] uppercase ${
         ok ? "border-ok/30 bg-ok/10 text-ok" : "border-border bg-transparent text-muted-foreground"
       }`}
     >
@@ -65,18 +66,18 @@ function RouteRow({ r, onChanged, status }: { r: Route; onChanged: () => void; s
             target="_blank"
             rel="noreferrer"
             title={`visitar ${publicHost(r.hosts[0], status)}`}
-            className="truncate font-mono text-[11px] hover:text-signal hover:underline"
+            className="truncate font-mono text-[12px] hover:text-signal hover:underline"
           >
             {r.hosts.join(", ")}
           </a>
           <CopyButton text={r.hosts[0]} />
           <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground/45" />
         </div>
-        <p className="mt-0.5 truncate font-mono text-[9px] text-muted-foreground md:hidden">→ {r.target}</p>
+        <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground md:hidden">→ {r.target}</p>
       </div>
       <TLSBadge host={r.hosts[0]} />
       <ArrowRight className="hidden h-3 w-3 text-muted-foreground/30 md:block" />
-      <span className="tnum col-span-2 min-w-0 truncate font-mono text-[10px] text-muted-foreground md:col-span-1">
+      <span className="tnum col-span-2 min-w-0 truncate font-mono text-[11px] text-muted-foreground md:col-span-1">
         {r.target}
       </span>
       {canWrite && (
@@ -105,13 +106,12 @@ function RouteRow({ r, onChanged, status }: { r: Route; onChanged: () => void; s
               />
             </Field>
           </FormDialog>
-          <Button
-            variant="destructive"
-            size="xs"
-            onClick={() => delRoute(r.hosts[0]).then(onChanged).catch(fail)}
-          >
-            borrar
-          </Button>
+          <ConfirmButton
+            title={`borrar ruta ${r.hosts[0]}`}
+            onConfirm={() => {
+              delRoute(r.hosts[0]).then(onChanged).catch(fail);
+            }}
+          />
         </div>
       )}
     </div>

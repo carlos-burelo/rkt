@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader, EmptyState } from "../../shared/components/patterns";
 import { FormDialog, Field } from "../../shared/components/FormDialog";
+import { ConfirmButton } from "../../shared/components/ConfirmButton";
 import { Dot, StateRail } from "../../shared/components/ui";
 import {
   Select, SelectTrigger, SelectContent, SelectItem,
@@ -125,34 +126,33 @@ export function Alerts() {
           >
             <StateRail status={r.last_fired ? "degraded" : "stopped"} />
             <Dot status={r.last_fired ? "degraded" : "stopped"} />
-            <span className="tnum font-mono text-[10px] text-muted-foreground">#{r.id}</span>
+            <span className="tnum font-mono text-[11px] text-muted-foreground">#{r.id}</span>
             <div className="min-w-0">
-              <p className="truncate font-mono text-[11px]">{r.app}</p>
-              <p className="tnum mt-0.5 font-mono text-[9px] text-muted-foreground md:hidden">
+              <p className="truncate font-mono text-[12px]">{r.app}</p>
+              <p className="tnum mt-0.5 font-mono text-[10px] text-muted-foreground md:hidden">
                 {r.kind} · ≥{r.threshold}/{r.window_min}min ·{" "}
                 {r.last_fired ? r.last_fired.slice(0, 16).replace("T", " ") : "sin disparos"}
               </p>
             </div>
-            <span className="hidden font-mono text-[10px] text-muted-foreground md:block">{r.kind}</span>
-            <span className="tnum hidden font-mono text-[10px] text-muted-foreground md:block">
+            <span className="hidden font-mono text-[11px] text-muted-foreground md:block">{r.kind}</span>
+            <span className="tnum hidden font-mono text-[11px] text-muted-foreground md:block">
               ≥{r.threshold}/{r.window_min}min
             </span>
             {r.last_fired ? (
-              <span className="tnum hidden text-right font-mono text-[10px] text-warn md:block">
+              <span className="tnum hidden text-right font-mono text-[11px] text-warn md:block">
                 {r.last_fired.slice(0, 16).replace("T", " ")}
               </span>
             ) : (
-              <span className="hidden text-right font-mono text-[10px] text-muted-foreground md:block">sin disparos</span>
+              <span className="hidden text-right font-mono text-[11px] text-muted-foreground md:block">sin disparos</span>
             )}
             <div className="flex justify-end">
               {canWrite && (
-                <Button
-                  variant="destructive"
-                  size="xs"
-                  onClick={() => delRule(r.id).then(load).catch(fail)}
-                >
-                  borrar
-                </Button>
+                <ConfirmButton
+                  title={`borrar regla #${r.id}`}
+                  onConfirm={() => {
+                    delRule(r.id).then(load).catch(fail);
+                  }}
+                />
               )}
             </div>
           </div>

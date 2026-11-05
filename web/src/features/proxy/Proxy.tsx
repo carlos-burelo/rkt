@@ -111,21 +111,21 @@ export function Proxy() {
                 >
                   <StateRail status={r.ok ? "ok" : "failed"} />
                   <div className="min-w-0">
-                    <p className="flex min-w-0 items-center gap-1.5 font-mono text-[11px]">
+                    <p className="flex min-w-0 items-center gap-1.5 font-mono text-[12px]">
                       <span className="truncate">{r.hosts.join(", ")}</span>
                       {r.dns_ok?.some((v) => !v) && (
                         <span
-                          className="shrink-0 font-mono text-[8px] tracking-[0.08em] uppercase text-warn"
+                          className="shrink-0 font-mono text-[9px] tracking-[0.08em] uppercase text-warn"
                           title="ese host no resuelve a 127.0.0.1 aquí: añádelo a hosts o usa .localhost"
                         >
                           no resuelve
                         </span>
                       )}
                     </p>
-                    <p className="tnum mt-0.5 truncate font-mono text-[9px] text-muted-foreground">→ {r.target}</p>
+                    <p className="tnum mt-0.5 truncate font-mono text-[10px] text-muted-foreground">→ {r.target}</p>
                   </div>
                   <span
-                    className={`tnum hidden font-mono text-[9px] tracking-[0.06em] uppercase sm:block ${
+                    className={`tnum hidden font-mono text-[10px] tracking-[0.06em] uppercase sm:block ${
                       r.ok ? "text-ok" : "text-bad"
                     }`}
                   >
@@ -135,7 +135,7 @@ export function Proxy() {
                     {r.tls.map((t, i) => (
                       <span
                         key={i}
-                        className={`tnum inline-flex h-5 items-center border px-1.5 font-mono text-[9px] tracking-[0.06em] uppercase ${
+                        className={`tnum inline-flex h-5 items-center border px-1.5 font-mono text-[10px] tracking-[0.06em] uppercase ${
                           t === "off"
                             ? "border-border text-muted-foreground"
                             : "border-info/30 bg-info/10 text-info"

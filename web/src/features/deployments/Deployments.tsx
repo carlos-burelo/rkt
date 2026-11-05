@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowRight, Search } from "lucide-react";
+import { ArrowRight, Search, X } from "lucide-react";
 import { dur, rel } from "../../shared/lib/time";
 import { Dot, StateRail } from "../../shared/components/ui";
 import { CopyButton } from "../../shared/components/feedback";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { deployStateLabel } from "../../shared/lib/labels";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
 import { PageHeader, Segmented } from "../../shared/components/patterns";
@@ -43,7 +46,9 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
         <PageHeader
           title="Despliegues"
           description="Libro de salidas. La fila en curso late; la revisión y la duración quedan a la derecha. Click abre el manifiesto de la compilación."
-          meta={<span className="tnum font-mono text-[10px] text-muted-foreground">{base.length} registros</span>}
+          meta={<span className="tnum font-mono text-[10px] text-muted-foreground">
+            {vis.length === base.length ? `${base.length} registros` : `${vis.length} de ${base.length}`}
+          </span>}
         />
       )}
       {!bare && (
@@ -54,7 +59,7 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="filtrar por app o rev…"
-              className="h-7 border-transparent bg-transparent pl-8 font-mono text-[11px] hover:border-input"
+              className="h-7 border-transparent bg-transparent pl-8 font-mono text-[12px] hover:border-input"
               aria-label="filtrar despliegues"
             />
           </div>
@@ -69,56 +74,98 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
               { value: "failed", label: "fallidos", count: counts.failed },
             ]}
           />
+          {(q !== "" || st !== "all") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setQ("");
+                setSt("all");
+              }}
+            >
+              <X className="h-3 w-3" /> limpiar
+            </Button>
+          )}
         </div>
       )}
       <div className="border border-border" role="table" aria-label="tablero de despliegues">
         <div
-          className="hidden grid-cols-[1.5rem_minmax(0,1fr)_8rem_4.5rem_5.5rem_1.5rem] items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 md:grid"
-          aria-hidden
+          role="row"
+          className={cn(
+            "hidden grid-cols-[1.5rem_minmax(0,1fr)_8rem_4.5rem_5.5rem_1.5rem] items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 lg:grid",
+            !bare && "sticky top-12 z-10 bg-card",
+          )}
         >
-          <span className="micro">est</span>
-          <span className="micro">salida</span>
-          <span className="micro">rev</span>
-          <span className="micro text-right">dur</span>
-          <span className="micro text-right">hora</span>
-          <span />
+          <span role="columnheader" className="micro">est</span>
+          <span role="columnheader" className="micro">salida</span>
+          <span role="columnheader" className="micro">rev</span>
+          <span role="columnheader" className="micro text-right">dur</span>
+          <span role="columnheader" className="micro text-right">hora</span>
+          <span role="columnheader" className="sr-only">acciones</span>
         </div>
         {vis.map((d) => (
           <div
             key={d.id}
             onClick={() => setSel(d)}
-            className={`group relative grid cursor-pointer grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-border/70 bg-card/35 px-3 py-2.5 text-left last:border-0 hover:bg-accent/40 md:grid-cols-[1.5rem_minmax(0,1fr)_8rem_4.5rem_5.5rem_1.5rem] ${
-              d.status === "running" ? "animate-row-arrive" : ""
-            }`}
+            onKeyDown={(e) => {
+              if (e.target !== e.currentTarget) return;
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setSel(d);
+              }
+            }}
+            tabIndex={0}
+            aria-label={`abrir salida ${d.app} #${d.id}`}
+            className={cn(
+              "group relative grid cursor-pointer grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-border/70 bg-card/35 px-3 py-2.5 text-left last:border-0 hover:bg-accent/40 focus-visible:bg-accent/40 lg:grid-cols-[1.5rem_minmax(0,1fr)_8rem_4.5rem_5.5rem_1.5rem]",
+              d.status === "running" && "animate-row-arrive bg-signal/[0.035] hover:bg-signal/[0.06]",
+              d.status === "failed" && "bg-bad/[0.045] hover:bg-bad/[0.075] focus-visible:bg-bad/[0.075]",
+            )}
             role="row"
           >
             <StateRail status={d.status} />
-            <Dot status={d.status} />
-            <div className="min-w-0">
-              <p className="truncate font-mono text-[12px]">
+            <span role="cell" className="flex items-center">
+              <Dot status={d.status} pulse={d.status === "running"} />
+            </span>
+            <div role="cell" className="min-w-0">
+              <p className="truncate font-mono text-[13px]">
                 {d.app} <span className="tnum text-muted-foreground">#{d.id}</span>
               </p>
-              <p className="tnum mt-0.5 truncate font-mono text-[9px] text-muted-foreground md:hidden">
-                {d.rev.slice(0, 8)} · {dur(d.started_at, d.finished_at)} ·{" "}
+              <p className="tnum mt-0.5 truncate font-mono text-[10px] text-muted-foreground lg:hidden">
+                {deployStateLabel(d.status)} · {d.rev.slice(0, 8)} · {dur(d.started_at, d.finished_at)} ·{" "}
                 {d.status === "running" ? "en curso…" : rel(d.finished_at || d.started_at)}
               </p>
-              <p className="mt-0.5 hidden truncate font-mono text-[9px] text-muted-foreground md:block">
+              <p className="mt-0.5 hidden truncate font-mono text-[10px] text-muted-foreground lg:block">
+                <span
+                  className={
+                    d.status === "failed"
+                      ? "text-bad"
+                      : d.status === "running"
+                        ? "text-signal"
+                        : d.status === "ok"
+                          ? "text-ok/80"
+                          : ""
+                  }
+                >
+                  {deployStateLabel(d.status)}
+                </span>
+                {" · "}
                 {d.triggered_by ? `por ${d.triggered_by}` : "operador local"}
               </p>
             </div>
-            <span className="tnum hidden items-center gap-1 font-mono text-[10px] text-muted-foreground md:flex">
+            <span role="cell" className="tnum hidden items-center gap-1 font-mono text-[11px] text-muted-foreground lg:flex">
               {d.rev.slice(0, 8)}
               <CopyButton text={d.rev} />
             </span>
-            <span className="tnum hidden text-right font-mono text-[10px] text-muted-foreground md:block">
+            <span role="cell" className="tnum hidden text-right font-mono text-[11px] text-muted-foreground lg:block">
               {dur(d.started_at, d.finished_at)}
             </span>
-            <span className="tnum hidden text-right font-mono text-[10px] text-muted-foreground md:block">
+            <span role="cell" className="tnum hidden text-right font-mono text-[11px] text-muted-foreground lg:block">
               {d.status === "running" ? "en curso…" : rel(d.finished_at || d.started_at)}
             </span>
-            <span className="flex items-center justify-end gap-1">
+            <span role="cell" className="flex items-center justify-end gap-1">
               <button
-                className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground hover:text-foreground md:hidden"
+                className="-my-1 inline-flex items-center gap-1 px-1 py-1.5 font-mono text-[10px] text-muted-foreground hover:text-foreground lg:hidden"
                 onClick={(e) => {
                   e.stopPropagation();
                   navigate(`/app/${d.app}`);
@@ -127,7 +174,7 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
               >
                 app <ArrowRight className="h-3 w-3" />
               </button>
-              <ArrowRight className="hidden h-3 w-3 text-muted-foreground/35 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground md:block" />
+              <ArrowRight aria-hidden className="hidden h-3 w-3 text-muted-foreground/35 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground lg:block" />
             </span>
           </div>
         ))}

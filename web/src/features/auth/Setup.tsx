@@ -31,7 +31,6 @@ export function Setup({ onOk }: { onOk: (me: Me) => void }) {
 
   return (
     <AccessShell
-      kicker="primer arranque"
       title="Crea la cuenta de administrador"
       description="Solo se muestra una vez, mientras no exista ningún usuario. Después podrás añadir más desde Usuarios."
       footer={

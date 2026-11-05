@@ -24,7 +24,6 @@ export function Login({ onOk }: { onOk: (me: Me) => void }) {
 
   return (
     <AccessShell
-      kicker="acceso"
       title="Inicia sesión"
       description="Entra con tu cuenta de rkt. Las cuentas se crean desde la terminal; aquí no hay registro."
       footer={

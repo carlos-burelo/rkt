@@ -152,7 +152,7 @@ export function Logs() {
         description="Ejecución por app u operativo. En vivo refresca cada 2s; Compilación muestra el último despliegue. Sin parsers de terceros."
         meta={
           <span className="tnum inline-flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
-            <Dot status={tab === "runtime" && live ? "running" : "stopped"} />
+            <Dot status={tab === "runtime" && live ? "running" : "stopped"} pulse={tab === "runtime" && live} />
             {tab === "runtime" ? (live ? "en vivo · 2s" : "pausado") : "compilación"}
             {appFilter ? ` · ${appFilter}` : " · operativo"}
           </span>
@@ -277,7 +277,7 @@ export function Logs() {
             <div className="flex flex-wrap items-center gap-2 border border-border bg-card/35 px-2.5 py-2">
               {latest ? (
                 <>
-                  <Dot status={latest.status} />
+                  <Dot status={latest.status} pulse={latest.status === "running"} />
                   <Avatar name={latest.app} />
                   <span className="tnum font-mono text-[10px]">
                     #{latest.id} {latest.app} {latest.rev.slice(0, 8)} <span className="text-muted-foreground">({latest.status})</span>

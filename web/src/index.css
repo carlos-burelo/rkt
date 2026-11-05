@@ -137,20 +137,23 @@
     color: oklch(0.98 0.005 245);
   }
   :where(button, a, input, select, textarea, [tabindex]):focus-visible {
-    outline: 1px solid var(--ring);
+    outline: 2px solid var(--ring);
     outline-offset: 2px;
     border-radius: 2px;
   }
+  :where(button, [role="button"], summary):not(:disabled) {
+    cursor: pointer;
+  }
   * {
     scrollbar-width: thin;
-    scrollbar-color: oklch(1 0 0 / 20%) transparent;
+    scrollbar-color: oklch(1 0 0 / 28%) transparent;
   }
   *::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
   *::-webkit-scrollbar-thumb {
-    background: oklch(1 0 0 / 18%);
+    background: oklch(1 0 0 / 26%);
     border-radius: 0;
     border: 2px solid transparent;
     background-clip: content-box;
@@ -201,6 +204,19 @@
     width: 2px;
     align-self: stretch;
     background: var(--border);
+  }
+  /* El estado también se lee por forma de línea, no solo por color. */
+  .rail-ok {
+    background: var(--ok);
+  }
+  .rail-warn {
+    background-image: repeating-linear-gradient(180deg, var(--warn) 0 3px, transparent 3px 5px);
+  }
+  .rail-bad {
+    background-image: repeating-linear-gradient(180deg, var(--bad) 0 6px, transparent 6px 8px);
+  }
+  .rail-idle {
+    background: color-mix(in oklch, var(--muted-foreground) 32%, transparent);
   }
   .grid-paper {
     background-image:

@@ -237,14 +237,22 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
     if (p.startsWith("/api/v1/apps/") && method !== "GET") return json(route, {});
     if (p === "/api/v1/proxy") return json(route, proxy);
     if (p === "/api/v1/routes") return json(route, method === "GET" ? routes : {});
+    if (p === "/api/v1/domains/zones") return json(route, { suffixes: ["localhost", "test"], groups: [] });
+    if (p === "/api/v1/env/global") return json(route, {});
     if (p.startsWith("/api/v1/domains/") && p.endsWith("/tls")) return json(route, { managed: true, expires: "2026-12-14" });
     if (p === "/api/v1/analytics") return json(route, analytics);
     if (p === "/api/v1/usage") return json(route, usage);
     if (p === "/api/v1/observability") return json(route, obs);
     if (p === "/api/v1/settings") return json(route, settings);
+    if (p === "/api/v1/github") return json(route, { configured: false });
+    if (p === "/api/v1/github/repos") return json(route, []);
     if (p === "/api/v1/users") return json(route, users);
     if (p === "/api/v1/alerts") return json(route, alerts);
     if (p.startsWith("/api/v1/alerts/")) return json(route, {});
+    if (p === "/api/v1/logs/stream") {
+      const body = `event: init\ndata: ${JSON.stringify({ log: logText })}\n\nevent: end\ndata: {"status":"done"}\n\n`;
+      return route.fulfill({ status: 200, contentType: "text/event-stream", body });
+    }
     if (p === "/api/v1/logs") return json(route, { log: logText });
     return json(route, { error: `mock sin ruta: ${p}` }, 404);
   });
@@ -260,6 +268,7 @@ const main = async () => {
   await mockApi(page);
   page.on("console", (m) => { if (m.type() === "error") errors.push(`[consola] ${m.text()}`); });
   page.on("pageerror", (e) => errors.push(`[pageerror] ${e.message}`));
+  page.on("response", (r) => { if (r.status() >= 400) errors.push(`[http ${r.status()}] ${r.url()}`); });
 
   const shot = async (name, route, opts = {}) => {
     await page.goto(`${BASE}/${route}`, { waitUntil: "networkidle" });
@@ -315,6 +324,7 @@ const main = async () => {
   await mockApi(mpage);
   mpage.on("console", (m) => { if (m.type() === "error") errors.push(`[móvil consola] ${m.text()}`); });
   mpage.on("pageerror", (e) => errors.push(`[móvil pageerror] ${e.message}`));
+  mpage.on("response", (r) => { if (r.status() >= 400) errors.push(`[móvil http ${r.status()}] ${r.url()}`); });
   for (const [name, route] of [
     ["mobile-overview", "overview"],
     ["mobile-deployments", "deployments"],

@@ -26,7 +26,7 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
   return (
     <div className="min-w-0 bg-card/45 px-3 py-2">
       <p className="micro">{label}</p>
-      <div className="mt-1 truncate font-mono text-[11px]">{children}</div>
+      <div className="mt-1 truncate font-mono text-[12px]">{children}</div>
     </div>
   );
 }
@@ -70,7 +70,7 @@ export function AppTabs() {
               <Dot status={state} />
               <StatusBadge status={state} />
             </div>
-            <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+            <p className="mt-2 font-mono text-[11px] text-muted-foreground">
               unidad de flota · puerto {meta?.port ? `:${meta.port}` : "sin asignar"} ·{" "}
               {domains.length > 0 ? `${domains.length} destino${domains.length > 1 ? "s" : ""}` : "sin destino"}
             </p>
@@ -97,7 +97,7 @@ export function AppTabs() {
             )}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-px bg-border md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-px bg-border lg:grid-cols-4">
           <Cell label="estado">
             <span className={st?.failed ? "text-bad" : st?.running ? "text-ok" : "text-muted-foreground"}>
               {stateLabel(state)}

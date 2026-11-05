@@ -13,7 +13,7 @@ export function Metrics({ apps, deps }: { apps: AppStatus[]; deps: Deployment[] 
   const rate = done.length === 0 ? "—" : `${Math.round((ok / done.length) * 100)}%`;
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4" role="group" aria-label="estado de la flota">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" role="group" aria-label="estado de la flota">
       <Stat value={`${running}/${apps.length}`} label="apps en marcha" sub="supervisor · ahora" tone={failed > 0 ? "warn" : "ok"} />
       <Stat
         value={failed === 0 ? "0" : `${failed}`}

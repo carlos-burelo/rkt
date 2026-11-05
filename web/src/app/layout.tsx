@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { NavLink, Link, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { LayoutGrid, Plus, Search, ChevronRight, Command } from "lucide-react";
@@ -63,22 +63,24 @@ export function ShellLayout() {
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
+      const t = e.target;
+      const typing =
+        t instanceof HTMLElement &&
+        (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT");
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPalette(!useUI.getState().palette);
-      } else if (
-        e.key === "/" &&
-        !(e.target instanceof HTMLInputElement) &&
-        !(e.target instanceof HTMLTextAreaElement) &&
-        !(e.target instanceof HTMLSelectElement)
-      ) {
+      } else if (e.key === "/" && !typing) {
         e.preventDefault();
         setPalette(true);
+      } else if (e.key.toLowerCase() === "n" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && canWrite) {
+        e.preventDefault();
+        setCreateOpen(true);
       }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [setPalette]);
+  }, [setPalette, setCreateOpen, canWrite]);
 
   function openApp(name: string) {
     setAppFilter(name);
@@ -117,7 +119,7 @@ export function ShellLayout() {
           </SidebarMenu>
 
           {canWrite && (
-            <Button className="mt-3 w-full justify-between px-2.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0" size="sm" onClick={() => setCreateOpen(true)}>
+            <Button className="mt-3 w-full justify-between px-2.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0" size="sm" onClick={() => setCreateOpen(true)} aria-keyshortcuts="N">
               <span className="inline-flex items-center gap-1.5">
                 <Plus className="h-3.5 w-3.5" />
                 <span className="group-data-[collapsible=icon]:hidden">Nueva app</span>
@@ -146,7 +148,7 @@ export function ShellLayout() {
             if (items.length === 0) return null;
             return (
               <SidebarGroup key={g.label} className="py-0 group-data-[collapsible=icon]:p-0">
-                <SidebarGroupLabel className="mt-4 mb-1 flex h-4 items-center gap-2 px-2 font-mono text-[9px] tracking-[0.18em] uppercase text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
+                <SidebarGroupLabel className="mt-3 mb-1 flex h-4 items-center gap-2 px-2 font-mono text-[9px] tracking-[0.18em] uppercase text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
                   <span>{g.label}</span>
                   <span aria-hidden className="h-px flex-1 bg-sidebar-border" />
                 </SidebarGroupLabel>
@@ -180,7 +182,7 @@ export function ShellLayout() {
             );
           })}
 
-          <SidebarGroup className="mt-4 py-0 group-data-[collapsible=icon]:p-0">
+          <SidebarGroup className="mt-3 py-0 group-data-[collapsible=icon]:p-0">
             <SidebarGroupLabel className="mb-1 flex h-4 items-center gap-2 px-2 font-mono text-[9px] tracking-[0.18em] uppercase text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
               <span>Puertos</span>
               <span aria-hidden className="h-px flex-1 bg-sidebar-border" />
@@ -193,13 +195,13 @@ export function ShellLayout() {
                     isActive={appFilter === ""}
                     onClick={() => setAppFilter("")}
                     tooltip="todos los puertos"
-                    className="h-7 rounded-[1px] px-2 font-mono text-[10px] text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:text-sidebar-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+                    className="h-7 rounded-[1px] px-2 font-mono text-[11px] text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:text-sidebar-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
                   >
                     <span className="hidden h-3.5 w-3.5 shrink-0 items-center justify-center text-muted-foreground/60 group-data-[collapsible=icon]:flex">
                       <LayoutGrid className="h-3.5 w-3.5" />
                     </span>
                     <span className="flex-1 group-data-[collapsible=icon]:hidden">todas</span>
-                    <span className="tnum text-[9px] text-muted-foreground/60 group-data-[collapsible=icon]:hidden">{apps.length}</span>
+                    <span className="tnum text-[10px] text-muted-foreground/60 group-data-[collapsible=icon]:hidden">{apps.length}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 {apps.map((a) => {
@@ -211,16 +213,16 @@ export function ShellLayout() {
                       <SidebarMenuButton
                         isActive={appFilter === a.name}
                         onClick={() => openApp(a.name)}
-                        className="h-7 rounded-[1px] px-2 font-mono text-[10px] text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:text-sidebar-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+                        className="h-7 rounded-[1px] px-2 font-mono text-[11px] text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:text-sidebar-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
                         tooltip={domain ? `${a.name} → ${domain}` : a.name}
                       >
                         <Dot status={st} />
                         <span className="min-w-0 flex-1 truncate group-data-[collapsible=icon]:hidden">{a.name}</span>
                         {meta?.port && (
-                          <span className="tnum text-[9px] text-muted-foreground/55 group-data-[collapsible=icon]:hidden">:{meta.port}</span>
+                          <span className="tnum text-[10px] text-muted-foreground/55 group-data-[collapsible=icon]:hidden">:{meta.port}</span>
                         )}
                         {st === "failed" && (
-                          <span className="tnum text-[9px] text-bad group-data-[collapsible=icon]:hidden">!{a.restarts}</span>
+                          <span className="tnum text-[10px] text-bad group-data-[collapsible=icon]:hidden">!{a.restarts}</span>
                         )}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -289,17 +291,21 @@ export function ShellLayout() {
           <span className="flex-1" />
           <span className="folio hidden items-center gap-1.5 lg:flex">
             <Command className="h-3 w-3" />
-            {new Date().toISOString().slice(0, 10)}
+            {new Date().toLocaleDateString("en-CA")}
           </span>
           {!online && <span className="font-mono text-[10px] text-warn">offline</span>}
-          <span className="hidden items-center gap-1.5 border border-border bg-card/40 px-2 py-1 md:flex">
+          <Link
+            to="/alerts"
+            aria-label={failed > 0 ? `${failed} apps varadas · ver alertas` : `${running}/${apps.length} en marcha · ver alertas`}
+            className="hidden items-center gap-1.5 border border-border bg-card/40 px-2 py-1 transition-colors hover:border-input hover:bg-card/70 md:flex"
+          >
             <Dot status={failed > 0 ? "failed" : "ok"} />
             <span className="tnum font-mono text-[10px] text-muted-foreground">
               {failed > 0 ? `${failed} varado${failed > 1 ? "s" : ""}` : `${running}/${apps.length} en marcha`}
             </span>
-          </span>
+          </Link>
           {canWrite && (
-            <Button size="sm" onClick={() => setCreateOpen(true)} className="h-7">
+            <Button size="sm" onClick={() => setCreateOpen(true)} className="h-7 md:hidden">
               <Plus className="h-3.5 w-3.5" /> Nueva app
             </Button>
           )}
@@ -309,7 +315,8 @@ export function ShellLayout() {
           <div className="mx-auto max-w-[1480px]">
             <Err msg={err} />
             {loading ? (
-              <div className="space-y-px border border-border" aria-label="cargando flota">
+              <div className="space-y-px border border-border" aria-busy="true" aria-label="cargando flota">
+                <span className="sr-only">cargando flota…</span>
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="flex h-14 items-center gap-3 border-b border-border bg-card/35 px-3 last:border-0">
                     <Skeleton className="h-3 w-3" />

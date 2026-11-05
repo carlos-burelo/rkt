@@ -18,10 +18,10 @@ function Check({ ok, label, hint }: { ok: boolean; label: string; hint: string }
         className={`h-2 w-2 shrink-0 border ${ok ? "border-ok/60 bg-ok" : "border-border bg-transparent"}`}
       />
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px]">{label}</span>
-        <span className="mt-0.5 block truncate font-mono text-[9px] text-muted-foreground">{hint}</span>
+        <span className="block text-[12px]">{label}</span>
+        <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground">{hint}</span>
       </span>
-      <span className={`font-mono text-[9px] tracking-[0.08em] uppercase ${ok ? "text-ok" : "text-muted-foreground/70"}`}>
+      <span className={`font-mono text-[10px] tracking-[0.08em] uppercase ${ok ? "text-ok" : "text-muted-foreground/70"}`}>
         {ok ? "listo" : "pendiente"}
       </span>
     </div>
@@ -32,7 +32,7 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
   return (
     <div className="min-w-0 bg-card/45 px-3 py-2">
       <p className="micro">{label}</p>
-      <div className="tnum mt-1 truncate font-mono text-[11px]">{children}</div>
+      <div className="tnum mt-1 truncate font-mono text-[12px]">{children}</div>
     </div>
   );
 }

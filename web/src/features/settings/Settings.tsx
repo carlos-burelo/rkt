@@ -123,7 +123,7 @@ export function Settings() {
         )}
         {gh && gh.configured && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-px border border-border bg-border md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-px border border-border bg-border lg:grid-cols-4">
               <div className="bg-card/45 px-3 py-2">
                 <p className="micro">cuenta</p>
                 <p className="mt-1 truncate font-mono text-[11px]">{gh.account || "—"}</p>

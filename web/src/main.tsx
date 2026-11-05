@@ -5,7 +5,8 @@ import { App } from "./app/App";
 
 // SW con scope absoluto desde la raíz: un deep link (p. ej.
 // /app/x/logs) no debe resolver assets/manifest relativos a esa ruta.
-if ("serviceWorker" in navigator) {
+// SW solo en build: en dev no existe /sw.js y el fallback HTML ensucia consola.
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
   const base = import.meta.env.BASE_URL;
   // Solo recarga si esta pestaña ya estaba controlada: la primera
   // instalación (clientsClaim) no debe refrescar en medio del login.

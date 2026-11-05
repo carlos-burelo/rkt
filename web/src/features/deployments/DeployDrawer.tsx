@@ -3,7 +3,7 @@ import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { rel, dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
-import { stateLabel } from "../../shared/lib/labels";
+import { deployStateLabel } from "../../shared/lib/labels";
 import { CopyButton } from "../../shared/components/feedback";
 import { Button } from "@/components/ui/button";
 import { streamLog, bust } from "../../shared/lib/http";
@@ -130,7 +130,7 @@ export function DeployDrawer() {
                       {dep.app} <span className="tnum text-muted-foreground">#{dep.id}</span>
                     </Title>
                     <p className="mt-1.5 flex flex-wrap items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
-                      <span>{stateLabel(dep.status)}</span>
+                      <span>{deployStateLabel(dep.status)}</span>
                       <span aria-hidden>·</span>
                       <span className="tnum">{dep.rev.slice(0, 12)}</span>
                       <CopyButton text={dep.rev} />

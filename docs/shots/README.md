@@ -31,4 +31,6 @@ pnpm --dir scripts/shots shots
 - Captura rutas fijas y las tabs de la primera app.
 - `users` solo si el rol es admin.
 - Salida: `docs/shots/<ruta>.png` (full page, 1600×900).
-- El modo mock registra errores de consola; úsalos como control de calidad.
+- El modo mock registra errores de consola y respuestas HTTP 4xx/5xx; úsalos
+  como control de calidad. Una corrida limpia termina en «sin errores de
+  consola».

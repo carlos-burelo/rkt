@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader, EmptyState, Time } from "../../shared/components/patterns";
 import { FormDialog, Field } from "../../shared/components/FormDialog";
-import { Avatar, Dot } from "../../shared/components/ui";
+import { ConfirmButton } from "../../shared/components/ConfirmButton";
+import { Avatar } from "../../shared/components/ui";
 import { roleLabel } from "../../shared/lib/labels";
 import {
   Select, SelectTrigger, SelectContent, SelectItem,
@@ -101,10 +102,9 @@ export function Users() {
       />
       <div className="border border-border" role="table" aria-label="usuarios">
         <div
-          className="hidden grid-cols-[1.5rem_minmax(0,1fr)_7rem_9rem_4rem] items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 sm:grid"
+          className="hidden grid-cols-[minmax(0,1fr)_7rem_9rem_4rem] items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 sm:grid"
           aria-hidden
         >
-          <span className="micro">est</span>
           <span className="micro">usuario</span>
           <span className="micro">rol</span>
           <span className="micro text-right">alta</span>
@@ -113,36 +113,34 @@ export function Users() {
         {users.map((u) => (
           <div
             key={u.name}
-            className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-2 border-b border-border/70 bg-card/35 px-3 py-2.5 last:border-0 sm:grid-cols-[1.5rem_minmax(0,1fr)_7rem_9rem_4rem] sm:gap-3"
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border/70 bg-card/35 px-3 py-2.5 last:border-0 sm:grid-cols-[minmax(0,1fr)_7rem_9rem_4rem] sm:gap-3"
           >
-            <Dot status={me?.user === u.name ? "running" : "stopped"} />
             <span className="flex min-w-0 items-center gap-2">
               <Avatar name={u.name} />
-              <span className="truncate font-mono text-[11px]">{u.name}</span>
+              <span className="truncate font-mono text-[12px]">{u.name}</span>
               {me?.user === u.name && (
-                <span className="font-mono text-[8px] tracking-[0.08em] text-muted-foreground uppercase">tú</span>
+                <span className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase">tú</span>
               )}
             </span>
             <span
-              className={`tnum inline-flex h-5 w-fit items-center border px-1.5 font-mono text-[9px] tracking-[0.08em] uppercase ${
+              className={`tnum inline-flex h-5 w-fit items-center border px-1.5 font-mono text-[10px] tracking-[0.08em] uppercase ${
                 ROLE_CLASS[u.role] ?? ROLE_CLASS.viewer
               }`}
             >
               {roleLabel(u.role)}
             </span>
-            <span className="tnum hidden text-right font-mono text-[10px] text-muted-foreground sm:block">
+            <span className="tnum hidden text-right font-mono text-[11px] text-muted-foreground sm:block">
               <Time iso={u.created_at} />
             </span>
             <div className="flex justify-end">
-              <Button
-                variant="destructive"
-                size="xs"
+              <ConfirmButton
                 disabled={me?.user === u.name}
-                title={me?.user === u.name ? "no puedes borrarte a ti mismo" : "borrar"}
-                onClick={() => deleteUser(u.name).then(load).catch(fail)}
-              >
-                borrar
-              </Button>
+                title={me?.user === u.name ? "no puedes borrarte a ti mismo" : "borrar usuario"}
+                confirmLabel="confirmar"
+                onConfirm={() => {
+                  deleteUser(u.name).then(load).catch(fail);
+                }}
+              />
             </div>
           </div>
         ))}

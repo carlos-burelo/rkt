@@ -107,7 +107,7 @@ export function Stat({
 
 export function StatGrid({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("grid grid-cols-2 gap-px border border-border bg-border md:grid-cols-4", className)}>
+    <div className={cn("grid grid-cols-2 gap-px border border-border bg-border lg:grid-cols-4", className)}>
       {children}
     </div>
   );
@@ -136,7 +136,9 @@ export function Segmented<T extends string>({
             aria-pressed={active}
             className={cn(
               "inline-flex h-7 items-center gap-1.5 border-r border-border px-2.5 font-mono text-[10px] tracking-[0.08em] uppercase transition-colors last:border-r-0",
-              active ? "bg-signal text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              active
+                ? "bg-secondary font-medium text-foreground shadow-[inset_0_-1px_0_0_var(--signal)]"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
             {it.label}
@@ -168,10 +170,18 @@ export function Meter({
         <span className="tnum font-mono text-[11px] text-foreground">{value}</span>
       </div>
       {frac === undefined ? (
-        <div aria-hidden className="mt-1.5 h-px bg-border" />
+        <div aria-hidden className="mt-2 h-px bg-border" />
       ) : (
-        <div className="mt-1.5 h-1 overflow-hidden bg-secondary" role="img" aria-label={`${label} ${value}`}>
-          <div className={cn("h-full", bar)} style={{ width: `${pct}%` }} />
+        <div
+          className="mt-2 h-1.5 overflow-hidden bg-secondary/80"
+          role="progressbar"
+          aria-label={label}
+          aria-valuenow={Math.round(pct)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuetext={value}
+        >
+          <div className={cn("h-full transition-[width] duration-300", bar)} style={{ width: `${pct}%` }} />
         </div>
       )}
     </div>
