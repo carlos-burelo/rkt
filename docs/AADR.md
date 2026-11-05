@@ -921,7 +921,7 @@ Criterios:
 | 2026-11-05 | BLD parcial: evidencia, gestores, Python/Rust/SolidStart, env determinista y UI | `42434d2` | `go test ./internal/buildpack ./internal/discover ./internal/deploy`, `tsc` |
 | 2026-11-05 | BLD final: Java, salidas estáticas, versión Node y caché decidida | `350575e` | `go test ./internal/buildpack ./internal/discover` |
 | 2026-11-05 | MOCK: nombres neutros, dominios ejemplo.com y guard de fixtures | `350575e` | `node scripts/fixtures-check.mjs`, capturas |
-| 2026-11-05 | MOCK-06: fixtures extraídos a módulo compartido | este commit | `node --check`, `fixtures-check`, capturas |
+| 2026-11-05 | MOCK-06: fixtures extraídos a módulo compartido | `76ffebc` | `node --check`, `fixtures-check`, capturas |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.
