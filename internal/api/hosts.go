@@ -20,7 +20,7 @@ func (d *Deps) handleHosts(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]any{"hosts": list, "path": hosts.Path()})
 	case http.MethodPost:
-		if !requireOperator(w, r, d.DB) {
+		if !requireOperator(w, r) {
 			return
 		}
 		var in struct {
@@ -41,7 +41,7 @@ func (d *Deps) handleHosts(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]string{"ok": "true", "host": in.Host})
 	case http.MethodDelete:
-		if !requireOperator(w, r, d.DB) {
+		if !requireOperator(w, r) {
 			return
 		}
 		host := r.URL.Query().Get("host")

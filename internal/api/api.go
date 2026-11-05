@@ -10,21 +10,16 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"rkt-proxy/internal/appusage"
-	"rkt-proxy/internal/appview"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
-	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/store"
-	"rkt-proxy/internal/weblog"
 )
 
 // Deps dependencias inyectables. LogsDir = logx.DirFor(cfgPath).
@@ -55,43 +50,9 @@ type Deps struct {
 	GithubRepos func() ([]github.Repo, error)
 	// GithubManager manager vivo para inferir plan de repos privados.
 	GithubManager func() *github.Manager
-}
 
-// cloneFleet copia editable de la flota viva (Live se lee sin lock;
-// mutar el puntero vivo = race con handlers).
-func cloneFleet(live *config.Live) *config.Config {
-	src := live.Get()
-	out := *src
-	out.Apps = make([]config.App, len(src.Apps))
-	for i, a := range src.Apps {
-		out.Apps[i] = a
-		if a.Env != nil {
-			env := make(map[string]string, len(a.Env))
-			for k, v := range a.Env {
-				env[k] = v
-			}
-			out.Apps[i].Env = env
-		}
-		if a.Deploy != nil {
-			d := *a.Deploy
-			d.Build = append([]string(nil), a.Deploy.Build...)
-			out.Apps[i].Deploy = &d
-		}
-		out.Apps[i].Args = append([]string(nil), a.Args...)
-	}
-	out.Routes = make([]config.Route, len(src.Routes))
-	for i, r := range src.Routes {
-		out.Routes[i] = r
-		out.Routes[i].Hosts = append([]string(nil), r.Hosts...)
-	}
-	if src.GlobalEnv != nil {
-		global := make(map[string]string, len(src.GlobalEnv))
-		for k, v := range src.GlobalEnv {
-			global[k] = v
-		}
-		out.GlobalEnv = global
-	}
-	return &out
+	// cache agregados costosos (access.log). Lo inicializa NewHandler.
+	cache *memo
 }
 
 // ctxUser/ctxRole usuario autenticado en el request.
@@ -160,18 +121,6 @@ func RequireAuth(db *store.DB, next http.Handler) http.Handler {
 	})
 }
 
-// RequireRole rol mínimo (viewer<operator<admin).
-func RequireRole(db *store.DB, minRole string, next http.Handler) http.Handler {
-	return RequireAuth(db, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, role := UserOf(r)
-		if roleLevel(role) < roleLevel(minRole) {
-			writeErr(w, http.StatusForbidden, "requiere rol "+minRole)
-			return
-		}
-		next.ServeHTTP(w, r)
-	}))
-}
-
 // memo caché TTL para agregados costosos (weblog). Clave = ruta+query.
 type memo struct {
 	mu sync.Mutex
@@ -212,25 +161,6 @@ func (c *memo) get(key string, ttl time.Duration, fn func() (any, error)) ([]byt
 	}
 	c.mu.Unlock()
 	return b, nil
-}
-
-// entries lee access.log filtrado por ventana (cero = todo).
-func entries(logsDir string, since time.Time, host string) []weblog.Entry {
-	all := weblog.ParseFile(filepath.Join(logsDir, "access.log"))
-	if since.IsZero() && host == "" {
-		return all
-	}
-	out := all[:0]
-	for _, e := range all {
-		if !since.IsZero() && e.Time.Before(since) {
-			continue
-		}
-		if host != "" && e.Host != host {
-			continue
-		}
-		out = append(out, e)
-	}
-	return out
 }
 
 type loginThrottle struct {
@@ -298,7 +228,7 @@ func clientIP(r *http.Request) string {
 // /users solo admin.
 func NewHandler(d Deps) http.Handler {
 	th := &loginThrottle{}
-	cache := newMemo()
+	d.cache = newMemo()
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/v1/auth/status", func(w http.ResponseWriter, r *http.Request) {
@@ -401,18 +331,21 @@ func NewHandler(d Deps) http.Handler {
 		})
 		writeJSON(w, map[string]any{"user": in.User, "role": role, "token": tok})
 	})
-	mux.Handle("/api/v1/auth/logout", RequireAuth(d.DB, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/auth/logout", func(w http.ResponseWriter, r *http.Request) {
 		if tok := bearerOf(r); tok != "" {
 			d.DB.DeleteSession(tok)
 		}
 		http.SetCookie(w, &http.Cookie{Name: "rkt_token", Value: "", Path: "/", MaxAge: -1})
 		writeJSON(w, map[string]string{"ok": "true"})
-	})))
-	mux.Handle("/api/v1/auth/me", RequireAuth(d.DB, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	})
+	mux.HandleFunc("/api/v1/auth/me", func(w http.ResponseWriter, r *http.Request) {
 		u, role := UserOf(r)
 		writeJSON(w, map[string]string{"user": u, "role": role})
-	})))
-	mux.Handle("/api/v1/users", RequireRole(d.DB, store.RoleAdmin, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	})
+	mux.HandleFunc("/api/v1/users", func(w http.ResponseWriter, r *http.Request) {
+		if !requireAdmin(w, r) {
+			return
+		}
 		switch r.Method {
 		case http.MethodGet:
 			users, err := d.DB.ListUsers()
@@ -440,8 +373,11 @@ func NewHandler(d Deps) http.Handler {
 		default:
 			writeErr(w, http.StatusMethodNotAllowed, "GET|POST")
 		}
-	})))
-	mux.Handle("/api/v1/users/", RequireRole(d.DB, store.RoleAdmin, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	})
+	mux.HandleFunc("/api/v1/users/", func(w http.ResponseWriter, r *http.Request) {
+		if !requireAdmin(w, r) {
+			return
+		}
 		if r.Method != http.MethodDelete {
 			writeErr(w, http.StatusMethodNotAllowed, "solo DELETE")
 			return
@@ -456,7 +392,7 @@ func NewHandler(d Deps) http.Handler {
 			return
 		}
 		writeJSON(w, map[string]string{"ok": "true"})
-	})))
+	})
 
 	mux.HandleFunc("/api/v1/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -481,385 +417,18 @@ func NewHandler(d Deps) http.Handler {
 			"https_port": httpsPort,
 		})
 	})
-	mux.HandleFunc("/api/v1/deployments", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
-			return
-		}
-		n := queryInt(r, "n", 20)
-		deps, err := d.DB.ListDeployments(r.URL.Query().Get("app"), n)
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		writeJSON(w, deps)
-	})
-	mux.HandleFunc("/api/v1/events", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
-			return
-		}
-		q := r.URL.Query()
-		evs, err := d.DB.ListEvents(queryInt(r, "n", 20), q.Get("kind"), q.Get("app"))
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		writeJSON(w, evs)
-	})
+	mux.HandleFunc("/api/v1/deployments", d.handleDeployments)
+	mux.HandleFunc("/api/v1/events", d.handleEvents)
 	// Apps: lista/detalle sin env (los secretos solo vía /env, operator).
-	mux.HandleFunc("/api/v1/logs", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
-			return
-		}
-		path := filepath.Join(d.LogsDir, "rkt.log")
-		if app := r.URL.Query().Get("app"); app != "" {
-			if !validAppName(app) {
-				writeErr(w, http.StatusBadRequest, "app inválida [a-z0-9-]")
-				return
-			}
-			path = filepath.Join(d.LogsDir, "apps", app+".log")
-		}
-		out, err := logx.Tail(path, queryInt(r, "n", 50))
-		if err != nil {
-			writeErr(w, http.StatusNotFound, err.Error())
-			return
-		}
-		writeJSON(w, map[string]any{"log": out})
-	})
+	mux.HandleFunc("/api/v1/logs", d.handleLogs)
 	// Mismo log, pero en vivo (SSE): init + chunks mientras el cliente escuche.
-	mux.HandleFunc("/api/v1/logs/stream", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
-			return
-		}
-		path := filepath.Join(d.LogsDir, "rkt.log")
-		if app := r.URL.Query().Get("app"); app != "" {
-			if !validAppName(app) {
-				writeErr(w, http.StatusBadRequest, "app inválida [a-z0-9-]")
-				return
-			}
-			path = filepath.Join(d.LogsDir, "apps", app+".log")
-		}
-		streamLog(w, r, path, queryInt(r, "n", 200), nil)
-	})
-	mux.HandleFunc("/api/v1/apps", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			live := d.Live.Get()
-			out := []map[string]any{}
-			for _, x := range live.Apps {
-				out = append(out, appview.App(live, x))
-			}
-			writeJSON(w, out)
-			return
-		}
-		if r.Method == http.MethodPost {
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			var in struct {
-				Repo    string `json:"repo"`
-				Name    string `json:"name"`
-				Runtime string `json:"runtime"`
-				Domain  string `json:"domain"`
-				Port    int    `json:"port"`
-				Command string `json:"command"`
-				Dir     string `json:"dir"`
-				Auto    bool   `json:"auto"`
-			}
-			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
-				writeErr(w, http.StatusBadRequest, "JSON inválido")
-				return
-			}
-			name, err := createAppFromRepo(d.DB, d.Live, d.githubManager(), in.Runtime, in.Repo, in.Name, in.Domain, in.Port, in.Command, in.Dir, in.Auto)
-			if err != nil {
-				writeErr(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			w.WriteHeader(http.StatusCreated)
-			writeJSON(w, map[string]string{"app": name})
-			return
-		}
-		writeErr(w, http.StatusMethodNotAllowed, "GET|POST")
-	})
-	mux.HandleFunc("/api/v1/apps/", func(w http.ResponseWriter, r *http.Request) {
-		rest := strings.TrimPrefix(r.URL.Path, "/api/v1/apps/")
-		name, action := rest, ""
-		if i := strings.Index(rest, "/"); i >= 0 {
-			name, action = rest[:i], rest[i+1:]
-		}
-		a := cfgfile.FindApp(d.Live.Get(), name)
-		if a == nil {
-			writeErr(w, http.StatusNotFound, "app inexistente")
-			return
-		}
-		if a.External() && (action == "deploy" || action == "restart" || action == "rollback" || action == "build" || action == "retry") {
-			writeErr(w, http.StatusConflict, "app externa: solo proxy; corre el dev server en "+a.Dir)
-			return
-		}
-		switch {
-		case action == "" && r.Method == http.MethodGet:
-			writeJSON(w, appview.App(d.Live.Get(), *a))
-		case action == "usage" && r.Method == http.MethodGet:
-			st := health.AppStatus{Name: name}
-			if d.Apps != nil {
-				for _, s := range d.Apps() {
-					if s.Name == name {
-						st = s
-					}
-				}
-			}
-			win := queryInt(r, "window", 300)
-			if win > 86400 {
-				win = 86400
-			}
-			rep, err := appusage.Collect(appusage.Input{
-				App: *a, Cfg: d.Live.Get(), LogsDir: d.LogsDir,
-				Status: st, Window: time.Duration(win) * time.Second,
-			})
-			if err != nil {
-				writeErr(w, http.StatusServiceUnavailable, err.Error())
-				return
-			}
-			writeJSON(w, rep)
-		case action == "" && r.Method == http.MethodPut:
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			var in struct {
-				Command      *string   `json:"command"`
-				Args         *[]string `json:"args"`
-				Dir          *string   `json:"dir"`
-				EnvFile      *string   `json:"env_file"`
-				Static       *string   `json:"static"`
-				Port         *int      `json:"port"`
-				Domain       *string   `json:"domain"`
-				RestartDelay *string   `json:"restart_delay"`
-				MinUptime    *string   `json:"min_uptime"`
-				MemoryMB     *uint64   `json:"memory_mb"`
-				Deploy       *struct {
-					Repo  string   `json:"repo"`
-					Ref   string   `json:"ref"`
-					Build []string `json:"build"`
-					Auto  bool     `json:"auto"`
-				} `json:"deploy"`
-			}
-			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
-				writeErr(w, http.StatusBadRequest, "JSON inválido")
-				return
-			}
-			cp := cloneFleet(d.Live)
-			t := cfgfile.FindApp(cp, name)
-			if in.Command != nil {
-				t.Command = *in.Command
-			}
-			if in.Args != nil {
-				t.Args = *in.Args
-			}
-			if in.Dir != nil {
-				t.Dir = *in.Dir
-			}
-			if in.EnvFile != nil {
-				t.EnvFile = *in.EnvFile
-			}
-			if in.Static != nil {
-				t.Static = *in.Static
-			}
-			if in.RestartDelay != nil {
-				t.RestartDelay = *in.RestartDelay
-			}
-			if in.MinUptime != nil {
-				t.MinUptime = *in.MinUptime
-			}
-			if in.MemoryMB != nil {
-				t.MemoryMB = *in.MemoryMB
-			}
-			if in.Deploy != nil {
-				t.Deploy = &config.Deploy{
-					Repo: in.Deploy.Repo, Ref: in.Deploy.Ref,
-					Build: in.Deploy.Build, Auto: in.Deploy.Auto,
-				}
-			}
-			if err := t.ValidateApp(0); err != nil {
-				writeErr(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			if in.Port != nil {
-				if err := cfgfile.SetAppPort(cp, name, *in.Port); err != nil {
-					writeErr(w, http.StatusBadRequest, err.Error())
-					return
-				}
-			}
-			if in.Domain != nil {
-				if err := cfgfile.SetAppDomain(cp, name, *in.Domain); err != nil {
-					writeErr(w, http.StatusBadRequest, err.Error())
-					return
-				}
-			}
-			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
-				writeErr(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			d.Live.Swap(cp)
-			if d.Apply != nil {
-				d.Apply(cp.Apps, cp.GlobalEnv)
-			}
-			writeJSON(w, map[string]string{"ok": "true"})
-		case action == "" && r.Method == http.MethodDelete:
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			cp := cloneFleet(d.Live)
-			target := ""
-			if old := cfgfile.FindApp(cp, name); old != nil {
-				if p := old.Env["PORT"]; p != "" {
-					target = "http://127.0.0.1:" + p
-				}
-			}
-			kept := []config.App{}
-			for _, x := range cp.Apps {
-				if x.Name != name {
-					kept = append(kept, x)
-				}
-			}
-			cp.Apps = kept
-			if target != "" {
-				routes := []config.Route{}
-				for _, r := range cp.Routes {
-					if r.Target != target {
-						routes = append(routes, r)
-					}
-				}
-				cp.Routes = routes
-			}
-			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
-				writeErr(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			d.Live.Swap(cp)
-			if d.Apply != nil {
-				d.Apply(cp.Apps, cp.GlobalEnv)
-			}
-			writeJSON(w, map[string]string{"ok": "true", "hint": "revisa huérfanas: routes list"})
-		case action == "build" && r.Method == http.MethodPost:
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			if d.Build == nil {
-				writeErr(w, http.StatusServiceUnavailable, "build deshabilitado")
-				return
-			}
-			id, err := d.Build(name, mustUser(r))
-			if err != nil {
-				writeErr(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-			writeJSON(w, map[string]any{"deployment": id})
-		case action == "restart" && r.Method == http.MethodPost:
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			if d.Restart == nil || !d.Restart(name) {
-				writeErr(w, http.StatusNotFound, "restart fallido")
-				return
-			}
-			writeJSON(w, map[string]string{"ok": "true"})
-		case action == "deploy" && r.Method == http.MethodPost:
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			if r.URL.Query().Get("async") == "1" && d.DeployAsync != nil {
-				id, err := d.DeployAsync(name, mustUser(r))
-				if err != nil {
-					writeErr(w, http.StatusInternalServerError, err.Error())
-					return
-				}
-				w.WriteHeader(http.StatusAccepted)
-				writeJSON(w, map[string]any{"deployment": id})
-				return
-			}
-			if d.Deploy == nil {
-				writeErr(w, http.StatusServiceUnavailable, "deploy deshabilitado")
-				return
-			}
-			rev, err := d.Deploy(name, mustUser(r))
-			if err != nil {
-				writeErr(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-			writeJSON(w, map[string]string{"rev": rev})
-		case action == "rollback" && r.Method == http.MethodPost:
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			if d.Rollback == nil {
-				writeErr(w, http.StatusServiceUnavailable, "rollback deshabilitado")
-				return
-			}
-			if err := d.Rollback(name, mustUser(r)); err != nil {
-				writeErr(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-			writeJSON(w, map[string]string{"ok": "true"})
-		case action == "env" && r.Method == http.MethodGet:
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			env := a.Env
-			if env == nil {
-				env = map[string]string{}
-			}
-			writeJSON(w, env)
-		case action == "env" && r.Method == http.MethodPut:
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			var in struct {
-				Key   string `json:"key"`
-				Value string `json:"value"`
-			}
-			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
-				writeErr(w, http.StatusBadRequest, "JSON inválido")
-				return
-			}
-			if strings.TrimSpace(in.Key) == "" {
-				writeErr(w, http.StatusBadRequest, "key vacía")
-				return
-			}
-			cp := cloneFleet(d.Live)
-			if err := cfgfile.SetEnv(d.DB, cp, name, strings.TrimSpace(in.Key), in.Value); err != nil {
-				writeErr(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			d.Live.Swap(cp) // inmediato (watchMerged lo reconfirma)
-			writeJSON(w, map[string]string{"ok": "true"})
-		case action == "env" && r.Method == http.MethodDelete:
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			key := r.URL.Query().Get("key")
-			if key == "" {
-				writeErr(w, http.StatusBadRequest, "falta ?key=")
-				return
-			}
-			cp := cloneFleet(d.Live)
-			t := cfgfile.FindApp(cp, name)
-			delete(t.Env, key)
-			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
-				writeErr(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			d.Live.Swap(cp) // inmediato (watchMerged lo reconfirma)
-			writeJSON(w, map[string]string{"ok": "true"})
-		default:
-			writeErr(w, http.StatusNotFound, "ruta inválida")
-		}
-	})
+	mux.HandleFunc("/api/v1/logs/stream", d.handleLogStream)
+	mux.HandleFunc("/api/v1/apps", d.handleApps)
+	mux.HandleFunc("/api/v1/apps/", d.handleAppDetail)
 
 	// Env global: variables compartidas por todas las apps (la app gana).
 	mux.HandleFunc("/api/v1/env/global", func(w http.ResponseWriter, r *http.Request) {
-		if !requireOperator(w, r, d.DB) {
+		if !requireOperator(w, r) {
 			return
 		}
 		switch r.Method {
@@ -883,7 +452,7 @@ func NewHandler(d Deps) http.Handler {
 				writeErr(w, http.StatusBadRequest, "key vacía")
 				return
 			}
-			cp := cloneFleet(d.Live)
+			cp := d.Live.Get().Clone()
 			if err := cfgfile.SetGlobalEnv(d.DB, cp, key, in.Value); err != nil {
 				writeErr(w, http.StatusBadRequest, err.Error())
 				return
@@ -899,7 +468,7 @@ func NewHandler(d Deps) http.Handler {
 				writeErr(w, http.StatusBadRequest, "falta ?key=")
 				return
 			}
-			cp := cloneFleet(d.Live)
+			cp := d.Live.Get().Clone()
 			if err := cfgfile.UnsetGlobalEnv(d.DB, cp, key); err != nil {
 				writeErr(w, http.StatusBadRequest, err.Error())
 				return
@@ -951,122 +520,7 @@ func NewHandler(d Deps) http.Handler {
 	})
 
 	// Routes: misma semántica que CLI (rm quita host).
-	mux.HandleFunc("/api/v1/routes", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			type routeOut struct {
-				Hosts  []string `json:"hosts"`
-				Target string   `json:"target"`
-			}
-			out := []routeOut{}
-			for _, x := range d.Live.Get().Routes {
-				out = append(out, routeOut{x.Hosts, x.Target})
-			}
-			writeJSON(w, out)
-		case http.MethodPost:
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			var in struct {
-				Hosts  []string `json:"hosts"`
-				Target string   `json:"target"`
-			}
-			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
-				writeErr(w, http.StatusBadRequest, "JSON inválido")
-				return
-			}
-			if len(in.Hosts) == 0 || in.Target == "" {
-				writeErr(w, http.StatusBadRequest, "hosts y target requeridos")
-				return
-			}
-			cp := cloneFleet(d.Live)
-			cp.Routes = append(cp.Routes, config.Route{Hosts: in.Hosts, Target: in.Target})
-			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
-				writeErr(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			d.Live.Swap(cp) // hot-reload inmediato
-			w.WriteHeader(http.StatusCreated)
-			writeJSON(w, map[string]string{"ok": "true"})
-		case http.MethodDelete:
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			host := r.URL.Query().Get("host")
-			if host == "" {
-				writeErr(w, http.StatusBadRequest, "falta ?host=")
-				return
-			}
-			cp := cloneFleet(d.Live)
-			kept := []config.Route{}
-			removed := false
-			for _, x := range cp.Routes {
-				hosts := []string{}
-				for _, h := range x.Hosts {
-					if strings.EqualFold(h, host) {
-						removed = true
-						continue
-					}
-					hosts = append(hosts, h)
-				}
-				if len(hosts) > 0 {
-					x.Hosts = hosts
-					kept = append(kept, x)
-				} else if len(x.Hosts) > 0 {
-					removed = true
-				}
-			}
-			if !removed {
-				writeErr(w, http.StatusNotFound, "host no encontrado")
-				return
-			}
-			cp.Routes = kept
-			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
-				writeErr(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			d.Live.Swap(cp) // hot-reload inmediato
-			writeJSON(w, map[string]string{"ok": "true"})
-		case http.MethodPut:
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			var pin struct {
-				Host   string `json:"host"`
-				Target string `json:"target"`
-			}
-			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&pin); err != nil {
-				writeErr(w, http.StatusBadRequest, "JSON inválido")
-				return
-			}
-			if pin.Host == "" || pin.Target == "" {
-				writeErr(w, http.StatusBadRequest, "host y target requeridos")
-				return
-			}
-			cp := cloneFleet(d.Live)
-			found := false
-			for i := range cp.Routes {
-				for _, h := range cp.Routes[i].Hosts {
-					if strings.EqualFold(h, pin.Host) {
-						cp.Routes[i].Target = pin.Target
-						found = true
-					}
-				}
-			}
-			if !found {
-				writeErr(w, http.StatusNotFound, "host no encontrado")
-				return
-			}
-			if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
-				writeErr(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			d.Live.Swap(cp) // hot-reload inmediato
-			writeJSON(w, map[string]string{"ok": "true"})
-		default:
-			writeErr(w, http.StatusMethodNotAllowed, "GET|POST|PUT|DELETE")
-		}
-	})
+	mux.HandleFunc("/api/v1/routes", d.handleRoutes)
 
 	// Settings: lectura viewer, escritura operator (solo conocidas).
 	mux.HandleFunc("/api/v1/settings", func(w http.ResponseWriter, r *http.Request) {
@@ -1078,7 +532,7 @@ func NewHandler(d Deps) http.Handler {
 			}
 			writeJSON(w, out)
 		case http.MethodPut:
-			if !requireOperator(w, r, d.DB) {
+			if !requireOperator(w, r) {
 				return
 			}
 			var in struct {
@@ -1125,119 +579,13 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("/api/v1/domains/hosts", d.handleHosts)
 
 	// Usage 30d (rollup access.log, caché 5min). Sin cobro: solo uso.
-	mux.HandleFunc("/api/v1/usage", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
-			return
-		}
-		days := queryInt(r, "days", 30)
-		b, err := cache.get("usage:"+strconv.Itoa(days), 5*time.Minute, func() (any, error) {
-			es := entries(d.LogsDir, time.Now().AddDate(0, 0, -days), "")
-			s := weblog.Summarize(es)
-			errs := s.ByClass["5xx"]
-			rate := 0.0
-			if s.Total > 0 {
-				rate = float64(errs) / float64(s.Total)
-			}
-			return map[string]any{
-				"days": days, "total": s.Total, "bytes": s.Bytes,
-				"err_rate": rate, "p95": s.P95, "by_day": s.ByDay,
-			}, nil
-		})
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(b)
-	})
+	mux.HandleFunc("/api/v1/usage", d.handleUsage)
 
-	// Analytics por host (o global): requests, bytes, errores, p50/p95,
-	// top rutas/referers, serie diaria. Sin visitors/bounce inventados.
-	mux.HandleFunc("/api/v1/analytics", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
-			return
-		}
-		host := r.URL.Query().Get("host")
-		days := queryInt(r, "days", 7)
-		key := "analytics:" + host + ":" + strconv.Itoa(days)
-		b, err := cache.get(key, 5*time.Minute, func() (any, error) {
-			es := entries(d.LogsDir, time.Now().AddDate(0, 0, -days), host)
-			return weblog.Summarize(es), nil
-		})
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(b)
-	})
+	// Analytics por host (o global), sin métricas inventadas.
+	mux.HandleFunc("/api/v1/analytics", d.handleAnalytics)
 
 	// Observability flota: serie req/errores por hora + restarts + caídas.
-	mux.HandleFunc("/api/v1/observability", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
-			return
-		}
-		hours := queryInt(r, "hours", 6)
-		if hours > 168 {
-			hours = 168
-		}
-		b, err := cache.get("obs:"+strconv.Itoa(hours), time.Minute, func() (any, error) {
-			since := time.Now().Add(-time.Duration(hours) * time.Hour)
-			es := entries(d.LogsDir, since, "")
-			type bucket struct {
-				Ts  string `json:"ts"`
-				Req int    `json:"req"`
-				Err int    `json:"err"`
-			}
-			buckets := make([]bucket, hours)
-			for i := range buckets {
-				buckets[i].Ts = since.Add(time.Duration(i+1) * time.Hour).Format("15:04")
-			}
-			for _, e := range es {
-				i := int(e.Time.Sub(since).Hours())
-				if i < 0 || i >= hours {
-					continue
-				}
-				buckets[i].Req++
-				if e.Status >= 500 {
-					buckets[i].Err++
-				}
-			}
-			restarts := 0
-			if evs, err := d.DB.ListEvents(500, "", ""); err == nil {
-				for _, e := range evs {
-					t, err := time.Parse(time.RFC3339, e.Ts)
-					if err != nil || t.Before(since) {
-						continue
-					}
-					if e.Kind == "died" || e.Kind == "restarted" || e.Kind == "failed" {
-						restarts++
-					}
-				}
-			}
-			down := []string{}
-			if d.Apps != nil {
-				for _, a := range d.Apps() {
-					if !a.Running || a.Failed {
-						down = append(down, a.Name)
-					}
-				}
-			}
-			return map[string]any{
-				"hours": hours, "buckets": buckets,
-				"restarts": restarts, "down": down,
-			}, nil
-		})
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(b)
-	})
+	mux.HandleFunc("/api/v1/observability", d.handleObservability)
 
 	// TLS de un dominio (desde cache ACME; sin manager = no manejado).
 	mux.HandleFunc("/api/v1/domains/", func(w http.ResponseWriter, r *http.Request) {
@@ -1270,7 +618,7 @@ func NewHandler(d Deps) http.Handler {
 			}
 			writeJSON(w, rules)
 		case http.MethodPost:
-			if !requireOperator(w, r, d.DB) {
+			if !requireOperator(w, r) {
 				return
 			}
 			var in struct {
@@ -1299,7 +647,7 @@ func NewHandler(d Deps) http.Handler {
 			writeErr(w, http.StatusMethodNotAllowed, "solo DELETE")
 			return
 		}
-		if !requireOperator(w, r, d.DB) {
+		if !requireOperator(w, r) {
 			return
 		}
 		id, err := strconv.ParseInt(strings.TrimPrefix(r.URL.Path, "/api/v1/alerts/"), 10, 64)
@@ -1315,113 +663,10 @@ func NewHandler(d Deps) http.Handler {
 	})
 
 	// Proxy: routes con alcance real (dial) + TLS por host.
-	// Lo que Vercel esconde, rkt lo muestra: cada host, a dónde va,
-	// si el backend responde y si el cert existe.
-	mux.HandleFunc("/api/v1/proxy", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeErr(w, http.StatusMethodNotAllowed, "solo GET")
-			return
-		}
-		type routeStatus struct {
-			Hosts  []string `json:"hosts"`
-			Target string   `json:"target"`
-			OK     bool     `json:"ok"`
-			TLS    []string `json:"tls"`
-			DNSOK  []bool   `json:"dns_ok"`
-		}
-		out := []routeStatus{}
-		for _, x := range d.Live.Get().Routes {
-			rs := routeStatus{Hosts: x.Hosts, Target: x.Target, TLS: []string{}, DNSOK: []bool{}}
-			if u, err := url.Parse(x.Target); err == nil && u.Host != "" {
-				rs.OK = health.BackendOK(u.Host)
-			}
-			for _, h := range x.Hosts {
-				state := "off"
-				if d.TLS != nil {
-					if ok, exp := d.TLS(h); ok {
-						state = exp
-						if state == "" {
-							state = "auto"
-						}
-					}
-				}
-				rs.TLS = append(rs.TLS, state)
-				rs.DNSOK = append(rs.DNSOK, appview.ResolvesLocal(h))
-			}
-			out = append(out, rs)
-		}
-		writeJSON(w, out)
-	})
+	mux.HandleFunc("/api/v1/proxy", d.handleProxy)
 
 	// Build log de un deploy (para vista detalle) + retry mismo rev.
-	mux.HandleFunc("/api/v1/deployments/", func(w http.ResponseWriter, r *http.Request) {
-		rest := strings.TrimPrefix(r.URL.Path, "/api/v1/deployments/")
-		parts := strings.Split(rest, "/")
-		if len(parts) == 2 && parts[1] == "retry" && r.Method == http.MethodPost {
-			if !requireOperator(w, r, d.DB) {
-				return
-			}
-			id, err := strconv.ParseInt(parts[0], 10, 64)
-			if err != nil || id <= 0 || d.Retry == nil {
-				writeErr(w, http.StatusBadRequest, "id inválido o retry deshabilitado")
-				return
-			}
-			rev, err := d.Retry(id, mustUser(r))
-			if err != nil {
-				writeErr(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			writeJSON(w, map[string]string{"rev": rev})
-			return
-		}
-		if len(parts) == 1 && r.Method == http.MethodGet {
-			id, err := strconv.ParseInt(parts[0], 10, 64)
-			if err != nil || id <= 0 {
-				writeErr(w, http.StatusBadRequest, "id inválido")
-				return
-			}
-			deps, err := d.DB.ListDeployments("", 2000)
-			if err != nil {
-				writeErr(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-			for _, dep := range deps {
-				if dep.ID == id {
-					writeJSON(w, dep)
-					return
-				}
-			}
-			writeErr(w, http.StatusNotFound, "deployment inexistente")
-			return
-		}
-		if len(parts) != 2 || parts[1] != "log" || r.Method != http.MethodGet {
-			writeErr(w, http.StatusNotFound, "ruta inválida (…/ID/log|…/ID/retry)")
-			return
-		}
-		id, err := strconv.ParseInt(parts[0], 10, 64)
-		if err != nil || id <= 0 {
-			writeErr(w, http.StatusBadRequest, "id inválido")
-			return
-		}
-		_, lp, ok := d.DB.DeploymentLogPath(id)
-		if !ok {
-			writeErr(w, http.StatusNotFound, "sin log para ese deploy")
-			return
-		}
-		if r.URL.Query().Get("stream") == "1" {
-			streamLog(w, r, lp, queryInt(r, "n", 200), func() bool {
-				st, ok := d.DB.DeploymentStatus(id)
-				return !ok || st != "running"
-			})
-			return
-		}
-		out, err := logx.Tail(lp, queryInt(r, "n", 200))
-		if err != nil {
-			writeErr(w, http.StatusNotFound, err.Error())
-			return
-		}
-		writeJSON(w, map[string]any{"log": out})
-	})
+	mux.HandleFunc("/api/v1/deployments/", d.handleDeploymentDetail)
 
 	// todo autenticado salvo login/status/setup: envuelve mux (login y
 	// setup se validan aparte por ruta para no romper el bootstrap
@@ -1450,36 +695,21 @@ func (d *Deps) githubManager() *github.Manager {
 	return d.GithubManager()
 }
 
-// createAppFromRepo alta con inferencia vía cfgfile.CreateApp (hogar
-// único, también usado por MCP). Escribe vía AddApp y refresca Live.
-func createAppFromRepo(db *store.DB, live *config.Live, gh *github.Manager, runtime, repo, name, domain string, port int, command, dir string, auto bool) (string, error) {
-	var app config.App
-	var domains []string
-	var portS string
-	var err error
-	if runtime == config.RuntimeExternal {
-		app, domains, portS, err = cfgfile.CreateExternalApp(db, name, domain, dir, port)
-	} else {
-		app, domains, portS, err = cfgfile.CreateApp(db, gh, repo, name, domain, port, command, dir, auto)
-	}
-	if err != nil {
-		return "", err
-	}
-	if err := cfgfile.AddApp(db, app, domains, portS); err != nil {
-		return "", err
-	}
-	if snap, err := cfgfile.Snapshot(db, live.Get()); err == nil {
-		live.Swap(snap)
-	}
-	return app.Name, nil
-}
-
 // requireOperator exige rol operator+ (escribe 403 si no).
-func requireOperator(w http.ResponseWriter, r *http.Request, db *store.DB) bool {
-	_ = db
+func requireOperator(w http.ResponseWriter, r *http.Request) bool {
 	_, role := UserOf(r)
 	if roleLevel(role) < roleLevel(store.RoleOperator) {
 		writeErr(w, http.StatusForbidden, "requiere rol operator")
+		return false
+	}
+	return true
+}
+
+// requireAdmin exige rol admin (gestión de usuarios).
+func requireAdmin(w http.ResponseWriter, r *http.Request) bool {
+	_, role := UserOf(r)
+	if roleLevel(role) < roleLevel(store.RoleAdmin) {
+		writeErr(w, http.StatusForbidden, "requiere rol admin")
 		return false
 	}
 	return true
@@ -1503,20 +733,6 @@ func queryInt(r *http.Request, key string, def int) int {
 		}
 	}
 	return def
-}
-
-func validAppName(s string) bool {
-	if s == "" {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' {
-			continue
-		}
-		return false
-	}
-	return true
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

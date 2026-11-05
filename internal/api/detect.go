@@ -26,7 +26,7 @@ func (d *Deps) handleDetect(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
 		return
 	}
-	if !requireOperator(w, r, d.DB) {
+	if !requireOperator(w, r) {
 		return
 	}
 	raw := r.URL.Query().Get("path")

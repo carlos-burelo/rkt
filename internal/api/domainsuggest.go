@@ -30,7 +30,7 @@ func (d *Deps) handleDomainsSuggest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
 		return
 	}
-	if !requireOperator(w, r, d.DB) {
+	if !requireOperator(w, r) {
 		return
 	}
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
