@@ -109,10 +109,9 @@ export function Avatar({ name, className }: { name: string; className?: string }
 export function BrandMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden className={className}>
-      <path d="M3.5 3.5h12.8l4.2 4.2v12.8H3.5V3.5Z" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M16.3 3.5v4.2h4.2" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M3.5 12h17M8 16h8" stroke="currentColor" strokeWidth="1" opacity=".55" />
-      <path d="M6.5 6.5h2.2v2.2H6.5zM6.5 15.3h2.2v2.2H6.5z" fill="currentColor" opacity=".8" />
+      <path d="M3.5 3.5h12.8l4.2 4.2v12.8H3.5V3.5Z" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M16.3 3.5v4.2h4.2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M6.4 6.4h3v3h-3zM6.4 14.6h3v3h-3z" fill="currentColor" />
     </svg>
   );
 }

@@ -16,3 +16,13 @@ pnpm --dir scripts/shots shots
 - `users` solo si el rol es admin.
 - Imprime errores de consola por página (QA gratis).
 - Salida: `docs/shots/<ruta>.png` (full page, 1600x900).
+
+## Iconos
+
+El favicon y los iconos PWA se generan desde `web/public/icons/mark*.svg`:
+
+```powershell
+node scripts/shots/icons.mjs
+```
+
+No editar los PNG a mano: el SVG es la fuente.
