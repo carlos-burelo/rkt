@@ -5,15 +5,23 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"rkt-proxy/internal/config"
 )
 
-// execer lo cumplen *sql.DB y *sql.Tx.
+// execer lo cumplen *sql.DB, *sql.Tx y *Tx.
 type execer interface {
 	Exec(query string, args ...any) (sql.Result, error)
+}
+
+// queryer añade lectura (flota, infra, settings).
+type queryer interface {
+	execer
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
 }
 
 // Settings conocidos de flota (únicos literales canónicos).
@@ -32,21 +40,31 @@ func KnownSettings() []string {
 	return []string{KeyNodeBin, KeyPythonBin, KeyBaseDomain, KeyPortPool, KeySiteName, KeyQuotaReqs, KeyQuotaBytes}
 }
 
+func getSetting(q queryer, key string) (string, error) {
+	var v string
+	err := q.QueryRow(`SELECT value FROM settings WHERE key=?`, key).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return v, err
+}
+
 // GetSetting lee un setting ("").
 func (d *DB) GetSetting(key string) string {
-	var v string
-	_ = d.sql.QueryRow(`SELECT value FROM settings WHERE key=?`, key).Scan(&v)
+	v, _ := getSetting(d.sql, key)
 	return v
 }
 
-// SetSetting escribe setting (upsert) + bump versión.
-func (d *DB) SetSetting(key, value string) error {
-	if _, err := d.sql.Exec(`INSERT INTO settings(key, value) VALUES(?,?)
+func setSetting(q queryer, key, value string) error {
+	if _, err := q.Exec(`INSERT INTO settings(key, value) VALUES(?,?)
 		ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value); err != nil {
 		return err
 	}
-	return d.bumpVersion()
+	return bumpVersion(q)
 }
+
+// SetSetting escribe setting (upsert) + bump versión.
+func (d *DB) SetSetting(key, value string) error { return setSetting(d.sql, key, value) }
 
 // ConfigVersion versión de flota (meta). 0 = DB sin inicializar.
 func (d *DB) ConfigVersion() int64 {
@@ -56,8 +74,10 @@ func (d *DB) ConfigVersion() int64 {
 }
 
 // bumpVersion +1 versión de flota.
-func (d *DB) bumpVersion() error {
-	_, err := d.sql.Exec(`INSERT INTO meta(key, value) VALUES('config_version','1')
+func (d *DB) bumpVersion() error { return bumpVersion(d.sql) }
+
+func bumpVersion(q execer) error {
+	_, err := q.Exec(`INSERT INTO meta(key, value) VALUES('config_version','1')
 		ON CONFLICT(key) DO UPDATE SET value=CAST(CAST(value AS INTEGER)+1 AS TEXT)`)
 	return err
 }
@@ -123,9 +143,11 @@ type FleetData struct {
 	Routes []config.Route
 }
 
-func (d *DB) LoadFleet() (*FleetData, error) {
+func (d *DB) LoadFleet() (*FleetData, error) { return loadFleet(d.sql) }
+
+func loadFleet(q queryer) (*FleetData, error) {
 	out := &FleetData{}
-	rows, err := d.sql.Query(`SELECT name, runtime, command, args, dir, env_file, env,
+	rows, err := q.Query(`SELECT name, runtime, command, args, dir, env_file, env,
 		restart_delay_ms, min_uptime_ms, memory_mb,
 		deploy_repo, deploy_ref, deploy_token_env, deploy_build, deploy_auto FROM apps`)
 	if err != nil {
@@ -162,7 +184,7 @@ func (d *DB) LoadFleet() (*FleetData, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	rrows, err := d.sql.Query(`SELECT hosts, target FROM routes ORDER BY id`)
+	rrows, err := q.Query(`SELECT hosts, target FROM routes ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -187,27 +209,32 @@ func (d *DB) ImportFleet(cfg *config.Config) error {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM apps`); err != nil {
+	if err := importFleet(tx, cfg); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM routes`); err != nil {
+	return tx.Commit()
+}
+
+// importFleet reemplaza apps/rutas usando el executor dado (tx o *sql.Tx).
+// No abre ni cierra transacción: el caller controla atomicidad.
+func importFleet(ex execer, cfg *config.Config) error {
+	if _, err := ex.Exec(`DELETE FROM apps`); err != nil {
+		return err
+	}
+	if _, err := ex.Exec(`DELETE FROM routes`); err != nil {
 		return err
 	}
 	for i := range cfg.Apps {
-		if err := insertApp(tx, &cfg.Apps[i]); err != nil {
+		if err := insertApp(ex, &cfg.Apps[i]); err != nil {
 			return fmt.Errorf("apps[%s]: %w", cfg.Apps[i].Name, err)
 		}
 	}
 	for i := range cfg.Routes {
 		hosts, _ := json.Marshal(cfg.Routes[i].Hosts)
-		if _, err := tx.Exec(`INSERT INTO routes(hosts, target) VALUES(?,?)`,
+		if _, err := ex.Exec(`INSERT INTO routes(hosts, target) VALUES(?,?)`,
 			string(hosts), cfg.Routes[i].Target); err != nil {
 			return err
 		}
 	}
-	if _, err := tx.Exec(`INSERT INTO meta(key, value) VALUES('config_version','1')
-		ON CONFLICT(key) DO UPDATE SET value=CAST(CAST(value AS INTEGER)+1 AS TEXT)`); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return bumpVersion(ex)
 }

@@ -4,6 +4,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -147,6 +148,35 @@ func Open(path string) (*DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+// WithTx ejecuta fn dentro de una transacción de escritura inmediata.
+// BEGIN IMMEDIATE toma el lock de escritura al empezar: dos procesos no
+// pueden leer el mismo estado y pisarse (lost update). Busy timeout global
+// hace que el segundo espere en vez de fallar.
+func (d *DB) WithTx(ctx context.Context, fn func(*Tx) error) error {
+	conn, err := d.sql.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(context.Background(), "ROLLBACK")
+		}
+	}()
+	if err := fn(&Tx{ctx: ctx, conn: conn}); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }
 
 // Close cierra (nil-safe: no-op).
