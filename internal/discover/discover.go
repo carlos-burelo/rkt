@@ -48,6 +48,12 @@ func Run(d Deps) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("instalaciones: %w", err)
 	}
+	// Una sola lectura de flota para todas las instalaciones; el mapa se
+	// actualiza al registrar para no duplicar si dos instalaciones comparten repo.
+	known, err := knownRepos(d.DB)
+	if err != nil {
+		return nil, err
+	}
 	registered := []string{}
 	for _, inst := range installs {
 		tok, err := d.GH.TokenFor(inst.ID)
@@ -59,10 +65,6 @@ func Run(d Deps) ([]string, error) {
 		if err != nil {
 			d.Log.Warn("discovery: sin repos", "installation", inst.ID, "err", err)
 			continue
-		}
-		known, err := knownRepos(d.DB)
-		if err != nil {
-			return nil, err
 		}
 		for _, r := range repos {
 			owner, name, ok := splitFull(r.FullName)
