@@ -1,5 +1,5 @@
 export const shell = {
-  "shell.terminal": "flota",
+  "shell.terminal": "apps",
   "shell.empty": "sin apps",
   "shell.running": "{running}/{total} en marcha",
   "shell.runningFailed": "{running}/{total} en marcha · {failed} caída",
@@ -9,7 +9,7 @@ export const shell = {
   "shell.newApp": "Nueva app",
   "shell.logout": "Salir",
   "shell.offline": "sin conexión",
-  "shell.loadingFleet": "cargando flota…",
+  "shell.loadingFleet": "cargando apps…",
   "shell.ports": "Puertos",
   "shell.allPorts": "todas",
   "shell.allPortsTooltip": "todos los puertos",

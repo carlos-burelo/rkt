@@ -729,7 +729,7 @@ func cmdImport(args []string, cfgPath string) {
 	if err := cfgfile.ReplaceAll(db, cfg, settings); err != nil {
 		log.Fatalf("import: %v", err)
 	}
-	fmt.Println("flota importada (restart requerido para apps)")
+	fmt.Println("configuración importada (reinicio requerido para apps)")
 }
 
 func cmdStatus(args []string, cfgPath string) {

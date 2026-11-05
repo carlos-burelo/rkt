@@ -542,7 +542,7 @@ func (s *Server) doAppUpdate(a appUpdateArg) (string, error) {
 	}); err != nil {
 		return "", err
 	}
-	return "manifiesto actualizado (el servicio lo aplica en ≤10s)", nil
+	return "configuración actualizada (el servicio la aplica en ≤10s)", nil
 }
 
 // doAppsRemove borra una app de la flota (y sus rutas salvo keep_routes).
@@ -680,7 +680,7 @@ func (s *Server) Run(ctx context.Context) error {
 		func(ctx context.Context, req *mcp.CallToolRequest, a waitHealthyArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doWaitHealthy(a.App, a.TimeoutS))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "apps_list", Description: "Flota con dominio, puerto, estático, deploy y dns_ok (JSON)."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "apps_list", Description: "Apps con dominio, puerto, estático, deploy y dns_ok (JSON)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppsList())
 		})
@@ -704,7 +704,7 @@ func (s *Server) Run(ctx context.Context) error {
 		func(ctx context.Context, req *mcp.CallToolRequest, a appUpdateArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppUpdate(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "apps_remove", Description: "Borra una app de la flota (detiene el proceso al aplicar, ≤10s). Por defecto borra sus rutas."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "apps_remove", Description: "Borra una app registrada (detiene el proceso al aplicar, ≤10s). Por defecto borra sus rutas."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a removeAppArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppsRemove(a))
 		})

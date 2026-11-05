@@ -1,7 +1,7 @@
 export const system = {
   // Ajustes
   "system.settings.description":
-    "Ajustes de flota. Aplican en caliente salvo binarios, que exigen reinicio del servicio.",
+    "Ajustes generales. Se aplican en caliente salvo los binarios, que requieren reiniciar el servicio.",
   "system.settings.keys.one": "{n} clave",
   "system.settings.keys.other": "{n} claves",
   "system.settings.githubConnected": "GitHub conectado. Los repositorios aparecen en Nueva app.",
@@ -39,7 +39,7 @@ export const system = {
   "system.settings.changeAccess": "Cambiar acceso",
   "system.settings.fullAccess": "acceso total · repos privados habilitados",
   "system.settings.githubError": "github: {error}",
-  "system.settings.keysTitle": "Claves de flota",
+  "system.settings.keysTitle": "Configuración general",
   "system.settings.keysDesc": "Los cambios se validan antes de guardar.",
   "system.settings.colFolio": "folio",
   "system.settings.colKey": "clave",
@@ -60,17 +60,17 @@ export const system = {
   "system.settings.readOnly": "solo lectura",
   "system.settings.loadingKeys": "cargando claves…",
   "system.settings.secretsNote":
-    "Los secretos de entorno no viven aquí: se editan por app en {env}. Este panel solo guarda configuración de flota.",
+    "Los secretos de entorno no viven aquí: se editan por app en {env}. Este panel solo guarda configuración general.",
 
   // Usuarios
   "system.users.description":
-    "Solo admin. Viewer lee, operator muta la flota, admin gestiona usuarios y configuración.",
+    "Solo admin. Viewer lee, operator modifica apps, admin gestiona usuarios y configuración.",
   "system.users.accounts.one": "{n} cuenta",
   "system.users.accounts.other": "{n} cuentas",
   "system.users.new": "nuevo usuario",
   "system.users.newTitle": "Nuevo usuario",
   "system.users.newDesc":
-    "lectura: solo lectura; operador: modifica la flota; administrador: usuarios y configuración. Contraseña mínima de 12 caracteres.",
+    "lectura: solo lectura; operador: modifica apps; administrador: usuarios y configuración. Contraseña mínima de 12 caracteres.",
   "system.users.user": "usuario",
   "system.users.password": "contraseña",
   "system.users.passwordHint": "mín. 12",

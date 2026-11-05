@@ -341,7 +341,7 @@ func (s *Server) doProcessStats(app string) (string, error) {
 			"restarts": a.Restarts, "http_ok": a.HTTPOK,
 		})
 	}
-	return "", fmt.Errorf("app %q no está en la flota", app)
+	return "", fmt.Errorf("app %q no está registrada", app)
 }
 
 func (s *Server) doTrafficRate(a trafficArg) (string, error) {

@@ -105,7 +105,7 @@ export const serve = {
 
   // Entorno (EnvAll)
   "serve.env.desc":
-    "Globales para toda la flota y propias de cada proyecto. Las del proyecto sobrescriben a las globales.",
+    "Globales para todas las apps y propias de cada proyecto. Las del proyecto sobrescriben a las globales.",
   "serve.env.globalCount.one": "{n} global",
   "serve.env.globalCount.other": "{n} globales",
   "serve.env.ownCount.one": "{n} propia",

@@ -15,7 +15,7 @@ export interface StepErrors {
   gitRepo: string;
 }
 
-// Paso 1: origen de la unidad.
+// Paso 1: origen de la app.
 export function OriginStep({
   origin,
   setOrigin,

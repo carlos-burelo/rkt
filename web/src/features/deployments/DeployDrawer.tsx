@@ -92,7 +92,7 @@ export function DeployDrawer() {
   const { deps } = useFleet();
   const dep = sel ? (deps.find((d) => d.id === sel.id) ?? sel) : null;
 
-  // Deploy en curso: SSE del build log. Al terminar, refresca la flota.
+  // Deploy en curso: SSE del build log. Al terminar, refresca las apps.
   useEffect(() => {
     if (!dep || dep.status !== "running") return;
     let acc = "";

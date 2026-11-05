@@ -1,6 +1,6 @@
 import { api } from "../../shared/lib/http";
 
-// Variables globales: las hereda toda la flota; una app puede sobrescribirlas.
+// Variables globales: las heredan todas las apps; una app puede sobrescribirlas.
 export async function getGlobalEnv(): Promise<Record<string, string>> {
   return api<Record<string, string>>("/api/v1/env/global");
 }

@@ -12,7 +12,7 @@ import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
 import { useI18n } from "../../shared/i18n";
 
-// AppEnv: variables heredadas de la flota (solo lectura, se editan en
+// AppEnv: variables heredadas de la configuración global (solo lectura, se editan en
 // Entorno) y propias del proyecto (sobrescriben a las globales).
 export function AppEnv() {
   const { t, tn } = useI18n();

@@ -14,7 +14,7 @@ import { useGlobalEnv } from "./hooks";
 import { delGlobalEnv, setGlobalEnv } from "./api";
 import { useI18n } from "../../shared/i18n";
 
-// EnvAll: variables globales de la flota + inventario por app.
+// EnvAll: variables globales + inventario por app.
 // Los valores se revelan a demanda; la edición de globales vive aquí.
 export function EnvAll() {
   const { t, tn } = useI18n();

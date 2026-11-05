@@ -2,7 +2,7 @@ import { BrandMark } from "../../shared/components/ui";
 import { useI18n } from "../../shared/i18n";
 import { ThemeToggle } from "../../shared/theme/ThemeToggle";
 
-// Marco de acceso: la terminal se presenta como manifiesto, no como landing.
+// Marco de acceso: formulario operativo, sin landing promocional.
 export function AccessShell({
   title,
   description,

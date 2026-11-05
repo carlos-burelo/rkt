@@ -68,7 +68,7 @@ type logSearchArg struct {
 	N       int    `json:"n,omitempty" jsonschema:"máximo de líneas (default 50)"`
 }
 type settingsSetArg struct {
-	Key   string `json:"key" jsonschema:"clave de flota"`
+	Key   string `json:"key" jsonschema:"clave de configuración"`
 	Value string `json:"value" jsonschema:"valor"`
 }
 type alertAddArg struct {
@@ -900,7 +900,7 @@ func (s *Server) registerMore(srv *mcp.Server) {
 		func(ctx context.Context, req *mcp.CallToolRequest, a envDelArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEnvDelete(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "env_global_list", Description: "Variables globales de la flota (claves; valores solo con include_secrets)."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "env_global_list", Description: "Variables globales de todas las apps (claves; valores solo con include_secrets)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a envGlobalListArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEnvGlobalList(a))
 		})
@@ -908,7 +908,7 @@ func (s *Server) registerMore(srv *mcp.Server) {
 		func(ctx context.Context, req *mcp.CallToolRequest, a envGlobalArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEnvGlobalSet(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "env_global_delete", Description: "Elimina una variable global de la flota."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "env_global_delete", Description: "Elimina una variable global de todas las apps."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a envGlobalArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEnvGlobalDelete(a))
 		})
@@ -968,8 +968,8 @@ func (s *Server) registerMore(srv *mcp.Server) {
 	add("usage_summary", "Resumen de tráfico desde access.log (total, bytes, clases, días, top).", s.doUsageSummary)
 	add("proxy_map", "Rutas con backend ok y dns_ok (vista /proxy).", s.doProxyMap)
 	add("backends_probe", "Dial TCP a cada backend único de las rutas.", s.doBackendsProbe)
-	add("settings_list", "Claves de flota y sus valores.", s.doSettingsList)
-	mcp.AddTool(srv, &mcp.Tool{Name: "settings_set", Description: "Cambia una clave de flota (base_domain, node_bin, quotas…)."},
+	add("settings_list", "Claves de configuración y sus valores.", s.doSettingsList)
+	mcp.AddTool(srv, &mcp.Tool{Name: "settings_set", Description: "Cambia una clave de configuración (base_domain, node_bin, quotas…)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a settingsSetArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doSettingsSet(a))
 		})
@@ -996,11 +996,11 @@ func (s *Server) registerMore(srv *mcp.Server) {
 		func(ctx context.Context, req *mcp.CallToolRequest, a userPassArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doUsersPasswd(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "config_export", Description: "Exporta config+flota en JSON (secretos solo con include_secrets)."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "config_export", Description: "Exporta configuración y apps en JSON (secretos solo con include_secrets)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a exportArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doConfigExport(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "config_import", Description: "Reemplaza config+flota desde JSON (confirm=replace). Destructivo."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "config_import", Description: "Reemplaza configuración y apps desde JSON (confirm=replace). Destructivo."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a importArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doConfigImport(a))
 		})

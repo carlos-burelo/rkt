@@ -16,8 +16,8 @@ import { useI18n } from "../../shared/i18n";
 
 type TextKey = "command" | "args" | "dir" | "static" | "env_file" | "restart_delay" | "min_uptime" | "repo" | "ref";
 
-// Ajustes por unidad: vista de solo lectura + diálogos de edición/borrado.
-// Un solo guardado aplica el manifiesto; el supervisor reinicia lo cambiado.
+// Ajustes por app: vista de solo lectura + diálogos de edición/borrado.
+// Un solo guardado aplica la configuración; el supervisor reinicia lo cambiado.
 export function AppSettings() {
   const { t } = useI18n();
   const { name = "" } = useParams();

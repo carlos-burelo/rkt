@@ -30,7 +30,7 @@ export function LocalZones({ onChanged }: { onChanged: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // target por defecto desde la primera unidad, si existe
+  // target por defecto desde la primera app, si existe
   useEffect(() => {
     if (metas[0]?.port)
       setTarget((prev) => (prev === "http://127.0.0.1:3000" ? `http://127.0.0.1:${metas[0].port}` : prev));

@@ -75,7 +75,7 @@ export const ops = {
   "ops.alerts.createTitle": "Nueva regla de alerta",
   "ops.alerts.createDesc": "se evalúa cada minuto · el disparo queda como evento kind=alert",
   "ops.alerts.app": "app",
-  "ops.alerts.appHint": "* = toda la flota",
+  "ops.alerts.appHint": "* = todas las apps",
   "ops.alerts.appPlaceholder": "app o *",
   "ops.alerts.kind": "tipo",
   "ops.alerts.kindFailed": "failed (caídas)",

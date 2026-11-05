@@ -13,7 +13,7 @@ export interface Fleet {
   loading: boolean;
 }
 
-// useFleet flota compartida con poll 5s. Respuestas cacheadas 4s:
+// useFleet estado compartido con poll 5s. Respuestas cacheadas 4s:
 // sidebar, página y paleta montadas a la vez = una request.
 export function useFleet(): Fleet {
   const fail = useUI((u) => u.fail);

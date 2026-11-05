@@ -65,7 +65,7 @@ export function Err({ msg }: { msg: string }) {
   );
 }
 
-// Tira de manifiesto por estado: una línea de 1px en el canto de la fila.
+// Tira de estado: una línea de 1px en el canto de la fila.
 // Solida = sana, discontinua = degradada, rota = fallida, tenue = detenida.
 export function StateRail({ status }: { status: string }) {
   const cls =
@@ -79,7 +79,7 @@ export function StateRail({ status }: { status: string }) {
   return <span aria-hidden className={`manifest-rail ${cls}`} />;
 }
 
-// Glyph de unidad: cuadrado con inicial, no avatar circular.
+// Glyph de app: cuadrado con inicial, no avatar circular.
 const GLYPH_TONES = [
   "border-border bg-secondary/60 text-muted-foreground",
   "border-border bg-secondary/60 text-muted-foreground",

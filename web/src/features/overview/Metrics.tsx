@@ -2,7 +2,7 @@ import { AppStatus, Deployment } from "../../shared/lib/types";
 import { Stat } from "../../shared/components/patterns";
 import { useI18n } from "../../shared/i18n";
 
-// Placas de flota a escala fija: mismo tamaño, número tabular arriba,
+// Placas de estado a escala fija: mismo tamaño, número tabular arriba,
 // etiqueta abajo, sub honesto con ventana de medición.
 export function Metrics({ apps, deps }: { apps: AppStatus[]; deps: Deployment[] }) {
   const { t } = useI18n();

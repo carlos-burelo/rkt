@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useUI } from "../../app/ui";
 import { getGlobalEnv } from "./api";
 
-// useGlobalEnv lee las variables compartidas por la flota.
+// useGlobalEnv lee las variables compartidas por todas las apps.
 export function useGlobalEnv(): { env: Record<string, string>; reload: () => void } {
   const fail = useUI((u) => u.fail);
   const online = useUI((u) => u.online);

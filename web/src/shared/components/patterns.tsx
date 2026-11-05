@@ -33,7 +33,7 @@ export function PageHeader({
   );
 }
 
-// Section: bloque de manifiesto con cabecera hairline, sin sombra.
+// Section: bloque de contenido con cabecera hairline, sin sombra.
 export function Section({
   title,
   description,
