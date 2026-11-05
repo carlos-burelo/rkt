@@ -17,23 +17,16 @@ import {
 import { useFleet } from "../overview/hooks";
 import { useUI } from "../../app/ui";
 import { useI18n } from "../../shared/i18n";
-
-type Level = "info" | "warning" | "error";
-
-function levelOf(line: string): Level {
-  if (/\b(ERROR|FATAL|error=|level=error)/.test(line)) return "error";
-  if (/\b(WARN|WARNING|warn=|level=warn)/.test(line)) return "warning";
-  return "info";
-}
+import { groupParsed, parseLogLine, type Level } from "./format";
 
 const LEVEL_TONE: Record<Level, string> = {
-  info: "bg-muted-foreground/45",
+  info: "bg-info",
   warning: "bg-warn",
   error: "bg-bad",
 };
 
 const LEVEL_TEXT: Record<Level, string> = {
-  info: "text-muted-foreground",
+  info: "text-info",
   warning: "text-warn",
   error: "text-bad",
 };
@@ -43,6 +36,64 @@ const LEVEL_KEY: Record<Level, string> = {
   warning: "ops.logs.level.warning",
   error: "ops.logs.level.error",
 };
+
+const LEVEL_SHORT: Record<Level, string> = { info: "INF", warning: "WRN", error: "ERR" };
+
+const LEVEL_BADGE: Record<Level, string> = {
+  info: "border-info/40 bg-info/10 text-info",
+  warning: "border-warn/45 bg-warn/10 text-warn",
+  error: "border-bad/45 bg-bad/10 text-bad",
+};
+
+const FIELD_SHORT: Record<string, string> = {
+  timestamp: "ts",
+  time: "t",
+  duration: "dur",
+  duration_ms: "dur",
+  latency: "lat",
+  latency_ms: "lat",
+  status: "st",
+  status_code: "st",
+  method: "m",
+  request_id: "req",
+  trace_id: "trace",
+  user_agent: "ua",
+  remote_addr: "ip",
+  service: "svc",
+  proto: "pr",
+  bytes: "b",
+  error: "err",
+  query: "q",
+};
+
+function shortField(key: string): string {
+  return FIELD_SHORT[key] ?? key;
+}
+
+function fieldTone(key: string, value: string): string {
+  const short = shortField(key);
+  if (short === "st") {
+    const n = Number(value);
+    if (n >= 500) return "text-bad";
+    if (n >= 400) return "text-warn";
+    if (n >= 200) return "text-ok";
+  }
+  if (short === "m") {
+    const v = value.toUpperCase();
+    if (v === "DELETE") return "text-bad";
+    if (v === "POST" || v === "PUT" || v === "PATCH") return "text-signal";
+    return "text-info";
+  }
+  if (short === "dur" || short === "lat") return "text-info";
+  if (short === "err") return "text-bad";
+  if (short === "level" || short === "lvl") return "text-foreground/70";
+  return "text-foreground/85";
+}
+
+function splitScope(msg: string): { scope: string; text: string } {
+  const m = /^([A-Za-z0-9_.-]+):\s*(.*)$/.exec(msg);
+  return m ? { scope: m[1], text: m[2] } : { scope: "", text: msg };
+}
 
 function LevelToggle({
   level,
@@ -56,17 +107,20 @@ function LevelToggle({
   onClick: () => void;
 }) {
   const { t } = useI18n();
+  const label = t(LEVEL_KEY[level]);
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={on}
+      aria-label={label}
+      title={label}
       className={`inline-flex h-7 items-center gap-1.5 border px-2 font-mono text-[9px] tracking-[0.08em] uppercase transition-colors ${
         on ? "border-input bg-accent/60 text-foreground" : "border-border bg-transparent text-muted-foreground/60 hover:text-foreground"
       }`}
     >
       <span aria-hidden className={`h-1.5 w-1.5 ${on ? LEVEL_TONE[level] : "bg-muted-foreground/25"}`} />
-      {t(LEVEL_KEY[level])}
+      <span className={on ? LEVEL_TEXT[level] : undefined}>{LEVEL_SHORT[level]}</span>
       <span className={`tnum ${on ? LEVEL_TEXT[level] : "text-muted-foreground/50"}`}>{count}</span>
     </button>
   );
@@ -86,6 +140,7 @@ export function Logs() {
   const [levels, setLevels] = useState<Record<Level, boolean>>({ info: true, warning: true, error: true });
   const [log, setLog] = useState("");
   const [follow, setFollow] = useState(true);
+  const [compact, setCompact] = useState(true);
   const [build, setBuild] = useState(t("ops.logs.pickDeployment"));
   const logRef = useRef<HTMLDivElement>(null);
   const latest = deps.find((d: Deployment) => appFilter === "" || d.app === appFilter);
@@ -118,19 +173,17 @@ export function Logs() {
 
   const lines = useMemo(() => {
     const all = typeof log === "string" && log !== "" ? log.split("\n") : [];
+    const parsed = all.map(parseLogLine);
     const counts: Record<Level, number> = { info: 0, warning: 0, error: 0 };
-    for (const l of all) counts[levelOf(l)]++;
+    for (const p of parsed) counts[p.level]++;
     const rx = q.trim() === "" ? null : new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    const vis = all.filter((l) => levels[levelOf(l)] && (!rx || rx.test(l)));
+    const vis = parsed.filter((p) => levels[p.level] && (!rx || rx.test(p.raw)));
     const buckets = new Array<number>(24).fill(0);
     let stamped = 0;
     const nowH = Date.now();
-    for (const l of all) {
-      const m = /time=(\d{4}-\d{2}-\d{2})T(\d{2})/.exec(l);
-      if (!m) continue;
-      const t = new Date(`${m[1]}T${m[2]}:00:00Z`).getTime();
-      if (Number.isNaN(t)) continue;
-      const h = Math.floor((nowH - t) / 3600000);
+    for (const p of parsed) {
+      if (!p.timestamp) continue;
+      const h = Math.floor((nowH - p.timestamp) / 3600000);
       if (h >= 0 && h < 24) {
         buckets[23 - h]++;
         stamped++;
@@ -138,6 +191,11 @@ export function Logs() {
     }
     return { vis, counts, buckets, stamped };
   }, [log, q, levels]);
+
+  const rendered = useMemo(
+    () => (compact ? groupParsed(lines.vis) : lines.vis.map((line) => ({ line, count: 1 }))),
+    [compact, lines.vis],
+  );
 
   function download() {
     const blob = new Blob([log], { type: "text/plain" });
@@ -230,6 +288,10 @@ export function Logs() {
                 <Checkbox checked={follow} onCheckedChange={(v) => setFollow(v === true)} />
                 {t("ops.logs.follow")}
               </label>
+              <label className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
+                <Checkbox checked={compact} onCheckedChange={(v) => setCompact(v === true)} />
+                {t("ops.logs.compact")}
+              </label>
               <span className="tnum font-mono text-[9px] text-muted-foreground">
                 {tn("ops.logs.visibleLines", log === "" ? 0 : log.split("\n").length, {
                   vis: lines.vis.length,
@@ -262,17 +324,70 @@ export function Logs() {
                 aria-label={t("ops.logs.logAria")}
                 className="h-[58vh] overflow-auto bg-ink/45 font-mono text-[11px] leading-[1.6]"
               >
-                {lines.vis.map((l, i) => {
-                  const lv = levelOf(l);
+                {rendered.map(({ line: p, count }, i) => {
+                  const lv = p.level;
+                  const { scope, text } = splitScope(p.msg || p.raw);
                   return (
-                    <div key={i} className="flex items-baseline gap-2 px-3 hover:bg-accent/25">
-                      <span className="tnum w-8 shrink-0 text-right text-[9px] text-muted-foreground/30 select-none">
+                    <div
+                      key={i}
+                      title={p.raw}
+                      className="flex items-center gap-2 px-3 py-0.5 hover:bg-accent/25"
+                    >
+                      <span className="tnum w-8 shrink-0 self-start text-right text-[9px] text-muted-foreground/30 select-none">
                         {String(i + 1).padStart(3, "0")}
                       </span>
-                      <span aria-label={t("ops.logs.lineLevel", { level: t(LEVEL_KEY[lv]) })} className={`h-1.5 w-1.5 shrink-0 translate-y-[-1px] ${LEVEL_TONE[lv]}`} />
-                      <span className={`min-w-0 flex-1 break-words whitespace-pre-wrap ${lv === "error" ? "text-bad/90" : lv === "warning" ? "text-warn/85" : "text-foreground/80"}`}>
-                        {l}
+                      <span className="tnum w-14 shrink-0 self-start text-[9px] text-muted-foreground/55">{p.time}</span>
+                      <span
+                        aria-label={t("ops.logs.lineLevel", { level: t(LEVEL_KEY[lv]) })}
+                        title={t(LEVEL_KEY[lv])}
+                        className={`w-8 shrink-0 self-start border px-1 text-center font-mono text-[9px] font-semibold tracking-[0.04em] ${LEVEL_BADGE[lv]}`}
+                      >
+                        {LEVEL_SHORT[lv]}
                       </span>
+                      {compact && p.structured && scope && (
+                        <span
+                          title={scope}
+                          className="hidden shrink-0 self-start border border-border bg-card/40 px-1 font-mono text-[9px] tracking-[0.04em] text-muted-foreground uppercase sm:inline"
+                        >
+                          {scope}
+                        </span>
+                      )}
+                      <span
+                        className={`min-w-0 flex-1 font-mono text-[11px] ${
+                          compact ? "truncate" : "break-words whitespace-pre-wrap"
+                        } ${
+                          lv === "error" ? "text-bad/90" : lv === "warning" ? "text-warn/85" : "text-foreground/80"
+                        }`}
+                      >
+                        {compact ? (p.structured ? text : p.raw) : p.raw}
+                      </span>
+                      {compact && p.structured && p.fields.length > 0 && (
+                        <span className="hidden max-w-[52%] shrink-0 items-center gap-1 overflow-hidden sm:flex">
+                          {p.fields.slice(0, 4).map((f, idx) => (
+                            <span
+                              key={`${f.key}-${idx}`}
+                              className="whitespace-nowrap border border-border bg-secondary/35 px-1 font-mono text-[9px]"
+                              title={`${f.key}=${f.value}`}
+                            >
+                              <span className="text-muted-foreground">{shortField(f.key)}=</span>
+                              <span className={fieldTone(f.key, f.value)}>
+                                {f.value.length > 32 ? `${f.value.slice(0, 32)}…` : f.value}
+                              </span>
+                            </span>
+                          ))}
+                          {p.fields.length > 4 && (
+                            <span
+                              title={p.fields.slice(4).map((f) => `${f.key}=${f.value}`).join(" ")}
+                              className="border border-border/60 px-1 font-mono text-[9px] text-muted-foreground"
+                            >
+                              +{p.fields.length - 4}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                      {count > 1 && (
+                        <span className="tnum shrink-0 font-mono text-[9px] text-muted-foreground/60">×{count}</span>
+                      )}
                     </div>
                   );
                 })}

@@ -2,7 +2,7 @@ export const ops = {
   // Logs
   "ops.logs.title": "Registros",
   "ops.logs.description":
-    "Logs de ejecución y compilación. En vivo refresca cada 2s; Compilación muestra el último despliegue.",
+    "Registros de ejecución y compilación. En vivo refresca cada 2s; Compilación muestra el último despliegue.",
   "ops.logs.level.info": "info",
   "ops.logs.level.warning": "aviso",
   "ops.logs.level.error": "error",
@@ -20,6 +20,7 @@ export const ops = {
   "ops.logs.reload": "recargar",
   "ops.logs.download": "descargar",
   "ops.logs.follow": "seguir registro",
+  "ops.logs.compact": "compactar",
   "ops.logs.visibleLines.one": "{vis} / {n} línea visible",
   "ops.logs.visibleLines.other": "{vis} / {n} líneas visibles",
   "ops.logs.activity": "Actividad 24h",
