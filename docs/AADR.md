@@ -689,7 +689,7 @@ Criterios:
 | Fecha | Tarea | Commit | Verificación |
 |---|---|---|---|
 | 2026-11-05 | Línea base: diff, resumen y logs compactos | `01e227e`, `f7edccb` | `go test ./...`, `tsc`, build, capturas |
-| 2026-11-05 | Spec creada (este documento) | este commit | revisión manual |
+| 2026-11-05 | Spec creada (este documento) | `812da8c` | revisión manual |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.
