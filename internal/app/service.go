@@ -76,6 +76,8 @@ type Program struct {
 	deployMu    sync.Mutex
 	lastDeploy  map[string]time.Time
 	rollingBack map[string]bool
+	// stateMu sincroniza los recursos que Stop lee mientras Run los crea.
+	stateMu sync.Mutex
 }
 
 // beginOp reclama la app para una operación destructiva. Devuelve error si
@@ -136,23 +138,27 @@ func (p *Program) Start(_ service.Service) error {
 func (p *Program) Stop(_ service.Service) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if p.srvTLS != nil {
-		_ = p.srvTLS.Shutdown(ctx)
+	p.stateMu.Lock()
+	srvTLS, srvHTTP, srvHealth := p.srvTLS, p.srvHTTP, p.srvHealth
+	sup, alog, db := p.sup, p.alog, p.db
+	p.stateMu.Unlock()
+	if srvTLS != nil {
+		_ = srvTLS.Shutdown(ctx)
 	}
-	if p.srvHTTP != nil {
-		_ = p.srvHTTP.Shutdown(ctx)
+	if srvHTTP != nil {
+		_ = srvHTTP.Shutdown(ctx)
 	}
-	if p.srvHealth != nil {
-		_ = p.srvHealth.Shutdown(ctx)
+	if srvHealth != nil {
+		_ = srvHealth.Shutdown(ctx)
 	}
-	if p.sup != nil {
-		p.sup.Stop()
+	if sup != nil {
+		sup.Stop()
 	}
-	if p.alog != nil {
-		_ = p.alog.Close()
+	if alog != nil {
+		_ = alog.Close()
 	}
-	if p.db != nil {
-		_ = p.db.Close()
+	if db != nil {
+		_ = db.Close()
 	}
 	return nil
 }
@@ -171,14 +177,16 @@ func (p *Program) Run() {
 		p.log.Error("config inválida", "err", err)
 		os.Exit(1)
 	}
-	p.db = db
 	live := config.NewLive(cfg)
+	sup := supervisor.New(cfg.Apps, cfg.GlobalEnv, filepath.Join(logx.DirFor(p.cfgPath), "apps"), p.log)
+	p.stateMu.Lock()
+	p.db = db
 	p.live = live
+	p.sup = sup
+	p.stateMu.Unlock()
 
-	p.sup = supervisor.New(cfg.Apps, cfg.GlobalEnv, filepath.Join(logx.DirFor(p.cfgPath), "apps"), p.log)
-	if p.db != nil {
-		db := p.db
-		p.sup.OnEvent = func(kind, app, msg string) {
+	if db != nil {
+		sup.OnEvent = func(kind, app, msg string) {
 			if err := db.InsertEvent(kind, app, msg); err != nil {
 				p.log.Warn("evento no guardado", "err", err)
 			}
@@ -187,32 +195,40 @@ func (p *Program) Run() {
 			}
 		}
 	}
-	p.sup.Start()
+	sup.Start()
 	backend := proxy.NewHandler(live, p.log)
 	handler := http.Handler(backend)
 	if alog, err := accesslog.New(logx.AccessPath(p.cfgPath)); err != nil {
 		p.log.Warn("access log desactivado", "err", err)
 	} else {
+		p.stateMu.Lock()
 		p.alog = alog
+		p.stateMu.Unlock()
 		handler = alog.Middleware(backend)
 	}
-	p.mgr = nil
 	var challenge http.Handler
+	var mgr *autocert.Manager
+	var ca *devca.CA
 	if cfg.LocalCA {
-		ca, err := devca.Load(filepath.Join(logx.DirFor(p.cfgPath), "devca"))
+		ca, err = devca.Load(filepath.Join(logx.DirFor(p.cfgPath), "devca"))
 		if err != nil {
 			p.log.Error("CA local inválida", "err", err)
 			os.Exit(1)
 		}
+		p.stateMu.Lock()
 		p.devca = ca
+		p.stateMu.Unlock()
 		if err := ca.EnsureTrusted(); err != nil {
 			p.log.Warn("CA local sin confiar: el navegador avisará; importa el PEM a mano", "ca", ca.CertPath(), "err", err)
 		} else {
 			p.log.Info("CA local confiada (Root del usuario)", "ca", ca.CertPath())
 		}
 	} else {
-		p.mgr = acme.NewManager(live, p.log)
-		challenge = p.mgr.HTTPHandler(nil) // eager: activa http-01 como fallback
+		mgr = acme.NewManager(live, p.log)
+		p.stateMu.Lock()
+		p.mgr = mgr
+		p.stateMu.Unlock()
+		challenge = mgr.HTTPHandler(nil) // eager: activa http-01 como fallback
 	}
 	errLog := slog.NewLogLogger(p.log.Handler(), slog.LevelError)
 	var control http.Handler
@@ -247,16 +263,20 @@ func (p *Program) Run() {
 		}))
 		control = mux
 	}
-	p.srvHTTP = server.NewHTTP(cfg, live, challenge, handler, control, errLog)
+	srvHTTP := server.NewHTTP(cfg, live, challenge, handler, control, errLog)
+	var srvTLS *http.Server
 	switch {
 	case cfg.LocalCA:
-		p.srvTLS = server.NewHTTPS(cfg, p.devca.GetCertificate, handler, control, errLog)
-		p.log.Info("TLS de desarrollo con CA local", "ca", p.devca.CertPath())
+		srvTLS = server.NewHTTPS(cfg, ca.GetCertificate, handler, control, errLog)
+		p.log.Info("TLS de desarrollo con CA local", "ca", ca.CertPath())
 	case cfg.ListenHTTPS != "":
-		p.srvTLS = server.NewHTTPS(cfg, p.mgr.GetCertificate, handler, control, errLog)
+		srvTLS = server.NewHTTPS(cfg, mgr.GetCertificate, handler, control, errLog)
 	default:
 		p.log.Warn("TLS desactivado (listen_https vacío): solo HTTP")
 	}
+	p.stateMu.Lock()
+	p.srvHTTP, p.srvTLS = srvHTTP, srvTLS
+	p.stateMu.Unlock()
 
 	p.log.Info("arrancando",
 		"http", cfg.ListenHTTP,
@@ -283,7 +303,7 @@ func (p *Program) Run() {
 			sub = nilFS{}
 		}
 		dashH := dashboard.NewHandler(sub)
-		p.srvHealth = &http.Server{
+		srvHealth := &http.Server{
 			Addr: cfg.Healthz.Listen,
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// API primero: nada del SPA puede tapar /api/v1.
@@ -313,8 +333,11 @@ func (p *Program) Run() {
 			// Sin WriteTimeout: POST /deploy/* tarda minutos (solo loopback).
 			ReadTimeout: 10 * time.Second,
 		}
+		p.stateMu.Lock()
+		p.srvHealth = srvHealth
+		p.stateMu.Unlock()
 		go func() {
-			if err := p.srvHealth.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			if err := srvHealth.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				p.log.Error("healthz muerto", "err", err)
 			}
 		}()
