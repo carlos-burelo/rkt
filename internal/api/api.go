@@ -17,6 +17,7 @@ import (
 	"rkt-proxy/internal/dnscheck"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
+	"rkt-proxy/internal/servermetrics"
 	"rkt-proxy/internal/store"
 )
 
@@ -46,6 +47,8 @@ type Deps struct {
 	TLS func(host string) (managed bool, expires string)
 	// DNS resuelve un host para el detalle de dominio (nil = resolver real).
 	DNS func(ctx context.Context, host string) dnscheck.Result
+	// Server monitor local de la instancia (nil = monitor real).
+	Server *servermetrics.Monitor
 	// Github estado vivo de la GitHub App (nil = no configurada).
 	Github func() (map[string]any, error)
 	// GithubRepos repos accesibles a las instalaciones (selector de app).
@@ -147,6 +150,9 @@ func NewHandler(d Deps) http.Handler {
 			return dnscheck.Check(ctx, nil, host)
 		}
 	}
+	if d.Server == nil {
+		d.Server = servermetrics.NewMonitor()
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/v1/auth/status", d.handleAuthStatus)
@@ -207,6 +213,11 @@ func NewHandler(d Deps) http.Handler {
 
 	// Observability flota: serie req/errores por hora + restarts + caídas.
 	mux.HandleFunc("/api/v1/observability", d.handleObservability)
+
+	// Servidor local: snapshot, histórico corto y top de procesos.
+	mux.HandleFunc("/api/v1/server", d.handleServer)
+	mux.HandleFunc("/api/v1/server/history", d.handleServerHistory)
+	mux.HandleFunc("/api/v1/server/processes", d.handleServerProcesses)
 
 	// Preflight DNS antes de crear una ruta.
 	mux.HandleFunc("/api/v1/domains/preflight", d.handleDomainPreflight)

@@ -18,6 +18,7 @@ import (
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/procstat"
+	"rkt-proxy/internal/servermetrics"
 	"rkt-proxy/internal/store"
 	"rkt-proxy/internal/weblog"
 )
@@ -40,11 +41,15 @@ func (p *Program) alertLoop(live *config.Live, db *store.DB) {
 		for _, s := range p.sup.Snapshot() {
 			statuses[s.Name] = s.Pid
 		}
+		srv := servermetrics.Snapshot{}
+		if p.srvMetrics != nil {
+			srv, _ = p.srvMetrics.Snapshot()
+		}
 		for _, r := range rules {
 			if !r.Enabled {
 				continue
 			}
-			m := p.metricsFor(r, cfg, entries, evs, statuses, now)
+			m := p.metricsFor(r, cfg, entries, evs, statuses, now, srv)
 			if alerts.Fired(r, m, now) {
 				msg := alerts.Describe(r, m)
 				fireID, err := db.AddFire(r.ID, m.Value(r.Kind), r.Threshold, msg)
@@ -62,9 +67,21 @@ func (p *Program) alertLoop(live *config.Live, db *store.DB) {
 	}
 }
 
-func (p *Program) metricsFor(r store.AlertRule, cfg *config.Config, entries []weblog.Entry, evs []store.Event, statuses map[string]int, now time.Time) alerts.Metrics {
+func (p *Program) metricsFor(r store.AlertRule, cfg *config.Config, entries []weblog.Entry, evs []store.Event, statuses map[string]int, now time.Time, srv servermetrics.Snapshot) alerts.Metrics {
 	since := now.Add(-time.Duration(r.WindowMin) * time.Minute)
 	var m alerts.Metrics
+	m.CPUPct = srv.CPU.Percent
+	m.MemPct = srv.Memory.Percent
+	for _, t := range srv.Temps {
+		if t.Celsius > m.TempC {
+			m.TempC = t.Celsius
+		}
+	}
+	for _, d := range srv.Disks {
+		if d.Percent > m.DiskPct {
+			m.DiskPct = d.Percent
+		}
+	}
 	hosts := map[string]bool{}
 	if r.App != "*" {
 		if a := cfgfile.FindApp(cfg, r.App); a != nil {

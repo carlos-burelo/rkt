@@ -6,6 +6,7 @@ import { nav } from "./es/nav";
 import { ops } from "./es/ops";
 import { overview } from "./es/overview";
 import { serve } from "./es/serve";
+import { server } from "./es/server";
 import { shared } from "./es/shared";
 import { shell } from "./es/shell";
 import { state } from "./es/state";
@@ -23,6 +24,7 @@ export const es: Record<string, string> = {
   ...apps,
   ...ops,
   ...serve,
+  ...server,
   ...system,
   ...shared,
 };

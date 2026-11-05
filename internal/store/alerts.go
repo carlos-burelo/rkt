@@ -53,7 +53,7 @@ type AlertDelivery struct {
 // ValidAlertKind kinds aceptados por el evaluador.
 func ValidAlertKind(kind string) bool {
 	switch kind {
-	case "failed", "error_rate", "latency_p95", "memory_mb", "down_min", "disk_pct":
+	case "failed", "error_rate", "latency_p95", "memory_mb", "down_min", "disk_pct", "cpu_pct", "mem_pct", "temp_c":
 		return true
 	}
 	return false
@@ -85,7 +85,7 @@ func (d *DB) AddRule(app, kind string, threshold float64, windowMin int) (int64,
 // AddRuleFull valida y crea una regla completa.
 func (d *DB) AddRuleFull(app, kind string, threshold float64, windowMin int, enabled bool, channelID int64) (int64, error) {
 	if !ValidAlertKind(kind) {
-		return 0, fmt.Errorf("kind inválido (failed|error_rate|latency_p95|memory_mb|down_min|disk_pct)")
+		return 0, fmt.Errorf("kind inválido (failed|error_rate|latency_p95|memory_mb|down_min|disk_pct|cpu_pct|mem_pct|temp_c)")
 	}
 	if threshold <= 0 {
 		return 0, fmt.Errorf("threshold debe ser > 0")

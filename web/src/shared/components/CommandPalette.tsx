@@ -36,7 +36,7 @@ export function CommandPalette({
   apps: { name: string; running: boolean; failed?: boolean }[];
   metas: AppMeta[];
   deps: Deployment[];
-  goPage: (p: "overview" | "proxy" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability" | "environment" | "ci" | "alerts") => void;
+  goPage: (p: "overview" | "proxy" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability" | "environment" | "ci" | "alerts" | "server") => void;
   openApp: (name: string) => void;
   openDeploy: (d: Deployment) => void;
   onAction: (app: string, a: "restart" | "deploy" | "rollback") => void;
@@ -56,13 +56,14 @@ export function CommandPalette({
 
   const targets: PaletteTarget[] = useMemo(() => {
     const out: PaletteTarget[] = [];
-    const pages: [string, "overview" | "proxy" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability" | "environment" | "ci" | "alerts"][] = [
+    const pages: [string, "overview" | "proxy" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability" | "environment" | "ci" | "alerts" | "server"][] = [
       [t("nav.overview"), "overview"],
       [t("nav.deployments"), "deployments"],
       [t("nav.ci"), "ci"],
       [t("nav.logs"), "logs"],
       [t("nav.analytics"), "analytics"],
       [t("nav.observability"), "observability"],
+      [t("nav.server"), "server"],
       [t("nav.alerts"), "alerts"],
       [t("nav.routes"), "routes"],
       [t("nav.environment"), "environment"],

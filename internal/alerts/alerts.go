@@ -16,6 +16,9 @@ type Metrics struct {
 	MemoryMB float64
 	DownMin  int
 	DiskPct  float64
+	CPUPct   float64
+	MemPct   float64
+	TempC    float64
 }
 
 // Value métrica usada por el kind (para historial y mensajes).
@@ -33,6 +36,12 @@ func (m Metrics) Value(kind string) float64 {
 		return float64(m.DownMin)
 	case "disk_pct":
 		return m.DiskPct
+	case "cpu_pct":
+		return m.CPUPct
+	case "mem_pct":
+		return m.MemPct
+	case "temp_c":
+		return m.TempC
 	}
 	return 0
 }
@@ -63,6 +72,12 @@ func Fired(r store.AlertRule, m Metrics, now time.Time) bool {
 		return float64(m.DownMin) >= r.Threshold
 	case "disk_pct":
 		return m.DiskPct >= r.Threshold
+	case "cpu_pct":
+		return m.CPUPct >= r.Threshold
+	case "mem_pct":
+		return m.MemPct >= r.Threshold
+	case "temp_c":
+		return m.TempC >= r.Threshold
 	}
 	return false
 }

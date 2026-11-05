@@ -6,9 +6,9 @@
 | Estado | aceptado |
 | Fecha | 2026-11-05 |
 | Ámbito | backend, API, dashboard, MCP |
-| Fase activa | P1/P2 cerrado; monitorización/protocolos/buildpack en espera |
-| Siguiente tarea | SRV-01 (solo cuando se autorice la fase posterior) |
-| Ampliación | SRV, PROTO, BLD y MOCK aprobados; no iniciar hasta cerrar P1 |
+| Fase activa | SRV cerrado; siguiente PROTO |
+| Siguiente tarea | PROTO-01 — inventario del transporte |
+| Ampliación | SRV implementado; PROTO, BLD y MOCK pendientes |
 | Relacionados | [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md), [CLI](CLI.md) |
 
 **AADR** = Architecture & API Decision Record. Este documento fija las
@@ -680,42 +680,42 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 
 **Prioridad:** P1.5. **Depende de:** D12. **Alcance:** una sola instancia VPS.
 
-- [ ] **SRV-01** Inventariar colectores disponibles por plataforma y decidir
+- [x] **SRV-01** Inventariar colectores disponibles por plataforma y decidir
   qué se mide, qué es opcional y qué se omite.
-- [ ] **SRV-02** Crear `internal/servermetrics` con `Snapshot` tipado: CPU
+- [x] **SRV-02** Crear `internal/servermetrics` con `Snapshot` tipado: CPU
   total/por núcleo, load 1/5/15, RAM, swap, uptime, discos, red, temperatura y
   firewall.
-- [ ] **SRV-03** Colector Windows: CPU, memoria, discos, red, uptime y
+- [x] **SRV-03** Colector Windows: CPU, memoria, discos, red, uptime y
   temperatura (best effort); firewall de solo lectura.
-- [ ] **SRV-04** Colector Linux: `/proc/stat`, `/proc/meminfo`,
+- [x] **SRV-04** Colector Linux: `/proc/stat`, `/proc/meminfo`,
   `/proc/loadavg`, `/proc/uptime`, `/proc/net/dev`, `statfs`,
   `/sys/class/thermal` y nft/iptables de solo lectura.
-- [ ] **SRV-05** Cálculo de CPU por delta con reloj inyectable; test.
-- [ ] **SRV-06** Parseo de memoria/swap con fixtures; test.
-- [ ] **SRV-07** Discos por punto de montaje, ignorando pseudo-filesystems;
+- [x] **SRV-05** Cálculo de CPU por delta con reloj inyectable; test.
+- [x] **SRV-06** Parseo de memoria/swap con fixtures; test.
+- [x] **SRV-07** Discos por punto de montaje, ignorando pseudo-filesystems;
   test.
-- [ ] **SRV-08** Tasas de red por delta; test.
-- [ ] **SRV-09** Temperatura opcional: si el sensor no existe, estado vacío
+- [x] **SRV-08** Tasas de red por delta; test.
+- [x] **SRV-09** Temperatura opcional: si el sensor no existe, estado vacío
   honesto; nunca valor inventado.
-- [ ] **SRV-10** Firewall de solo lectura: estado, puertos y reglas visibles;
+- [x] **SRV-10** Firewall de solo lectura: estado, puertos y reglas visibles;
   sin mutación desde el dashboard.
-- [ ] **SRV-11** Top procesos por CPU/RAM con `procstat`/`appusage`, acotado y
+- [x] **SRV-11** Top procesos por CPU/RAM con `procstat`/`appusage`, acotado y
   sin bloquear el request.
-- [ ] **SRV-12** Histórico en memoria de 24h con muestras de 1 min y límite
+- [x] **SRV-12** Histórico en memoria de 24h con muestras de 1 min y límite
   duro; sin persistir series en SQLite.
-- [ ] **SRV-13** Endpoints `/server`, `/server/history` y
+- [x] **SRV-13** Endpoints `/server`, `/server/history` y
   `/server/processes`; cache corta y rol viewer.
-- [ ] **SRV-14** Módulo "Servidor" en el dashboard: placas, sparklines, discos,
+- [x] **SRV-14** Módulo "Servidor" en el dashboard: placas, sparklines, discos,
   temperatura, red y firewall.
-- [ ] **SRV-15** Alertas nuevas: `cpu_pct`, `mem_pct`, `disk_pct`, `temp_c`;
+- [x] **SRV-15** Alertas nuevas: `cpu_pct`, `mem_pct`, `disk_pct`, `temp_c`;
   evaluador con datos del snapshot.
-- [ ] **SRV-16** Enlazar alertas de servidor con el mismo outbox de canales.
-- [ ] **SRV-17** Empty states por plataforma: "sensor no disponible" y "firewall
+- [x] **SRV-16** Enlazar alertas de servidor con el mismo outbox de canales.
+- [x] **SRV-17** Empty states por plataforma: "sensor no disponible" y "firewall
   no legible" sin romper la vista.
-- [ ] **SRV-18** i18n español neutro para todas las métricas y unidades.
-- [ ] **SRV-19** Tests de colectores y handlers; snapshot determinista con
+- [x] **SRV-18** i18n español neutro para todas las métricas y unidades.
+- [x] **SRV-19** Tests de colectores y handlers; snapshot determinista con
   fixtures.
-- [ ] **SRV-20** Capturas desktop, móvil y light/dark del módulo Servidor.
+- [x] **SRV-20** Capturas desktop, móvil y light/dark del módulo Servidor.
 
 ### 5.12 PROTO — Protocolos y upgrades
 
@@ -915,6 +915,7 @@ Criterios:
 | 2026-11-05 | Cierre P1/P2: tests de dominios/usuarios/alertas, contexto de logs, eventos y capturas light | `601fe5e` | `go test ./...`, `tsc`, Vitest, capturas |
 | 2026-11-05 | X-04: paridad MCP de entorno y alertas | `58aa1ff` | `go test ./internal/mcpserver`, `tsc` |
 | 2026-11-05 | Gate de cobertura: store 90%, hosts 98% y tests de `WithTx` | `2eeaebc` | bucle de cobertura local |
+| 2026-11-05 | SRV completo: colector local, API, vista, alertas y capturas | este commit | `go test ./internal/servermetrics ./internal/api`, `tsc`, capturas |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.

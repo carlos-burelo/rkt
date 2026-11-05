@@ -169,6 +169,49 @@ const obs = {
   restarts: 3, down: ["billing-worker"],
 };
 
+const serverHistory = Array.from({ length: 12 }, (_, i) => ({
+  ts: iso((11 - i) * 5),
+  cpu: [18, 24, 31, 27, 44, 52, 38, 41, 33, 29, 36, 42][i],
+  mem: [54, 54, 55, 55, 56, 56, 57, 57, 58, 58, 59, 59][i],
+  disk: 38,
+  rx_rate: 180000 + i * 9000,
+  tx_rate: 90000 + i * 4000,
+  load1: [0.4, 0.5, 0.6, 0.5, 0.8, 1.0, 0.7, 0.8, 0.6, 0.5, 0.7, 0.8][i],
+  temp_max: [42, 43, 45, 44, 48, 51, 47, 48, 46, 45, 47, 49][i],
+}));
+
+const serverSnapshot = {
+  ts: new Date().toISOString(),
+  hostname: "rkt-vps-01",
+  os: "linux",
+  uptime_s: 17 * 86400 + 5 * 3600 + 23 * 60,
+  cpu: { percent: 42, cores: 4, per_core: [38, 45, 40, 47] },
+  load: { l1: 0.8, l5: 0.65, l15: 0.5, supported: true },
+  memory: {
+    total: 8 * 1024 ** 3, used: 4.7 * 1024 ** 3, available: 3.3 * 1024 ** 3,
+    cached: 1.2 * 1024 ** 3, swap_total: 2 * 1024 ** 3, swap_used: 0.3 * 1024 ** 3,
+    percent: 59,
+  },
+  disks: [
+    { mount: "/", fs_type: "ext4", total: 80 * 1024 ** 3, used: 30.4 * 1024 ** 3, free: 49.6 * 1024 ** 3, percent: 38 },
+    { mount: "/var/lib/rkt", fs_type: "ext4", total: 120 * 1024 ** 3, used: 54 * 1024 ** 3, free: 66 * 1024 ** 3, percent: 45 },
+  ],
+  network: { rx_bytes: 184e9, tx_bytes: 91e9, rx_rate: 278000, tx_rate: 134000 },
+  temps: [
+    { zone: "cpu0", celsius: 49 },
+    { zone: "nvme0", celsius: 38 },
+  ],
+  firewall: { available: true, enabled: true, profiles: ["ufw activo", "22/tcp permitido", "80,443/tcp permitido"] },
+  warnings: [],
+};
+
+const serverProcs = [
+  { pid: 1842, name: "node", rss_mb: 412.3, cpu_pct: 18.4, threads: 24 },
+  { pid: 2210, name: "go", rss_mb: 128.7, cpu_pct: 9.1, threads: 12 },
+  { pid: 901, name: "postgres", rss_mb: 246.5, cpu_pct: 4.2, threads: 8 },
+  { pid: 640, name: "caddy", rss_mb: 42.8, cpu_pct: 1.8, threads: 10 },
+];
+
 const settings = {
   node_bin: "C:/Program Files/nodejs/node.exe",
   python_bin: "C:/Python312/python.exe",
@@ -203,6 +246,7 @@ const audit = [
 ];
 
 const alerts = [
+  { id: 5, app: "*", kind: "cpu_pct", threshold: 85, window_min: 15, enabled: true, channel_id: 1, last_fired: "", created_at: iso(60 * 24 * 2) },
   { id: 4, app: "billing-worker", kind: "failed", threshold: 1, window_min: 60, enabled: true, channel_id: 1, last_fired: iso(7), created_at: iso(60 * 24 * 20) },
   { id: 3, app: "api-core", kind: "error_rate", threshold: 0.02, window_min: 15, enabled: true, channel_id: 1, last_fired: iso(31), created_at: iso(60 * 24 * 16) },
   { id: 2, app: "*", kind: "latency_p95", threshold: 250, window_min: 60, enabled: true, channel_id: 0, last_fired: "", created_at: iso(60 * 24 * 9) },
@@ -324,6 +368,9 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
     if (p === "/api/v1/analytics") return json(route, analytics);
     if (p === "/api/v1/usage") return json(route, usage);
     if (p === "/api/v1/observability") return json(route, obs);
+    if (p === "/api/v1/server") return json(route, serverSnapshot);
+    if (p === "/api/v1/server/history") return json(route, serverHistory);
+    if (p === "/api/v1/server/processes") return json(route, serverProcs);
     if (p === "/api/v1/settings") return json(route, settings);
     if (p === "/api/v1/github") return json(route, { configured: false });
     if (p === "/api/v1/github/repos") return json(route, []);
@@ -381,6 +428,7 @@ const main = async () => {
   await shot("proxy", "proxy");
   await shot("analytics", "analytics");
   await shot("observability", "observability");
+  await shot("server", "server");
   await shot("alerts", "alerts");
   await shot("environment", "environment");
   await shot("settings", "settings");
@@ -427,6 +475,7 @@ const main = async () => {
     ["mobile-app-overview", "app/checkout/overview"],
     ["mobile-proxy", "proxy"],
     ["mobile-logs", "logs"],
+    ["mobile-server", "server"],
   ]) {
     await mpage.goto(`${BASE}/${route}`, { waitUntil: "networkidle" });
     await mpage.waitForTimeout(500);
@@ -470,6 +519,7 @@ const main = async () => {
     ["logs", "logs"],
     ["routes", "routes"],
     ["observability", "observability"],
+    ["server", "server"],
     ["alerts", "alerts"],
     ["environment", "environment"],
     ["settings", "settings"],

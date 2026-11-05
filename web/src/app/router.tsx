@@ -13,6 +13,7 @@ import { CI } from "../features/ci/CI";
 import { Logs } from "../features/logs/Logs";
 import { AnalyticsPage } from "../features/overview/AnalyticsPage";
 import { Observability } from "../features/overview/Observability";
+import { Server } from "../features/server/Server";
 import { Alerts } from "../features/alerts/Alerts";
 import { EnvAll } from "../features/env/EnvAll";
 import { AppTabs } from "../features/apps/AppTabs";
@@ -128,6 +129,7 @@ export const router = createBrowserRouter(
             { path: "logs", element: <Logs /> },
             { path: "analytics", element: <AnalyticsPage /> },
             { path: "observability", element: <Observability /> },
+            { path: "server", element: <Server /> },
             { path: "alerts", element: <Alerts /> },
             { path: "environment", element: <EnvAll /> },
             {

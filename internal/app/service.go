@@ -40,6 +40,7 @@ import (
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/proxy"
 	"rkt-proxy/internal/server"
+	"rkt-proxy/internal/servermetrics"
 	"rkt-proxy/internal/store"
 	"rkt-proxy/internal/supervisor"
 	"rkt-proxy/web"
@@ -80,6 +81,8 @@ type Program struct {
 	// cancelMu protege los canceladores de despliegues en curso.
 	cancelMu      sync.Mutex
 	deployCancels map[int64]context.CancelFunc
+	// srvMetrics monitor local de la instancia (compartido con API).
+	srvMetrics *servermetrics.Monitor
 	// stateMu sincroniza los recursos que Stop lee mientras Run los crea.
 	stateMu sync.Mutex
 }
@@ -113,7 +116,7 @@ type probeResult struct {
 // New crea el programa sin arrancarlo.
 func New(cfgPath string, log *slog.Logger) *Program {
 	return &Program{cfgPath: cfgPath, log: log, discoverKick: make(chan struct{}, 1), probes: map[string]probeResult{},
-		lastDeploy: map[string]time.Time{}, rollingBack: map[string]bool{}}
+		lastDeploy: map[string]time.Time{}, rollingBack: map[string]bool{}, srvMetrics: servermetrics.NewMonitor()}
 }
 
 // gh devuelve el manager de GitHub App (atómico: se reemplaza al crear la App).
@@ -300,7 +303,7 @@ func (p *Program) Run() {
 	}()
 	if cfg.Healthz.Enabled {
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.restartApp, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal})
-		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) { p.sup.Apply(apps, global) }, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh})
+		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) { p.sup.Apply(apps, global) }, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, Server: p.srvMetrics, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh})
 		sub, err := fs.Sub(web.Dist, "dist")
 		if err != nil {
 			p.log.Error("dashboard sin dist", "err", err)

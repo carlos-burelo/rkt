@@ -49,6 +49,9 @@ func TestFiredKinds(t *testing.T) {
 		{"memory_mb", Metrics{MemoryMB: 512}, 512},
 		{"down_min", Metrics{DownMin: 15}, 15},
 		{"disk_pct", Metrics{DiskPct: 91}, 91},
+		{"cpu_pct", Metrics{CPUPct: 88}, 88},
+		{"mem_pct", Metrics{MemPct: 93}, 93},
+		{"temp_c", Metrics{TempC: 82}, 82},
 	}
 	for _, c := range cases {
 		r := store.AlertRule{ID: 9, Kind: c.kind, Threshold: c.want - 1, WindowMin: 60, Enabled: true}
