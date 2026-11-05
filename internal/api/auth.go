@@ -3,13 +3,13 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 
+	"rkt-proxy/internal/netutil"
 	"rkt-proxy/internal/store"
 )
 
@@ -133,13 +133,6 @@ func (t *loginThrottle) ok(ip string) {
 	delete(t.hits, ip)
 }
 
-func clientIP(r *http.Request) string {
-	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		return h
-	}
-	return r.RemoteAddr
-}
-
 // handleAuthStatus informa si falta crear el primer admin (público).
 func (d *Deps) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -169,7 +162,7 @@ func (d *Deps) handleSetup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "setup ya completado")
 		return
 	}
-	ip := clientIP(r)
+	ip := netutil.ClientIP(r)
 	if d.th.blocked(ip) {
 		writeErr(w, http.StatusTooManyRequests, "demasiados intentos, espera 60s")
 		return
@@ -213,7 +206,7 @@ func (d *Deps) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "solo POST")
 		return
 	}
-	ip := clientIP(r)
+	ip := netutil.ClientIP(r)
 	if d.th.blocked(ip) {
 		writeErr(w, http.StatusTooManyRequests, "demasiados intentos, espera 60s")
 		return

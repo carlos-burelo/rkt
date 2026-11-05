@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -192,17 +191,6 @@ func (d *Deps) githubManager() *github.Manager {
 		return nil
 	}
 	return d.GithubManager()
-}
-
-// listenPort extrae el puerto de ":8080" / "127.0.0.1:8080".
-func listenPort(addr, def string) string {
-	if addr == "" {
-		return def
-	}
-	if i := strings.LastIndex(addr, ":"); i >= 0 && i+1 < len(addr) {
-		return addr[i+1:]
-	}
-	return def
 }
 
 func queryInt(r *http.Request, key string, def int) int {

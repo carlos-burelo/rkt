@@ -4,12 +4,13 @@ package ratelimit
 
 import (
 	"log/slog"
-	"net"
 	"net/http"
 	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
+
+	"rkt-proxy/internal/netutil"
 )
 
 // idleTTL echa buckets sin uso; sweep cada minuto (var para tests).
@@ -90,10 +91,7 @@ func (l *Limiter) Allow(ip string) bool {
 // Middleware responde 429 sin tocar el backend.
 func (l *Limiter) Middleware(next http.Handler, log *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
-		if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-			ip = h
-		}
+		ip := netutil.ClientIP(r)
 		if !l.Allow(ip) {
 			log.Warn("rate limit", "ip", ip, "host", r.Host, "path", r.URL.Path)
 			http.Error(w, "demasiadas peticiones", http.StatusTooManyRequests)

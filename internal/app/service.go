@@ -42,6 +42,7 @@ import (
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/hook"
 	"rkt-proxy/internal/logx"
+	"rkt-proxy/internal/netutil"
 	"rkt-proxy/internal/proxy"
 	"rkt-proxy/internal/server"
 	"rkt-proxy/internal/store"
@@ -481,10 +482,7 @@ func (p *Program) setupOrigin() (origin, domain string, local, tls bool) {
 	if tls {
 		addr = cfg.ListenHTTPS
 	}
-	port := ""
-	if i := strings.LastIndex(addr, ":"); i >= 0 {
-		port = addr[i+1:]
-	}
+	port := netutil.Port(addr, "")
 	host := "localhost"
 	if (tls && port != "" && port != "443") || (!tls && port != "" && port != "80") {
 		host += ":" + port

@@ -39,6 +39,7 @@ cmd/rkt-proxy
 | Alta de app (inferencia + rutas) | `cfgfile.CreateAndAdd` |
 | Patch/borrado de app, rutas, env | `cfgfile/mutate.go` |
 | Vistas para API/MCP | `internal/appview` |
+| Puerto de listen y IP de cliente | `internal/netutil` |
 | Pipeline deploy/build | `internal/deploy` |
 | Procesos y reinicios | `internal/supervisor` |
 | Historial y eventos | `internal/store` |
@@ -67,12 +68,11 @@ Hecho:
   `github.go`, `alerts.go`, `status.go`, `domains.go`.
 - Mutaciones de flota canónicas en `cfgfile/mutate.go`.
 - Carrera del supervisor corregida (`m.apps` bajo lock).
+- Parseo de listen y RemoteAddr unificado en `internal/netutil`.
 
 ## Deuda pendiente (orden sugerido)
 
-1. **Unificar parseo de puerto/listen.** Hoy hay copias en `api.listenPort` y
-   `app.setupOrigin`; extraer una función de red compartida.
-2. **Web.** `CreateDialog.tsx` concentra estado de 3 pasos + tracking: extraer
+1. **Web.** `CreateDialog.tsx` concentra estado de 3 pasos + tracking: extraer
    pasos a componentes con props explícitas y helpers de slug a un módulo.
-3. **Cobertura de concurrencia.** Añadir pruebas con `-race` en CI (requiere
+2. **Cobertura de concurrencia.** Añadir pruebas con `-race` en CI (requiere
    CGO) para supervisor, API y watcher.
