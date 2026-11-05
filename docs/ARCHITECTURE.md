@@ -60,9 +60,10 @@ tags.
 | CA de desarrollo | Root del usuario | manual (`SSL_CERT_FILE`) |
 | Abrir navegador | `rundll32` | `xdg-open` / `open` |
 
-Estado: Windows es la plataforma soportada. Linux compila y CI ejecuta
-build+vet+tests en Ubuntu; el runtime Linux mantiene limitaciones conscientes
-(sin tope RAM, CA local manual) hasta validación funcional completa.
+Estado: Windows es la plataforma soportada. Linux compila, pasa la suite
+completa en Ubuntu/WSL y CI ejecuta build+vet+tests más un job con `-race`.
+Limitaciones conscientes en Linux: sin tope de RAM (Job Objects) y CA de
+desarrollo manual.
 
 ## Invariantes
 
@@ -97,10 +98,12 @@ Hecho:
 - `CreateDialog.tsx` reducido a estado/orquestación (~330 líneas):
   helpers en `createDialog.model.tsx`, pasos 1–3 en `CreateSteps.tsx` y
   tracking en `CreateTrack.tsx`.
+- Suite completa validada en Linux (WSL Ubuntu) y CI con job `-race`.
+- `Program.Stop` sincronizado con el arranque (`stateMu`) para el detector.
 
 ## Deuda pendiente (orden sugerido)
 
-1. **Cobertura de concurrencia.** Añadir pruebas con `-race` en CI (requiere
-   CGO) para supervisor, API y watcher.
-2. **Linux funcional.** Validar smoke real (deploy, supervisor, proxy) en un
-   runner Linux además de build+vet+tests.
+1. **Confirmar `-race` en CI.** El job está añadido, pero no se pudo ejecutar
+   localmente (sin CGO/gcc); la primera pasada del runner es la validación.
+2. **E2E del dashboard.** Hoy hay `tsc`, build y capturas; falta un runner de
+   navegador para regresiones de interacción.
