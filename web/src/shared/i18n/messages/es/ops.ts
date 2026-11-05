@@ -23,6 +23,7 @@ export const ops = {
   "ops.logs.compact": "compactar",
   "ops.logs.wrap": "ajustar línea",
   "ops.logs.absolute": "hora absoluta",
+  "ops.logs.context": "contexto ±2",
   "ops.logs.visibleLines.one": "{vis} / {n} línea visible",
   "ops.logs.visibleLines.other": "{vis} / {n} líneas visibles",
   "ops.logs.activity": "Actividad 24h",

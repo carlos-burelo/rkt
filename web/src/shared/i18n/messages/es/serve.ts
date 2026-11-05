@@ -166,6 +166,8 @@ export const serve = {
   "serve.env.importSubmit": "importar",
   "serve.env.imported.one": "{n} clave importada",
   "serve.env.imported.other": "{n} claves importadas",
+  "serve.env.restartApp": "reiniciar {app} para aplicar el entorno",
+  "serve.env.restarted": "{app} reiniciada",
   "serve.env.noApps": "Sin apps",
   "serve.env.noAppsHint": "Registra la primera app para ver su inventario.",
   "serve.env.noMatch": "Sin coincidencias",

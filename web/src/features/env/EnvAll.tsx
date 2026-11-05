@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Globe2, Lock, Pencil, Plus, Search, Upload } from "lucide-react";
+import { ArrowRight, Globe2, Lock, Pencil, Plus, RotateCw, Search, Upload } from "lucide-react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { getEnvValue } from "../apps/api";
+import { appAction, getEnvValue } from "../apps/api";
 import { getGlobalValue, importGlobalEnv, patchGlobalEnv } from "./api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -232,17 +232,29 @@ export function EnvAll() {
         const inherited = globalKeys.filter((k) => !global.appKeys[app].includes(k)).length;
         return (
           <section key={app} className="border border-border">
-            <button
-              onClick={() => navigate(`/app/${app}`)}
-              className="flex w-full items-center gap-2.5 border-b border-border bg-secondary/20 px-3 py-2 text-left hover:bg-accent/40"
-            >
-              <Avatar name={app} />
-              <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{app}</span>
-              <span className="tnum font-mono text-[9px] text-muted-foreground">
-                {tn("serve.env.ownCount", global.appKeys[app].length)} · {tn("serve.env.inherited", inherited)}
-              </span>
-              <ArrowRight className="h-3 w-3 text-muted-foreground/40" />
-            </button>
+            <div className="flex items-center gap-2 border-b border-border bg-secondary/20 px-3 py-2">
+              <button
+                onClick={() => navigate(`/app/${app}`)}
+                className="flex min-w-0 flex-1 items-center gap-2.5 text-left hover:text-signal"
+              >
+                <Avatar name={app} />
+                <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{app}</span>
+                <span className="tnum font-mono text-[9px] text-muted-foreground">
+                  {tn("serve.env.ownCount", global.appKeys[app].length)} · {tn("serve.env.inherited", inherited)}
+                </span>
+                <ArrowRight className="h-3 w-3 text-muted-foreground/40" />
+              </button>
+              {canWrite && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  title={t("serve.env.restartApp", { app })}
+                  onClick={() => appAction(app, "restart").then(() => toast.success(t("serve.env.restarted", { app }))).catch(fail)}
+                >
+                  <RotateCw className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
             {keys.map((k) => (
               <div key={k} className="flex items-center gap-2 border-b border-border/60 bg-card/35 px-3 py-1.5 last:border-0">
                 <Lock className="h-3 w-3 shrink-0 text-muted-foreground/60" aria-label={t("serve.env.secretAria")} />

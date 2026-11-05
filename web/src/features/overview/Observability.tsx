@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { fetchObs, Obs } from "./api";
 import { Bars } from "../../shared/components/feedback";
 import { PageHeader, Stat, StatGrid, Section, Segmented, EmptyState } from "../../shared/components/patterns";
+import { eventKindLabel } from "../../shared/lib/labels";
 import { useI18n } from "../../shared/i18n";
 
 export function Observability() {
@@ -65,6 +66,16 @@ export function Observability() {
           >
             <Bars data={data.buckets.map((b) => b.req)} labels={data.buckets.map((b) => (b.ts.length > 5 ? b.ts.slice(11, 16) : b.ts))} height={104} showValues />
           </Section>
+          {data.events && Object.keys(data.events).length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {Object.entries(data.events).map(([kind, n]) => (
+                <span key={kind} className="inline-flex items-center gap-1.5 border border-border px-2 py-1 font-mono text-[9px] text-muted-foreground">
+                  <span className="uppercase tracking-[0.06em]">{eventKindLabel(kind)}</span>
+                  <span className="tnum text-foreground">{n}</span>
+                </span>
+              ))}
+            </div>
+          )}
           <Section
             title={t("overview.observability.errTitle")}
             description={errTotal === 0 ? t("overview.observability.errNone") : t("overview.observability.errAction")}

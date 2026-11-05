@@ -171,6 +171,7 @@ export function Logs() {
   const [compact, setCompact] = useState(true);
   const [wrap, setWrap] = useState(false);
   const [absolute, setAbsolute] = useState(true);
+  const [context, setContext] = useState(false);
   const [build, setBuild] = useState(t("ops.logs.pickDeployment"));
   const logRef = useRef<HTMLDivElement>(null);
   const latest = deps.find((d: Deployment) => appFilter === "" || d.app === appFilter);
@@ -219,13 +220,22 @@ export function Logs() {
         stamped++;
       }
     }
-    return { vis, counts, buckets, stamped };
+    return { vis, parsed, counts, buckets, stamped };
   }, [log, q, levels]);
 
-  const rendered = useMemo(
-    () => (compact ? groupParsed(lines.vis) : lines.vis.map((line) => ({ line, count: 1 }))),
-    [compact, lines.vis],
-  );
+  const rendered = useMemo(() => {
+    let list = lines.vis;
+    if (context && q.trim() !== "") {
+      const rx = new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      const keep = new Set<number>();
+      lines.parsed.forEach((p, i) => {
+        if (!levels[p.level] || !rx.test(p.raw)) return;
+        for (let j = Math.max(0, i - 2); j <= Math.min(lines.parsed.length - 1, i + 2); j++) keep.add(j);
+      });
+      list = lines.parsed.filter((p, i) => keep.has(i) && levels[p.level]);
+    }
+    return compact ? groupParsed(list) : list.map((line) => ({ line, count: 1 }));
+  }, [compact, context, lines, q, levels]);
 
   function download() {
     const blob = new Blob([log], { type: "text/plain" });
@@ -330,6 +340,12 @@ export function Logs() {
                 <Checkbox checked={absolute} onCheckedChange={(v) => setAbsolute(v === true)} />
                 {t("ops.logs.absolute")}
               </label>
+              {q.trim() !== "" && (
+                <label className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
+                  <Checkbox checked={context} onCheckedChange={(v) => setContext(v === true)} />
+                  {t("ops.logs.context")}
+                </label>
+              )}
               <span className="tnum font-mono text-[9px] text-muted-foreground">
                 {tn("ops.logs.visibleLines", log === "" ? 0 : log.split("\n").length, {
                   vis: lines.vis.length,
@@ -358,6 +374,7 @@ export function Logs() {
               <div
                 ref={logRef}
                 role="log"
+                tabIndex={0}
                 aria-live={live ? "polite" : "off"}
                 aria-label={t("ops.logs.logAria")}
                 className="h-[58vh] overflow-auto bg-ink/45 font-mono text-[11px] leading-[1.6]"

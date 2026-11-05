@@ -127,6 +127,8 @@ export const overview = {
   "overview.tlsSoon.one": "{n} certificado vence en 14 días o menos",
   "overview.tlsSoon.other": "{n} certificados vencen en 14 días o menos",
   "overview.tlsSoonAction": "revisar dominios",
+  "overview.restarts24h.one": "{n} reinicio 24h",
+  "overview.restarts24h.other": "{n} reinicios 24h",
 
   "overview.usage.empty": "sin lectura de access.log",
   "overview.usage.bandwidth": "ancho de banda",

@@ -160,6 +160,11 @@ export function Overview() {
   const lastDep = (app: string) => deps.find((d) => d.app === app);
   const running = apps.filter((a) => a.running && !a.failed).length;
   const failed = apps.filter((a) => a.failed).length;
+  const dayAgo = Date.now() - 24 * 3600 * 1000;
+  const restarts = evs.filter((e) => {
+    const t = new Date(e.ts).getTime();
+    return t >= dayAgo && (e.kind === "died" || e.kind === "restarted" || e.kind === "failed");
+  }).length;
   const rank = { failed: 0, degraded: 1, running: 2, ok: 2, stopped: 3 } as const;
   const sortedApps = [...apps].sort((a, b) => rank[stateOf(a)] - rank[stateOf(b)]);
   const failedApps = sortedApps.filter((a) => a.failed);
@@ -177,6 +182,7 @@ export function Overview() {
             <span className="h-1 w-1 bg-ok" />
             {t("overview.meta.running", { running, total: apps.length })}
             {failed > 0 && <span className="text-bad">· {tn("overview.stuck", failed)}</span>}
+            {restarts > 0 && <span className="text-warn">· {tn("overview.restarts24h", restarts)}</span>}
           </span>
         }
       />

@@ -172,12 +172,14 @@ func (d *Deps) handleObservability(w http.ResponseWriter, r *http.Request) {
 		}
 		sort.Slice(byApp, func(i, j int) bool { return byApp[i].Req > byApp[j].Req })
 		restarts := 0
+		eventCounts := map[string]int{}
 		if evs, err := d.DB.ListEvents(500, "", ""); err == nil {
 			for _, e := range evs {
 				t, err := time.Parse(time.RFC3339, e.Ts)
 				if err != nil || t.Before(since) {
 					continue
 				}
+				eventCounts[e.Kind]++
 				if e.Kind == "died" || e.Kind == "restarted" || e.Kind == "failed" {
 					restarts++
 				}
@@ -194,7 +196,8 @@ func (d *Deps) handleObservability(w http.ResponseWriter, r *http.Request) {
 		return map[string]any{
 			"hours": hours, "buckets": buckets, "classes": classes,
 			"by_app": byApp, "restarts": restarts, "down": down,
-			"p50": p50, "p95": p95, "p99": p99,
+			"events": eventCounts,
+			"p50":    p50, "p95": p95, "p99": p99,
 		}, nil
 	})
 	if err != nil {

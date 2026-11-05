@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -41,11 +42,26 @@ func (d *Deps) handleDomainPreflight(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
-	dns := d.DNS(ctx, host)
+	dns := d.resolveDNS(ctx, host)
 	expected := dnscheck.Expected(host, d.DB.GetSetting(store.KeyBaseDomain), d.DB.GetSetting(store.KeyPublicIP))
 	writeJSON(w, map[string]any{
 		"host": host, "dns": dns, "expected": expected, "dns_ok": dns.Matches(expected),
 	})
+}
+
+// resolveDNS cachea 30s por host: el drawer y el preflight no martillean DNS.
+func (d *Deps) resolveDNS(ctx context.Context, host string) dnscheck.Result {
+	b, err := d.cache.get("dns:"+host, 30*time.Second, func() (any, error) {
+		return d.DNS(ctx, host), nil
+	})
+	if err != nil {
+		return dnscheck.Result{Error: err.Error()}
+	}
+	var out dnscheck.Result
+	if err := json.Unmarshal(b, &out); err != nil {
+		return dnscheck.Result{Error: err.Error()}
+	}
+	return out
 }
 
 // handleDomainDetail GET /api/v1/domains/{host}: vista agregada para el
@@ -79,7 +95,7 @@ func (d *Deps) handleDomainDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
-	dns := d.DNS(ctx, host)
+	dns := d.resolveDNS(ctx, host)
 	expected := dnscheck.Expected(host, d.DB.GetSetting(store.KeyBaseDomain), d.DB.GetSetting(store.KeyPublicIP))
 	managed, expires := false, ""
 	if d.TLS != nil {

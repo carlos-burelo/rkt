@@ -6,8 +6,8 @@
 | Estado | aceptado |
 | Fecha | 2026-11-05 |
 | Ámbito | backend, API, dashboard, MCP |
-| Fase activa | DOM — Dominios y Proxy |
-| Siguiente tarea | DOM-01 |
+| Fase activa | P1/P2 cerrado; X-04 (MCP) pendiente |
+| Siguiente tarea | X-04 — paridad MCP de mutaciones nuevas |
 | Ampliación | SRV, PROTO, BLD y MOCK aprobados; no iniciar hasta cerrar P1 |
 | Relacionados | [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md), [CLI](CLI.md) |
 
@@ -443,7 +443,7 @@ qué eligió un plan; si no puede, falla con una acción concreta.
   claves de lista, vacío y principal.
 - [x] **DOM-12** Actualizar CLI y MCP que editen dominio para usar el conjunto;
   test de paridad.
-- [ ] **DOM-13** Test de integración: PUT con dos hosts, GET refleja ambos,
+- [x] **DOM-13** Test de integración: PUT con dos hosts, GET refleja ambos,
   PUT con lista vacía retira las rutas.
 - [x] **DOM-14** Nuevo `GET /api/v1/domains/{host}` con ruta, app dueña, TLS,
   DNS y `checked_at`.
@@ -475,7 +475,7 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 
 **Prioridad:** P1. **Depende de:** D3.
 
-- [ ] **ENV-01** Auditar endpoints y UI actuales; fijar claves vs valores.
+- [x] **ENV-01** Auditar endpoints y UI actuales; fijar claves vs valores.
 - [x] **ENV-02** `cfgfile.ApplyEnvPatch(scope, set, unset)` atómico para global
   y app.
 - [x] **ENV-03** Validación canónica de claves `[A-Z_][A-Z0-9_]*`; reservadas
@@ -493,12 +493,12 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 - [x] **ENV-09** Tests de `ApplyEnvPatch`: set, unset, mixto, clave inválida y
   fallo atómico sin cambios.
 - [x] **ENV-10** Tests de handlers: roles, claves, revelado e importación.
-- [ ] **ENV-11** UI global: editar valor en sitio, eliminar, revelar/copiar y
+- [x] **ENV-11** UI global: editar valor en sitio, eliminar, revelar/copiar y
   guardar patch.
 - [x] **ENV-12** UI global: importar `.env` pegado o archivo, previsualizar
   claves y aplicar.
 - [x] **ENV-13** UI por app: editar en sitio e importar; heredadas vs propias.
-- [ ] **ENV-14** Banner "aplicado al reiniciar" con acción de reinicio por app;
+- [x] **ENV-14** Banner "aplicado al reiniciar" con acción de reinicio por app;
   nunca reinicio automático.
 - [x] **ENV-15** `EnvAll` carga claves en una sola llamada; sin N+1; valores
   solo al revelar.
@@ -565,7 +565,7 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 
 **Prioridad:** P2. **Depende de:** D6.
 
-- [ ] **OBS-01** Documentar atribución host→app y campos reales de `weblog`.
+- [x] **OBS-01** Documentar atribución host→app y campos reales de `weblog`.
 - [x] **OBS-02** Función pura de series: req/err por bucket, p50/p95/p99 y
   clases 2xx/3xx/4xx/5xx.
 - [x] **OBS-03** `GET /observability` añade `by_app`, `classes`, `latency` y
@@ -573,7 +573,7 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 - [x] **OBS-04** Tests de agregación con entradas sintéticas y ventanas.
 - [x] **OBS-05** UI: serie con ejes y leyenda, tarjetas total/error/p95 y tabla
   por app.
-- [ ] **OBS-06** Superponer eventos de deploy, caída y reinicio en la serie.
+- [x] **OBS-06** Superponer eventos de deploy, caída y reinicio en la serie.
 - [x] **OBS-07** Empty state honesto si no hay `access.log`; sin RUM.
 - [x] **OBS-08** Enlazar app/host al detalle de dominio y a logs filtrados.
 - [x] **OBS-09** i18n y textos sobrios.
@@ -603,7 +603,7 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 - [x] **ALR-10** Validar reglas: app existente o `*`, umbral >0 y ventana >0.
 - [x] **ALR-11** Seguridad: secretos fuera de listas, timeout, límite de
   payload y bloqueo de metadata/link-local en webhooks.
-- [ ] **ALR-12** Tests de store, evaluador y outbox.
+- [x] **ALR-12** Tests de store, evaluador y outbox.
 - [x] **ALR-13** Email solo si hay SMTP configurado; si no, no mostrar canal
   falso.
 - [x] **ALR-14** Capturas: alertas, edición, historial y canal.
@@ -626,8 +626,9 @@ qué eligió un plan; si no puede, falla con una acción concreta.
   auth/usuarios; API admin.
 - [x] **USR-08** UI: contraseña, sesiones, deshabilitar, último acceso y
   auditoría.
-- [ ] **USR-09** Tests de store/auth y roles.
-- [ ] **USR-10** Cubrir cambio/reset con el rate limit existente.
+- [x] **USR-09** Tests de store/auth y roles.
+- [-] **USR-10** El rate limit de login ya existe; cambio/reset exigen sesión
+  válida y no pasan por el throttle. No se duplica un segundo limitador.
 - [x] **USR-11** i18n y mensajes de seguridad claros.
 - [x] **USR-12** Capturas: usuarios, sesiones y cambio de contraseña.
 
@@ -657,9 +658,9 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 - [x] **LOG-02** Resaltar coincidencias de búsqueda sin inyectar HTML.
 - [x] **LOG-03** Copiar línea cruda y selección.
 - [x] **LOG-04** Alternar hora absoluta/relativa, persistido.
-- [ ] **LOG-05** Contexto ±N alrededor de coincidencias cuando hay búsqueda.
+- [x] **LOG-05** Contexto ±N alrededor de coincidencias cuando hay búsqueda.
 - [x] **LOG-06** Tests TS de `format.ts`: JSON, logfmt, plano y agrupación.
-- [ ] **LOG-07** Teclado y accesibilidad: filtros, pausa y foco en consola.
+- [x] **LOG-07** Teclado y accesibilidad: filtros, pausa y foco en consola.
 - [x] **LOG-08** Capturas: compacto, ajuste, búsqueda resaltada y contexto.
 
 ### 5.10 OVR — Resumen
@@ -671,7 +672,7 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 - [x] **OVR-02** Avisos TLS próximos a vencer desde el detalle de dominios.
 - [x] **OVR-03** Alertas abiertas desde eventos/fires.
 - [x] **OVR-04** Tasa de éxito de despliegues de 7 días desde SQLite.
-- [ ] **OVR-05** Apps caídas y reinicios desde status/observability.
+- [x] **OVR-05** Apps caídas y reinicios desde status/observability.
 - [x] **OVR-06** Jerarquía y empty states; no duplicar tablas enteras.
 - [x] **OVR-07** Capturas y tests de datos derivados.
 
@@ -799,17 +800,17 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 - [x] **X-01** Añadir Vitest a `web` (`pnpm --dir web test`) y cubrir
   `format.ts`, `canSaveApp` y validadores puros.
 - [x] **X-02** CI ejecuta Vitest, i18n-check, build y smoke de capturas.
-- [ ] **X-03** Convertir capturas en smoke con aserciones: sin errores de
+- [x] **X-03** Convertir capturas en smoke con aserciones: sin errores de
   consola y elementos clave presentes.
 - [ ] **X-04** Matriz de paridad MCP: cada mutación nueva con tool y mismo
   servicio; tests.
 - [x] **X-05** i18n guard cubre los namespaces nuevos; cero textos crudos.
-- [ ] **X-06** Capturas light/dark de cada módulo nuevo.
+- [x] **X-06** Capturas light/dark de cada módulo nuevo.
 - [x] **X-07** Actualizar `ARCHITECTURE.md` (hogares `dnscheck`, `settings`,
   alertas), `CLI.md` y README.
 - [x] **X-08** Revisión de seguridad: secretos fuera de listas/logs, roles,
   timeouts y bloqueo SSRF de webhooks.
-- [ ] **X-09** Performance: caché DNS/TLS, entorno sin N+1 y series en una
+- [x] **X-09** Performance: caché DNS/TLS, entorno sin N+1 y series en una
   pasada.
 - [x] **X-10** Commits atómicos y checklist actualizada en el mismo commit;
   sin push.
@@ -986,3 +987,16 @@ La matriz se amplía solo con fixture y test. Un plan sin evidencia no se elige.
 | WebSocket seguro (`wss`) | obligatorio | eco con CA local |
 | SSE | obligatorio | eventos sin buffering |
 | TCP crudo | fuera de alcance | decisión explícita |
+
+### F. Atribución de observabilidad
+
+| Dato | Origen | Regla |
+|---|---|---|
+| Peticiones/errores | `access.log` | `status >= 500` cuenta como error. |
+| Latencia | `dur=` del access log | p50/p95/p99 por bucket y por app. |
+| App dueña | `routes` | target `http://127.0.0.1:PORT` → app con ese `PORT`. |
+| Reinicios/caídas | `events` | kinds `died`, `restarted`, `failed`. |
+| Clases | status HTTP | 2xx, 3xx, 4xx, 5xx. |
+
+Sin RUM ni métricas dentro de las apps. Si no hay `access.log`, la vista lo
+dice y no inventa series.

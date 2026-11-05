@@ -36,6 +36,7 @@ export interface Obs {
   by_app?: { app: string; req: number; err: number; bytes: number; p95?: string }[];
   restarts: number;
   down: string[];
+  events?: Record<string, number>;
   p50?: string;
   p95?: string;
   p99?: string;

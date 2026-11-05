@@ -165,6 +165,7 @@ const obs = {
     { app: "admin", req: 559, err: 2, bytes: 1200000, p95: "31ms" },
   ],
   p50: "12ms", p95: "28ms", p99: "91ms",
+  events: { deploy: 4, died: 2, alert: 1 },
   restarts: 3, down: ["billing-worker"],
 };
 
@@ -367,6 +368,7 @@ const main = async () => {
   const shot = async (name, route, opts = {}) => {
     await page.goto(`${BASE}/${route}`, { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
+    if ((await page.locator("h1").count()) === 0) errors.push(`[smoke] ${name}: sin h1`);
     await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: opts.fullPage ?? true });
     console.log("ok", name);
   };
@@ -463,6 +465,21 @@ const main = async () => {
   await wpage.waitForTimeout(500);
   await wpage.screenshot({ path: join(OUT, "overview-light.png"), fullPage: true });
   console.log("ok overview-light");
+  for (const [name, route] of [
+    ["deployments", "deployments"],
+    ["logs", "logs"],
+    ["routes", "routes"],
+    ["observability", "observability"],
+    ["alerts", "alerts"],
+    ["environment", "environment"],
+    ["settings", "settings"],
+    ["users", "users"],
+  ]) {
+    await wpage.goto(`${BASE}/${route}`, { waitUntil: "networkidle" });
+    await wpage.waitForTimeout(400);
+    await wpage.screenshot({ path: join(OUT, `${name}-light.png`), fullPage: true });
+    console.log("ok", `${name}-light`);
+  }
   await wctx.close();
 
   const wlctx = await browser.newContext({ viewport: { width: 1600, height: 900 }, colorScheme: "light" });
