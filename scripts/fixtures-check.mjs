@@ -1,7 +1,7 @@
 // Guard de fixtures: nombres regionales, marcas ajenas y voseo.
 import { readFileSync } from "node:fs";
 
-const files = ["scripts/shots/mock.mjs"];
+const files = ["scripts/shots/mock.mjs", "scripts/shots/fixtures.mjs"];
 const forbidden = [
   /\bxavi\b/i,
   /\bmira\b/i,

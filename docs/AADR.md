@@ -6,9 +6,9 @@
 | Estado | aceptado |
 | Fecha | 2026-11-05 |
 | Ámbito | backend, API, dashboard, MCP |
-| Fase activa | MOCK casi cerrado; solo MOCK-06 |
-| Siguiente tarea | MOCK-06 — extraer fixtures compartidos |
-| Ampliación | SRV, PROTO y BLD cerrados; MOCK pendiente de extracción |
+| Fase activa | AADR completo |
+| Siguiente tarea | revisión final y mantenimiento |
+| Ampliación | SRV, PROTO, BLD y MOCK cerrados |
 | Relacionados | [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md), [CLI](CLI.md) |
 
 **AADR** = Architecture & API Decision Record. Este documento fija las
@@ -790,7 +790,7 @@ qué eligió un plan; si no puede, falla con una acción concreta.
   `facturacion`, `panel`.
 - [x] **MOCK-04** Revisar todo el copy de fixtures en español neutro.
 - [x] **MOCK-05** Dominios de ejemplo `ejemplo.com` o base local.
-- [ ] **MOCK-06** Extraer fixtures compartidos para capturas y tests.
+- [x] **MOCK-06** Extraer fixtures compartidos para capturas y tests.
 - [x] **MOCK-07** Eliminar regionalismos y lenguaje de marketing.
 - [x] **MOCK-08** Regenerar todas las capturas y revisar dark/light/móvil.
 - [x] **MOCK-09** Asegurar que ninguna vista usa datos fuera del fixture.
@@ -921,6 +921,7 @@ Criterios:
 | 2026-11-05 | BLD parcial: evidencia, gestores, Python/Rust/SolidStart, env determinista y UI | `42434d2` | `go test ./internal/buildpack ./internal/discover ./internal/deploy`, `tsc` |
 | 2026-11-05 | BLD final: Java, salidas estáticas, versión Node y caché decidida | `350575e` | `go test ./internal/buildpack ./internal/discover` |
 | 2026-11-05 | MOCK: nombres neutros, dominios ejemplo.com y guard de fixtures | `350575e` | `node scripts/fixtures-check.mjs`, capturas |
+| 2026-11-05 | MOCK-06: fixtures extraídos a módulo compartido | este commit | `node --check`, `fixtures-check`, capturas |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.
