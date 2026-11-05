@@ -6,9 +6,9 @@
 | Estado | aceptado |
 | Fecha | 2026-11-05 |
 | Ámbito | backend, API, dashboard, MCP |
-| Fase activa | SRV cerrado; siguiente PROTO |
-| Siguiente tarea | PROTO-01 — inventario del transporte |
-| Ampliación | SRV implementado; PROTO, BLD y MOCK pendientes |
+| Fase activa | SRV y PROTO cerrados; siguiente BLD |
+| Siguiente tarea | BLD-01 — inventario del buildpack |
+| Ampliación | SRV y PROTO implementados; BLD y MOCK pendientes |
 | Relacionados | [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md), [CLI](CLI.md) |
 
 **AADR** = Architecture & API Decision Record. Este documento fija las
@@ -721,28 +721,28 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 
 **Prioridad:** P1.5. **Depende de:** D13.
 
-- [ ] **PROTO-01** Inventariar el proxy actual: `ReverseProxy`, timeouts,
+- [x] **PROTO-01** Inventariar el proxy actual: `ReverseProxy`, timeouts,
   compresión, flush y manejo de `Connection: Upgrade`.
-- [ ] **PROTO-02** Aceptar y normalizar targets `http`, `https`, `ws` y `wss`
+- [x] **PROTO-02** Aceptar y normalizar targets `http`, `https`, `ws` y `wss`
   en validación de rutas.
-- [ ] **PROTO-03** Test de eco WebSocket a través del proxy, incluyendo
+- [x] **PROTO-03** Test de eco WebSocket a través del proxy, incluyendo
   mensajes binarios y cierre limpio.
-- [ ] **PROTO-04** Test WSS con la CA local y certificado de desarrollo.
-- [ ] **PROTO-05** Test SSE: eventos llegan sin buffering y el cliente puede
+- [x] **PROTO-04** Test WSS con la CA local y certificado de desarrollo.
+- [x] **PROTO-05** Test SSE: eventos llegan sin buffering y el cliente puede
   cancelar.
-- [ ] **PROTO-06** Verificar HTTP/2 en listener TLS y ALPN; documentar límites.
-- [ ] **PROTO-07** Preservar cabeceras de upgrade y no comprimir respuestas de
+- [x] **PROTO-06** Verificar HTTP/2 en listener TLS y ALPN; documentar límites.
+- [x] **PROTO-07** Preservar cabeceras de upgrade y no comprimir respuestas de
   upgrade.
-- [ ] **PROTO-08** Ajustar timeouts e idle connections para conexiones largas
+- [x] **PROTO-08** Ajustar timeouts e idle connections para conexiones largas
   sin afectar peticiones normales.
-- [ ] **PROTO-09** UI de rutas: aceptar los cuatro esquemas, mostrarlos y
+- [x] **PROTO-09** UI de rutas: aceptar los cuatro esquemas, mostrarlos y
   explicar el destino.
-- [ ] **PROTO-10** `GET /proxy/capabilities` con protocolos y límites reales.
-- [ ] **PROTO-11** Errores accionables para esquema no soportado o upgrade
+- [x] **PROTO-10** `GET /proxy/capabilities` con protocolos y límites reales.
+- [x] **PROTO-11** Errores accionables para esquema no soportado o upgrade
   rechazado; nunca un 502 opaco.
-- [ ] **PROTO-12** Documentar ejemplos de app con WebSocket y SSE.
-- [ ] **PROTO-13** Prueba de carga ligera con conexiones WS concurrentes.
-- [ ] **PROTO-14** Capturas o demo de app WS/SSE funcionando a través de rkt.
+- [x] **PROTO-12** Documentar ejemplos de app con WebSocket y SSE.
+- [x] **PROTO-13** Prueba de carga ligera con conexiones WS concurrentes.
+- [x] **PROTO-14** Capturas o demo de app WS/SSE funcionando a través de rkt.
 
 ### 5.13 BLD — Buildpack
 
@@ -915,7 +915,8 @@ Criterios:
 | 2026-11-05 | Cierre P1/P2: tests de dominios/usuarios/alertas, contexto de logs, eventos y capturas light | `601fe5e` | `go test ./...`, `tsc`, Vitest, capturas |
 | 2026-11-05 | X-04: paridad MCP de entorno y alertas | `58aa1ff` | `go test ./internal/mcpserver`, `tsc` |
 | 2026-11-05 | Gate de cobertura: store 90%, hosts 98% y tests de `WithTx` | `2eeaebc` | bucle de cobertura local |
-| 2026-11-05 | SRV completo: colector local, API, vista, alertas y capturas | este commit | `go test ./internal/servermetrics ./internal/api`, `tsc`, capturas |
+| 2026-11-05 | SRV completo: colector local, API, vista, alertas y capturas | `1f30244` | `go test ./internal/servermetrics ./internal/api`, `tsc`, capturas |
+| 2026-11-05 | PROTO completo: ws/wss, SSE, HTTP/2, capacidades y tests | este commit | `go test ./internal/proxy ./internal/config`, `tsc` |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.

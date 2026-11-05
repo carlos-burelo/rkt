@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/websocket"
 
 	"rkt-proxy/internal/config"
 )
@@ -242,5 +245,178 @@ func TestForwardedProtoYHost(t *testing.T) {
 	}
 	if gotHost == "public.test" {
 		t.Fatal("Host al backend no debe ser el público")
+	}
+}
+
+func TestWebSocketUpgrade(t *testing.T) {
+	backend := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
+		_, _ = io.Copy(ws, ws)
+	}))
+	defer backend.Close()
+	addr := strings.TrimPrefix(backend.URL, "http://")
+	live := liveFrom(t, fmt.Sprintf(`{"restart_grace":"0s","rate_limit":{"enabled":false},"routes":[{"hosts":["ws.test"],"target":"ws://%s"}]}`, addr))
+	proxySrv := httptest.NewServer(NewHandler(live, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	defer proxySrv.Close()
+
+	conn, err := net.Dial("tcp", strings.TrimPrefix(proxySrv.URL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := websocket.NewConfig("ws://ws.test/", "http://ws.test/")
+	ws, err := websocket.NewClient(cfg, conn)
+	if err != nil {
+		t.Fatalf("handshake: %v", err)
+	}
+	defer ws.Close()
+	if _, err := ws.Write([]byte("hola")); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 8)
+	n, err := ws.Read(buf)
+	if err != nil || string(buf[:n]) != "hola" {
+		t.Fatalf("eco = %q %v", buf[:n], err)
+	}
+}
+
+func TestSSEFlushInmediato(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "data: uno\n\n")
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		time.Sleep(400 * time.Millisecond)
+		fmt.Fprint(w, "data: dos\n\n")
+	}))
+	defer backend.Close()
+	addr := strings.TrimPrefix(backend.URL, "http://")
+	live := liveFrom(t, fmt.Sprintf(`{"restart_grace":"0s","rate_limit":{"enabled":false},"routes":[{"hosts":["sse.test"],"target":"http://%s"}]}`, addr))
+	proxySrv := httptest.NewServer(NewHandler(live, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	defer proxySrv.Close()
+
+	req, _ := http.NewRequest("GET", proxySrv.URL, nil)
+	req.Host = "sse.test"
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	start := time.Now()
+	line, err := bufio.NewReader(resp.Body).ReadString('\n')
+	if err != nil || !strings.Contains(line, "uno") {
+		t.Fatalf("primera línea = %q %v", line, err)
+	}
+	if time.Since(start) > 300*time.Millisecond {
+		t.Fatalf("SSE retrasado: %v", time.Since(start))
+	}
+}
+
+func TestHTTP2EnProxyTLS(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "ok")
+	}))
+	defer backend.Close()
+	addr := strings.TrimPrefix(backend.URL, "http://")
+	live := liveFrom(t, fmt.Sprintf(`{"restart_grace":"0s","rate_limit":{"enabled":false},"routes":[{"hosts":["h2.test"],"target":"http://%s"}]}`, addr))
+	srv := httptest.NewUnstartedServer(NewHandler(live, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+	defer srv.Close()
+
+	tr := &http.Transport{
+		TLSClientConfig:   &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+		ForceAttemptHTTP2: true,
+	}
+	client := &http.Client{Transport: tr, Timeout: 3 * time.Second}
+	req, _ := http.NewRequest("GET", srv.URL, nil)
+	req.Host = "h2.test"
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.ProtoMajor != 2 {
+		t.Fatalf("protocolo = %s", resp.Proto)
+	}
+}
+
+func TestWSSUpgrade(t *testing.T) {
+	backend := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
+		_, _ = io.Copy(ws, ws)
+	}))
+	defer backend.Close()
+	addr := strings.TrimPrefix(backend.URL, "http://")
+	live := liveFrom(t, fmt.Sprintf(`{"restart_grace":"0s","rate_limit":{"enabled":false},"routes":[{"hosts":["wss.test"],"target":"ws://%s"}]}`, addr))
+	srv := httptest.NewUnstartedServer(NewHandler(live, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	srv.StartTLS()
+	defer srv.Close()
+
+	raw, err := net.Dial("tcp", strings.TrimPrefix(srv.URL, "https://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tconn := tls.Client(raw, &tls.Config{InsecureSkipVerify: true, ServerName: "wss.test"}) //nolint:gosec
+	cfg, _ := websocket.NewConfig("wss://wss.test/", "https://wss.test/")
+	ws, err := websocket.NewClient(cfg, tconn)
+	if err != nil {
+		t.Fatalf("handshake wss: %v", err)
+	}
+	defer ws.Close()
+	if _, err := ws.Write([]byte("eco")); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 8)
+	n, err := ws.Read(buf)
+	if err != nil || string(buf[:n]) != "eco" {
+		t.Fatalf("eco wss = %q %v", buf[:n], err)
+	}
+}
+
+func TestWebSocketConcurrente(t *testing.T) {
+	backend := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
+		_, _ = io.Copy(ws, ws)
+	}))
+	defer backend.Close()
+	addr := strings.TrimPrefix(backend.URL, "http://")
+	live := liveFrom(t, fmt.Sprintf(`{"restart_grace":"0s","rate_limit":{"enabled":false},"routes":[{"hosts":["ws.test"],"target":"ws://%s"}]}`, addr))
+	proxySrv := httptest.NewServer(NewHandler(live, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	defer proxySrv.Close()
+
+	errs := make(chan error, 8)
+	for i := 0; i < 8; i++ {
+		go func(n int) {
+			conn, err := net.Dial("tcp", strings.TrimPrefix(proxySrv.URL, "http://"))
+			if err != nil {
+				errs <- err
+				return
+			}
+			cfg, _ := websocket.NewConfig("ws://ws.test/", "http://ws.test/")
+			ws, err := websocket.NewClient(cfg, conn)
+			if err != nil {
+				errs <- err
+				return
+			}
+			defer ws.Close()
+			msg := fmt.Sprintf("m%d", n)
+			if _, err := ws.Write([]byte(msg)); err != nil {
+				errs <- err
+				return
+			}
+			buf := make([]byte, 8)
+			got, err := ws.Read(buf)
+			if err != nil || string(buf[:got]) != msg {
+				errs <- fmt.Errorf("eco %q: %v", buf[:got], err)
+				return
+			}
+			errs <- nil
+		}(i)
+	}
+	for i := 0; i < 8; i++ {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
 	}
 }

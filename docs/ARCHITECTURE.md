@@ -50,9 +50,7 @@ cmd/rkt-proxy
 
 `internal/platform` concentra defaults y diferencias de OS. El backend no
 pregunta por `runtime.GOOS` fuera de ese paquete ni de los wrappers con build
-tags.
-
-| Pieza | Windows | Linux/Unix |
+tags.| Pieza | Windows | Linux/Unix |
 |---|---|---|
 | Procesos hijos | Job Object | process group (`Setpgid`) |
 | Límite RAM | Job Object | no disponible (degradado) |
@@ -66,6 +64,13 @@ Estado: Windows es la plataforma soportada. Linux compila, pasa la suite
 completa en Ubuntu/WSL y CI ejecuta build+vet+tests más un job con `-race`.
 Limitaciones conscientes en Linux: sin tope de RAM (Job Objects) y CA de
 desarrollo manual.
+
+## Protocolos
+
+El proxy acepta targets `http`, `https`, `ws` y `wss`; `ws`/`wss` se
+normalizan a `http`/`https` para el transporte y conservan el upgrade. Soporta
+HTTP/1.1, HTTP/2 cuando el listener TLS lo permite, WebSocket/WSS y SSE con
+flush inmediato. TCP crudo queda fuera de alcance.
 
 ## Invariantes
 

@@ -238,6 +238,24 @@ func percentiles(ds []time.Duration) (string, string, string) {
 	return at(0.50), at(0.95), at(0.99)
 }
 
+// handleProxyCapabilities protocolos soportados por el transporte.
+func (d *Deps) handleProxyCapabilities(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+		return
+	}
+	writeJSON(w, map[string]any{
+		"http":           true,
+		"https":          true,
+		"http2":          "when_tls",
+		"websocket":      true,
+		"wss":            true,
+		"sse":            true,
+		"raw_tcp":        false,
+		"target_schemes": []string{"http", "https", "ws", "wss"},
+	})
+}
+
 // handleProxy muestra el alcance real de cada ruta: backend, TLS y DNS.
 func (d *Deps) handleProxy(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

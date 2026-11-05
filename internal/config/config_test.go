@@ -395,3 +395,27 @@ func TestPuertoDuplicadoFalla(t *testing.T) {
 		t.Fatalf("quiero error de puerto, got %v", err)
 	}
 }
+
+func TestRouteResolveProtocolos(t *testing.T) {
+	cases := []struct{ target, scheme string }{
+		{"http://127.0.0.1:3000", "http"},
+		{"https://127.0.0.1:3000", "https"},
+		{"ws://127.0.0.1:3000", "http"},
+		{"wss://127.0.0.1:3000", "https"},
+	}
+	for _, c := range cases {
+		r := Route{Hosts: []string{"a.test"}, Target: c.target}
+		if err := r.Resolve(); err != nil {
+			t.Fatalf("%s: %v", c.target, err)
+		}
+		if r.TargetURL().Scheme != c.scheme {
+			t.Fatalf("%s scheme = %s", c.target, r.TargetURL().Scheme)
+		}
+	}
+	for _, bad := range []string{"ftp://127.0.0.1:1", "127.0.0.1:3000", "ws://"} {
+		r := Route{Hosts: []string{"a.test"}, Target: bad}
+		if err := r.Resolve(); err == nil {
+			t.Fatalf("%s debía fallar", bad)
+		}
+	}
+}

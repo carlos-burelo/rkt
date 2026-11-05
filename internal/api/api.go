@@ -234,6 +234,7 @@ func NewHandler(d Deps) http.Handler {
 
 	// Proxy: routes con alcance real (dial) + TLS por host.
 	mux.HandleFunc("/api/v1/proxy", d.handleProxy)
+	mux.HandleFunc("/api/v1/proxy/capabilities", d.handleProxyCapabilities)
 
 	// Build log de un deploy (para vista detalle) + retry mismo rev.
 	mux.HandleFunc("/api/v1/deployments/", d.handleDeploymentDetail)

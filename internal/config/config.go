@@ -29,10 +29,20 @@ type Route struct {
 func (r *Route) TargetURL() *url.URL { return r.targetURL }
 
 // Resolve parsea el target (sin chequeo de duplicados global).
+// ws/wss se normalizan a http/https para el transporte; el upgrade se
+// conserva por las cabeceras de la petición.
 func (r *Route) Resolve() error {
 	u, err := url.Parse(r.Target)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return fmt.Errorf("target inválido %q: debe ser http(s)://127.0.0.1:puerto", r.Target)
+	if err != nil || u.Host == "" {
+		return fmt.Errorf("target inválido %q: debe ser http(s):// o ws(s)://127.0.0.1:puerto", r.Target)
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "ws":
+		u.Scheme = "http"
+	case "https", "wss":
+		u.Scheme = "https"
+	default:
+		return fmt.Errorf("target inválido %q: esquema %q no soportado (http|https|ws|wss)", r.Target, u.Scheme)
 	}
 	r.targetURL = u
 	return nil

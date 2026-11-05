@@ -50,7 +50,7 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 | `apps add --external --name dev --dir C:\repo --domain dev.localhost [--port 3010]` | Registra app externa: solo proxy (sin build/deploy/supervisor). El dev server lo corrés vos. |
 | `apps rm <name>` | Elimina app (avisa revisar routes huérfanas) |
 | `routes list [--json]` | `hosts, target` |
-| `routes add --host (repetible) --target <url>` | Agrega ruta (hot) |
+| `routes add --host (repetible) --target <url>` | Agrega ruta (hot). Target `http(s)://` o `ws(s)://`; ws/wss se normalizan y conservan el upgrade |
 | `routes rm <host>` | Quita host (borra la ruta si queda vacía) |
 | `env list <app>` | Vars inline (`KEY=valor` por línea) |
 | `env set <app> CLAVE=valor` | Escribe (+expande `${}`) |

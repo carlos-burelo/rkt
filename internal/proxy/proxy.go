@@ -25,6 +25,7 @@ func NewHandler(live *config.Live, log *slog.Logger) http.Handler {
 		MaxIdleConns:          200,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
@@ -58,6 +59,9 @@ func NewHandler(live *config.Live, log *slog.Logger) http.Handler {
 				}
 			},
 			Transport: transport,
+			// -1 fuerza flush inmediato por escritura: SSE y streaming no
+			// esperan a que termine la respuesta.
+			FlushInterval: -1,
 			ErrorHandler: func(rw http.ResponseWriter, req *http.Request, err error) {
 				// Cliente que corta (cerrar pestaña, cancelar video) no es un
 				// backend caído: se registra en debug y no se responde nada.
