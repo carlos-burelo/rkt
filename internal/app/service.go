@@ -6,17 +6,14 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,7 +25,6 @@ import (
 
 	"rkt-proxy/internal/accesslog"
 	"rkt-proxy/internal/acme"
-	"rkt-proxy/internal/alerts"
 	"rkt-proxy/internal/api"
 	"rkt-proxy/internal/build"
 	"rkt-proxy/internal/buildpack"
@@ -37,17 +33,14 @@ import (
 	"rkt-proxy/internal/dashboard"
 	"rkt-proxy/internal/deploy"
 	"rkt-proxy/internal/devca"
-	"rkt-proxy/internal/discover"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/hook"
 	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/netutil"
 	"rkt-proxy/internal/proxy"
 	"rkt-proxy/internal/server"
 	"rkt-proxy/internal/store"
 	"rkt-proxy/internal/supervisor"
-	"rkt-proxy/internal/weblog"
 	"rkt-proxy/web"
 )
 
@@ -119,13 +112,6 @@ func New(cfgPath string, log *slog.Logger) *Program {
 
 // gh devuelve el manager de GitHub App (atómico: se reemplaza al crear la App).
 func (p *Program) gh() *github.Manager { return p.ghm.Load() }
-
-func boolStr(b bool) string {
-	if b {
-		return "1"
-	}
-	return "0"
-}
 
 // Start lanza Run en goroutine (contrato kardianos/service).
 // isHealthPath separa el control por loopback de la SPA en la raíz.
@@ -355,281 +341,6 @@ func (p *Program) Run() {
 		p.log.Error("https muerto", "err", err)
 		os.Exit(1)
 	}
-}
-
-// verifyInstallation confirma una instalación contra la API (setup browser).
-func (p *Program) verifyInstallation(id int64) (string, error) {
-	if p.gh() == nil {
-		return "", fmt.Errorf("sin github app")
-	}
-	return p.gh().Installation(id)
-}
-
-// onSetup atiende el setup del browser tras instalar: verifica y dispara
-// discovery (la API es la fuente; nada que persistir).
-func (p *Program) onSetup(id int64, account string) error {
-	p.log.Info("setup: instalación confirmada", "account", account, "installation", id)
-	if p.gh() != nil {
-		info, err := p.gh().InstallationDetail(id)
-		if err != nil {
-			p.log.Warn("setup: no pude leer la instalación", "err", err)
-		} else {
-			if info.Account != "" {
-				account = info.Account
-			}
-			settings := map[string]string{
-				"github_install_id":     strconv.FormatInt(id, 10),
-				"github_account":        account,
-				"github_repo_selection": info.RepositorySelection,
-				"github_install_url":    info.HTMLURL,
-				"github_install_target": info.TargetType,
-			}
-			for k, v := range settings {
-				if err := p.db.SetSetting(k, v); err != nil {
-					return err
-				}
-			}
-			if tok, err := p.gh().TokenFor(id); err == nil {
-				if repos, err := p.gh().Repositories(tok); err == nil {
-					_ = p.db.SetSetting("github_repo_count", strconv.Itoa(len(repos)))
-				}
-			}
-			if info.RepositorySelection != "all" {
-				p.log.Warn("github: instalación con repos seleccionados; activa All repositories para clonar privados",
-					"account", account, "settings", info.HTMLURL)
-			}
-		}
-	}
-	p.kickDiscovery()
-	return nil
-}
-
-// onInstallEvent atiende webhooks installation* (alta/baja): la API es la
-// fuente de verdad, aquí solo se dispara discovery inmediato.
-func (p *Program) onInstallEvent(id int64, account, action string) {
-	p.log.Info("hook: evento instalación", "action", action, "account", account)
-	p.kickDiscovery()
-}
-
-// kickDiscovery pide pasada inmediata (no bloquea).
-func (p *Program) kickDiscovery() {
-	select {
-	case p.discoverKick <- struct{}{}:
-	default:
-	}
-}
-
-// onManifest guarda credenciales del manifest (PEM + settings) y devuelve
-// la URL de instalación para el browser.
-func (p *Program) onManifest(c *github.ManifestCredentials) (string, error) {
-	if p.db == nil {
-		return "", fmt.Errorf("sin DB")
-	}
-	keyPath := logx.AppKeyPath(p.cfgPath)
-	if err := os.WriteFile(keyPath, []byte(c.PEM), 0o600); err != nil {
-		return "", fmt.Errorf("guardar key: %w", err)
-	}
-	for k, v := range map[string]string{
-		"github_app_id":         strconv.FormatInt(c.ID, 10),
-		"github_key_file":       keyPath,
-		"github_webhook_secret": c.WebhookSecret,
-	} {
-		if err := p.db.SetSetting(k, v); err != nil {
-			return "", err
-		}
-	}
-	slug := c.Slug
-	if slug == "" {
-		slug = "rkt-deployer"
-	}
-	_ = p.db.SetSetting("github_app_slug", slug)
-	p.ghStale.Store(false)
-	if gh, err := github.New(c.ID, keyPath, ""); err != nil {
-		p.log.Warn("github app creada pero manager inválido", "err", err)
-	} else {
-		p.ghm.Store(gh)
-		if p.autoStarted.CompareAndSwap(false, true) {
-			go p.autoDeploy(p.live)
-		}
-	}
-	p.log.Info("app github creada, instala en browser", "slug", slug)
-	return "https://github.com/apps/" + slug + "/installations/new", nil
-}
-
-// dashboardURL arma el destino de vuelta tras instalar la App. El panel
-// embebido vive en el listener de control (loopback), no en el proxy.
-func dashboardURL(listen string) string {
-	host, port, err := net.SplitHostPort(listen)
-	if err != nil || port == "" {
-		return ""
-	}
-	if host == "" || host == "0.0.0.0" || host == "::" {
-		host = "127.0.0.1"
-	}
-	return "http://" + net.JoinHostPort(host, port) + "/settings?github=ok"
-}
-
-// setupOrigin devuelve el origen público para el manifest. Sin base_domain
-// cae a loopback (GitHub permite crear Apps con URLs locales; sin webhooks).
-func (p *Program) setupOrigin() (origin, domain string, local, tls bool) {
-	base := strings.TrimSpace(p.db.GetSetting(store.KeyBaseDomain))
-	if base != "" {
-		return "https://" + base, base, false, true
-	}
-	cfg := p.live.Get()
-	tls = cfg.ListenHTTPS != ""
-	addr := cfg.ListenHTTP
-	if tls {
-		addr = cfg.ListenHTTPS
-	}
-	port := netutil.Port(addr, "")
-	host := "localhost"
-	if (tls && port != "" && port != "443") || (!tls && port != "" && port != "80") {
-		host += ":" + port
-	}
-	scheme := "http"
-	if tls {
-		scheme = "https"
-	}
-	return scheme + "://" + host, host, true, tls
-}
-
-// githubStatus estado de la GitHub App para dashboard/API.
-func (p *Program) githubStatus() (map[string]any, error) {
-	out := map[string]any{"configured": false}
-	origin, domain, local, tls := p.setupOrigin()
-	label := "local"
-	if !local {
-		label = strings.ReplaceAll(strings.Split(domain, ".")[0], "_", "-")
-	}
-	name := "rkt-" + label + "-" + strconv.FormatInt(time.Now().UnixNano()%10000, 10)
-	out["setup_url"] = origin + "/_rkt/new-app?name=" + url.QueryEscape(name) +
-		"&domain=" + url.QueryEscape(domain) + "&local=" + boolStr(local) + "&tls=" + boolStr(tls)
-	out["local"] = local
-	cfg := p.live.Get()
-	if cfg.Github == nil || p.gh() == nil || p.db.GetSetting("github_app_id") == "" {
-		if p.ghStale.Load() {
-			out["stale"] = true
-		}
-		return out, nil
-	}
-	out["configured"] = true
-	out["app_id"] = cfg.Github.AppID
-	out["app_slug"] = cfg.Github.AppSlug
-	out["account"] = p.db.GetSetting("github_account")
-	out["repository_selection"] = p.db.GetSetting("github_repo_selection")
-	out["install_url"] = p.db.GetSetting("github_install_url")
-	if out["install_url"] == "" && cfg.Github.AppSlug != "" {
-		out["install_url"] = "https://github.com/apps/" + cfg.Github.AppSlug + "/installations/new"
-	}
-	out["repositories"] = p.db.GetSetting("github_repo_count")
-	if p.gh() == nil {
-		return out, nil
-	}
-	insts, err := p.gh().Installations()
-	if err != nil {
-		if errors.Is(err, github.ErrAppGone) {
-			p.dropGithub()
-			for _, k := range []string{
-				"app_id", "app_slug", "account", "repository_selection",
-				"install_url", "install_target", "repositories", "installations", "error",
-			} {
-				delete(out, k)
-			}
-			out["configured"] = false
-			out["stale"] = true
-			return out, nil
-		}
-		out["error"] = err.Error()
-		return out, nil
-	}
-	out["installations"] = len(insts)
-	if len(insts) == 0 {
-		// la App existe pero no está instalada (o la desinstalaron)
-		for _, k := range []string{
-			"github_install_id", "github_account", "github_repo_selection",
-			"github_install_url", "github_install_target", "github_repo_count",
-		} {
-			_ = p.db.SetSetting(k, "")
-		}
-		out["account"] = ""
-		out["repositories"] = ""
-		out["repository_selection"] = ""
-		return out, nil
-	}
-	inst := insts[0]
-	id := inst.ID
-	if want := p.db.GetSetting("github_install_id"); want != "" {
-		for _, i := range insts {
-			if strconv.FormatInt(i.ID, 10) == want {
-				id = i.ID
-				break
-			}
-		}
-	}
-	out["account"] = inst.Account.Login
-	out["repository_selection"] = inst.RepositorySelection
-	out["install_url"] = inst.HTMLURL
-	out["install_target"] = inst.TargetType
-	if tok, err := p.gh().TokenFor(id); err == nil {
-		if repos, err := p.gh().Repositories(tok); err == nil {
-			out["repositories"] = strconv.Itoa(len(repos))
-		}
-	}
-	return out, nil
-}
-
-// dropGithub limpia la configuración local cuando la App ya no existe
-// en GitHub (borrada) o su clave dejó de autenticar. Permite recrearla
-// desde Ajustes sin reiniciar ni dejar estado fantasma.
-func (p *Program) dropGithub() {
-	for _, k := range []string{
-		"github_app_id", "github_app_slug", "github_key_file", "github_webhook_secret",
-		"github_install_id", "github_account", "github_repo_selection",
-		"github_install_url", "github_install_target", "github_repo_count",
-	} {
-		_ = p.db.SetSetting(k, "")
-	}
-	_ = os.Remove(logx.AppKeyPath(p.cfgPath))
-	p.ghm.Store(nil)
-	p.ghStale.Store(true)
-	p.log.Warn("github: la App ya no existe en GitHub; configuración local limpiada")
-}
-
-// githubRepos lista repos de todas las instalaciones (personales y orgs).
-func (p *Program) githubRepos() ([]github.Repo, error) {
-	gh := p.gh()
-	if gh == nil {
-		return nil, fmt.Errorf("sin github app")
-	}
-	insts, err := gh.Installations()
-	if err != nil {
-		return nil, err
-	}
-	seen := map[string]bool{}
-	out := []github.Repo{}
-	for _, inst := range insts {
-		tok, err := gh.TokenFor(inst.ID)
-		if err != nil {
-			continue
-		}
-		repos, err := gh.Repositories(tok)
-		if err != nil {
-			continue
-		}
-		for _, r := range repos {
-			if seen[r.FullName] {
-				continue
-			}
-			seen[r.FullName] = true
-			out = append(out, github.Repo{
-				FullName: r.FullName, DefaultBranch: r.DefaultBranch,
-				Private: r.Private, Owner: r.Owner.Login,
-			})
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].FullName < out[j].FullName })
-	return out, nil
 }
 
 // appStatuses adapta supervisor a health (nil si no hay manager).
@@ -1099,195 +810,3 @@ func (p *Program) rollbackApp(name, actor string) error {
 // alertLoop evalúa reglas cada minuto: failed por app desde events,
 // error_rate global desde access.log (entries no traen app).
 // Disparo = evento kind=alert + cooldown de ventana.
-func (p *Program) alertLoop(live *config.Live, db *store.DB) {
-	_ = live
-	t := time.NewTicker(time.Minute)
-	defer t.Stop()
-	for range t.C {
-		rules, err := db.ListRules()
-		if err != nil || len(rules) == 0 {
-			continue
-		}
-		now := time.Now().UTC()
-		evs, _ := db.ListEvents(500, "", "")
-		for _, r := range rules {
-			since := now.Add(-time.Duration(r.WindowMin) * time.Minute)
-			failed := 0
-			for _, e := range evs {
-				t, err := time.Parse(time.RFC3339, e.Ts)
-				if err != nil || t.Before(since) {
-					continue
-				}
-				if r.App != "*" && e.App != r.App {
-					continue
-				}
-				if e.Kind == "died" || e.Kind == "failed" {
-					failed++
-				}
-			}
-			rate := 0.0
-			if r.Kind == "error_rate" {
-				total, errs := 0, 0
-				for _, e := range weblog.ParseFile(filepath.Join(logx.DirFor(p.cfgPath), "access.log")) {
-					if e.Time.Before(since) {
-						continue
-					}
-					total++
-					if e.Status >= 500 {
-						errs++
-					}
-				}
-				if total > 0 {
-					rate = float64(errs) / float64(total)
-				}
-			}
-			if alerts.Fired(r, failed, rate, now) {
-				msg := alerts.Describe(r)
-				if err := db.InsertEvent("alert", r.App, msg); err == nil {
-					_ = db.MarkFired(r.ID, now)
-					p.log.Warn("alerta disparada", "regla", r.ID, "msg", msg)
-				}
-			}
-		}
-	}
-}
-
-// runDiscovery registra repos nuevos de todas las instalaciones.
-func (p *Program) runDiscovery() {
-	if p.db == nil || p.gh() == nil {
-		return
-	}
-	if _, err := discover.Run(discover.Deps{
-		GH: p.gh(), DB: p.db, Log: p.log,
-		DeployFn: func(name, actor string) (string, error) { return p.deployApp(name, actor) },
-	}); err != nil {
-		p.log.Warn("discovery fallida", "err", err)
-	}
-}
-
-// autoDeploy sondea GitHub por cambios y despliega (push-to-deploy con
-// delay de poll). El git local es el estado: si HEAD != remoto, deploy.
-// El intervalo se recalcula: tras crear la App la config llega por hot-reload.
-func (p *Program) autoDeploy(live *config.Live) {
-	next := 2 * time.Second
-	var lastPoll, lastDiscovery time.Time
-	forceDiscovery := false
-	for {
-		wait := next
-		if gh := live.Get().Github; gh != nil && gh.Poll() > 0 && !lastPoll.IsZero() {
-			wait = gh.Poll()
-		}
-		select {
-		case <-time.After(wait):
-		case <-p.discoverKick:
-			forceDiscovery = true
-		}
-		cfg := live.Get()
-		if cfg.Github == nil || p.gh() == nil {
-			next = 2 * time.Second
-			continue
-		}
-		// 1) push-to-deploy primero: 1 request por app, latencia = poll.
-		for i := range cfg.Apps {
-			a := &cfg.Apps[i]
-			if a.Deploy == nil || !a.Deploy.Auto {
-				continue
-			}
-			owner, repo, ok := github.ParseRepo(a.Deploy.Repo)
-			if !ok {
-				p.log.Warn("auto-deploy: repo no parseable", "app", a.Name)
-				continue
-			}
-			tok, err := p.appToken(a)
-			if err != nil {
-				p.log.Warn("auto-deploy: sin token", "app", a.Name, "err", err)
-				continue
-			}
-			remote, err := p.gh().CommitSHA(owner, repo, a.Deploy.Ref, tok)
-			if err != nil {
-				p.log.Warn("auto-deploy: sin remoto", "app", a.Name, "err", err)
-				continue
-			}
-			if local := deploy.HeadRev(a.Dir); local == "" || local == remote {
-				continue
-			}
-			p.log.Info("auto-deploy: cambio detectado", "app", a.Name, "rev", shortSHA(remote))
-			if rev, err := p.deployApp(a.Name, "auto"); err != nil {
-				p.log.Error("auto-deploy fallido", "app", a.Name, "err", err)
-			} else {
-				p.log.Info("auto-deploy ok", "app", a.Name, "rev", rev)
-			}
-			cfg = live.Get()
-		}
-		// 2) auto-registro de repos nuevos: cada 5 min o kick (setup/discover).
-		if forceDiscovery || time.Since(lastDiscovery) >= 5*time.Minute {
-			p.runDiscovery()
-			lastDiscovery = time.Now()
-			forceDiscovery = false
-		}
-		lastPoll = time.Now()
-		if cfg.Github.Poll() > 0 {
-			next = cfg.Github.Poll()
-		} else {
-			next = 10 * time.Second
-		}
-	}
-}
-
-func shortSHA(s string) string {
-	if len(s) > 7 {
-		return s[:7]
-	}
-	return s
-}
-
-// watchMerged recarga la flota cuando cambia la DB (única fuente).
-// Fuente inválida = se conserva la anterior.
-func (p *Program) watchMerged(live *config.Live, db *store.DB) {
-	t := time.NewTicker(pollInterval)
-	defer t.Stop()
-	lastVer := db.ConfigVersion()
-	for range t.C {
-		if v := db.ConfigVersion(); v == lastVer {
-			continue
-		} else {
-			lastVer = v
-		}
-		base, err := cfgfile.LoadBase(db, p.cfgPath)
-		if err != nil {
-			p.log.Warn("infra inválida en DB, conservo anterior", "err", err)
-			continue
-		}
-		next, err := cfgfile.Snapshot(db, base)
-		if err != nil {
-			p.log.Warn("snapshot inválido, conservo anterior", "err", err)
-			continue
-		}
-		if err := cfgfile.OverlayGithub(next, db); err != nil {
-			p.log.Warn("github en DB inválido, conservo anterior", "err", err)
-			continue
-		}
-		old := live.Get()
-		live.Swap(next)
-		if p.sup != nil {
-			// manifiesto en caliente: nuevas/actualizadas arrancan solas
-			p.sup.Apply(next.Apps, next.GlobalEnv)
-		}
-		if next.Github != nil && p.gh() == nil {
-			if gh, err := github.New(next.Github.AppID, next.Github.KeyFile, ""); err == nil {
-				p.ghm.Store(gh)
-			}
-		}
-		if next.Github != nil && p.autoStarted.CompareAndSwap(false, true) {
-			go p.autoDeploy(live)
-		}
-		p.log.Info("config recargada",
-			"routes", len(next.Routes),
-			"apps", len(next.Apps),
-			"redirect", next.RedirectHTTPToHTTPS,
-		)
-		if need := config.NeedRestart(old, next); len(need) > 0 {
-			p.log.Warn("cambios requieren restart", "campos", need)
-		}
-	}
-}
