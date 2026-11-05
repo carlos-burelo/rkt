@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -103,6 +104,13 @@ func listDir(abs string) (fsListing, error) {
 // rootsListing expone los puntos de entrada del disco como una lista.
 func rootsListing() fsListing {
 	entries := []fsEntry{}
+	if runtime.GOOS != "windows" {
+		entries = append(entries, fsEntry{Name: "/", Path: "/", Dir: true})
+		if home, err := os.UserHomeDir(); err == nil && home != "" && home != "/" {
+			entries = append(entries, fsEntry{Name: home, Path: home, Dir: true})
+		}
+		return fsListing{Path: "", Parent: "", Entries: entries}
+	}
 	for c := 'A'; c <= 'Z'; c++ {
 		p := string(c) + `:\`
 		if st, err := os.Stat(p); err == nil && st.IsDir() {

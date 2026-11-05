@@ -453,9 +453,13 @@ func TestCreateAppRepoDominioYExec(t *testing.T) {
 	if _, _, _, err := CreateApp(db, nil, "", "s", "", 0, "", site, false); err == nil {
 		t.Fatal("CreateApp debía fallar al resolver el ejecutable")
 	}
-	// MkdirAll falla con un nombre de dir inválido en Windows
+	// MkdirAll falla si un componente de la ruta es un archivo (portable).
 	execOwn = old
-	if _, _, _, err := CreateApp(db, nil, "", "bad:name", "", 0, "cmd.exe", "", false); err == nil {
+	blocker := filepath.Join(t.TempDir(), "bloqueo")
+	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := CreateApp(db, nil, "", "bad", "", 0, "cmd.exe", filepath.Join(blocker, "app"), false); err == nil {
 		t.Fatal("CreateApp debía fallar al crear el directorio")
 	}
 }

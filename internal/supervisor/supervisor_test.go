@@ -26,14 +26,14 @@ func shell(t *testing.T, script string) (string, []string) {
 	if runtime.GOOS == "windows" {
 		return "cmd.exe", []string{"/c", script}
 	}
-	return "sh", []string{"-c", script}
+	return "/bin/sh", []string{"-c", script}
 }
 
 // sleepProc proceso que vive el tiempo pedido (sin depender del shell).
 func sleepProc(t *testing.T, d time.Duration) (string, []string) {
 	t.Helper()
 	if runtime.GOOS != "windows" {
-		return "sleep", []string{fmt.Sprintf("%.3f", d.Seconds())}
+		return "/bin/sleep", []string{fmt.Sprintf("%.3f", d.Seconds())}
 	}
 	if d < time.Second {
 		return "cmd.exe", []string{"/c", fmt.Sprintf("ping -n 1 -w %d 127.0.0.1 >nul", d.Milliseconds())}

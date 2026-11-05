@@ -3,14 +3,20 @@
 package platform
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 )
 
-// DefaultAppsDir directorio padre de apps gestionadas.
+// DefaultAppsDir directorio padre de apps gestionadas. En Unix usa el home
+// del usuario para no exigir root; /srv queda como fallback.
 func DefaultAppsDir() string {
 	if runtime.GOOS == "windows" {
 		return `C:\apps`
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return filepath.Join(home, "rkt", "apps")
 	}
 	return "/srv/rkt/apps"
 }
@@ -28,7 +34,8 @@ func Shell(step string) *exec.Cmd {
 	if runtime.GOOS == "windows" {
 		return exec.Command("cmd.exe", "/C", step)
 	}
-	return exec.Command("sh", "-c", step)
+	// Ruta absoluta: el PATH de un servicio puede venir vacío o mínimo.
+	return exec.Command("/bin/sh", "-c", step)
 }
 
 // OpenBrowser abre una URL (best effort). El caller decide si ignora el error.
