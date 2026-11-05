@@ -5,7 +5,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { now, iso, apps, metas, depSeed, fullRev, deps, evs, routes, proxy, dayKeys, byDay, analytics, usage, obsBuckets, obs, serverHistory, serverSnapshot, serverProcs, settings, users, channels, fires, audit, alerts, envs, buildLog, logText } from "./fixtures.mjs";
+import { now, iso, apps, metas, depSeed, fullRev, deps, evs, routes, proxy, dayKeys, byDay, analytics, usage, obsBuckets, obs, serverHistory, serverSnapshot, serverProcs, cronJobs, cronRuns, cronLog, settings, users, channels, fires, audit, alerts, envs, buildLog, logText } from "./fixtures.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const OUT = join(ROOT, "docs", "shots");
@@ -95,6 +95,11 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
     if (p === "/api/v1/server") return json(route, serverSnapshot);
     if (p === "/api/v1/server/history") return json(route, serverHistory);
     if (p === "/api/v1/server/processes") return json(route, serverProcs);
+    if (p === "/api/v1/cron") return json(route, method === "GET" ? cronJobs : { ok: true });
+    if (p.startsWith("/api/v1/cron/runs/") && p.endsWith("/log")) return json(route, { log: cronLog });
+    if (p.startsWith("/api/v1/cron/") && p.endsWith("/runs")) return json(route, cronRuns);
+    if (p.startsWith("/api/v1/cron/") && p.endsWith("/run")) return json(route, { run: 32 });
+    if (p.startsWith("/api/v1/cron/")) return json(route, { ok: true });
     if (p === "/api/v1/settings") return json(route, settings);
     if (p === "/api/v1/github") return json(route, { configured: false });
     if (p === "/api/v1/github/repos") return json(route, []);
@@ -148,6 +153,7 @@ const main = async () => {
   await shot("deployments", "deployments");
   await shot("ci", "ci");
   await shot("logs", "logs");
+  await shot("cron", "cron");
   await shot("routes", "routes");
   await shot("proxy", "proxy");
   await shot("analytics", "analytics");
@@ -200,6 +206,7 @@ const main = async () => {
     ["mobile-proxy", "proxy"],
     ["mobile-logs", "logs"],
     ["mobile-server", "server"],
+    ["mobile-cron", "cron"],
   ]) {
     await mpage.goto(`${BASE}/${route}`, { waitUntil: "networkidle" });
     await mpage.waitForTimeout(500);
@@ -241,6 +248,7 @@ const main = async () => {
   for (const [name, route] of [
     ["deployments", "deployments"],
     ["logs", "logs"],
+    ["cron", "cron"],
     ["routes", "routes"],
     ["observability", "observability"],
     ["server", "server"],

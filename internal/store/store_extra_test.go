@@ -42,8 +42,14 @@ func TestFleetRoundtripYColisiones(t *testing.T) {
 	a := &config.App{
 		Name: "w", Command: "node", Args: []string{"server.js"},
 		Dir: "C:/apps/w", EnvFile: ".env", Env: map[string]string{"PORT": "3000"},
-		MemoryMB: 512,
-		Deploy:   &config.Deploy{Repo: "https://github.com/x/y", Ref: "main", TokenEnv: "T", Build: []string{"pnpm build"}, Auto: true},
+		MemoryMB:   512,
+		Disabled:   true,
+		HealthPath: "/health",
+		Static:     "dist",
+		Cron: []config.CronJob{{
+			Name: "backup", Schedule: "0 3 * * *", Command: "node backup.js", Timeout: "20m",
+		}},
+		Deploy: &config.Deploy{Repo: "https://github.com/x/y", Ref: "main", TokenEnv: "T", Build: []string{"pnpm build"}, Auto: true},
 	}
 	a.SetDelays(2*time.Second, 10*time.Second)
 	if err := db.UpsertApp(a); err != nil {
@@ -66,6 +72,28 @@ func TestFleetRoundtripYColisiones(t *testing.T) {
 	}
 	if got.Env["PORT"] != "3000" || got.Delay() != 2*time.Second || got.MinUp() != 10*time.Second {
 		t.Fatalf("app = %+v", got)
+	}
+	if !got.Disabled || got.HealthPath != "/health" || got.Static != "dist" {
+		t.Fatalf("estado = %+v", got)
+	}
+	if len(got.Cron) != 1 || got.Cron[0].Name != "backup" || got.Cron[0].Schedule != "0 3 * * *" ||
+		got.Cron[0].Command != "node backup.js" || got.Cron[0].Timeout != "20m" {
+		t.Fatalf("cron = %+v", got.Cron)
+	}
+
+	// Upsert actualiza estado y cron (no solo inserta).
+	a.Disabled = false
+	a.Cron = append(a.Cron, config.CronJob{Name: "cleanup", Schedule: "*/5 * * * *", Command: "node clean.js"})
+	if err := db.UpsertApp(a); err != nil {
+		t.Fatal(err)
+	}
+	fleet, err = db.LoadFleet()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = fleet.Apps[0]
+	if got.Disabled || len(got.Cron) != 2 || got.Cron[1].Name != "cleanup" {
+		t.Fatalf("upsert = %+v", got)
 	}
 
 	// ImportFleet reemplaza apps y rutas

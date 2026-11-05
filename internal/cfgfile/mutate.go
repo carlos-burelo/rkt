@@ -19,19 +19,20 @@ type DeployPatch struct {
 
 // AppPatch cambio parcial de una app. nil = no tocar el campo.
 type AppPatch struct {
-	Command      *string      `json:"command"`
-	Args         *[]string    `json:"args"`
-	Dir          *string      `json:"dir"`
-	EnvFile      *string      `json:"env_file"`
-	Static       *string      `json:"static"`
-	RestartDelay *string      `json:"restart_delay"`
-	MinUptime    *string      `json:"min_uptime"`
-	MemoryMB     *uint64      `json:"memory_mb"`
-	Port         *int         `json:"port"`
-	Domains      *[]string    `json:"domains"`
-	Disabled     *bool        `json:"disabled"`
-	HealthPath   *string      `json:"health_path"`
-	Deploy       *DeployPatch `json:"deploy"`
+	Command      *string           `json:"command"`
+	Args         *[]string         `json:"args"`
+	Dir          *string           `json:"dir"`
+	EnvFile      *string           `json:"env_file"`
+	Static       *string           `json:"static"`
+	RestartDelay *string           `json:"restart_delay"`
+	MinUptime    *string           `json:"min_uptime"`
+	MemoryMB     *uint64           `json:"memory_mb"`
+	Port         *int              `json:"port"`
+	Domains      *[]string         `json:"domains"`
+	Disabled     *bool             `json:"disabled"`
+	HealthPath   *string           `json:"health_path"`
+	Cron         *[]config.CronJob `json:"cron"`
+	Deploy       *DeployPatch      `json:"deploy"`
 }
 
 // UpdateApp aplica un patch, valida y retargeta rutas si cambia puerto o
@@ -71,6 +72,9 @@ func UpdateApp(cp *config.Config, name string, p AppPatch) error {
 	}
 	if p.HealthPath != nil {
 		app.HealthPath = *p.HealthPath
+	}
+	if p.Cron != nil {
+		app.Cron = append([]config.CronJob(nil), (*p.Cron)...)
 	}
 	if p.Deploy != nil {
 		app.Deploy = &config.Deploy{

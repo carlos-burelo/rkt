@@ -73,6 +73,7 @@ func App(cfg *config.Config, a config.App) map[string]any {
 		"restart_delay": a.RestartDelay, "min_uptime": a.MinUptime,
 		"memory_mb": a.MemoryMB, "port": Port(a),
 		"disabled": a.Disabled, "health_path": a.HealthPath,
+		"cron":   a.Cron,
 		"deploy": deploy, "domains": domains, "dns_ok": dnsOK,
 		"run_command": runCommand,
 	}

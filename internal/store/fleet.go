@@ -120,19 +120,27 @@ func insertApp(ex execer, a *config.App) error {
 		}
 	}
 	buildJSON, _ := json.Marshal(build)
+	cronJSON, _ := json.Marshal(a.Cron)
+	disabled := 0
+	if a.Disabled {
+		disabled = 1
+	}
 	_, err := ex.Exec(`INSERT INTO apps(name, runtime, command, args, dir, env_file, env,
-		restart_delay_ms, min_uptime_ms, memory_mb,
+		restart_delay_ms, min_uptime_ms, memory_mb, disabled, health_path, static, cron,
 		deploy_repo, deploy_ref, deploy_token_env, deploy_build, deploy_auto)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(name) DO UPDATE SET runtime=excluded.runtime,
 		command=excluded.command, args=excluded.args,
 		dir=excluded.dir, env_file=excluded.env_file, env=excluded.env,
 		restart_delay_ms=excluded.restart_delay_ms, min_uptime_ms=excluded.min_uptime_ms,
-		memory_mb=excluded.memory_mb, deploy_repo=excluded.deploy_repo,
+		memory_mb=excluded.memory_mb, disabled=excluded.disabled,
+		health_path=excluded.health_path, static=excluded.static, cron=excluded.cron,
+		deploy_repo=excluded.deploy_repo,
 		deploy_ref=excluded.deploy_ref, deploy_token_env=excluded.deploy_token_env,
 		deploy_build=excluded.deploy_build, deploy_auto=excluded.deploy_auto`,
 		a.Name, a.Runtime, a.Command, string(args), a.Dir, a.EnvFile, string(env),
 		a.Delay().Milliseconds(), a.MinUp().Milliseconds(), a.MemoryMB,
+		disabled, a.HealthPath, a.Static, string(cronJSON),
 		repo, ref, tokenEnv, string(buildJSON), auto)
 	return err
 }
@@ -148,7 +156,7 @@ func (d *DB) LoadFleet() (*FleetData, error) { return loadFleet(d.sql) }
 func loadFleet(q queryer) (*FleetData, error) {
 	out := &FleetData{}
 	rows, err := q.Query(`SELECT name, runtime, command, args, dir, env_file, env,
-		restart_delay_ms, min_uptime_ms, memory_mb,
+		restart_delay_ms, min_uptime_ms, memory_mb, disabled, health_path, static, cron,
 		deploy_repo, deploy_ref, deploy_token_env, deploy_build, deploy_auto FROM apps`)
 	if err != nil {
 		return nil, err
@@ -156,13 +164,16 @@ func loadFleet(q queryer) (*FleetData, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var a config.App
-		var argsS, envS, buildS string
-		var delayMs, minUpMs, memMB, auto int64
+		var argsS, envS, buildS, cronS string
+		var delayMs, minUpMs, memMB, auto, disabled int64
 		var repo, ref, tokenEnv string
 		if err := rows.Scan(&a.Name, &a.Runtime, &a.Command, &argsS, &a.Dir, &a.EnvFile, &envS,
-			&delayMs, &minUpMs, &memMB, &repo, &ref, &tokenEnv, &buildS, &auto); err != nil {
+			&delayMs, &minUpMs, &memMB, &disabled, &a.HealthPath, &a.Static, &cronS,
+			&repo, &ref, &tokenEnv, &buildS, &auto); err != nil {
 			return nil, err
 		}
+		a.Disabled = disabled != 0
+		_ = json.Unmarshal([]byte(cronS), &a.Cron)
 		if a.Runtime == "" {
 			a.Runtime = config.RuntimeManaged
 		}

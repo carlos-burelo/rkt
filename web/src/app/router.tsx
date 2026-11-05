@@ -11,6 +11,7 @@ import { useI18n } from "../shared/i18n";
 import { Deployments } from "../features/deployments/Deployments";
 import { CI } from "../features/ci/CI";
 import { Logs } from "../features/logs/Logs";
+import { Cron } from "../features/cron/Cron";
 import { AnalyticsPage } from "../features/overview/AnalyticsPage";
 import { Observability } from "../features/overview/Observability";
 import { Server } from "../features/server/Server";
@@ -127,6 +128,7 @@ export const router = createBrowserRouter(
             { path: "deployments", element: <Deployments /> },
             { path: "ci", element: <CI /> },
             { path: "logs", element: <Logs /> },
+            { path: "cron", element: <Cron /> },
             { path: "analytics", element: <AnalyticsPage /> },
             { path: "observability", element: <Observability /> },
             { path: "server", element: <Server /> },

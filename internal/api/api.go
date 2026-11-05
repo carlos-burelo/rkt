@@ -14,6 +14,7 @@ import (
 
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/cronjobs"
 	"rkt-proxy/internal/dnscheck"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
@@ -49,6 +50,8 @@ type Deps struct {
 	DNS func(ctx context.Context, host string) dnscheck.Result
 	// Server monitor local de la instancia (nil = monitor real).
 	Server *servermetrics.Monitor
+	// Cron runner de tareas programadas (nil = no disponible).
+	Cron *cronjobs.Runner
 	// Github estado vivo de la GitHub App (nil = no configurada).
 	Github func() (map[string]any, error)
 	// GithubRepos repos accesibles a las instalaciones (selector de app).
@@ -218,6 +221,10 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("/api/v1/server", d.handleServer)
 	mux.HandleFunc("/api/v1/server/history", d.handleServerHistory)
 	mux.HandleFunc("/api/v1/server/processes", d.handleServerProcesses)
+
+	// Cron jobs por app: lista, alta/edición, borrado, ejecución e historial.
+	mux.HandleFunc("/api/v1/cron", d.handleCron)
+	mux.HandleFunc("/api/v1/cron/", d.handleCronDetail)
 
 	// Preflight DNS antes de crear una ruta.
 	mux.HandleFunc("/api/v1/domains/preflight", d.handleDomainPreflight)

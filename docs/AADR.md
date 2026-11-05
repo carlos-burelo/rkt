@@ -6,9 +6,9 @@
 | Estado | aceptado |
 | Fecha | 2026-11-05 |
 | Ámbito | backend, API, dashboard, MCP |
-| Fase activa | AADR completo |
-| Siguiente tarea | revisión final y mantenimiento |
-| Ampliación | SRV, PROTO, BLD y MOCK cerrados |
+| Fase activa | AADR completo + CRON |
+| Siguiente tarea | mantenimiento |
+| Ampliación | SRV, PROTO, BLD, MOCK y CRON cerrados |
 | Relacionados | [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md), [CLI](CLI.md) |
 
 **AADR** = Architecture & API Decision Record. Este documento fija las
@@ -354,6 +354,25 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 - El build log muestra pasos, tiempos y causa de fallo.
 - No se promete Dockerfile, Nix ni builds arbitrarios sin diseño previo.
 
+### D16. Cron jobs por app, no scheduler global
+
+**Contexto.** Las tareas programadas necesitan el directorio y el entorno de
+una app, pero rkt es una instancia única. Un scheduler global con agentes
+duplicaría el modelo.
+
+**Decisión.** Cada app declara `cron[]` en su manifiesto. El runner vive en el
+servicio, reconcilia contra la config viva y ejecuta con el shell en el
+directorio de la app, con `global_env` + env propio y timeout. Cada ejecución
+queda en `cron_runs` y en un log propio. Una tarea no arranca si la app está
+detenida ni si la ejecución anterior sigue viva.
+
+**Consecuencias.**
+
+- CRUD en `/api/v1/cron`, historial y log por ejecución.
+- El scheduler reacciona a cambios de flota sin reiniciar el servicio.
+- Sin cron distribuido, sin agentes remotos y sin secretos en argumentos
+  visibles.
+
 ## 4. Contratos de API
 
 ### 4.1 Nuevos o cambiados
@@ -394,6 +413,11 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 | `/api/v1/proxy/capabilities` | GET | viewer | Protocolos soportados y límites reales (HTTP/1.1, HTTP/2, WS, WSS, SSE). |
 | `/api/v1/buildpack/frameworks` | GET | viewer | Matriz de frameworks, gestores y requisitos que el detector reconoce. |
 | `/api/v1/detect` | GET | operator | Se amplía: explica el plan elegido y los manifiestos que lo activaron. |
+| `/api/v1/cron` | GET | viewer | Tareas con próxima ejecución, estado y último resultado. |
+| `/api/v1/cron/{app}/{job}` | PUT/DELETE | operator | Crea/edita o borra una tarea. |
+| `/api/v1/cron/{app}/{job}/run` | POST | operator | Ejecución manual en segundo plano. |
+| `/api/v1/cron/{app}/{job}/runs` | GET | viewer | Historial de ejecuciones. |
+| `/api/v1/cron/runs/{id}/log` | GET | viewer | Tail del log de una ejecución. |
 
 ### 4.2 Se mantienen
 
@@ -816,6 +840,21 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 - [x] **X-10** Commits atómicos y checklist actualizada en el mismo commit;
   sin push.
 
+### 5.16 CRON — Tareas programadas
+
+**Prioridad:** P1.5. **Depende de:** D16.
+
+- [x] **CRON-01** Modelo `CronJob` con nombre, schedule, command, timeout y disabled; validación.
+- [x] **CRON-02** Mutaciones canónicas `SetCronJob`/`DeleteCronJob` en `cfgfile`.
+- [x] **CRON-03** Migración `cron_runs` + historial por app/tarea.
+- [x] **CRON-04** Runner con cron estándar, reconciliación contra config viva y arranque/parada.
+- [x] **CRON-05** Ejecución con entorno efectivo, timeout, log propio y bloqueo de solape.
+- [x] **CRON-06** API de lista, alta/edición, borrado, ejecución manual, historial y log.
+- [x] **CRON-07** Vista Tareas con estado, próxima, última, acciones e historial.
+- [x] **CRON-08** Navegación, i18n y paleta.
+- [x] **CRON-09** Tests de validación, cfgfile, runner, store y API.
+- [x] **CRON-10** Fixtures, capturas desktop/móvil/light y guard.
+
 ## 6. Orden de construcción
 
 1. **Fase 0:** X-01 y X-02 (red de tests) en paralelo con DOM.
@@ -922,6 +961,7 @@ Criterios:
 | 2026-11-05 | BLD final: Java, salidas estáticas, versión Node y caché decidida | `350575e` | `go test ./internal/buildpack ./internal/discover` |
 | 2026-11-05 | MOCK: nombres neutros, dominios ejemplo.com y guard de fixtures | `350575e` | `node scripts/fixtures-check.mjs`, capturas |
 | 2026-11-05 | MOCK-06: fixtures extraídos a módulo compartido | `76ffebc` | `node --check`, `fixtures-check`, capturas |
+| 2026-11-05 | CRON: tareas por app, runner, API, UI, historial y capturas | este commit | `go test ./internal/...`, `tsc`, build, capturas |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.

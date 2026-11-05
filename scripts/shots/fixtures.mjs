@@ -203,6 +203,32 @@ export const serverProcs = [
   { pid: 640, name: "caddy", rss_mb: 42.8, cpu_pct: 1.8, threads: 10 },
 ];
 
+export const cronJobs = [
+  {
+    app: "tienda", job: "limpieza", schedule: "*/15 * * * *", command: "pnpm run cleanup",
+    timeout: "5m", disabled: false, running: false, next: iso(-12),
+    last: { status: "ok", started_at: iso(7), finished_at: iso(6), exit_code: 0, message: "" },
+  },
+  {
+    app: "api", job: "respaldo", schedule: "0 3 * * *", command: "pnpm run backup",
+    timeout: "20m", disabled: false, running: true, next: iso(-300),
+    last: { status: "running", started_at: iso(1), finished_at: "", exit_code: 0, message: "" },
+  },
+  {
+    app: "facturacion", job: "cierre", schedule: "0 0 1 * *", command: "python -u cierre.py",
+    timeout: "30m", disabled: true, running: false, next: "",
+    last: { status: "failed", started_at: iso(60 * 24 * 3), finished_at: iso(60 * 24 * 3), exit_code: 1, message: "exit 1" },
+  },
+];
+
+export const cronRuns = [
+  { id: 31, app: "tienda", job: "limpieza", started_at: iso(7), finished_at: iso(6), status: "ok", exit_code: 0, log_path: "", message: "" },
+  { id: 30, app: "tienda", job: "limpieza", started_at: iso(22), finished_at: iso(21), status: "ok", exit_code: 0, log_path: "", message: "" },
+  { id: 29, app: "facturacion", job: "cierre", started_at: iso(60 * 24 * 3), finished_at: iso(60 * 24 * 3), status: "failed", exit_code: 1, log_path: "", message: "exit 1" },
+];
+
+export const cronLog = "▶ cron tienda/limpieza (schedule) 2026-11-05T18:00:00Z\npnpm run cleanup\n✔ ok\n";
+
 export const settings = {
   node_bin: "C:/Program Files/nodejs/node.exe",
   python_bin: "C:/Python312/python.exe",

@@ -2,6 +2,7 @@ import { apps } from "./es/apps";
 import { common } from "./es/common";
 import { create } from "./es/create";
 import { deployments } from "./es/deployments";
+import { cron } from "./es/cron";
 import { nav } from "./es/nav";
 import { ops } from "./es/ops";
 import { overview } from "./es/overview";
@@ -21,6 +22,7 @@ export const es: Record<string, string> = {
   ...create,
   ...overview,
   ...deployments,
+  ...cron,
   ...apps,
   ...ops,
   ...serve,

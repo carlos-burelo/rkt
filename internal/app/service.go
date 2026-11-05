@@ -31,6 +31,7 @@ import (
 	"rkt-proxy/internal/buildpack"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/cronjobs"
 	"rkt-proxy/internal/dashboard"
 	"rkt-proxy/internal/deploy"
 	"rkt-proxy/internal/devca"
@@ -83,6 +84,8 @@ type Program struct {
 	deployCancels map[int64]context.CancelFunc
 	// srvMetrics monitor local de la instancia (compartido con API).
 	srvMetrics *servermetrics.Monitor
+	// cron ejecutor de tareas programadas.
+	cron *cronjobs.Runner
 	// stateMu sincroniza los recursos que Stop lee mientras Run los crea.
 	stateMu sync.Mutex
 }
@@ -147,7 +150,7 @@ func (p *Program) Stop(_ service.Service) error {
 	defer cancel()
 	p.stateMu.Lock()
 	srvTLS, srvHTTP, srvHealth := p.srvTLS, p.srvHTTP, p.srvHealth
-	sup, alog, db := p.sup, p.alog, p.db
+	sup, alog, db, cron := p.sup, p.alog, p.db, p.cron
 	p.stateMu.Unlock()
 	if srvTLS != nil {
 		_ = srvTLS.Shutdown(ctx)
@@ -160,6 +163,9 @@ func (p *Program) Stop(_ service.Service) error {
 	}
 	if sup != nil {
 		sup.Stop()
+	}
+	if cron != nil {
+		cron.Stop()
 	}
 	if alog != nil {
 		_ = alog.Close()
@@ -186,10 +192,12 @@ func (p *Program) Run() {
 	}
 	live := config.NewLive(cfg)
 	sup := supervisor.New(cfg.Apps, cfg.GlobalEnv, filepath.Join(logx.DirFor(p.cfgPath), "apps"), p.log)
+	cronRunner := cronjobs.New(live, db, logx.DirFor(p.cfgPath), p.log)
 	p.stateMu.Lock()
 	p.db = db
 	p.live = live
 	p.sup = sup
+	p.cron = cronRunner
 	p.stateMu.Unlock()
 
 	if db != nil {
@@ -203,6 +211,7 @@ func (p *Program) Run() {
 		}
 	}
 	sup.Start()
+	cronRunner.Start()
 	backend := proxy.NewHandler(live, p.log)
 	handler := http.Handler(backend)
 	if alog, err := accesslog.New(logx.AccessPath(p.cfgPath)); err != nil {
@@ -303,7 +312,12 @@ func (p *Program) Run() {
 	}()
 	if cfg.Healthz.Enabled {
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.restartApp, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal})
-		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) { p.sup.Apply(apps, global) }, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, Server: p.srvMetrics, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh})
+		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
+			p.sup.Apply(apps, global)
+			if p.cron != nil {
+				p.cron.Apply()
+			}
+		}, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, Server: p.srvMetrics, Cron: p.cron, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh})
 		sub, err := fs.Sub(web.Dist, "dist")
 		if err != nil {
 			p.log.Error("dashboard sin dist", "err", err)

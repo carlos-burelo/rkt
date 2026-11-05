@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/robfig/cron/v3"
+
 	"rkt-proxy/internal/dotenv"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/platform"
@@ -46,6 +48,40 @@ func (r *Route) Resolve() error {
 	}
 	r.targetURL = u
 	return nil
+}
+
+// CronJob tarea programada de una app. Se ejecuta en su directorio con el
+// entorno efectivo (globales + app). `Disabled` evita programarla.
+type CronJob struct {
+	Name     string `yaml:"name" json:"name"`
+	Schedule string `yaml:"schedule" json:"schedule"`
+	Command  string `yaml:"command" json:"command"`
+	Timeout  string `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Disabled bool   `yaml:"disabled,omitempty" json:"disabled,omitempty"`
+}
+
+// ValidCronName [a-z0-9-], igual que las apps: seguro para logs.
+func ValidCronName(s string) bool { return ValidAppName(s) }
+
+// ParseCron valida una expresión estándar de 5 campos.
+func ParseCron(expr string) (cron.Schedule, error) {
+	s, err := cron.ParseStandard(expr)
+	if err != nil {
+		return nil, fmt.Errorf("cron inválido %q: usa minuto hora día mes semana", expr)
+	}
+	return s, nil
+}
+
+// CronTimeout duración máxima de una ejecución (default 10m).
+func (j CronJob) CronTimeout() (time.Duration, error) {
+	if strings.TrimSpace(j.Timeout) == "" {
+		return 10 * time.Minute, nil
+	}
+	d, err := time.ParseDuration(j.Timeout)
+	if err != nil || d < time.Second || d > time.Hour {
+		return 0, fmt.Errorf("timeout inválido %q (1s..1h)", j.Timeout)
+	}
+	return d, nil
 }
 
 // App es un proceso supervisado (mini-PaaS). El proxy enruta
@@ -113,6 +149,8 @@ type App struct {
 	// Static dir servido por el propio binario (sitios: astro/vite/export).
 	Static string  `yaml:"static,omitempty" json:"static,omitempty"`
 	Deploy *Deploy `yaml:"deploy" json:"deploy"`
+	// Cron tareas programadas de la app.
+	Cron []CronJob `yaml:"cron,omitempty" json:"cron,omitempty"`
 
 	delay time.Duration `yaml:"-" json:"-"`
 	minUp time.Duration `yaml:"-" json:"-"`
@@ -508,6 +546,7 @@ func (c *Config) Clone() *Config {
 	for i, a := range c.Apps {
 		out.Apps[i] = a
 		out.Apps[i].Args = append([]string(nil), a.Args...)
+		out.Apps[i].Cron = append([]CronJob(nil), a.Cron...)
 		if a.Env != nil {
 			env := make(map[string]string, len(a.Env))
 			for k, v := range a.Env {
@@ -644,6 +683,25 @@ func (a *App) ValidateApp(idx int) error {
 			if strings.TrimSpace(s) == "" {
 				return fmt.Errorf("apps[%s] deploy con build vacío", a.Name)
 			}
+		}
+	}
+	seenCron := map[string]bool{}
+	for _, job := range a.Cron {
+		if !ValidCronName(job.Name) {
+			return fmt.Errorf("apps[%s] cron name inválido %q: [a-z0-9-]", a.Name, job.Name)
+		}
+		if seenCron[job.Name] {
+			return fmt.Errorf("apps[%s] cron duplicado %q", a.Name, job.Name)
+		}
+		seenCron[job.Name] = true
+		if _, err := ParseCron(job.Schedule); err != nil {
+			return fmt.Errorf("apps[%s] cron %q: %w", a.Name, job.Name, err)
+		}
+		if strings.TrimSpace(job.Command) == "" {
+			return fmt.Errorf("apps[%s] cron %q sin command", a.Name, job.Name)
+		}
+		if _, err := job.CronTimeout(); err != nil {
+			return fmt.Errorf("apps[%s] cron %q: %w", a.Name, job.Name, err)
 		}
 	}
 	return nil

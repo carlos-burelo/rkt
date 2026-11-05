@@ -153,6 +153,24 @@ var migrations = []string{
 		ip TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit(ts);`,
+	// v13: ejecuciones de cron jobs.
+	`CREATE TABLE IF NOT EXISTS cron_runs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		app TEXT NOT NULL,
+		job TEXT NOT NULL,
+		started_at TEXT NOT NULL DEFAULT '',
+		finished_at TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'running',
+		exit_code INTEGER NOT NULL DEFAULT 0,
+		log_path TEXT NOT NULL DEFAULT '',
+		message TEXT NOT NULL DEFAULT ''
+	);
+	CREATE INDEX IF NOT EXISTS idx_cron_runs_app_job ON cron_runs(app, job);`,
+	// v14: estado y configuración de app que antes solo vivía en memoria.
+	`ALTER TABLE apps ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE apps ADD COLUMN health_path TEXT NOT NULL DEFAULT '';
+	ALTER TABLE apps ADD COLUMN static TEXT NOT NULL DEFAULT '';
+	ALTER TABLE apps ADD COLUMN cron TEXT NOT NULL DEFAULT '[]';`,
 }
 
 // DB wrapper.
