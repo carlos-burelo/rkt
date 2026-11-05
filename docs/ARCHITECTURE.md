@@ -69,10 +69,12 @@ Hecho:
 - Mutaciones de flota canónicas en `cfgfile/mutate.go`.
 - Carrera del supervisor corregida (`m.apps` bajo lock).
 - Parseo de listen y RemoteAddr unificado en `internal/netutil`.
+- `CreateDialog.tsx`: helpers/constantes en `createDialog.model.tsx` y panel
+  de tracking en `CreateTrack.tsx`.
 
 ## Deuda pendiente (orden sugerido)
 
-1. **Web.** `CreateDialog.tsx` concentra estado de 3 pasos + tracking: extraer
-   pasos a componentes con props explícitas y helpers de slug a un módulo.
+1. **Web.** `CreateDialog.tsx` aún concentra el estado de los 3 pasos; extraer
+   los pasos de detalles y revisión a componentes presentacionales.
 2. **Cobertura de concurrencia.** Añadir pruebas con `-race` en CI (requiere
    CGO) para supervisor, API y watcher.

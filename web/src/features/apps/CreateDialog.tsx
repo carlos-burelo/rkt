@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, FolderGit2, FolderOpen, Laptop, Terminal } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,56 +8,8 @@ import { PathInput } from "../../shared/components/PathPicker";
 import { DomainSuggest } from "../../shared/components/DomainSuggest";
 import { createApp, CreateAppIn, detectApp, buildApp, deployAppAsync, DetectOut, listGithubRepos, GithubRepo } from "./api";
 import { deploymentLog, getDeployment } from "../deployments/api";
-
-type Origin = "git" | "local" | "external" | "manual";
-type Step = 1 | 2 | 3;
-
-const ORIGINS: { id: Origin; label: string; hint: string; icon: typeof FolderGit2 }[] = [
-  { id: "git", label: "Repositorio Git", hint: "Clona el repo y detecta comando, puerto y dominio.", icon: FolderGit2 },
-  { id: "local", label: "Directorio local", hint: "Sirve un proyecto que ya vive en esta máquina.", icon: FolderOpen },
-  { id: "external", label: "Dev externo", hint: "Solo proxy: registra dominio/puerto; el dev server lo corrés vos.", icon: Laptop },
-  { id: "manual", label: "Manual", hint: "Sin repo: defines el binario y el directorio a mano.", icon: Terminal },
-];
-
-const SLUG = /^[a-z0-9][a-z0-9-]*$/;
-
-// slug desde la última parte del repo (git o ruta local).
-function slugOf(src: string): string {
-  const clean = src.trim().replace(/[\\/]+$/, "").replace(/\.git$/i, "");
-  const base = clean.split(/[\\/]/).pop() ?? "";
-  return base
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
-}
-
-function looksGit(src: string): boolean {
-  return /^(https?:\/\/|git@|ssh:\/\/)/i.test(src.trim());
-}
-
-function Field({
-  label,
-  hint,
-  error,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="field-label">
-      <span className="flex items-baseline justify-between gap-2">
-        {label}
-        {hint && <span className="font-mono text-[9px] text-muted-foreground/70 normal-case">{hint}</span>}
-      </span>
-      {children}
-      {error && <span className="font-mono text-[10px] normal-case text-bad">{error}</span>}
-    </label>
-  );
-}
+import { ORIGINS, SLUG, slugOf, looksGit, Field, type Origin, type Step } from "./createDialog.model";
+import { CreateTrack } from "./CreateTrack";
 
 // Alta guiada por pasos: origen → detalles → revisión. Una sola acción
 // primaria por paso; el backend infiere lo que falta (cfgfile.CreateApp).
@@ -267,60 +219,22 @@ export function CreateDialog({
     >
       <DialogContent className="gap-4 sm:max-w-lg">
         {track ? (
-          <div className="space-y-3">
-            <DialogHeader>
-              <div className="flex items-center gap-2 pr-8">
-                <span
-                  aria-hidden
-                  className={`h-1.5 w-1.5 ${
-                    trackStatus === "running" ? "animate-pulse bg-signal" : trackStatus === "ok" ? "bg-ok" : "bg-bad"
-                  }`}
-                />
-                <span className="micro">{track.kind === "build" ? "compilando" : "desplegando"}</span>
-                <span className="flex-1" />
-                <span className="tnum font-mono text-[9px] text-muted-foreground">
-                  {trackStatus === "running" ? "en curso" : trackStatus === "ok" ? "ok" : "fallido"}
-                </span>
-              </div>
-              <DialogTitle className="mt-1 font-mono text-[18px]">{track.app}</DialogTitle>
-              <DialogDescription className="font-mono text-[10px] leading-relaxed">
-                {trackStatus === "running"
-                  ? "log en vivo · puedes cerrar y seguir en Despliegues"
-                  : trackStatus === "ok"
-                    ? "listo · la app quedó publicada y respondiendo"
-                    : "falló · revisa el log; no se publicó"}
-              </DialogDescription>
-            </DialogHeader>
-            <pre className="max-h-64 overflow-auto border border-border bg-background p-3 font-mono text-[10px] leading-relaxed whitespace-pre-wrap">
-              {trackLog || "esperando salida…"}
-            </pre>
-            <div className="flex items-center gap-2 border-t border-border pt-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setOpen(false);
-                  reset();
-                }}
-              >
-                {trackStatus === "running" ? "cerrar (sigue)" : "cerrar"}
-              </Button>
-              <span className="flex-1" />
-              {trackStatus === "ok" && (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    const app = track.app;
-                    setOpen(false);
-                    reset();
-                    onOpen(app);
-                  }}
-                >
-                  abrir app <ArrowRight className="h-3 w-3" />
-                </Button>
-              )}
-            </div>
-          </div>
+          <CreateTrack
+            app={track.app}
+            kind={track.kind}
+            status={trackStatus}
+            log={trackLog}
+            onClose={() => {
+              setOpen(false);
+              reset();
+            }}
+            onOpen={() => {
+              const app = track.app;
+              setOpen(false);
+              reset();
+              onOpen(app);
+            }}
+          />
         ) : (
           <>
         <DialogHeader>
