@@ -343,18 +343,8 @@ func (s *Server) doAppsAdd(a appsAddArg) (string, error) {
 	}
 	defer db.Close()
 	gh, _ := githubNew(cfg)
-	var app config.App
-	var domains []string
-	var port string
-	if a.Runtime == config.RuntimeExternal {
-		app, domains, port, err = cfgfile.CreateExternalApp(db, a.Name, a.Domain, a.Dir, a.Port)
-	} else {
-		app, domains, port, err = cfgfile.CreateApp(db, gh, a.Repo, a.Name, a.Domain, a.Port, a.Command, a.Dir, a.Auto)
-	}
+	app, domains, port, err := cfgfile.CreateAndAdd(db, gh, a.Runtime, a.Repo, a.Name, a.Domain, a.Port, a.Command, a.Dir, a.Auto)
 	if err != nil {
-		return "", err
-	}
-	if err := cfgfile.AddApp(db, app, domains, port); err != nil {
 		return "", err
 	}
 	out, _ := json.Marshal(map[string]any{
@@ -542,42 +532,12 @@ func (s *Server) doAppUpdate(a appUpdateArg) (string, error) {
 		return "", err
 	}
 	defer db.Close()
-	app := cfgfile.FindApp(cfg, a.App)
-	if app == nil {
-		return "", fmt.Errorf("app %q inexistente", a.App)
+	patch := cfgfile.AppPatch{
+		Command: a.Command, Args: a.Args, Dir: a.Dir, Static: a.Static,
+		EnvFile: a.EnvFile, MemoryMB: a.MemoryMB, MinUptime: a.MinUptime,
+		Port: a.Port, Domain: a.Domain,
 	}
-	if a.Command != nil {
-		app.Command = *a.Command
-	}
-	if a.Args != nil {
-		app.Args = *a.Args
-	}
-	if a.Dir != nil {
-		app.Dir = *a.Dir
-	}
-	if a.Static != nil {
-		app.Static = *a.Static
-	}
-	if a.EnvFile != nil {
-		app.EnvFile = *a.EnvFile
-	}
-	if a.MemoryMB != nil {
-		app.MemoryMB = *a.MemoryMB
-	}
-	if a.MinUptime != nil {
-		app.MinUptime = *a.MinUptime
-	}
-	if a.Port != nil {
-		if err := cfgfile.SetAppPort(cfg, a.App, *a.Port); err != nil {
-			return "", err
-		}
-	}
-	if a.Domain != nil {
-		if err := cfgfile.SetAppDomain(cfg, a.App, *a.Domain); err != nil {
-			return "", err
-		}
-	}
-	if err := app.ValidateApp(0); err != nil {
+	if err := cfgfile.UpdateApp(cfg, a.App, patch); err != nil {
 		return "", err
 	}
 	if err := cfgfile.SaveFleet(db, cfg); err != nil {
@@ -597,32 +557,9 @@ func (s *Server) doAppsRemove(a removeAppArg) (string, error) {
 		return "", err
 	}
 	defer db.Close()
-	app := cfgfile.FindApp(cfg, a.App)
-	if app == nil {
-		return "", fmt.Errorf("app %q inexistente", a.App)
-	}
-	target := ""
-	if port := app.Env["PORT"]; port != "" {
-		target = "http://127.0.0.1:" + port
-	}
-	kept := cfg.Apps[:0]
-	for _, x := range cfg.Apps {
-		if x.Name != a.App {
-			kept = append(kept, x)
-		}
-	}
-	cfg.Apps = kept
-	routesDropped := 0
-	if !a.KeepRoutes && target != "" {
-		routes := cfg.Routes[:0]
-		for _, r := range cfg.Routes {
-			if r.Target == target {
-				routesDropped++
-				continue
-			}
-			routes = append(routes, r)
-		}
-		cfg.Routes = routes
+	routesDropped, err := cfgfile.RemoveApp(cfg, a.App, a.KeepRoutes)
+	if err != nil {
+		return "", err
 	}
 	if err := cfgfile.SaveFleet(db, cfg); err != nil {
 		return "", err
