@@ -28,28 +28,6 @@ export function AccessShell({
               <p className="micro mt-1">{t("system.access.panelControl")}</p>
             </div>
           </div>
-          <div className="mt-16 max-w-sm">
-            <h2 className="text-[32px] leading-[1.05] font-semibold tracking-[-0.04em] text-balance">
-              {t("system.access.headline")}
-            </h2>
-            <p className="mt-4 max-w-[36ch] text-[12px] leading-relaxed text-muted-foreground">
-              {t("system.access.subtitle")}
-            </p>
-          </div>
-          <div className="mt-10 max-w-sm border border-border/80">
-            {[
-              ["01", t("nav.group.operate"), t("system.access.operateDesc")],
-              ["02", t("nav.group.serve"), t("system.access.serveDesc")],
-              ["03", t("nav.group.observe"), t("system.access.observeDesc")],
-            ].map(([n, k, d]) => (
-              <div key={k} className="flex items-baseline gap-3 border-b border-border/60 px-3 py-2 last:border-0">
-                <span className="folio">{n}</span>
-                <span className="font-mono text-[10px] tracking-[0.08em] uppercase">{k}</span>
-                <span className="flex-1" />
-                <span className="font-mono text-[9px] text-muted-foreground">{d}</span>
-              </div>
-            ))}
-          </div>
         </div>
         <div className="relative flex items-end justify-between gap-4 border-t border-border/70 pt-4">
           <p className="font-mono text-[9px] leading-relaxed text-muted-foreground/70">

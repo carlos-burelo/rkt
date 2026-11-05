@@ -84,36 +84,29 @@ export const system = {
   "system.users.emptyHint": "Crea el primero con «nuevo usuario».",
 
   // Acceso
-  "system.auth.loginTitle": "Inicia sesión",
+  "system.auth.loginTitle": "Acceso",
   "system.auth.loginDesc":
-    "Entra con tu cuenta de rkt. Las cuentas se crean desde la CLI; no hay registro público.",
-  "system.auth.noAccountBefore": "Sin cuenta. Créala con",
+    "Entra con una cuenta local. Las cuentas se crean desde la CLI; no hay registro público.",
+  "system.auth.noAccountBefore": "Sin cuenta. Crear con",
   "system.auth.permissions": "permisos: {viewer} · {operator} · {admin}",
   "system.auth.user": "usuario",
   "system.auth.userPlaceholder": "usuario",
   "system.auth.password": "contraseña",
   "system.auth.passwordPlaceholder": "contraseña",
   "system.auth.signIn": "Entrar",
-  "system.auth.setupTitle": "Crea la cuenta de administrador",
+  "system.auth.setupTitle": "Crear cuenta de administrador",
   "system.auth.setupDesc":
     "Solo se muestra una vez, mientras no exista ningún usuario. Después se pueden añadir más desde Usuarios.",
-  "system.auth.setupFooterOne": "cuenta única de arranque",
+  "system.auth.setupFooterOne": "cuenta inicial",
   "system.auth.setupFooterTwo": "contraseña de 12 caracteres como mínimo",
   "system.auth.passwordMismatch": "las contraseñas no coinciden",
   "system.auth.passwordMinPlaceholder": "12 caracteres como mínimo",
   "system.auth.repeatPassword": "repetir contraseña",
-  "system.auth.repeatPasswordPlaceholder": "escríbela otra vez",
+  "system.auth.repeatPasswordPlaceholder": "repetir contraseña",
   "system.auth.createAccount": "Crear cuenta y entrar",
 
   // Marco de acceso
   "system.access.panelControl": "panel de control",
-  "system.access.headline":
-    "Proxy por dominio, supervisor de procesos y despliegues desde git.",
-  "system.access.subtitle":
-    "Operación local: métricas de access.log, historial de despliegues y estado del supervisor.",
-  "system.access.operateDesc": "despliegues · registros · CI",
-  "system.access.serveDesc": "dominios · proxy · entorno",
-  "system.access.observeDesc": "tráfico · alertas",
   "system.access.restricted": "acceso restringido · sesión con cookie segura",
   "system.access.noUsers": "sin usuarios, rkt no opera",
   "system.access.panel": "panel",
