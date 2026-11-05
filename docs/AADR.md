@@ -961,7 +961,7 @@ Criterios:
 | 2026-11-05 | BLD final: Java, salidas estáticas, versión Node y caché decidida | `350575e` | `go test ./internal/buildpack ./internal/discover` |
 | 2026-11-05 | MOCK: nombres neutros, dominios ejemplo.com y guard de fixtures | `350575e` | `node scripts/fixtures-check.mjs`, capturas |
 | 2026-11-05 | MOCK-06: fixtures extraídos a módulo compartido | `76ffebc` | `node --check`, `fixtures-check`, capturas |
-| 2026-11-05 | CRON: tareas por app, runner, API, UI, historial y capturas | este commit | `go test ./internal/...`, `tsc`, build, capturas |
+| 2026-11-05 | CRON: tareas por app, runner, API, UI, historial y capturas | `cca451b` | `go test ./...`, `tsc`, build, capturas |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.
