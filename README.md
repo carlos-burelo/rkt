@@ -186,6 +186,7 @@ docs/                  CLI, especificación y capturas
 
 - [CLI](docs/CLI.md)
 - [Especificación del dashboard](docs/SPEC.md)
+- [AADR de expansión por módulos](docs/AADR.md)
 - [Capturas](docs/shots/README.md)
 
 ## Licencia
