@@ -939,63 +939,69 @@ No borrar filas anteriores.
 | `site_name` | texto | no vacío | marca visible |
 | `quota_reqs` | entero | ≥0 | barras de uso |
 | `quota_bytes` | entero | ≥0 | barras de uso |
-| `public_ip` | IP | IPv4/IPv6 | preflight DNS |
+| `public_ip` | IP | IPv4/IPv6, opcional | preflight DNS |
 
 ### B. Inventario de dominios (DOM-01 completado)
 
-| Lugar | Campo/función | Cambio |
+| Lugar | Campo/función | Estado |
 |---|---|---|
-| `internal/cfgfile/mutate.go` | `AppPatch.Domain`, `SetAppDomain` | reemplazar por `Domains` y `SetAppDomains` |
-| `internal/api/apps.go` | create/update | aceptar `domains` |
-| `internal/appview` | `domains[]` | orden estable |
-| `web/src/features/apps/AppSettings.tsx` | input singular | editor de lista |
-| `web/src/features/apps/AppOverview.tsx` | `domains[0]` | lista |
-| `internal/mcpserver` | patch de app | conjunto |
-| `internal/cli` | comando de app | conjunto |
+| `internal/cfgfile/mutate.go` | `AppPatch.Domains` + `SetAppDomains` | hecho |
+| `internal/api/apps.go` | create/update aceptan `domains` | hecho |
+| `internal/appview` | `domains[]` orden estable | hecho |
+| `web/src/features/apps/AppSettings.tsx` | editor de lista | hecho |
+| `web/src/features/apps/AppOverview.tsx` | lista de dominios | hecho |
+| `web/src/features/apps/AppTabs.tsx` | primer host como principal visual | hecho |
+| `internal/mcpserver` | `app_update` con conjunto | hecho |
+| `internal/cli` | `apps add` acepta varios `--domain` | hecho |
 
 ### C. Métricas del servidor (SRV)
 
 | Grupo | Datos | Fuente |
 |---|---|---|
-| CPU | uso total, por núcleo, load 1/5/15 | `GetSystemTimes` / `/proc/stat` + `/proc/loadavg` |
+| CPU | uso total; por núcleo en Linux | `GetSystemTimes` / `/proc/stat` |
+| Carga | load 1/5/15; no disponible en Windows | `/proc/loadavg` |
 | Memoria | total, usada, disponible, caché, swap | `GlobalMemoryStatusEx` / `/proc/meminfo` |
 | Disco | por montaje: total, libre, usado, % | `GetDiskFreeSpaceEx` / `statfs` |
-| Red | bytes y paquetes rx/tx, tasa por segundo | `GetIfTable2` / `/proc/net/dev` |
-| Tiempo | uptime del host | API del SO / `/proc/uptime` |
-| Temperatura | °C por sensor, si existe | WMI térmico / `/sys/class/thermal` |
-| Firewall | estado, puertos y reglas de solo lectura | API del SO / nft/iptables |
-| Procesos | top por CPU/RAM, PID y nombre | `procstat` |
+| Red | bytes rx/tx y tasa por segundo | `GetIfTable2Ex` / `/proc/net/dev` |
+| Tiempo | uptime del host | `GetTickCount64` / `/proc/uptime` |
+| Temperatura | °C por sensor; vacío si no existe | `/sys/class/thermal` |
+| Firewall | estado y perfiles/reglas de solo lectura | `netsh` / `nft` o `iptables` |
+| Procesos | top por CPU/RAM, PID, hilos | `procstat` + listado del SO |
 
-Sin agentes remotos. Sin multi-servidor. Sin valores estimados.
+Sin agentes remotos. Sin multi-servidor. Sin valores estimados. En Windows la
+temperatura se informa como no disponible; no se simula.
 
-### D. Matriz inicial del buildpack (BLD)
+### D. Matriz implementada del buildpack (BLD)
 
 | Familia | Detección | Salida / arranque |
 |---|---|---|
-| Next.js | `next.config.*`, `package.json` | standalone + `server.js` |
-| Nuxt | `nuxt.config.*` | `.output/server/index.mjs` |
-| Astro | `astro.config.*` | `dist/` estático o SSR |
-| Vite | `vite.config.*` | `dist/` estático |
-| SvelteKit | `svelte.config.*` | `build/` o adapter-node |
-| Remix | `remix.config.*` / `@remix-run` | `build/` + server |
-| SolidStart | `app.config.*` / `solid-start` | `.output/` |
-| Go | `go.mod` | binario `cmd/*` o raíz |
-| Python | `pyproject.toml`, `requirements.txt`, `uv.lock`, `poetry.lock` | ASGI/WSGI o script |
-| Rust | `Cargo.toml` | binario release |
-| Java | `pom.xml`, `build.gradle*` | jar ejecutable |
+| Next.js | `next` en `package.json` | `next start` o script `start` |
+| Nuxt | `nuxt` | `node .output/server/index.mjs` |
+| Astro | `astro` | `dist/` estático |
+| Vite | `vite` | `dist/` estático |
+| SvelteKit | `@sveltejs/kit` | `node build` (adapter-node) |
+| Remix | `@remix-run/*` | script `start` |
+| SolidStart | `@solidjs/start` | `node .output/server/index.mjs` |
+| Go | `go.mod` | `go build -trimpath` + binario |
+| Python | `pyproject.toml`, `requirements.txt`, `uv.lock`, `poetry.lock` | `pip`/`uv`/`poetry` + `python -u` |
+| Rust | `Cargo.toml` | `target/release/<name>` |
+| Java | `pom.xml`, `build.gradle*` | `mvn spring-boot:run` / `gradlew bootRun` |
 
-La matriz se amplía solo con fixture y test. Un plan sin evidencia no se elige.
+Node usa `pnpm` por defecto; `yarn.lock`/`bun.lock` cambian el gestor. `npm`
+nunca se ejecuta. Salidas estáticas: `dist`, `build`, `out`, `public` y
+`.output/public`. La matriz se amplía solo con fixture y test; un plan sin
+evidencia no se elige.
 
 ### E. Protocolos soportados (PROTO)
 
-| Protocolo | Estado objetivo | Verificación |
+| Protocolo | Estado | Verificación |
 |---|---|---|
-| HTTP/1.1 | obligatorio | tests actuales + smoke |
-| HTTPS | obligatorio | TLS local/ACME |
-| HTTP/2 | cuando el listener TLS lo permita | ALPN y test |
-| WebSocket (`ws`) | obligatorio | eco binario/texto |
-| WebSocket seguro (`wss`) | obligatorio | eco con CA local |
-| SSE | obligatorio | eventos sin buffering |
+| HTTP/1.1 | soportado | tests existentes + smoke |
+| HTTPS | soportado | TLS local/ACME |
+| HTTP/2 | soportado con listener TLS | ALPN + `TestHTTP2EnProxyTLS` |
+| WebSocket (`ws`) | soportado | eco texto/binario + concurrente |
+| WebSocket seguro (`wss`) | soportado | eco con TLS de test |
+| SSE | soportado | flush inmediato |
 | TCP crudo | fuera de alcance | decisión explícita |
 
 ### F. Atribución de observabilidad
@@ -1010,3 +1016,32 @@ La matriz se amplía solo con fixture y test. Un plan sin evidencia no se elige.
 
 Sin RUM ni métricas dentro de las apps. Si no hay `access.log`, la vista lo
 dice y no inventa series.
+
+### G. Fixtures neutrales (MOCK)
+
+| Campo | Valor |
+|---|---|
+| Personas | `alex`, `dani`, `noa` |
+| Apps | `tienda`, `api`, `documentacion`, `facturacion`, `panel`, `legado`, `vista-previa` |
+| Dominio de ejemplo | `ejemplo.com` |
+| Fuente única | `scripts/shots/fixtures.mjs` |
+| Guard | `scripts/fixtures-check.mjs` |
+
+El guard rechaza nombres regionales, voseo y marcas ajenas. Las capturas y los
+smokes consumen el mismo módulo.
+
+### H. Gates de CI
+
+| Gate | Umbral |
+|---|---|
+| `gofmt -l .` | sin salida |
+| `go vet ./...` | sin errores |
+| `go test ./... -count=1` | verde |
+| `tsc --noEmit` | sin errores |
+| `pnpm --dir web test` | verde |
+| `i18n-check` | sin claves faltantes |
+| `fixtures-check` | sin nombres prohibidos |
+| Cobertura `store` | ≥ 90% |
+| Cobertura `hosts` | ≥ 98% |
+| Cobertura resto blindado | 100% |
+| Capturas | sin errores de consola ni HTTP ≥ 400 |
