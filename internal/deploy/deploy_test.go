@@ -65,6 +65,41 @@ func (f *fakeCtl) Snapshot() []supervisor.Status {
 	return []supervisor.Status{{Name: "web", Running: f.healthy, Failed: !f.healthy}}
 }
 
+func TestDiffFilesEntreRevisiones(t *testing.T) {
+	gitOK(t)
+	dir := t.TempDir()
+	run := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
+			"GIT_CONFIG_NOSYSTEM=1", "HOME="+t.TempDir(),
+		)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	run("init", "-b", "main", ".")
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o644)
+	run("add", ".")
+	run("commit", "-m", "v1", "--no-gpg-sign")
+	os.WriteFile(filepath.Join(dir, "b.txt"), []byte("b"), 0o644)
+	run("add", ".")
+	run("commit", "-m", "v2", "--no-gpg-sign")
+
+	changes, err := DiffFiles(dir, "HEAD~1", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 1 || changes[0].Status != "A" || changes[0].Path != "b.txt" {
+		t.Fatalf("cambios = %+v", changes)
+	}
+	if _, err := DiffFiles(dir, "--help", "HEAD"); err == nil {
+		t.Fatal("revisión con flag debe rechazarse")
+	}
+}
+
 func TestIsSHAAceptaRevCorto(t *testing.T) {
 	for _, s := range []string{"3cb6176", "6360d12", "0123456789abcdef0123456789abcdef01234567"} {
 		if !isSHA(s) {

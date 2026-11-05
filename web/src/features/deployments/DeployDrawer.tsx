@@ -1,5 +1,5 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { rel, dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
@@ -7,7 +7,7 @@ import { deployStateLabel } from "../../shared/lib/labels";
 import { CopyButton } from "../../shared/components/feedback";
 import { Button } from "@/components/ui/button";
 import { streamLog, bust } from "../../shared/lib/http";
-import { getDeployment } from "./api";
+import { diffDeployment, getDeployment, type DiffFile } from "./api";
 import { Timeline } from "./Timeline";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
@@ -71,6 +71,15 @@ function Steps({ log }: { log: string }) {
   );
 }
 
+const CHANGE_LABEL: Record<string, string> = {
+  A: "deployments.change.added",
+  M: "deployments.change.modified",
+  D: "deployments.change.deleted",
+  R: "deployments.change.renamed",
+  C: "deployments.change.copied",
+  T: "deployments.change.type",
+};
+
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0 bg-card/45 px-3 py-2">
@@ -91,6 +100,8 @@ export function DeployDrawer() {
   const navigate = useNavigate();
   const { deps } = useFleet();
   const dep = sel ? (deps.find((d) => d.id === sel.id) ?? sel) : null;
+  const [diff, setDiff] = useState<DiffFile[] | null>(null);
+  const [diffErr, setDiffErr] = useState("");
 
   // Deploy en curso: SSE del build log. Al terminar, refresca las apps.
   useEffect(() => {
@@ -113,6 +124,19 @@ export function DeployDrawer() {
       },
     );
   }, [dep?.id, dep?.status]);
+
+  useEffect(() => {
+    setDiff(null);
+    setDiffErr("");
+    if (!dep || !dep.prev_rev || !dep.rev || dep.status === "running") return;
+    let alive = true;
+    diffDeployment(dep.app, dep.prev_rev, dep.rev)
+      .then((files) => { if (alive) setDiff(files); })
+      .catch((e) => { if (alive) setDiffErr(e instanceof Error ? e.message : t("common.error")); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dep?.id, dep?.prev_rev, dep?.rev, dep?.status]);
+
   return (
     <Root
       open={dep !== null}
@@ -202,6 +226,46 @@ export function DeployDrawer() {
                   )}
                 </section>
               </div>
+
+              <section className="border-b border-border px-4 py-4">
+                <div className="flex items-center gap-2">
+                  <p className="micro">{t("deployments.changes")}</p>
+                  <span className="flex-1" />
+                  <span className="tnum font-mono text-[9px] text-muted-foreground">
+                    {diff ? tn("deployments.changesCount", diff.length) : ""}
+                  </span>
+                </div>
+                <div className="mt-2 border border-border">
+                  {!dep.prev_rev ? (
+                    <p className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
+                      {t("deployments.noPrevRev")}
+                    </p>
+                  ) : diffErr ? (
+                    <p className="px-3 py-2 font-mono text-[10px] text-warn">{diffErr}</p>
+                  ) : diff === null ? (
+                    <p className="px-3 py-2 font-mono text-[10px] text-muted-foreground">{t("common.loading")}</p>
+                  ) : diff.length === 0 ? (
+                    <p className="px-3 py-2 font-mono text-[10px] text-muted-foreground">{t("deployments.noChanges")}</p>
+                  ) : (
+                    diff.map((f, i) => {
+                      const kind = CHANGE_LABEL[f.status[0] ?? ""] ?? "deployments.change.modified";
+                      return (
+                        <div
+                          key={`${f.path}-${i}`}
+                          className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-2 border-b border-border/60 px-3 py-1.5 last:border-0"
+                        >
+                          <span className="font-mono text-[9px] tracking-[0.06em] text-muted-foreground uppercase">
+                            {t(kind)}
+                          </span>
+                          <span className="min-w-0 truncate font-mono text-[10px]">
+                            {f.from ? `${f.from} → ${f.path}` : f.path}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </section>
 
               <section>
                 <header className="flex items-center gap-2 border-b border-border bg-secondary/20 px-4 py-2">

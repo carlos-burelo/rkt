@@ -327,6 +327,51 @@ func dirExists(p string) bool {
 	return err == nil && st.IsDir()
 }
 
+// FileChange cambio entre dos revisiones del repo.
+type FileChange struct {
+	Status string `json:"status"`
+	From   string `json:"from,omitempty"`
+	Path   string `json:"path"`
+}
+
+// DiffFiles lista archivos cambiados entre dos revisiones del repo de la app.
+// No usa shell; from/to se validan para no interpretarse como flags.
+func DiffFiles(dir, from, to string) ([]FileChange, error) {
+	if !dirExists(dir) {
+		return nil, fmt.Errorf("directorio inexistente: %s", dir)
+	}
+	for _, rev := range []string{from, to} {
+		if rev == "" || strings.HasPrefix(rev, "-") || strings.ContainsAny(rev, " \t\r\n") {
+			return nil, fmt.Errorf("revisión inválida: %q", rev)
+		}
+	}
+	out, err := exec.Command("git", "-C", dir, "diff", "--name-status", "--find-renames", from, to, "--").Output()
+	if err != nil {
+		return nil, fmt.Errorf("git diff: %w", err)
+	}
+	changes := []FileChange{}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		if len(f) < 2 {
+			continue
+		}
+		c := FileChange{Status: f[0]}
+		if len(f) >= 3 {
+			c.From, c.Path = f[1], f[2]
+		} else {
+			c.Path = f[1]
+		}
+		changes = append(changes, c)
+		if len(changes) >= 500 {
+			break
+		}
+	}
+	return changes, nil
+}
+
 // OneLine primera línea, máx 300, para errores de deploy/servicio.
 // Canónica; MCP la reutiliza (antes duplicada con límite 200).
 func OneLine(b []byte) string {

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { deployStateLabel } from "../../shared/lib/labels";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
-import { PageHeader, Segmented } from "../../shared/components/patterns";
+import { PageHeader, Segmented, Stat, StatGrid } from "../../shared/components/patterns";
 import { useI18n } from "../../shared/i18n";
 
 export type DepStatus = "all" | "ok" | "running" | "failed";
@@ -41,6 +41,15 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
     running: base.filter((d) => d.status === "running").length,
     failed: base.filter((d) => d.status === "failed").length,
   };
+  const finished = base.filter((d) => d.status === "ok" || d.status === "failed");
+  const avgMs = finished.length
+    ? finished.reduce((sum, d) => {
+        const a = new Date(d.started_at).getTime();
+        const b = new Date(d.finished_at).getTime();
+        return sum + (Number.isNaN(a) || Number.isNaN(b) ? 0 : Math.max(0, b - a));
+      }, 0) / finished.length
+    : 0;
+  const avg = avgMs >= 60000 ? `${Math.floor(avgMs / 60000)}min ${Math.round((avgMs % 60000) / 1000)}s` : `${Math.round(avgMs / 1000)}s`;
 
   return (
     <div className="space-y-4">
@@ -54,6 +63,19 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
               : t("deployments.countFiltered", { shown: vis.length, total: base.length })}
           </span>}
         />
+      )}
+      {!bare && (
+        <StatGrid>
+          <Stat value={String(counts.all)} label={t("deployments.summary.total")} sub={t("deployments.summary.totalSub")} />
+          <Stat value={String(counts.ok)} label={t("deployments.summary.ok")} sub={t("deployments.summary.okSub")} />
+          <Stat
+            value={String(counts.failed)}
+            label={t("deployments.summary.failed")}
+            sub={t("deployments.summary.failedSub")}
+            tone={counts.failed > 0 ? "warn" : undefined}
+          />
+          <Stat value={finished.length ? avg : "—"} label={t("deployments.summary.avg")} sub={t("deployments.summary.avgSub")} />
+        </StatGrid>
       )}
       {!bare && (
         <div className="flex flex-wrap items-center gap-2 border border-border bg-card/35 p-2">

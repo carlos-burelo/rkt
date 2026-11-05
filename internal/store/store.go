@@ -219,6 +219,7 @@ type Deployment struct {
 	ID          int64  `json:"id"`
 	App         string `json:"app"`
 	Rev         string `json:"rev"`
+	PrevRev     string `json:"prev_rev"`
 	Status      string `json:"status"`
 	StartedAt   string `json:"started_at"`
 	FinishedAt  string `json:"finished_at"`
@@ -254,14 +255,14 @@ func (d *DB) FinishDeployment(id int64, status, prevRev, rev string) error {
 
 // ListDeployments últimas N (app "" = todas).
 func (d *DB) ListDeployments(app string, n int) ([]Deployment, error) {
-	q := `SELECT id, app, rev, status, started_at, finished_at, triggered_by, env_snapshot FROM deployments ORDER BY id DESC LIMIT ?`
+	q := `SELECT id, app, rev, prev_rev, status, started_at, finished_at, triggered_by, env_snapshot FROM deployments ORDER BY id DESC LIMIT ?`
 	var rows *sql.Rows
 	var err error
 	if app == "" {
 		rows, err = d.sql.Query(q, n)
 	} else {
 		rows, err = d.sql.Query(
-			`SELECT id, app, rev, status, started_at, finished_at, triggered_by, env_snapshot FROM deployments WHERE app=? ORDER BY id DESC LIMIT ?`,
+			`SELECT id, app, rev, prev_rev, status, started_at, finished_at, triggered_by, env_snapshot FROM deployments WHERE app=? ORDER BY id DESC LIMIT ?`,
 			app, n)
 	}
 	if err != nil {
@@ -271,7 +272,7 @@ func (d *DB) ListDeployments(app string, n int) ([]Deployment, error) {
 	out := []Deployment{}
 	for rows.Next() {
 		var dep Deployment
-		if err := rows.Scan(&dep.ID, &dep.App, &dep.Rev, &dep.Status, &dep.StartedAt, &dep.FinishedAt, &dep.TriggeredBy, &dep.EnvSnapshot); err != nil {
+		if err := rows.Scan(&dep.ID, &dep.App, &dep.Rev, &dep.PrevRev, &dep.Status, &dep.StartedAt, &dep.FinishedAt, &dep.TriggeredBy, &dep.EnvSnapshot); err != nil {
 			return nil, err
 		}
 		out = append(out, dep)

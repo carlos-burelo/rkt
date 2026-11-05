@@ -27,6 +27,7 @@ export interface Deployment {
   id: number;
   app: string;
   rev: string;
+  prev_rev: string;
   status: string;
   started_at: string;
   finished_at: string;

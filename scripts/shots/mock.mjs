@@ -58,16 +58,22 @@ const depSeed = [
   [1, "docs", "ok", "e8a1c36", "auto"],
   [0.4, "checkout", "running", "pending", "xavi"],
 ];
-const deps = depSeed.map(([mins, app, status, rev, by], i) => ({
-  id: 148 - i,
-  app,
-  rev: rev === "pending" ? "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678" : `${rev}${"0123456789abcdef".slice(0, 33)}`,
-  status,
-  started_at: iso(mins + 2),
-  finished_at: status === "running" ? "" : iso(mins),
-  triggered_by: by,
-  env_snapshot: "{}",
-}));
+const fullRev = (rev) =>
+  rev === "pending" ? "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678" : `${rev}${"0123456789abcdef".slice(0, 33)}`;
+const deps = depSeed.map(([mins, app, status, rev, by], i) => {
+  const prev = depSeed.slice(0, i).find(([, a, , r]) => a === app && r !== "pending" && r !== "unknown");
+  return {
+    id: 148 - i,
+    app,
+    rev: fullRev(rev),
+    prev_rev: prev ? fullRev(prev[3]) : "",
+    status,
+    started_at: iso(mins + 2),
+    finished_at: status === "running" ? "" : iso(mins),
+    triggered_by: by,
+    env_snapshot: "{}",
+  };
+});
 
 const evs = [
   { id: 91, ts: iso(3), kind: "deploy", app: "checkout", msg: "deploy ok rev 9f3c2a1" },
@@ -230,6 +236,18 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
     if (p === "/api/v1/events") return json(route, evs);
     if (p === "/api/v1/apps") return json(route, metas);
     if (p === "/api/v1/apps" && method === "POST") return json(route, { app: "nueva-app" });
+    if (p.startsWith("/api/v1/apps/") && p.endsWith("/diff")) {
+      return json(route, {
+        from: "5a1d8f3",
+        to: "9f3c2a1",
+        files: [
+          { status: "M", path: "app/page.tsx" },
+          { status: "A", path: "public/og.png" },
+          { status: "D", path: "src/legacy.ts" },
+          { status: "R100", from: "src/client.ts", path: "src/api/client.ts" },
+        ],
+      });
+    }
     if (p.startsWith("/api/v1/apps/") && p.endsWith("/env")) {
       const name = decodeURIComponent(p.split("/")[4] ?? "");
       return json(route, envs[name] ?? {});
@@ -305,7 +323,7 @@ const main = async () => {
 
   await page.goto(`${BASE}/deployments`, { waitUntil: "networkidle" });
   await page.waitForTimeout(300);
-  await page.locator('[role="row"]').nth(1).click();
+  await page.locator('[role="row"]').filter({ hasText: "#143" }).click();
   await page.waitForTimeout(400);
   await page.screenshot({ path: join(OUT, "overlay-drawer.png"), fullPage: false });
   console.log("ok overlay-drawer");

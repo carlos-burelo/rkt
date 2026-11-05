@@ -21,7 +21,7 @@ export function Timeline({ dep }: { dep: Deployment }) {
     dep.status === "running"
       ? { label: t("deployments.timeline.end"), sub: t("deployments.timeline.pending"), state: "idle" }
       : {
-          label: dep.status === "ok" ? t("deployments.timeline.live") : t("deployments.timeline.failed"),
+          label: dep.status === "ok" ? t("deployments.timeline.published") : t("deployments.timeline.failed"),
           sub: rel(dep.finished_at),
           state: dep.status === "ok" ? "ok" : "bad",
         },

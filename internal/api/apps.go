@@ -10,6 +10,7 @@ import (
 	"rkt-proxy/internal/appview"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/deploy"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/store"
@@ -70,11 +71,26 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "app inexistente")
 		return
 	}
-	if a.External() && (action == "deploy" || action == "restart" || action == "rollback" || action == "build" || action == "retry") {
+	if a.External() && (action == "deploy" || action == "restart" || action == "rollback" || action == "build" || action == "retry" || action == "diff") {
 		writeErr(w, http.StatusConflict, "app externa: solo proxy; corre el dev server en "+a.Dir)
 		return
 	}
 	switch {
+	case action == "diff" && r.Method == http.MethodGet:
+		if !requireOperator(w, r) {
+			return
+		}
+		from, to := r.URL.Query().Get("from"), r.URL.Query().Get("to")
+		if from == "" || to == "" {
+			writeErr(w, http.StatusBadRequest, "from y to requeridos")
+			return
+		}
+		files, err := deploy.DiffFiles(a.Dir, from, to)
+		if err != nil {
+			writeErr(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"from": from, "to": to, "files": files})
 	case action == "" && r.Method == http.MethodGet:
 		writeJSON(w, appview.App(d.Live.Get(), *a))
 	case action == "usage" && r.Method == http.MethodGet:
