@@ -63,6 +63,10 @@ bloque naranja (el CTA debe seguir siendo el único bloque sólido).
 - `t(clave, vars)` interpola `{var}`; `tn(clave, n)` pluraliza con
   `Intl.PluralRules` (`.one` / `.other`).
 - Español neutro: sin voseo ni regionalismos; "tú" o impersonal.
+- Copy operativo: app, despliegue, caída, estado, configuración. Sin metáforas
+  visibles ("varado", "salida", "manifiesto", "terminal"), sin claims de
+  posicionamiento ("sin X inventados", "lo que no se mide…") y sin adjetivos
+  de marketing. Estados y hechos medidos, no promesas.
 - `node scripts/i18n-check.mjs` falla si una clave usada no existe o está
   duplicada. CI lo ejecuta junto a `tsc`.
 

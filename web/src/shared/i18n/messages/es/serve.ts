@@ -20,20 +20,20 @@ export const serve = {
 
   // Dominios (Routes)
   "serve.routes.desc":
-    "Host → backend con TLS real. Editar el target recarga el proxy al instante. Sin wildcards inventados.",
+    "Rutas host → backend con TLS. Editar el target recarga el proxy sin reinicio.",
   "serve.routes.visitTitle": "visitar {host}",
   "serve.routes.editTitle": "Target de {host}",
-  "serve.routes.editDesc": "el proxy recarga al instante · solo loopback",
+  "serve.routes.editDesc": "el proxy recarga sin reinicio · solo loopback",
   "serve.routes.targetAria": "target de {host}",
   "serve.routes.deleteTitle": "borrar ruta {host}",
   "serve.routes.new": "nueva ruta",
   "serve.routes.newTitle": "Nueva ruta",
-  "serve.routes.newDesc": "alta inmediata · el proxy recarga al instante · TLS se emite al primer request",
+  "serve.routes.newDesc": "La ruta se aplica al guardar. TLS se emite en el primer request.",
   "serve.routes.hostsPlaceholder": "app.localhost, app.test",
   "serve.routes.targetPlaceholder": "http://127.0.0.1:3000",
   "serve.routes.tableAria": "rutas de dominio",
   "serve.routes.emptyTitle": "Sin rutas",
-  "serve.routes.emptyHint": "Agrega tu primer dominio con «nueva ruta».",
+  "serve.routes.emptyHint": "Añade el primer dominio con «nueva ruta».",
 
   // Zonas locales (LocalZones)
   "serve.zones.title": "Zonas locales",
@@ -59,7 +59,7 @@ export const serve = {
   "serve.zones.addSubTitle": "añadir subdominio a {host}",
   "serve.zones.addSub": "subdominio",
   "serve.zones.newSubTitle": "Nuevo subdominio de {host}",
-  "serve.zones.newSubDesc": "se crea la ruta y el proxy recarga al instante",
+  "serve.zones.newSubDesc": "se crea la ruta y el proxy recarga sin reinicio",
   "serve.zones.sub": "subdominio",
   "serve.zones.subHint": "se añade .{base}",
   "serve.zones.subPlaceholder": "api",
@@ -77,11 +77,11 @@ export const serve = {
 
   // Proxy
   "serve.proxy.desc":
-    "Mapa real por ruta: dial TCP al backend y cert ACME. Toca un host para aislar su haz. Solo lectura.",
+    "Estado por ruta: dial TCP al backend y certificado ACME. Selecciona un host para filtrar. Solo lectura.",
   "serve.proxy.meta": "{ok}/{total} en ruta",
   "serve.proxy.filterState": "estado del backend",
   "serve.proxy.onRoute": "en ruta",
-  "serve.proxy.stranded": "varados",
+  "serve.proxy.stranded": "sin backend",
   "serve.proxy.filterTls": "estado tls",
   "serve.proxy.tlsAll": "tls todo",
   "serve.proxy.withTls": "con tls",
@@ -95,11 +95,11 @@ export const serve = {
   "serve.proxy.backendOk": "backend ok",
   "serve.proxy.backendDown": "backend caído",
   "serve.proxy.emptyTitle": "Sin rutas",
-  "serve.proxy.emptyHint": "Agrega tu primer dominio en «{domains}».",
+  "serve.proxy.emptyHint": "Añade el primer dominio en «{domains}».",
 
   // Mapa radial (ProxyMap)
-  "serve.map.topology": "topología de borde",
-  "serve.map.realDial": "dial real",
+  "serve.map.topology": "topología del proxy",
+  "serve.map.realDial": "dial TCP",
   "serve.map.aria.one": "topología proxy: edge con {n} ruta",
   "serve.map.aria.other": "topología proxy: edge con {n} rutas",
 
@@ -136,7 +136,7 @@ export const serve = {
   "serve.env.editInApp": "editar en app",
   "serve.env.emptyOwn": "sin propias para este filtro",
   "serve.env.noApps": "Sin apps",
-  "serve.env.noAppsHint": "Registra tu primera app para ver su inventario.",
+  "serve.env.noAppsHint": "Registra la primera app para ver su inventario.",
   "serve.env.noMatch": "Sin coincidencias",
   "serve.env.noMatchHint": "Ninguna variable o app coincide con “{q}”.",
 };

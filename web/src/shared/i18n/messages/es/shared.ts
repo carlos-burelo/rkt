@@ -15,11 +15,11 @@ export const shared = {
   "shared.palette.navigate": "navegar",
   "shared.palette.open": "abrir",
   "shared.palette.close": "cerrar",
-  "shared.palette.targets.one": "{n} objetivo",
-  "shared.palette.targets.other": "{n} objetivos",
+  "shared.palette.targets.one": "{n} resultado",
+  "shared.palette.targets.other": "{n} resultados",
   "shared.palette.kind.page": "página",
-  "shared.palette.kind.app": "unidad",
-  "shared.palette.kind.deployment": "salida",
+  "shared.palette.kind.app": "app",
+  "shared.palette.kind.deployment": "despliegue",
   "shared.palette.kind.action": "acción",
   "shared.palette.action.restart": "reiniciar",
   "shared.palette.action.deploy": "redesplegar",
@@ -55,7 +55,7 @@ export const shared = {
   "shared.domain.suggested": "sugeridos",
 
   // Instalación PWA (InstallButton)
-  "shared.install.button": "Instalar app",
+  "shared.install.button": "Instalar panel",
 
   // Indicadores (ui)
   "shared.dot.aria": "estado {state}",
