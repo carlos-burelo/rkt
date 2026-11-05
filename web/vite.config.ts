@@ -44,7 +44,19 @@ export default defineConfig({
     }),
   ],
   base: "/",
-  build: { outDir: "dist", emptyOutDir: true },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Vendor estable en chunks propios: mejor caché entre deploys.
+        manualChunks: {
+          react: ["react", "react-dom", "react-router"],
+          ui: ["@base-ui/react", "lucide-react", "sonner", "zustand", "next-themes"],
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       "/api": { target: "http://127.0.0.1:18099", changeOrigin: true },

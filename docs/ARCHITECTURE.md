@@ -104,5 +104,3 @@ Hecho:
    CGO) para supervisor, API y watcher.
 2. **Linux funcional.** Validar smoke real (deploy, supervisor, proxy) en un
    runner Linux además de build+vet+tests.
-3. **Code splitting del dashboard.** El bundle principal supera 500 kB;
-   dividir por rutas o vendor chunks.
