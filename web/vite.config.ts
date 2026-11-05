@@ -52,7 +52,7 @@ export default defineConfig({
         // Vendor estable en chunks propios: mejor caché entre deploys.
         manualChunks: {
           react: ["react", "react-dom", "react-router"],
-          ui: ["@base-ui/react", "lucide-react", "sonner", "zustand", "next-themes"],
+          ui: ["@base-ui/react", "lucide-react", "sonner", "zustand"],
         },
       },
     },
