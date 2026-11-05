@@ -82,7 +82,7 @@ function CronForm({
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label={t("cron.app")}>
-          <Select value={app} onValueChange={(v: string | null) => setApp(v ?? "")}>
+          <Select value={app} onValueChange={(v: string | null) => setApp(v ?? "")} disabled={!!job}>
             <SelectTrigger className="h-8 font-mono text-[12px]">
               <span>{app || t("cron.pickApp")}</span>
             </SelectTrigger>
@@ -94,7 +94,7 @@ function CronForm({
           </Select>
         </Field>
         <Field label={t("cron.name")} hint={t("cron.nameHint")}>
-          <Input value={name} onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} className="h-8 font-mono text-[12px]" autoFocus={!job} />
+          <Input value={name} onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} className="h-8 font-mono text-[12px]" autoFocus={!job} disabled={!!job} />
         </Field>
       </div>
       <Field label={t("cron.schedule")} hint={t("cron.scheduleHint")}>
