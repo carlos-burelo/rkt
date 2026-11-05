@@ -163,11 +163,22 @@ func (d *DB) migrate() error {
 		return err
 	}
 	for i := v; i < len(migrations); i++ {
-		if _, err := d.sql.Exec(migrations[i]); err != nil {
+		// Cada migración es atómica: si el DDL o el bump de versión fallan,
+		// no queda un esquema a medias con user_version desincronizado.
+		tx, err := d.sql.Begin()
+		if err != nil {
 			return fmt.Errorf("migración %d: %w", i+1, err)
 		}
-		if _, err := d.sql.Exec(fmt.Sprintf("PRAGMA user_version=%d", i+1)); err != nil {
-			return err
+		if _, err := tx.Exec(migrations[i]); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("migración %d: %w", i+1, err)
+		}
+		if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version=%d", i+1)); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("migración %d: %w", i+1, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("migración %d: %w", i+1, err)
 		}
 	}
 	return nil
