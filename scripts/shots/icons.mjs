@@ -1,4 +1,4 @@
-// Genera favicon e iconos PWA desde web/public/icons/mark*.svg.
+// Genera favicon e iconos PWA desde web/public/icons/mark.svg.
 // Uso: node scripts/shots/icons.mjs
 import { chromium } from "playwright";
 import { readFileSync } from "node:fs";
@@ -9,11 +9,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");
 const out = join(root, "web", "public", "icons");
 const mark = readFileSync(join(out, "mark.svg"), "utf8");
-const small = readFileSync(join(out, "mark-small.svg"), "utf8");
-const maskable = readFileSync(join(out, "mark-maskable.svg"), "utf8");
+// Maskable: misma marca, fondo lleno y escala dentro de la zona segura.
+const maskable = mark
+  .replace(/(<svg[^>]*>)/, `$1<rect width="512" height="512" fill="#0a0a0c"/>`)
+  .replace(/scale\([\d.]+\)/, "scale(1.02)");
 
 const targets = [
-  ["favicon-16.png", 16, small],
+  ["favicon-16.png", 16, mark],
   ["favicon-32.png", 32, mark],
   ["apple-touch-icon.png", 180, mark],
   ["icon-192.png", 192, mark],

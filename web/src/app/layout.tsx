@@ -103,7 +103,7 @@ export function ShellLayout() {
                 className="h-auto gap-2.5 rounded-none p-0 hover:bg-transparent group-data-[collapsible=icon]:justify-center"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center border border-signal/40 bg-signal/10 text-signal">
-                  <BrandMark className="h-4 w-4" />
+                  <BrandMark className="h-5 w-5" />
                 </span>
                 <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
                   <span className="flex items-baseline gap-1.5">
