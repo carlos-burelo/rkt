@@ -14,6 +14,29 @@ import (
 	"rkt-proxy/internal/store"
 )
 
+// CreateAndAdd es el alta canónica: infiere (repo/dir) o registra externa,
+// valida y persiste app+rutas. API, MCP y CLI no reimplementan el flujo.
+func CreateAndAdd(db *store.DB, gh *github.Manager, runtime, repo, name, domain string, port int, command, dir string, auto bool) (config.App, []string, string, error) {
+	var (
+		app     config.App
+		domains []string
+		portS   string
+		err     error
+	)
+	if runtime == config.RuntimeExternal {
+		app, domains, portS, err = CreateExternalApp(db, name, domain, dir, port)
+	} else {
+		app, domains, portS, err = CreateApp(db, gh, repo, name, domain, port, command, dir, auto)
+	}
+	if err != nil {
+		return config.App{}, nil, "", err
+	}
+	if err := AddApp(db, app, domains, portS); err != nil {
+		return config.App{}, nil, "", err
+	}
+	return app, domains, portS, nil
+}
+
 // AddApp valida y persiste app+routes.
 func AddApp(db *store.DB, app config.App, domains []string, port string) error {
 	fleet, err := db.LoadFleet()
