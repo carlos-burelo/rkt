@@ -4,7 +4,7 @@ export const serve = {
   "serve.field.hosts": "hosts",
   "serve.field.hostsHint": "separados por coma",
   "serve.field.target": "destino",
-  "serve.field.targetHint": "http(s)://127.0.0.1:puerto",
+  "serve.field.targetHint": "http(s):// o ws(s)://127.0.0.1:puerto",
   "serve.field.backend": "servicio",
   "serve.field.cert": "cert",
   "serve.field.stateShort": "est",

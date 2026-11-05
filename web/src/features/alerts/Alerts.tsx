@@ -18,7 +18,7 @@ import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
 import { useI18n } from "../../shared/i18n";
 
-const KINDS = ["failed", "error_rate", "latency_p95", "memory_mb", "down_min", "disk_pct"] as const;
+const KINDS = ["failed", "error_rate", "latency_p95", "memory_mb", "down_min", "disk_pct", "cpu_pct", "mem_pct", "temp_c"] as const;
 
 function RuleEdit({ rule, channels, onSaved }: { rule: AlertRule; channels: AlertChannel[]; onSaved: () => void }) {
   const { t } = useI18n();
