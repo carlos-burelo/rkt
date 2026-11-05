@@ -61,19 +61,18 @@ cmd/rkt-proxy
 Hecho:
 
 - `internal/cli` separado de `internal/app` (comandos vs runtime).
-- `internal/api` dividido por recurso: `apps.go`, `routes.go`,
-  `deployments.go`, `analytics.go`; el resto sigue en `api.go`.
+- `internal/api` dividido por recurso: `api.go` queda en ~190 líneas
+  (Deps, NewHandler, helpers); handlers en `apps.go`, `routes.go`,
+  `deployments.go`, `analytics.go`, `auth.go`, `env.go`, `settings.go`,
+  `github.go`, `alerts.go`, `status.go`, `domains.go`.
 - Mutaciones de flota canónicas en `cfgfile/mutate.go`.
 - Carrera del supervisor corregida (`m.apps` bajo lock).
 
 ## Deuda pendiente (orden sugerido)
 
-1. **Terminar de dividir `api.go`.** Extraer `auth.go` (middleware, login,
-   usuarios) y `env.go`/`settings.go`/`alerts.go`. El resto del paquete ya
-   sigue el patrón por recurso.
-2. **Unificar parseo de puerto/listen.** Hoy hay copias en `api.listenPort` y
+1. **Unificar parseo de puerto/listen.** Hoy hay copias en `api.listenPort` y
    `app.setupOrigin`; extraer una función de red compartida.
-3. **Web.** `CreateDialog.tsx` concentra estado de 3 pasos + tracking: extraer
+2. **Web.** `CreateDialog.tsx` concentra estado de 3 pasos + tracking: extraer
    pasos a componentes con props explícitas y helpers de slug a un módulo.
-4. **Cobertura de concurrencia.** Añadir pruebas con `-race` en CI (requiere
+3. **Cobertura de concurrencia.** Añadir pruebas con `-race` en CI (requiere
    CGO) para supervisor, API y watcher.
