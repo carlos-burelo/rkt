@@ -1,11 +1,13 @@
 package supervisor
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -21,7 +23,30 @@ func testLog(t *testing.T) *slog.Logger {
 
 func shell(t *testing.T, script string) (string, []string) {
 	t.Helper()
-	return "cmd.exe", []string{"/c", script}
+	if runtime.GOOS == "windows" {
+		return "cmd.exe", []string{"/c", script}
+	}
+	return "sh", []string{"-c", script}
+}
+
+// sleepProc proceso que vive el tiempo pedido (sin depender del shell).
+func sleepProc(t *testing.T, d time.Duration) (string, []string) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return "sleep", []string{fmt.Sprintf("%.3f", d.Seconds())}
+	}
+	if d < time.Second {
+		return "cmd.exe", []string{"/c", fmt.Sprintf("ping -n 1 -w %d 127.0.0.1 >nul", d.Milliseconds())}
+	}
+	return "cmd.exe", []string{"/c", fmt.Sprintf("ping -n %d 127.0.0.1 >nul", int(d/time.Second)+1)}
+}
+
+func echoEnv(t *testing.T) (string, []string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return "cmd.exe", []string{"/c", "echo %RKT_TEST_VAR%"}
+	}
+	return shell(t, "echo $RKT_TEST_VAR")
 }
 
 func app1(name, cmd string, args []string, delay, minUp time.Duration) config.App {
@@ -69,7 +94,7 @@ func TestRestartOnCrash(t *testing.T) {
 }
 
 func TestStopKillsRunning(t *testing.T) {
-	cmd, args := "cmd.exe", []string{"/c", "ping -n 30 127.0.0.1 >nul"}
+	cmd, args := sleepProc(t, 30*time.Second)
 	apps := []config.App{app1("largo", cmd, args, 5*time.Second, 10*time.Second)}
 	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
@@ -96,7 +121,7 @@ func TestCrashloopGuard(t *testing.T) {
 }
 
 func TestEnvOverride(t *testing.T) {
-	cmd, args := "cmd.exe", []string{"/c", "echo %RKT_TEST_VAR%"}
+	cmd, args := echoEnv(t)
 	envApp := app1("envtest", cmd, args, 5*time.Second, 10*time.Second)
 	envApp.Env = map[string]string{"RKT_TEST_VAR": "valor123"}
 	apps := []config.App{envApp}
@@ -124,7 +149,7 @@ func TestBackoffFor(t *testing.T) {
 }
 
 func TestSlowDeathsDontTripGuard(t *testing.T) {
-	cmd, args := "cmd.exe", []string{"/c", "ping -n 1 -w 300 127.0.0.1 >nul"}
+	cmd, args := sleepProc(t, 300*time.Millisecond)
 	apps := []config.App{app1("lenta", cmd, args, 50*time.Millisecond, 100*time.Millisecond)}
 	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
@@ -138,6 +163,9 @@ func TestSlowDeathsDontTripGuard(t *testing.T) {
 }
 
 func TestMemoryLimitKills(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Job Object con límite RAM: solo Windows")
+	}
 	py, err := exec.LookPath("python")
 	if err != nil {
 		py, err = exec.LookPath("python3")
@@ -172,7 +200,7 @@ func trunc(s string, n int) string {
 }
 
 func TestRestartImmediate(t *testing.T) {
-	cmd, args := "cmd.exe", []string{"/c", "ping -n 30 127.0.0.1 >nul"}
+	cmd, args := sleepProc(t, 30*time.Second)
 	// delay 30s: si Restart tarda, el test lo delata
 	apps := []config.App{app1("largo", cmd, args, 30*time.Second, time.Millisecond)}
 	m := New(apps, nil, t.TempDir(), testLog(t))
@@ -216,7 +244,7 @@ func TestRestartRevivesFailed(t *testing.T) {
 }
 
 func TestSwapAndRestart(t *testing.T) {
-	cmd, args := "cmd.exe", []string{"/c", "ping -n 30 127.0.0.1 >nul"}
+	cmd, args := sleepProc(t, 30*time.Second)
 	apps := []config.App{app1("largo", cmd, args, 30*time.Second, time.Millisecond)}
 	m := New(apps, nil, t.TempDir(), testLog(t))
 	m.Start()
@@ -270,7 +298,8 @@ func TestOnEventDied(t *testing.T) {
 func TestExternalNoSeSupervisa(t *testing.T) {
 	dir := t.TempDir()
 	ext := config.App{Name: "ext", Runtime: config.RuntimeExternal, Dir: dir, Env: map[string]string{"PORT": "3999"}}
-	man := app1("man", "cmd.exe", []string{"/c", "exit 0"}, time.Second, time.Second)
+	cmd, args := shell(t, "exit 0")
+	man := app1("man", cmd, args, time.Second, time.Second)
 	m := New([]config.App{ext, man}, nil, dir, testLog(t))
 	if got := len(m.Snapshot()); got != 1 {
 		t.Fatalf("snapshot = %d, solo debe estar la managed", got)

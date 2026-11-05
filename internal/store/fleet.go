@@ -1,5 +1,5 @@
-// Flota en DB: apps, routes y settings. La config YAML conserva la
-// infra estable (listeners, ACME...); cada campo tiene un solo hogar.
+// Flota en DB: apps, routes y settings. La infra estable (listeners,
+// ACME...) vive en la tabla infra; cada campo tiene un solo hogar.
 package store
 
 import (

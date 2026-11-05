@@ -14,6 +14,7 @@ import (
 
 	"rkt-proxy/internal/dotenv"
 	"rkt-proxy/internal/github"
+	"rkt-proxy/internal/platform"
 )
 
 // Route mapea uno o varios hosts al mismo backend.
@@ -203,7 +204,7 @@ func defaultConfig() Config {
 	return Config{
 		ListenHTTP:          ":80",
 		ListenHTTPS:         "",
-		ACMECacheDir:        `C:\ProgramData\rkt-proxy\certs`,
+		ACMECacheDir:        platform.DefaultCertsDir(),
 		RedirectHTTPToHTTPS: true,
 		Healthz:             HealthzConfig{Enabled: true, Listen: "127.0.0.1:8090"},
 		RateLimit:           RateLimitConfig{Enabled: true, RPS: 20, Burst: 40},
@@ -264,7 +265,7 @@ func (cfg *Config) ApplyDefaults() {
 	}
 	// listen_https vacío = TLS desactivado (modo local). A propósito sin default.
 	if cfg.ACMECacheDir == "" {
-		cfg.ACMECacheDir = `C:\ProgramData\rkt-proxy\certs`
+		cfg.ACMECacheDir = platform.DefaultCertsDir()
 	}
 	if cfg.RestartGrace == "" {
 		cfg.RestartGrace = restartGraceDefault

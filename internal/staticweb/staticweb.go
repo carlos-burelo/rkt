@@ -15,7 +15,7 @@ import (
 	"strings"
 )
 
-// Tipos que el registro de Windows no siempre conoce (sitios modernos).
+// Tipos que el registro MIME del sistema no siempre conoce.
 func init() {
 	for ext, typ := range map[string]string{
 		".avif":  "image/avif",

@@ -76,6 +76,15 @@ humano: pnpm exec vite --host 127.0.0.1 --port 3010 --strictPort
 La ficha de la app muestra el comando sugerido y su estado real (TCP/HTTP).
 No aparecen acciones de deploy, restart ni rollback.
 
+## Plataformas
+
+Windows Server es la plataforma soportada en producción. El backend ya separa
+las diferencias de sistema en `internal/platform` y wrappers con build tags:
+Linux/Unix compila y funciona con process groups, métricas `/proc`, shell
+`sh -c` y `/etc/hosts`. CI ejecuta build+vet+tests en Ubuntu. Limitaciones
+conscientes en Linux: sin tope de RAM (Job Objects) y CA de desarrollo manual
+(`SSL_CERT_FILE`).
+
 ## Inicio rápido (desarrollo)
 
 Requisitos: Windows, Go 1.26+, Node 22+ y pnpm.

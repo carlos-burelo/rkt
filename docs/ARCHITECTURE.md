@@ -44,6 +44,26 @@ cmd/rkt-proxy
 | Procesos y reinicios | `internal/supervisor` |
 | Historial y eventos | `internal/store` |
 
+## Plataformas
+
+`internal/platform` concentra defaults y diferencias de OS. El backend no
+pregunta por `runtime.GOOS` fuera de ese paquete ni de los wrappers con build
+tags.
+
+| Pieza | Windows | Linux/Unix |
+|---|---|---|
+| Procesos hijos | Job Object | process group (`Setpgid`) |
+| Límite RAM | Job Object | no disponible (degradado) |
+| Métricas de proceso | Win32 | `/proc/<pid>` |
+| Pasos de build | `cmd.exe /C` | `sh -c` |
+| Hosts locales | `%SystemRoot%\...\hosts` | `/etc/hosts` |
+| CA de desarrollo | Root del usuario | manual (`SSL_CERT_FILE`) |
+| Abrir navegador | `rundll32` | `xdg-open` / `open` |
+
+Estado: Windows es la plataforma soportada. Linux compila y CI ejecuta
+build+vet+tests en Ubuntu; el runtime Linux mantiene limitaciones conscientes
+(sin tope RAM, CA local manual) hasta validación funcional completa.
+
 ## Invariantes
 
 1. **Validar antes de persistir.** Ninguna escritura inválida llega a SQLite.

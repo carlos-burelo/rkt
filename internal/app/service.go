@@ -1,5 +1,5 @@
 // Package app orquesta el binario: carga config, arma handler,
-// ACME y servidores. Implementa service.Interface para Windows.
+// ACME y servidores. Implementa service.Interface (kardianos/service).
 package app
 
 import (
@@ -171,7 +171,7 @@ func (p *Program) Stop(_ service.Service) error {
 	return nil
 }
 
-// Run carga config (YAML bootstrap + flota DB) y sirve. Bloquea en TLS.
+// Run carga infra + flota desde SQLite y sirve. Bloquea en TLS.
 func (p *Program) Run() {
 	defer func() {
 		if v := recover(); v != nil {

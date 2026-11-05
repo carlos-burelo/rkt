@@ -26,6 +26,7 @@ import (
 
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/dotenv"
+	"rkt-proxy/internal/platform"
 	"rkt-proxy/internal/supervisor"
 )
 
@@ -304,9 +305,9 @@ func RunSteps(steps []string, dir string, env map[string]string, out io.Writer) 
 	return nil
 }
 
-// runStep ejecuta un paso de build en cmd.exe con el env de la app.
+// runStep ejecuta un paso de build en el shell de la plataforma.
 func runStep(step, dir string, env map[string]string, out io.Writer) error {
-	cmd := exec.Command("cmd.exe", "/C", step)
+	cmd := platform.Shell(step)
 	cmd.Dir = dir
 	cmd.Env = dotenv.EnvironList(env)
 	cmd.Stdout = out

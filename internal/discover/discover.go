@@ -17,6 +17,7 @@ import (
 	"rkt-proxy/internal/buildpack"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/github"
+	"rkt-proxy/internal/platform"
 	"rkt-proxy/internal/store"
 )
 
@@ -152,7 +153,7 @@ func register(d Deps, owner, repo, branch, tok string) error {
 	domain := uniqueDomain(d.DB, name, owner, base)
 	dir := d.DirBase
 	if dir == "" {
-		dir = `C:\apps`
+		dir = platform.DefaultAppsDir()
 	}
 	dir = filepath.Join(dir, name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

@@ -3,6 +3,7 @@ package hosts
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -62,6 +63,9 @@ func TestAddRechazaHostInvalido(t *testing.T) {
 }
 
 func TestPathWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("ruta del hosts de Windows")
+	}
 	t.Setenv("RKT_HOSTS_PATH", "")
 	t.Setenv("SystemRoot", `D:\Win`)
 	if got := Path(); got != filepath.Join(`D:\Win`, "System32", "drivers", "etc", "hosts") {
@@ -70,6 +74,16 @@ func TestPathWindows(t *testing.T) {
 	t.Setenv("SystemRoot", "")
 	if got := Path(); got != filepath.Join(`C:\Windows`, "System32", "drivers", "etc", "hosts") {
 		t.Fatalf("Path default = %q", got)
+	}
+}
+
+func TestPathUnix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("ruta del hosts POSIX")
+	}
+	t.Setenv("RKT_HOSTS_PATH", "")
+	if got := Path(); got != "/etc/hosts" {
+		t.Fatalf("Path = %q", got)
 	}
 }
 

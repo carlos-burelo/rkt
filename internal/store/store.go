@@ -1,6 +1,6 @@
 // Package store: persistencia SQLite (rkt.db junto a la config).
-// Solo historial consultable: deployments + events. La config YAML
-// sigue siendo la fuente de verdad (legible, difeable en git).
+// Única fuente de flota e infraestructura, además del historial
+// consultable (deployments + events).
 package store
 
 import (

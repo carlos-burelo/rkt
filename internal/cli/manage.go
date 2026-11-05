@@ -1,5 +1,5 @@
-// Comandos de gestión sobre SQLite (la flota vive en DB; el YAML solo
-// conserva infra estable). Toda mutación valida y persiste atómico.
+// Comandos de gestión sobre SQLite (flota e infra viven en DB).
+// Toda mutación valida y persiste atómico.
 // routes/redirect aplican por hot-reload; apps/env exigen restart.
 package cli
 
@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,6 +25,7 @@ import (
 	"rkt-proxy/internal/discover"
 	"rkt-proxy/internal/hosts"
 	"rkt-proxy/internal/logx"
+	"rkt-proxy/internal/platform"
 	"rkt-proxy/internal/store"
 )
 
@@ -54,7 +55,7 @@ func wantJSON(args []string) ([]string, bool) {
 	return rest, json
 }
 
-// merged abre DB + fusiona infra YAML + flota DB. Cerrar con db.Close().
+// merged abre DB + fusiona infra y flota. Cerrar con db.Close().
 func merged(cfgPath string) (*config.Config, *store.DB) {
 	cfg, db, err := cfgfile.LoadMerged(cfgPath)
 	if err != nil {
@@ -353,7 +354,7 @@ func appsAdd(args []string, cfgPath string) {
 		if sug != nil && sug.Dir != "" {
 			dd = sug.Dir
 		} else {
-			dd = `C:\apps\` + nm
+			dd = filepath.Join(platform.DefaultAppsDir(), nm)
 		}
 		dd = prompt("dir app", dd)
 	}
@@ -882,10 +883,9 @@ func githubInitURL(domain, name, org string) string {
 	return link
 }
 
-// openBrowser abre URL (best effort) con rundll32: la URL va como argumento
-// directo y ningún shell la parte.
+// openBrowser abre URL (best effort); la URL va como argumento directo.
 func openBrowser(link string) {
-	_ = exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", link).Start()
+	_ = platform.OpenBrowser(link)
 }
 
 func cmdDeployments(args []string, cfgPath string) {

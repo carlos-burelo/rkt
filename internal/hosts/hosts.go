@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -20,6 +21,9 @@ const (
 func Path() string {
 	if p := os.Getenv("RKT_HOSTS_PATH"); p != "" {
 		return p
+	}
+	if runtime.GOOS != "windows" {
+		return "/etc/hosts"
 	}
 	root := os.Getenv("SystemRoot")
 	if root == "" {

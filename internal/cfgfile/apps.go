@@ -5,12 +5,14 @@ package cfgfile
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/discover"
 	"rkt-proxy/internal/dotenv"
 	"rkt-proxy/internal/github"
+	"rkt-proxy/internal/platform"
 	"rkt-proxy/internal/store"
 )
 
@@ -188,7 +190,7 @@ func CreateApp(db *store.DB, gh *github.Manager, repo, name, domain string, port
 		dir = sug.Dir
 	}
 	if dir == "" {
-		dir = `C:\apps\` + name
+		dir = filepath.Join(platform.DefaultAppsDir(), name)
 	}
 	portS := ""
 	if port > 0 {
