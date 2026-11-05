@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { suggestDomains, DomainSuggestion } from "../../features/routes/api";
+import { suggestDomains, DomainSuggestResult } from "../../features/routes/api";
 import { useI18n } from "../i18n";
 
-// DomainSuggest: chips de dominios libres para un nombre. Prioriza
-// *.localhost (resuelve sin hosts) y el dominio base si está configurado.
+const empty: DomainSuggestResult = { suggestions: [], public: false, requires_domain: false };
+
+// DomainSuggest: chips de dominios libres para un nombre. En local prioriza
+// *.localhost; en servidor público exige un dominio con acceso o base_domain.
 export function DomainSuggest({
   name,
   onPick,
@@ -14,28 +16,38 @@ export function DomainSuggest({
   exclude?: string[];
 }) {
   const { t } = useI18n();
-  const [items, setItems] = useState<DomainSuggestion[]>([]);
+  const [data, setData] = useState<DomainSuggestResult>(empty);
 
   useEffect(() => {
     const clean = name.trim().toLowerCase();
     if (clean === "") {
-      setItems([]);
+      setData(empty);
       return;
     }
     const timer = window.setTimeout(() => {
       suggestDomains(clean)
-        .then((s) => setItems(s.filter((x) => !exclude.includes(x.host))))
-        .catch(() => setItems([]));
+        .then(setData)
+        .catch(() => setData(empty));
     }, 250);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);
 
-  if (items.length === 0) return null;
+  const items = data.suggestions.filter((x) => !exclude.includes(x.host));
+  if (items.length === 0 && !data.requires_domain) return null;
 
   return (
-    <span className="flex flex-wrap items-center gap-1.5">
-      <span className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground/70 uppercase">{t("shared.domain.suggested")}</span>
+    <div className="flex flex-wrap items-center gap-1.5">
+      {data.requires_domain && (
+        <span className="w-full border border-warn/30 bg-warn/5 px-2 py-1 font-mono text-[9px] text-warn">
+          {t("shared.domain.requires")}
+        </span>
+      )}
+      {items.length > 0 && (
+        <span className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground/70 uppercase">
+          {t("shared.domain.suggested")}
+        </span>
+      )}
       {items.map((s) => (
         <button
           key={s.host}
@@ -50,6 +62,6 @@ export function DomainSuggest({
           </span>
         </button>
       ))}
-    </span>
+    </div>
   );
 }

@@ -17,6 +17,7 @@ import (
 
 	"rkt-proxy/internal/buildpack"
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/domains"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/platform"
 	"rkt-proxy/internal/store"
@@ -122,10 +123,6 @@ func register(d Deps, owner, repo, branch, tok string) error {
 			"repo", owner+"/"+repo, "ayuda", "apps add")
 		return nil
 	}
-	base := d.DB.GetSetting(store.KeyBaseDomain)
-	if base == "" {
-		return fmt.Errorf("sin base_domain (settings set base_domain=...)")
-	}
 	// plan estático no necesita binario; proceso sí.
 	var bin string
 	if !plan.IsStatic() {
@@ -161,7 +158,12 @@ func register(d Deps, owner, repo, branch, tok string) error {
 	if appExists(d.DB, name) {
 		return fmt.Errorf("app %q ya existe (registro manual?)", name)
 	}
-	domain := uniqueDomain(d.DB, name, owner, base)
+	host, err := domains.Default(name,
+		d.DB.GetSetting(store.KeyBaseDomain), d.DB.GetSetting(store.KeyPublicIP))
+	if err != nil {
+		return err
+	}
+	domain := uniqueDomain(d.DB, name, host, owner)
 	dir := d.DirBase
 	if dir == "" {
 		dir = platform.DefaultAppsDir()
@@ -303,7 +305,7 @@ func appExists(db *store.DB, name string) bool {
 	return false
 }
 
-func uniqueDomain(db *store.DB, name, owner, base string) string {
+func uniqueDomain(db *store.DB, name, host, owner string) string {
 	taken := map[string]bool{}
 	if fleet, err := db.LoadFleet(); err == nil {
 		for i := range fleet.Routes {
@@ -312,10 +314,18 @@ func uniqueDomain(db *store.DB, name, owner, base string) string {
 			}
 		}
 	}
-	if !taken[name+"."+base] {
-		return name + "." + base
+	if !taken[strings.ToLower(host)] {
+		return host
 	}
-	return name + "-" + strings.ToLower(owner) + "." + base
+	suffix := strings.ToLower(strings.TrimSpace(owner))
+	if suffix == "" {
+		suffix = "2"
+	}
+	dot := strings.Index(host, ".")
+	if dot < 0 {
+		return name + "-" + suffix
+	}
+	return name + "-" + suffix + host[dot:]
 }
 
 // freePort primer puerto libre del pool fuera de routes + bind real.
@@ -349,6 +359,9 @@ func parsePool(s string) (int, int) {
 	return 3000, 3999
 }
 
+// FreePort primer puerto libre del pool (para altas sin inferencia).
+func FreePort(db *store.DB) (int, error) { return freePort(db) }
+
 func usedPorts(db *store.DB) map[int]bool {
 	out := map[int]bool{}
 	fleet, err := db.LoadFleet()
@@ -373,7 +386,6 @@ func usedPorts(db *store.DB) map[int]bool {
 // Suggestion valores inferidos para `apps add` (wizard los propone).
 type Suggestion struct {
 	Name    string
-	Domain  string
 	Port    int
 	Preset  string
 	Command string
@@ -422,9 +434,6 @@ func Suggest(db *store.DB, gh *github.Manager, repoURL string) (*Suggestion, err
 	}
 	if binKey, ok := presetBinKey[s.Preset]; ok {
 		s.Command = db.GetSetting(binKey)
-	}
-	if base := db.GetSetting(store.KeyBaseDomain); base != "" && s.Name != "" {
-		s.Domain = uniqueDomain(db, s.Name, "", base)
 	}
 	if port, err := freePort(db); err == nil {
 		s.Port = port

@@ -53,6 +53,8 @@ export const shared = {
 
   // Sugerencias de dominio (DomainSuggest)
   "shared.domain.suggested": "sugeridos",
+  "shared.domain.requires":
+    "IP pública: escribe el dominio con acceso concedido o configura el dominio base en Ajustes.",
 
   // Instalación PWA (InstallButton)
   "shared.install.button": "Instalar panel",

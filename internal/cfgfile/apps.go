@@ -11,6 +11,7 @@ import (
 
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/discover"
+	"rkt-proxy/internal/domains"
 	"rkt-proxy/internal/dotenv"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/platform"
@@ -322,11 +323,22 @@ func CreateApp(db *store.DB, gh *github.Manager, repo, name, domain string, port
 	} else if sug.Port > 0 {
 		portS = strconv.Itoa(sug.Port)
 	}
-	domains := []string{}
+	if portS == "" {
+		p, err := discover.FreePort(db)
+		if err != nil {
+			return config.App{}, nil, "", fmt.Errorf("sin puerto libre: %w", err)
+		}
+		portS = strconv.Itoa(p)
+	}
+	hosts := []string{}
 	if domain != "" {
-		domains = []string{domain}
-	} else if sug.Domain != "" {
-		domains = []string{sug.Domain}
+		hosts = []string{domain}
+	} else {
+		host, err := domains.Default(name, db.GetSetting(store.KeyBaseDomain), db.GetSetting(store.KeyPublicIP))
+		if err != nil {
+			return config.App{}, nil, "", err
+		}
+		hosts = []string{host}
 	}
 
 	// Plan canónico (buildpack): estático o proceso + pasos de build.
@@ -372,7 +384,7 @@ func CreateApp(db *store.DB, gh *github.Manager, repo, name, domain string, port
 			Repo: repo, Ref: ref, Build: build, Auto: auto,
 		}
 	}
-	return app, domains, portS, nil
+	return app, hosts, portS, nil
 }
 
 // CreateExternalApp registra una app que solo usa el proxy: sin command,
@@ -400,15 +412,21 @@ func CreateExternalApp(db *store.DB, name, domain, dir string, port int) (config
 	if portS == "" {
 		return config.App{}, nil, "", fmt.Errorf("sin puerto libre en port_pool")
 	}
-	domains := []string{}
+	hosts := []string{}
 	if domain != "" {
-		domains = []string{domain}
+		hosts = []string{domain}
+	} else {
+		host, err := domains.Default(name, db.GetSetting(store.KeyBaseDomain), db.GetSetting(store.KeyPublicIP))
+		if err != nil {
+			return config.App{}, nil, "", err
+		}
+		hosts = []string{host}
 	}
 	app := config.App{
 		Name: name, Runtime: config.RuntimeExternal, Dir: dir,
 		Env: map[string]string{"PORT": portS},
 	}
-	return app, domains, portS, nil
+	return app, hosts, portS, nil
 }
 
 // processBin respeta node_bin/python_bin de Ajustes; resto va por PATH.

@@ -1,8 +1,8 @@
 import { chromium } from "playwright";
 
 const apps = [{ name: "checkout", running: true, restarts: 0, failed: false }];
-const metas = [{ name: "checkout", command: "node server.js", args: [], dir: "C:/rkt/apps/checkout", restart_delay: "2s", min_uptime: "10s", memory_mb: 512, port: "3001", domains: ["checkout.rkt.dev"], deploy: { repo: "https://github.com/xavi/checkout", ref: "main", build: [], auto: true } }];
-const routes = [{ hosts: ["checkout.rkt.dev"], target: "http://127.0.0.1:3001" }];
+const metas = [{ name: "checkout", command: "node server.js", args: [], dir: "C:/rkt/apps/checkout", restart_delay: "2s", min_uptime: "10s", memory_mb: 512, port: "3001", domains: ["checkout.localhost"], deploy: { repo: "https://github.com/xavi/checkout", ref: "main", build: [], auto: true } }];
+const routes = [{ hosts: ["checkout.localhost"], target: "http://127.0.0.1:3001" }];
 const analytics = { total: 7105, bytes: 428_000_000, by_class: { "2xx": 6832, "3xx": 141, "4xx": 96, "5xx": 36 }, by_day: { "2026-10-27": 812 }, by_path: [], by_host: [], by_ref: [], p50: "42ms", p95: "188ms" };
 
 const browser = await chromium.launch();

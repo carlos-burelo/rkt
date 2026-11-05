@@ -373,6 +373,28 @@ detenida ni si la ejecución anterior sigue viva.
 - Sin cron distribuido, sin agentes remotos y sin secretos en argumentos
   visibles.
 
+### D17. Dominio por defecto según modo de red
+
+**Contexto.** Un `base_domain` vacío dejaba apps sin ruta o dependía de
+configuración manual. `*.localhost` funciona en un equipo local pero no en un
+servidor público, donde no se puede inventar un dominio ajeno.
+
+**Decisión.** `public_ip` válida y global activa el modo público. Sin IP pública
+el dominio por defecto es `<app>.localhost`, aunque exista `base_domain`. En
+público se usa `<app>.<base_domain>`; si falta el base, no se cae a localhost:
+el alta pide un dominio con acceso y falla con error accionable. El paquete
+`internal/domains` es el único hogar de la política y lo consumen sugerencias,
+descubrimiento, altas y CLI.
+
+**Consecuencias.**
+
+- `GET /api/v1/domains/suggest` expone `public`, `requires_domain` y
+  `base_domain` además de los chips.
+- El auto-registro de GitHub usa `<app>.localhost` en local y el base en
+  público; sin base en público no registra.
+- No se consulta un servicio externo para adivinar la IP: el operador declara
+  `public_ip` cuando la instancia es pública.
+
 ## 4. Contratos de API
 
 ### 4.1 Nuevos o cambiados
@@ -381,6 +403,7 @@ detenida ni si la ejecución anterior sigue viva.
 |---|---|---|---|
 | `/api/v1/apps` | POST | operator | Body `domains []string` en vez de `domain string`. |
 | `/api/v1/apps/{name}` | PUT | operator | Body `domains []string` en vez de `domain string`. |
+| `/api/v1/domains/suggest` | GET | operator | Sugerencias según modo; incluye `public`, `requires_domain` y `base_domain`. |
 | `/api/v1/domains/{host}` | GET | viewer | Detalle: ruta, app, TLS, DNS y `checked_at`. |
 | `/api/v1/domains/{host}/tls` | GET | viewer | Se elimina; su dato pasa al detalle. |
 | `/api/v1/env` | GET | operator | Solo claves: `{global:[], apps:{app:[]}}`. |
@@ -489,6 +512,14 @@ detenida ni si la ejecución anterior sigue viva.
 - [x] **DOM-22** Renovación: mostrar "automática" y fecha. Sin botón si ACME
   no permite forzar; si se añade, `POST /domains/{host}/renew` con test.
 - [x] **DOM-23** Tests de handler y detalle con resolver/TLS falsos; sin red.
+- [x] **DOM-24** Paquete `internal/domains`: modo local/público, defecto,
+  sugerencias y requisito de dominio.
+- [x] **DOM-25** Altas, auto-registro y CLI usan el defecto canónico; local
+  manda `*.localhost` y público exige `base_domain` o dominio explícito.
+- [x] **DOM-26** `domains/suggest` devuelve metadatos y la UI avisa cuando hay
+  que solicitar acceso al dominio.
+- [x] **DOM-27** Tests de política, altas y descubrimiento; docs y ejemplos sin
+  dominios ajenos.
 - [x] **DOM-24** Hook único `useProxyStatus` con refresco y caché corta;
   elimina el fetch duplicado de Routes y Proxy.
 - [x] **DOM-25** Fusionar Proxy como pestaña "Diagnóstico" en Dominios;
@@ -962,6 +993,7 @@ Criterios:
 | 2026-11-05 | MOCK: nombres neutros, dominios ejemplo.com y guard de fixtures | `350575e` | `node scripts/fixtures-check.mjs`, capturas |
 | 2026-11-05 | MOCK-06: fixtures extraídos a módulo compartido | `76ffebc` | `node --check`, `fixtures-check`, capturas |
 | 2026-11-05 | CRON: tareas por app, runner, API, UI, historial y capturas | `cca451b` | `go test ./...`, `tsc`, build, capturas |
+| 2026-11-05 | Dominios: modo local/público, defaults locales y solicitud de dominio | este commit | `go test ./...`, `tsc`, Vitest, i18n |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.

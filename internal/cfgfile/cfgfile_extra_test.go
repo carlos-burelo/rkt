@@ -419,8 +419,11 @@ func TestCreateAppBranches(t *testing.T) {
 
 func TestCreateAppRepoDominioYExec(t *testing.T) {
 	_, db := testCfg(t)
-	// base_domain: la sugerencia trae dominio
-	if err := db.SetSetting(store.KeyBaseDomain, "rkt.test"); err != nil {
+	// servidor público con base_domain: la sugerencia usa el dominio base
+	if err := db.SetSetting(store.KeyBaseDomain, "ejemplo.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetSetting(store.KeyPublicIP, "203.0.113.7"); err != nil {
 		t.Fatal(err)
 	}
 	repo := t.TempDir()
@@ -437,7 +440,7 @@ func TestCreateAppRepoDominioYExec(t *testing.T) {
 	if app.Deploy == nil || app.Deploy.Repo != repo {
 		t.Fatalf("deploy = %+v", app.Deploy)
 	}
-	if len(domains) != 1 || !strings.Contains(domains[0], "rkt.test") {
+	if len(domains) != 1 || !strings.Contains(domains[0], "ejemplo.com") {
 		t.Fatalf("dominio sugerido = %v", domains)
 	}
 	if portS == "" {

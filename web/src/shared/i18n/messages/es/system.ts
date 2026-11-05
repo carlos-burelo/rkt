@@ -46,7 +46,8 @@ export const system = {
   "system.settings.colValue": "valor",
   "system.settings.desc.node_bin": "Binario de Node para los presets Next/Node.",
   "system.settings.desc.python_bin": "Binario de Python para el preset Python.",
-  "system.settings.desc.base_domain": "Dominio base para sugerir <app>.<base>.",
+  "system.settings.desc.base_domain":
+    "Dominio base que controlas para las apps. Obligatorio en servidor con IP pública.",
   "system.settings.desc.port_pool": "Rango de puertos locales (ej 3000-3999).",
   "system.settings.desc.site_name": "Nombre visible en la barra lateral y la cabecera.",
   "system.settings.desc.quota_reqs":
@@ -70,7 +71,8 @@ export const system = {
   "system.settings.label.quota_reqs": "Cuota de peticiones",
   "system.settings.label.quota_bytes": "Cuota de tráfico",
   "system.settings.label.public_ip": "IP pública",
-  "system.settings.desc.public_ip": "IP esperada para dominios propios; vacío = solo informar DNS.",
+  "system.settings.desc.public_ip":
+    "IP pública de la instancia. Vacío = equipo local: los dominios por defecto son *.localhost.",
   "system.settings.restartNeeded": "requiere reiniciar el servicio",
   "system.settings.reset": "restaurar",
   "system.settings.resetTitle": "restaurar {key} al valor por defecto",

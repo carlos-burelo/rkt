@@ -94,6 +94,7 @@ func testDeps(t *testing.T, srv *httptest.Server, pem string) (Deps, *store.DB, 
 	}
 	t.Cleanup(func() { db.Close() })
 	db.SetSetting("base_domain", "coatl.in")
+	db.SetSetting("public_ip", "203.0.113.7")
 	db.SetSetting("node_bin", os.Args[0]) // binario existente cualquiera
 	var deployed []string
 	return Deps{

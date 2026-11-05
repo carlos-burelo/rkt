@@ -93,12 +93,15 @@ Requisitos: Windows, Go 1.26+, Node 22+ y pnpm.
 pnpm --dir web install
 pnpm --dir web build
 go build -o bin/rkt.exe ./cmd/rkt-proxy
-bin\rkt.exe -config rkt.dev.db dev
+bin\rkt.exe -config rkt.local.db dev
 ```
 
 - Dashboard: `http://127.0.0.1:8090`
 - HTTP/HTTPS: `127.0.0.1:80` y `127.0.0.1:443`
 - Dominios locales: `*.localhost` (resuelven solos) o `rkt hosts add <host>`
+- Sin `public_ip`, las apps nuevas usan `<app>.localhost`
+- En servidor público define `public_ip` y `base_domain`; sin dominio el alta
+  pide uno con acceso
 - CA local: `logs/devca/ca.crt`, instalada en el almacén del usuario
 
 ## Instalación en producción

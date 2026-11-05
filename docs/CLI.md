@@ -58,7 +58,7 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 | `env global` | Lista las variables de toda la flota |
 | `env global set CLAVE=valor` | Escribe una global (las apps la heredan) |
 | `env global unset CLAVE` | Borra una global |
-| `settings list` | `node_bin, python_bin, base_domain, port_pool, site_name, quota_reqs, quota_bytes` |
+| `settings list` | `node_bin, python_bin, base_domain, port_pool, site_name, quota_reqs, quota_bytes, public_ip` |
 | `settings set CLAVE=valor` | Escribe setting (solo conocidas) |
 | `users list` | Usuarios dashboard (`name, role, created_at`) |
 | `users add <nombre> [--role admin]` | Alta con password sin eco (el primero se fuerza a admin) |

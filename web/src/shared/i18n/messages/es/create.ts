@@ -40,6 +40,8 @@ export const create = {
   "create.nameHint": "[a-z0-9-]",
   "create.namePlaceholder": "mi-app",
   "create.domain": "Dominio",
+  "create.domainHint":
+    "vacío = dominio local por defecto; en servidor público indica un dominio con acceso",
   "create.domainPlaceholder": "app.midominio.com",
   "create.command": "Comando",
   "create.commandHint": "Binario absoluto",

@@ -1,30 +1,45 @@
 package api
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
 
-func TestDomainSuggestionsPriorizaLocalhost(t *testing.T) {
-	got := domainSuggestions("coatl-in", "", map[string]bool{})
-	if len(got) != 2 {
-		t.Fatalf("sugerencias = %d, quiero 2 (localhost y test)", len(got))
-	}
-	if got[0].Host != "coatl-in.localhost" || got[0].Kind != "local" {
-		t.Fatalf("primera = %+v, quiero .localhost", got[0])
-	}
-	if got[1].Host != "coatl-in.test" {
-		t.Fatalf("segunda = %+v, quiero .test", got[1])
-	}
-}
+	"rkt-proxy/internal/store"
+)
 
-func TestDomainSuggestionsUsaBaseYEvitaOcupados(t *testing.T) {
-	used := map[string]bool{"coatl-in.localhost": true}
-	got := domainSuggestions("coatl-in", "rkt.dev", used)
-	if len(got) != 2 {
-		t.Fatalf("sugerencias = %+v, quiero test y base", got)
+func TestDomainSuggestSegunModo(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	tok := loginAs(t, h, db, "op", store.RoleOperator)
+
+	if err := db.SetSetting(store.KeyBaseDomain, "ejemplo.com"); err != nil {
+		t.Fatal(err)
 	}
-	if got[0].Host != "coatl-in.test" {
-		t.Fatalf("primera = %+v, localhost está ocupado", got[0])
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/domains/suggest?name=tienda", tok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("local: %d %s", rec.Code, rec.Body.String())
 	}
-	if got[1].Host != "coatl-in.rkt.dev" || got[1].Kind != "base" {
-		t.Fatalf("segunda = %+v, quiero dominio base", got[1])
+	body := rec.Body.String()
+	if !strings.Contains(body, "tienda.localhost") || strings.Contains(body, `"requires_domain":true`) {
+		t.Fatalf("local = %s", body)
+	}
+
+	// Público sin base: no inventa localhost y pide dominio con acceso.
+	if err := db.SetSetting(store.KeyPublicIP, "203.0.113.7"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetSetting(store.KeyBaseDomain, ""); err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/domains/suggest?name=tienda", tok))
+	body = rec.Body.String()
+	if strings.Contains(body, "localhost") || !strings.Contains(body, `"requires_domain":true`) ||
+		!strings.Contains(body, `"public":true`) {
+		t.Fatalf("público = %s", body)
 	}
 }

@@ -25,7 +25,7 @@ func TestValidateSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	ok := map[string]string{
-		KeyNodeBin: exe, KeyPythonBin: exe, KeyBaseDomain: "rkt.dev",
+		KeyNodeBin: exe, KeyPythonBin: exe, KeyBaseDomain: "ejemplo.com",
 		KeyPortPool: "3000-3999", KeySiteName: "rkt", KeyQuotaReqs: "100",
 		KeyQuotaBytes: "0", KeyPublicIP: "203.0.113.7",
 	}

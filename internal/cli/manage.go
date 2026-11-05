@@ -23,6 +23,7 @@ import (
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/discover"
+	domainx "rkt-proxy/internal/domains"
 	"rkt-proxy/internal/hosts"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/platform"
@@ -306,16 +307,23 @@ func appsAdd(args []string, cfgPath string) {
 	cfg, db := merged(cfgPath)
 	defer db.Close()
 	if *external {
-		if *name == "" || *dir == "" || len(domains) == 0 {
-			log.Fatal("apps add --external requiere --name, --dir y --domain")
+		if *name == "" || *dir == "" {
+			log.Fatal("apps add --external requiere --name y --dir")
 		}
 		p := 0
 		if *port != "" {
 			p, _ = strconv.Atoi(*port)
 		}
-		app, _, portS, err := cfgfile.CreateExternalApp(db, *name, domains[0], *dir, p)
+		primary := ""
+		if len(domains) > 0 {
+			primary = domains[0]
+		}
+		app, initial, portS, err := cfgfile.CreateExternalApp(db, *name, primary, *dir, p)
 		if err != nil {
 			log.Fatalf("apps add: %v", err)
+		}
+		if len(domains) == 0 {
+			domains = initial
 		}
 		if err := cfgfile.AddApp(db, app, domains, portS); err != nil {
 			log.Fatalf("apps add: %v", err)
@@ -394,11 +402,18 @@ func appsAdd(args []string, cfgPath string) {
 		pt = prompt("puerto local", strconv.Itoa(sug.Port))
 	}
 	if len(domains) == 0 {
-		d := ""
-		if sug != nil {
-			d = sug.Domain
+		base := db.GetSetting(store.KeyBaseDomain)
+		publicIP := db.GetSetting(store.KeyPublicIP)
+		d, _ := domainx.Default(nm, base, publicIP)
+		label := "dominios (coma, vacío = dominio local por defecto)"
+		if domainx.RequiresDomain(publicIP, base) {
+			label = "dominio con acceso (obligatorio en servidor público)"
 		}
-		if ans := prompt("dominios (coma, vacío = sin route)", d); ans != "" {
+		ans := prompt(label, d)
+		if ans == "" && domainx.RequiresDomain(publicIP, base) {
+			log.Fatal("apps add: servidor público sin dominio; pasa --domain o configura base_domain")
+		}
+		if ans != "" {
 			for _, h := range strings.Split(ans, ",") {
 				if h = strings.TrimSpace(h); h != "" {
 					domains = append(domains, h)

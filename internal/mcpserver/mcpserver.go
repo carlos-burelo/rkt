@@ -298,7 +298,7 @@ type appsAddArg struct {
 	Repo    string   `json:"repo,omitempty" jsonschema:"repo git https o dir local (sugiere valores)"`
 	Name    string   `json:"name,omitempty" jsonschema:"nombre [a-z0-9-] (default: slug del repo)"`
 	Runtime string   `json:"runtime,omitempty" jsonschema:"managed (default) | external (solo proxy, sin proceso)"`
-	Domains []string `json:"domains,omitempty" jsonschema:"dominios iniciales (default: <nombre>.<base_domain>)"`
+	Domains []string `json:"domains,omitempty" jsonschema:"dominios iniciales (default local: <nombre>.localhost; público: <nombre>.<base_domain>)"`
 	Port    int      `json:"port,omitempty" jsonschema:"puerto local (default: libre del pool)"`
 	Command string   `json:"command,omitempty" jsonschema:"binario absoluto (default: detectado del plan)"`
 	Dir     string   `json:"dir,omitempty" jsonschema:"dir app (default: estándar por OS)"`

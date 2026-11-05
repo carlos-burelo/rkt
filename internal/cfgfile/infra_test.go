@@ -21,7 +21,7 @@ func openDB(t *testing.T, cfgPath string) *store.DB {
 
 func TestApplyDevYPersistencia(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "rkt.dev.yaml")
+	cfgPath := filepath.Join(dir, "rkt.local.yaml")
 	db := openDB(t, cfgPath)
 	if err := ApplyDev(db, "127.0.0.1:80", "127.0.0.1:443"); err != nil {
 		t.Fatal(err)
@@ -77,7 +77,7 @@ func TestIgnoraYAMLViejo(t *testing.T) {
 }
 
 func TestSetGlobalEnvPersistencia(t *testing.T) {
-	cfgPath := filepath.Join(t.TempDir(), "rkt.dev.yaml")
+	cfgPath := filepath.Join(t.TempDir(), "rkt.local.yaml")
 	db := openDB(t, cfgPath)
 	if _, err := LoadBase(db, cfgPath); err != nil {
 		t.Fatal(err)

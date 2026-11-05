@@ -55,12 +55,24 @@ export interface DomainSuggestion {
   note: string;
 }
 
-// suggestDomains: dominios libres para un nombre (localhost/test/base).
-export async function suggestDomains(name: string): Promise<DomainSuggestion[]> {
-  const res = await api<{ suggestions: DomainSuggestion[] }>(
+export interface DomainSuggestResult {
+  suggestions: DomainSuggestion[];
+  public: boolean;
+  requires_domain: boolean;
+  base_domain?: string;
+}
+
+// suggestDomains: dominios libres para un nombre (local o base pública).
+export async function suggestDomains(name: string): Promise<DomainSuggestResult> {
+  const res = await api<DomainSuggestResult>(
     `/api/v1/domains/suggest?name=${encodeURIComponent(name)}`,
   );
-  return res.suggestions ?? [];
+  return {
+    suggestions: res.suggestions ?? [],
+    public: res.public ?? false,
+    requires_domain: res.requires_domain ?? false,
+    base_domain: res.base_domain,
+  };
 }
 
 export interface ZoneHost {

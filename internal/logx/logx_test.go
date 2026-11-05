@@ -10,7 +10,7 @@ import (
 
 // TestRutasCanonicas: db, log operativo y access log viven bajo logs/.
 func TestRutasCanonicas(t *testing.T) {
-	cfg := filepath.Join(t.TempDir(), "rkt.dev.yaml")
+	cfg := filepath.Join(t.TempDir(), "rkt.local.yaml")
 	dir := DirFor(cfg)
 	if filepath.Base(dir) != "logs" {
 		t.Fatalf("DirFor = %q", dir)
@@ -94,7 +94,7 @@ func TestTailYStripANSI(t *testing.T) {
 
 func TestSetupEscribeYRoja(t *testing.T) {
 	dir := t.TempDir()
-	cfg := filepath.Join(dir, "rkt.dev.yaml")
+	cfg := filepath.Join(dir, "rkt.local.yaml")
 	logger, closeFn, err := Setup(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +163,7 @@ func TestAbsCWDYFallbackTotal(t *testing.T) {
 }
 
 func TestSetupLogEsDirectorio(t *testing.T) {
-	cfg := filepath.Join(t.TempDir(), "rkt.dev.yaml")
+	cfg := filepath.Join(t.TempDir(), "rkt.local.yaml")
 	if err := os.MkdirAll(DirFor(cfg), 0o755); err != nil {
 		t.Fatal(err)
 	}

@@ -224,7 +224,7 @@ export function DetailsStep({
             className="font-mono text-[11px]"
           />
         </Field>
-        <Field label={t("create.domain")} hint={t("common.optional")}>
+        <Field label={t("create.domain")} hint={t("create.domainHint")}>
           <Input
             value={domain}
             onChange={(e) => setDomain(e.target.value)}

@@ -119,6 +119,40 @@ func TestCreateAppDirectorioInexistente(t *testing.T) {
 	}
 }
 
+func TestCreateAppDominioPorDefectoSegunModo(t *testing.T) {
+	db := newTestDB(t)
+	site := t.TempDir()
+	if err := os.WriteFile(filepath.Join(site, "index.html"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetSetting(store.KeyBaseDomain, "ejemplo.com"); err != nil {
+		t.Fatal(err)
+	}
+	// Sin IP pública manda el dominio local, aunque haya base_domain.
+	if _, hosts, _, err := CreateApp(db, nil, "", "sitio", "", 0, "", site, false); err != nil {
+		t.Fatal(err)
+	} else if len(hosts) != 1 || hosts[0] != "sitio.localhost" {
+		t.Fatalf("local = %v", hosts)
+	}
+	// Con IP pública usa el base_domain.
+	if err := db.SetSetting(store.KeyPublicIP, "203.0.113.7"); err != nil {
+		t.Fatal(err)
+	}
+	if _, hosts, _, err := CreateApp(db, nil, "", "sitio", "", 0, "", site, false); err != nil {
+		t.Fatal(err)
+	} else if len(hosts) != 1 || hosts[0] != "sitio.ejemplo.com" {
+		t.Fatalf("público = %v", hosts)
+	}
+	// Servidor público sin base ni dominio explícito: no inventa localhost.
+	if err := db.SetSetting(store.KeyBaseDomain, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := CreateApp(db, nil, "", "sitio", "", 0, "", site, false); err == nil ||
+		!strings.Contains(err.Error(), "IP pública") {
+		t.Fatalf("err = %v, quiero solicitud de dominio", err)
+	}
+}
+
 func TestCreateAppSinPlanFalla(t *testing.T) {
 	db := newTestDB(t)
 	dir := t.TempDir() // sin package.json ni requirements

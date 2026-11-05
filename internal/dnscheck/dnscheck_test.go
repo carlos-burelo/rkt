@@ -51,8 +51,8 @@ func TestExpectedAndMatches(t *testing.T) {
 	}{
 		{"app.localhost", "", "", "127.0.0.1"},
 		{"app.test", "", "", "127.0.0.1"},
-		{"app.rkt.dev", "rkt.dev", "203.0.113.7", "203.0.113.7"},
-		{"otro.dev", "rkt.dev", "", ""},
+		{"app.ejemplo.com", "ejemplo.com", "203.0.113.7", "203.0.113.7"},
+		{"otro.dev", "ejemplo.com", "", ""},
 	}
 	for _, c := range cases {
 		if got := Expected(c.host, c.base, c.ip); got != c.want {

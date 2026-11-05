@@ -247,7 +247,7 @@ func cmdDev(args []string, cfgPath string) {
 	}
 	path := cfgPath
 	if path == "" || path == "rkt.db" {
-		path = "rkt.dev.db"
+		path = "rkt.local.db"
 	}
 	db, err := store.Open(logx.DBPath(path))
 	if err != nil {
