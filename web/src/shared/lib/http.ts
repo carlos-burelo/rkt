@@ -15,6 +15,28 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+// apiResult conserva error/hint del backend en respuestas no-2xx.
+// Para endpoints que necesitan el body de error (p. ej. fix hosts).
+export type ApiResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string; hint?: string };
+
+export async function apiResult<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
+  const res = await fetch(path, {
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    hint?: string;
+  };
+  if (!res.ok) {
+    return { ok: false, error: body.error ?? `http ${res.status}`, hint: body.hint };
+  }
+  return { ok: true, data: body as T };
+}
+
 // Caché en memoria con TTL: varias rutas montadas a la vez comparten
 // la misma respuesta (una sola request en vuelo por clave).
 const memo = new Map<string, { exp: number; p: Promise<unknown> }>();

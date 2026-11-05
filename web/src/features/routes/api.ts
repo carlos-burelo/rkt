@@ -1,4 +1,4 @@
-import { api } from "../../shared/lib/http";
+import { api, apiResult } from "../../shared/lib/http";
 import { Route } from "../../shared/lib/types";
 
 export async function listRoutes(): Promise<Route[]> {
@@ -60,13 +60,10 @@ export function listZones(): Promise<Zones> {
 
 // fixHost añade el host al archivo hosts del sistema (requiere admin).
 export async function fixHost(host: string): Promise<{ ok: boolean; error?: string; hint?: string }> {
-  const res = await fetch("/api/v1/domains/hosts", {
+  const result = await apiResult<{ ok: string }>("/api/v1/domains/hosts", {
     method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ host }),
   });
-  const body = (await res.json().catch(() => ({}))) as { error?: string; hint?: string };
-  if (!res.ok) return { ok: false, error: body.error ?? `http ${res.status}`, hint: body.hint };
+  if (!result.ok) return { ok: false, error: result.error, hint: result.hint };
   return { ok: true };
 }
