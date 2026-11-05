@@ -916,7 +916,7 @@ Criterios:
 | 2026-11-05 | X-04: paridad MCP de entorno y alertas | `58aa1ff` | `go test ./internal/mcpserver`, `tsc` |
 | 2026-11-05 | Gate de cobertura: store 90%, hosts 98% y tests de `WithTx` | `2eeaebc` | bucle de cobertura local |
 | 2026-11-05 | SRV completo: colector local, API, vista, alertas y capturas | `1f30244` | `go test ./internal/servermetrics ./internal/api`, `tsc`, capturas |
-| 2026-11-05 | PROTO completo: ws/wss, SSE, HTTP/2, capacidades y tests | este commit | `go test ./internal/proxy ./internal/config`, `tsc` |
+| 2026-11-05 | PROTO completo: ws/wss, SSE, HTTP/2, capacidades y tests | `d3c53ff`, `dbb1c6c` | `go test ./internal/proxy ./internal/config`, `tsc` |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.
