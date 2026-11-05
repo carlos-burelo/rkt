@@ -908,6 +908,9 @@ Criterios:
 | 2026-11-05 | Línea base: diff, resumen y logs compactos | `01e227e`, `f7edccb` | `go test ./...`, `tsc`, build, capturas |
 | 2026-11-05 | Spec creada (este documento) | `812da8c` | revisión manual |
 | 2026-11-05 | AADR ampliado: servidor local, protocolos, buildpack y fixtures neutros | `fe31663` | revisión manual |
+| 2026-11-05 | Bloque P1/P2: 114 tareas marcadas | `272ec58` | `go test ./...`, `tsc`, Vitest, build, capturas |
+| 2026-11-05 | Brechas: dominios externos, borrado, observabilidad, webhooks y tiempos | `a3700a9` | `go test ./internal/{api,deploy,cli}`, `tsc`, i18n |
+| 2026-11-05 | Checklist actualizada tras el bloque P1/P2 | este commit | revisión manual |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.
