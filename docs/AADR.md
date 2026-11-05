@@ -912,6 +912,7 @@ Criterios:
 | 2026-11-05 | Bloque P1/P2: 114 tareas marcadas | `272ec58` | `go test ./...`, `tsc`, Vitest, build, capturas |
 | 2026-11-05 | Brechas: dominios externos, borrado, observabilidad, webhooks y tiempos | `a3700a9` | `go test ./internal/{api,deploy,cli}`, `tsc`, i18n |
 | 2026-11-05 | Checklist actualizada tras el bloque P1/P2 | este commit | revisión manual |
+| 2026-11-05 | Cierre P1/P2: tests de dominios/usuarios/alertas, contexto de logs, eventos y capturas light | `601fe5e` | `go test ./...`, `tsc`, Vitest, capturas |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.
