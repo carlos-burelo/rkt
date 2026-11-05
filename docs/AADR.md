@@ -907,7 +907,7 @@ Criterios:
 |---|---|---|---|
 | 2026-11-05 | Línea base: diff, resumen y logs compactos | `01e227e`, `f7edccb` | `go test ./...`, `tsc`, build, capturas |
 | 2026-11-05 | Spec creada (este documento) | `812da8c` | revisión manual |
-| 2026-11-05 | AADR ampliado: servidor local, protocolos, buildpack y fixtures neutros | pendiente | revisión manual |
+| 2026-11-05 | AADR ampliado: servidor local, protocolos, buildpack y fixtures neutros | `fe31663` | revisión manual |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.
