@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router";
-import { ExternalLink } from "lucide-react";
-import { dur } from "../../shared/lib/time";
+import { Link, useParams } from "react-router";
+import { ArrowRight, ExternalLink } from "lucide-react";
+import { dur, rel } from "../../shared/lib/time";
 import { CopyButton } from "../../shared/components/feedback";
 import { Section, Stat, Time } from "../../shared/components/patterns";
+import { Dot } from "../../shared/components/ui";
+import { deployStateLabel } from "../../shared/lib/labels";
 import { fetchAnalytics, Analytics } from "../overview/api";
 import { useFleet } from "../overview/hooks";
 import { useEnvCount } from "./hooks";
 import { publicUrl, publicHost } from "../../shared/lib/url";
 import { AppPreview } from "./AppPreview";
 import { useI18n } from "../../shared/i18n";
+import { useUI } from "../../app/ui";
 
 function Check({ ok, label, hint }: { ok: boolean; label: string; hint: string }) {
   const { t } = useI18n();
@@ -42,12 +45,14 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
 export function AppOverview() {
   const { t } = useI18n();
   const { name = "" } = useParams();
-  const { metas, deps, status } = useFleet();
+  const { metas, deps, evs, status } = useFleet();
+  const setSel = useUI((u) => u.setSel);
   const [stats, setStats] = useState<Analytics | null>(null);
 
   const meta = metas.find((m) => m.name === name);
   const st = status?.apps.find((a) => a.name === name);
   const appDeps = deps.filter((d) => d.app === name);
+  const appEvents = evs.filter((e) => e.app === name);
   const prod = appDeps.find((d) => d.status === "ok");
   const domains = meta?.domains ?? [];
   const running = st ? st.running && !st.failed : false;
@@ -160,10 +165,10 @@ export function AppOverview() {
         </Section>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
         <Section title={t("apps.overview.checklistTitle")} description={t("apps.overview.checklistDesc")}>
           <div className="divide-y divide-border/60">
-            <Check ok={!!meta?.deploy?.repo} label={t("apps.overview.checkRepo")} hint="deploy.repo" />
+            <Check ok={!!meta?.deploy?.repo} label={t("apps.overview.checkRepo")} hint={t("apps.overview.checkRepoHint")} />
             <Check ok={domains.length > 0} label={t("apps.overview.checkDomain")} hint={t("apps.overview.checkDomainHint")} />
             <Check ok={!!prod} label={t("apps.overview.checkDeploy")} hint={t("apps.overview.checkDeployHint")} />
             <Check ok={envCount > 0} label={t("apps.overview.checkEnv")} hint={t("nav.environment")} />
@@ -192,6 +197,73 @@ export function AppOverview() {
               />
             </div>
           )}
+        </Section>
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+        <Section
+          title={t("apps.overview.recentDeploys")}
+          description={t("apps.overview.recentDeploysDesc", { n: Math.min(appDeps.length, 5) })}
+        >
+          <div className="divide-y divide-border/60">
+            {appDeps.slice(0, 5).map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => setSel(d)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-accent/40"
+              >
+                <Dot status={d.status} />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-mono text-[11px]">
+                    #{d.id} · {d.rev.slice(0, 8) || "—"}
+                  </span>
+                  <span className="block font-mono text-[9px] text-muted-foreground">
+                    {deployStateLabel(d.status)} · {rel(d.started_at)}
+                  </span>
+                </span>
+                <span className="tnum shrink-0 font-mono text-[10px] text-muted-foreground">
+                  {dur(d.started_at, d.finished_at)}
+                </span>
+                <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground/40" />
+              </button>
+            ))}
+            {appDeps.length === 0 && (
+              <p className="px-3 py-4 font-mono text-[10px] text-muted-foreground">{t("apps.overview.noDeploys")}</p>
+            )}
+          </div>
+          <Link
+            to={`/app/${name}/deploys`}
+            className="flex items-center gap-1 border-t border-border px-3 py-2 font-mono text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t("apps.overview.viewDeploys")} <ArrowRight className="h-3 w-3" />
+          </Link>
+        </Section>
+
+        <Section title={t("apps.overview.recentActivity")} description={t("apps.overview.recentActivityDesc")}>
+          <div className="divide-y divide-border/60">
+            {appEvents.slice(0, 6).map((e) => (
+              <div
+                key={e.id}
+                className="grid grid-cols-[4rem_4.5rem_minmax(0,1fr)] items-baseline gap-2 px-3 py-1.5"
+              >
+                <span className="tnum font-mono text-[10px] text-muted-foreground/60">{rel(e.ts)}</span>
+                <span className="truncate font-mono text-[10px] tracking-[0.06em] text-muted-foreground uppercase">
+                  {e.kind}
+                </span>
+                <span className="min-w-0 truncate font-mono text-[11px] text-foreground/70">{e.msg}</span>
+              </div>
+            ))}
+            {appEvents.length === 0 && (
+              <p className="px-3 py-4 font-mono text-[10px] text-muted-foreground">{t("apps.overview.noActivity")}</p>
+            )}
+          </div>
+          <Link
+            to={`/app/${name}/logs`}
+            className="flex items-center gap-1 border-t border-border px-3 py-2 font-mono text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t("apps.overview.viewLogs")} <ArrowRight className="h-3 w-3" />
+          </Link>
         </Section>
       </div>
     </div>

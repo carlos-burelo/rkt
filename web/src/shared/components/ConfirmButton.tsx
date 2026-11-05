@@ -11,6 +11,7 @@ export function ConfirmButton({
   title,
   className,
   disabled,
+  size = "xs",
 }: {
   onConfirm: () => void;
   label?: string;
@@ -18,6 +19,7 @@ export function ConfirmButton({
   title?: string;
   className?: string;
   disabled?: boolean;
+  size?: "xs" | "sm";
 }) {
   const [armed, setArmed] = useState(false);
 
@@ -30,7 +32,7 @@ export function ConfirmButton({
   return (
     <Button
       variant={armed ? "destructive" : "ghost"}
-      size="xs"
+      size={size}
       disabled={disabled}
       aria-live="polite"
       title={armed ? "click otra vez para confirmar" : title}
