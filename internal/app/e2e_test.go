@@ -90,6 +90,8 @@ func TestE2EProxyWAFBodyYAccessLog(t *testing.T) {
 	go p.Run()
 	defer func() { _ = p.Stop(nil) }()
 	waitHTTP(t, "http://"+healthAddr+"/healthz", 10*time.Second)
+	// healthz puede arrancar antes que el listener público: espera ambos.
+	waitHTTP(t, "http://"+httpAddr+"/", 10*time.Second)
 
 	client := &http.Client{
 		Timeout: 5 * time.Second,
