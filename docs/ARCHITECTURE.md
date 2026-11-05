@@ -94,14 +94,15 @@ Hecho:
   el mismo camino y no se pisan entre procesos.
 - Migraciones SQLite atómicas por transacción.
 - `internal/app` dividido: `service.go` (runtime), `github.go`, `background.go`.
-- `CreateDialog.tsx`: helpers/constantes en `createDialog.model.tsx` y panel
-  de tracking en `CreateTrack.tsx`.
+- `CreateDialog.tsx` reducido a estado/orquestación (~330 líneas):
+  helpers en `createDialog.model.tsx`, pasos 1–3 en `CreateSteps.tsx` y
+  tracking en `CreateTrack.tsx`.
 
 ## Deuda pendiente (orden sugerido)
 
-1. **Web.** `CreateDialog.tsx` aún concentra el estado de los 3 pasos; extraer
-   los pasos de detalles y revisión a componentes presentacionales.
-2. **Cobertura de concurrencia.** Añadir pruebas con `-race` en CI (requiere
+1. **Cobertura de concurrencia.** Añadir pruebas con `-race` en CI (requiere
    CGO) para supervisor, API y watcher.
-3. **Linux funcional.** Validar smoke real (deploy, supervisor, proxy) en un
+2. **Linux funcional.** Validar smoke real (deploy, supervisor, proxy) en un
    runner Linux además de build+vet+tests.
+3. **Code splitting del dashboard.** El bundle principal supera 500 kB;
+   dividir por rutas o vendor chunks.
