@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { fetchObs, Obs } from "./api";
 import { Bars } from "../../shared/components/feedback";
-import { PageHeader, Stat, StatGrid, Section, Segmented } from "../../shared/components/patterns";
+import { PageHeader, Stat, StatGrid, Section, Segmented, EmptyState } from "../../shared/components/patterns";
 import { useI18n } from "../../shared/i18n";
 
 export function Observability() {
@@ -36,7 +37,10 @@ export function Observability() {
         }
       />
       {!data && <p className="font-mono text-[10px] text-muted-foreground">{t("overview.loadingSeries")}</p>}
-      {data && (
+      {data && reqTotal === 0 && (data.by_app?.length ?? 0) === 0 && (
+        <EmptyState title={t("overview.observability.emptyTitle")} hint={t("overview.observability.emptyHint")} />
+      )}
+      {data && (reqTotal > 0 || (data.by_app?.length ?? 0) > 0) && (
         <>
           <StatGrid className="md:grid-cols-4">
             <Stat value={`${reqTotal}`} label={t("overview.requests")} sub={t("overview.window", { label })} />
@@ -86,7 +90,7 @@ export function Observability() {
             >
               <div className="divide-y divide-border/60">
                 {(data.by_app ?? []).map((a) => (
-                  <div key={a.app} className="flex items-center gap-2 px-3 py-1.5">
+                  <Link key={a.app} to={`/app/${a.app}/logs`} className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent/40">
                     <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{a.app}</span>
                     <span className="tnum font-mono text-[10px] text-muted-foreground">{a.req}</span>
                     <span className={`tnum w-10 text-right font-mono text-[10px] ${a.err > 0 ? "text-bad" : "text-muted-foreground"}`}>
@@ -95,7 +99,7 @@ export function Observability() {
                     <span className="tnum w-16 text-right font-mono text-[10px] text-muted-foreground">
                       {a.p95 || "—"}
                     </span>
-                  </div>
+                  </Link>
                 ))}
                 {(data.by_app ?? []).length === 0 && (
                   <p className="px-3 py-3 font-mono text-[10px] text-muted-foreground">{t("common.empty")}</p>

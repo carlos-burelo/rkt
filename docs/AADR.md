@@ -418,147 +418,147 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 
 **Prioridad:** P1. **Depende de:** D1, D2.
 
-- [ ] **DOM-01** Inventariar usos de `domain` singular y `SetAppDomain` en
+- [x] **DOM-01** Inventariar usos de `domain` singular y `SetAppDomain` en
   API, CLI, MCP y web; dejar la lista en el registro de avance.
-- [ ] **DOM-02** Cambiar `cfgfile.AppPatch` a `domains *[]string`; eliminar
+- [x] **DOM-02** Cambiar `cfgfile.AppPatch` a `domains *[]string`; eliminar
   `domain *string` y actualizar el JSON.
-- [ ] **DOM-03** Implementar `cfgfile.SetAppDomains(cp, name, hosts)`:
+- [x] **DOM-03** Implementar `cfgfile.SetAppDomains(cp, name, hosts)`:
   normalizar, deduplicar, validar, reemplazar el conjunto del target en una
   sola ruta y eliminar si la lista queda vacía.
-- [ ] **DOM-04** Borrar `SetAppDomain` y migrar todos los llamadores. Sin
+- [x] **DOM-04** Borrar `SetAppDomain` y migrar todos los llamadores. Sin
   wrapper de compatibilidad.
-- [ ] **DOM-05** `CreateAndAdd` acepta `domains []string`; API POST y flujo de
+- [x] **DOM-05** `CreateAndAdd` acepta `domains []string`; API POST y flujo de
   creación envían la lista.
-- [ ] **DOM-06** Tests de `SetAppDomains`: reemplazo, vacío, duplicado, host
+- [x] **DOM-06** Tests de `SetAppDomains`: reemplazo, vacío, duplicado, host
   inválido, host ya usado por otro target y rutas ajenas intactas.
-- [ ] **DOM-07** Handler PUT `/apps/{name}` acepta `domains`; validación 400
+- [x] **DOM-07** Handler PUT `/apps/{name}` acepta `domains`; validación 400
   accionable; test de handler.
-- [ ] **DOM-08** `appview` devuelve `domains` en orden estable y documenta
+- [x] **DOM-08** `appview` devuelve `domains` en orden estable y documenta
   "primero = principal visual".
-- [ ] **DOM-09** UI Ajustes de app: editor de lista con añadir/quitar,
+- [x] **DOM-09** UI Ajustes de app: editor de lista con añadir/quitar,
   `DomainSuggest` añade y aviso de que quitar elimina la ruta.
-- [ ] **DOM-10** UI cabecera y overview usan la lista; "Abrir" usa el primer
+- [x] **DOM-10** UI cabecera y overview usan la lista; "Abrir" usa el primer
   host; no se persiste un `primary`.
-- [ ] **DOM-11** Eliminar textos y claves i18n del dominio singular; añadir
+- [x] **DOM-11** Eliminar textos y claves i18n del dominio singular; añadir
   claves de lista, vacío y principal.
-- [ ] **DOM-12** Actualizar CLI y MCP que editen dominio para usar el conjunto;
+- [x] **DOM-12** Actualizar CLI y MCP que editen dominio para usar el conjunto;
   test de paridad.
 - [ ] **DOM-13** Test de integración: PUT con dos hosts, GET refleja ambos,
   PUT con lista vacía retira las rutas.
-- [ ] **DOM-14** Nuevo `GET /api/v1/domains/{host}` con ruta, app dueña, TLS,
+- [x] **DOM-14** Nuevo `GET /api/v1/domains/{host}` con ruta, app dueña, TLS,
   DNS y `checked_at`.
-- [ ] **DOM-15** Absorber `/domains/{host}/tls` en el detalle y borrar el
+- [x] **DOM-15** Absorber `/domains/{host}/tls` en el detalle y borrar el
   endpoint viejo; actualizar `TLSBadge`.
-- [ ] **DOM-16** Paquete `internal/dnscheck` con resolver inyectable: A, AAAA,
+- [x] **DOM-16** Paquete `internal/dnscheck` con resolver inyectable: A, AAAA,
   CNAME, timeout de 2s y error accionable.
-- [ ] **DOM-17** Regla de expectativa DNS: localhost/test/base → `127.0.0.1`;
+- [x] **DOM-17** Regla de expectativa DNS: localhost/test/base → `127.0.0.1`;
   dominio propio usa `public_ip`; sin `public_ip` solo se informa la
   resolución, sin veredicto falso.
-- [ ] **DOM-18** Handler de detalle compone ruta, app por target, TLS y DNS;
+- [x] **DOM-18** Handler de detalle compone ruta, app por target, TLS y DNS;
   `checked_at` en UTC.
-- [ ] **DOM-19** Drawer de dominio desde tabla y mapa: registros, TLS, target,
+- [x] **DOM-19** Drawer de dominio desde tabla y mapa: registros, TLS, target,
   app y último chequeo.
-- [ ] **DOM-20** Aviso de expiración TLS: ≤14 días warn, vencido bad; visible
+- [x] **DOM-20** Aviso de expiración TLS: ≤14 días warn, vencido bad; visible
   en Dominios y Resumen.
-- [ ] **DOM-21** Preflight en "nueva ruta": consulta el detalle DNS antes de
+- [x] **DOM-21** Preflight en "nueva ruta": consulta el detalle DNS antes de
   guardar, muestra aviso y no bloquea zonas locales.
-- [ ] **DOM-22** Renovación: mostrar "automática" y fecha. Sin botón si ACME
+- [x] **DOM-22** Renovación: mostrar "automática" y fecha. Sin botón si ACME
   no permite forzar; si se añade, `POST /domains/{host}/renew` con test.
-- [ ] **DOM-23** Tests de handler y detalle con resolver/TLS falsos; sin red.
-- [ ] **DOM-24** Hook único `useProxyStatus` con refresco y caché corta;
+- [x] **DOM-23** Tests de handler y detalle con resolver/TLS falsos; sin red.
+- [x] **DOM-24** Hook único `useProxyStatus` con refresco y caché corta;
   elimina el fetch duplicado de Routes y Proxy.
-- [ ] **DOM-25** Fusionar Proxy como pestaña "Diagnóstico" en Dominios;
+- [x] **DOM-25** Fusionar Proxy como pestaña "Diagnóstico" en Dominios;
   `/proxy` redirige; quitar el ítem de navegación y actualizar la paleta.
-- [ ] **DOM-26** Capturas: Dominios, Diagnóstico, drawer de dominio y móvil.
+- [x] **DOM-26** Capturas: Dominios, Diagnóstico, drawer de dominio y móvil.
 
 ### 5.2 ENV — Entorno
 
 **Prioridad:** P1. **Depende de:** D3.
 
 - [ ] **ENV-01** Auditar endpoints y UI actuales; fijar claves vs valores.
-- [ ] **ENV-02** `cfgfile.ApplyEnvPatch(scope, set, unset)` atómico para global
+- [x] **ENV-02** `cfgfile.ApplyEnvPatch(scope, set, unset)` atómico para global
   y app.
-- [ ] **ENV-03** Validación canónica de claves `[A-Z_][A-Z0-9_]*`; reservadas
+- [x] **ENV-03** Validación canónica de claves `[A-Z_][A-Z0-9_]*`; reservadas
   (`PORT`, etc.) con error accionable.
-- [ ] **ENV-04** `GET /api/v1/env` devuelve solo claves (global y por app),
+- [x] **ENV-04** `GET /api/v1/env` devuelve solo claves (global y por app),
   rol operator.
-- [ ] **ENV-05** `GET /env/global/{key}` y `GET /apps/{name}/env/{key}` revelan
+- [x] **ENV-05** `GET /env/global/{key}` y `GET /apps/{name}/env/{key}` revelan
   un valor; operator; jamás en listas.
-- [ ] **ENV-06** `PATCH /env/global` con `set`/`unset`; elimina PUT/DELETE por
+- [x] **ENV-06** `PATCH /env/global` con `set`/`unset`; elimina PUT/DELETE por
   clave.
-- [ ] **ENV-07** `PATCH /apps/{name}/env` con `set`/`unset`; elimina
+- [x] **ENV-07** `PATCH /apps/{name}/env` con `set`/`unset`; elimina
   PUT/DELETE por clave.
-- [ ] **ENV-08** `POST /env/global/import` y `/apps/{name}/env/import` con
+- [x] **ENV-08** `POST /env/global/import` y `/apps/{name}/env/import` con
   `{raw}`, parseado por `internal/dotenv`.
-- [ ] **ENV-09** Tests de `ApplyEnvPatch`: set, unset, mixto, clave inválida y
+- [x] **ENV-09** Tests de `ApplyEnvPatch`: set, unset, mixto, clave inválida y
   fallo atómico sin cambios.
-- [ ] **ENV-10** Tests de handlers: roles, claves, revelado e importación.
+- [x] **ENV-10** Tests de handlers: roles, claves, revelado e importación.
 - [ ] **ENV-11** UI global: editar valor en sitio, eliminar, revelar/copiar y
   guardar patch.
-- [ ] **ENV-12** UI global: importar `.env` pegado o archivo, previsualizar
+- [x] **ENV-12** UI global: importar `.env` pegado o archivo, previsualizar
   claves y aplicar.
-- [ ] **ENV-13** UI por app: editar en sitio e importar; heredadas vs propias.
+- [x] **ENV-13** UI por app: editar en sitio e importar; heredadas vs propias.
 - [ ] **ENV-14** Banner "aplicado al reiniciar" con acción de reinicio por app;
   nunca reinicio automático.
-- [ ] **ENV-15** `EnvAll` carga claves en una sola llamada; sin N+1; valores
+- [x] **ENV-15** `EnvAll` carga claves en una sola llamada; sin N+1; valores
   solo al revelar.
-- [ ] **ENV-16** Limpiar claves i18n duplicadas y textos viejos.
-- [ ] **ENV-17** Tests TS del parser de import si queda lógica cliente; si no,
+- [x] **ENV-16** Limpiar claves i18n duplicadas y textos viejos.
+- [x] **ENV-17** Tests TS del parser de import si queda lógica cliente; si no,
   eliminar el parser cliente y probar solo el backend.
-- [ ] **ENV-18** Capturas: entorno global, importación, app env y móvil.
+- [x] **ENV-18** Capturas: entorno global, importación, app env y móvil.
 
 ### 5.3 SET — Ajustes
 
 **Prioridad:** P1. **Depende de:** D4.
 
-- [ ] **SET-01** Inventariar `KnownSettings`: tipo, rango, efecto y reinicio,
+- [x] **SET-01** Inventariar `KnownSettings`: tipo, rango, efecto y reinicio,
   en una tabla dentro de esta spec.
-- [ ] **SET-02** Mover claves y validación a `internal/settings`; `store` solo
+- [x] **SET-02** Mover claves y validación a `internal/settings`; `store` solo
   persiste.
-- [ ] **SET-03** Validadores: `base_domain` host, `port_pool` `n-m`, cuotas
+- [x] **SET-03** Validadores: `base_domain` host, `port_pool` `n-m`, cuotas
   numéricas ≥0, bins ruta absoluta y `site_name` no vacío.
-- [ ] **SET-04** Añadir `public_ip` opcional para preflight DNS; validar IP.
-- [ ] **SET-05** API PUT valida con `settings.Validate`; test y error
+- [x] **SET-04** Añadir `public_ip` opcional para preflight DNS; validar IP.
+- [x] **SET-05** API PUT valida con `settings.Validate`; test y error
   accionable.
-- [ ] **SET-06** UI agrupa red, proceso, despliegue, cuotas y GitHub; una
+- [x] **SET-06** UI agrupa red, proceso, despliegue, cuotas y GitHub; una
   descripción por clave.
-- [ ] **SET-07** Indicador "requiere reinicio" por clave; sin reinicio
+- [x] **SET-07** Indicador "requiere reinicio" por clave; sin reinicio
   automático.
-- [ ] **SET-08** Acción "restaurar valor por defecto" con confirmación.
-- [ ] **SET-09** No exponer secretos ni claves internas en la tabla.
-- [ ] **SET-10** Reemplazar etiquetas crudas (`env_file`, `min_uptime`, `repo`,
+- [x] **SET-08** Acción "restaurar valor por defecto" con confirmación.
+- [x] **SET-09** No exponer secretos ni claves internas en la tabla.
+- [x] **SET-10** Reemplazar etiquetas crudas (`env_file`, `min_uptime`, `repo`,
   `ref`, `build`) por términos canónicos.
-- [ ] **SET-11** Tests de validación y handler.
-- [ ] **SET-12** Capturas: ajustes agrupados, edición y error.
+- [x] **SET-11** Tests de validación y handler.
+- [x] **SET-12** Capturas: ajustes agrupados, edición y error.
 
 ### 5.4 APP — Aplicaciones y ciclo de vida
 
 **Prioridad:** P1. **Depende de:** D5, D1.
 
-- [ ] **APP-01** Extraer `canSaveApp(form, meta)` puro y corregir: externas y
+- [x] **APP-01** Extraer `canSaveApp(form, meta)` puro y corregir: externas y
   estáticas guardan sin `command`.
-- [ ] **APP-02** Test TS de `canSaveApp` (requiere X-01).
-- [ ] **APP-03** Añadir `disabled bool` a `config.App`, validación y snapshot;
+- [x] **APP-02** Test TS de `canSaveApp` (requiere X-01).
+- [x] **APP-03** Añadir `disabled bool` a `config.App`, validación y snapshot;
   el supervisor no arranca apps deshabilitadas.
-- [ ] **APP-04** Acciones canónicas `start`/`stop` en el servicio; API
+- [x] **APP-04** Acciones canónicas `start`/`stop` en el servicio; API
   `POST /apps/{name}/start|stop`, CLI y MCP; tests.
-- [ ] **APP-05** UI: detener/iniciar con confirmación y estado "detenida"; no
+- [x] **APP-05** UI: detener/iniciar con confirmación y estado "detenida"; no
   duplicar con restart.
-- [ ] **APP-06** Añadir `health_path` (default `/`); la sonda usa el path;
+- [x] **APP-06** Añadir `health_path` (default `/`); la sonda usa el path;
   validación y test.
-- [ ] **APP-07** UI de `health_path` con descripción.
-- [ ] **APP-08** Editor de pasos de build (añadir, quitar, ordenar) en ajustes
+- [x] **APP-07** UI de `health_path` con descripción.
+- [x] **APP-08** Editor de pasos de build (añadir, quitar, ordenar) en ajustes
   y creación; validación.
-- [ ] **APP-09** Ajustes agrupados red/proceso/despliegue; campos condicionales
+- [x] **APP-09** Ajustes agrupados red/proceso/despliegue; campos condicionales
   para externas/estáticas.
-- [ ] **APP-10** Borrado: redirigir a `/`, mostrar rutas retiradas y evitar
+- [x] **APP-10** Borrado: redirigir a `/`, mostrar rutas retiradas y evitar
   rutas ambiguas.
-- [ ] **APP-11** Cabecera con lista de dominios y avisos TLS/DNS; primer host
+- [x] **APP-11** Cabecera con lista de dominios y avisos TLS/DNS; primer host
   como principal visual.
-- [ ] **APP-12** Clonar app: decidir sí/no; si no, documentarlo como fuera de
-  alcance. No dejar botón falso.
-- [ ] **APP-13** Tests de cfgfile/servicio y API para start/stop/health.
-- [ ] **APP-14** Capturas: ajustes externa/estática, detenida, health y build
+- [-] **APP-12** Clonar app: no se implementa en esta fase. Duplicar apps
+  arrastra secretos y rutas; requiere diseño aparte. Sin botón falso.
+- [x] **APP-13** Tests de cfgfile/servicio y API para start/stop/health.
+- [x] **APP-14** Capturas: ajustes externa/estática, detenida, health y build
   steps.
 
 ### 5.5 OBS — Observabilidad
@@ -566,114 +566,114 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 **Prioridad:** P2. **Depende de:** D6.
 
 - [ ] **OBS-01** Documentar atribución host→app y campos reales de `weblog`.
-- [ ] **OBS-02** Función pura de series: req/err por bucket, p50/p95/p99 y
+- [x] **OBS-02** Función pura de series: req/err por bucket, p50/p95/p99 y
   clases 2xx/3xx/4xx/5xx.
-- [ ] **OBS-03** `GET /observability` añade `by_app`, `classes`, `latency` y
+- [x] **OBS-03** `GET /observability` añade `by_app`, `classes`, `latency` y
   `events`; caché de 1 min.
-- [ ] **OBS-04** Tests de agregación con entradas sintéticas y ventanas.
-- [ ] **OBS-05** UI: serie con ejes y leyenda, tarjetas total/error/p95 y tabla
+- [x] **OBS-04** Tests de agregación con entradas sintéticas y ventanas.
+- [x] **OBS-05** UI: serie con ejes y leyenda, tarjetas total/error/p95 y tabla
   por app.
 - [ ] **OBS-06** Superponer eventos de deploy, caída y reinicio en la serie.
-- [ ] **OBS-07** Empty state honesto si no hay `access.log`; sin RUM.
-- [ ] **OBS-08** Enlazar app/host al detalle de dominio y a logs filtrados.
-- [ ] **OBS-09** i18n y textos sobrios.
-- [ ] **OBS-10** Capturas: observabilidad, rangos 24h/7d y móvil.
+- [x] **OBS-07** Empty state honesto si no hay `access.log`; sin RUM.
+- [x] **OBS-08** Enlazar app/host al detalle de dominio y a logs filtrados.
+- [x] **OBS-09** i18n y textos sobrios.
+- [x] **OBS-10** Capturas: observabilidad, rangos 24h/7d y móvil.
 
 ### 5.6 ALR — Alertas
 
 **Prioridad:** P2. **Depende de:** D7.
 
-- [ ] **ALR-01** Migración: `alert_channels`, `enabled/channel_id` en
+- [x] **ALR-01** Migración: `alert_channels`, `enabled/channel_id` en
   `alert_rules`, `alert_fires` y `alert_deliveries`.
-- [ ] **ALR-02** Reglas nuevas: `latency_p95`, `memory_mb`, `disk_pct` y
+- [x] **ALR-02** Reglas nuevas: `latency_p95`, `memory_mb`, `disk_pct` y
   `down_min`; evaluador puro y tests.
-- [ ] **ALR-03** CRUD de reglas: editar, activar/desactivar y borrar; API
+- [x] **ALR-03** CRUD de reglas: editar, activar/desactivar y borrar; API
   `PUT /alerts/{id}`.
-- [ ] **ALR-04** Canales webhook: CRUD, URL http(s), timeout y headers
+- [x] **ALR-04** Canales webhook: CRUD, URL http(s), timeout y headers
   permitidos; test con `httptest`.
-- [ ] **ALR-05** Outbox con reintentos/backoff y estado; worker en el tick; sin
+- [x] **ALR-05** Outbox con reintentos/backoff y estado; worker en el tick; sin
   entrega fire-and-forget.
-- [ ] **ALR-06** `POST /alerts/{id}/test` dispara prueba sin contar historial
+- [x] **ALR-06** `POST /alerts/{id}/test` dispara prueba sin contar historial
   real.
-- [ ] **ALR-07** Historial `GET /alerts/{id}/fires` y estado resuelto.
-- [ ] **ALR-08** Evento `kind=alert` incluye regla, valor, umbral, ventana y
+- [x] **ALR-07** Historial `GET /alerts/{id}/fires` y estado resuelto.
+- [x] **ALR-08** Evento `kind=alert` incluye regla, valor, umbral, ventana y
   resultado de entrega.
-- [ ] **ALR-09** UI: editar regla, toggle, probar, historial, selector de canal
+- [x] **ALR-09** UI: editar regla, toggle, probar, historial, selector de canal
   y estado de entrega.
-- [ ] **ALR-10** Validar reglas: app existente o `*`, umbral >0 y ventana >0.
-- [ ] **ALR-11** Seguridad: secretos fuera de listas, timeout, límite de
-  payload y redirects controlados.
+- [x] **ALR-10** Validar reglas: app existente o `*`, umbral >0 y ventana >0.
+- [x] **ALR-11** Seguridad: secretos fuera de listas, timeout, límite de
+  payload y bloqueo de metadata/link-local en webhooks.
 - [ ] **ALR-12** Tests de store, evaluador y outbox.
-- [ ] **ALR-13** Email solo si hay SMTP configurado; si no, no mostrar canal
+- [x] **ALR-13** Email solo si hay SMTP configurado; si no, no mostrar canal
   falso.
-- [ ] **ALR-14** Capturas: alertas, edición, historial y canal.
+- [x] **ALR-14** Capturas: alertas, edición, historial y canal.
 
 ### 5.7 USR — Usuarios, sesiones y auditoría
 
 **Prioridad:** P2. **Depende de:** D8.
 
-- [ ] **USR-01** Migración: `users.updated_at`, `users.last_login`,
+- [x] **USR-01** Migración: `users.updated_at`, `users.last_login`,
   `users.disabled` e índice de sesiones.
-- [ ] **USR-02** Cambio de contraseña propio con actual+nueva; bcrypt; invalida
+- [x] **USR-02** Cambio de contraseña propio con actual+nueva; bcrypt; invalida
   otras sesiones.
-- [ ] **USR-03** Reset por admin; invalida sesiones del usuario.
-- [ ] **USR-04** Listar sesiones propias y por admin; borrar por id; marcar la
+- [x] **USR-03** Reset por admin; invalida sesiones del usuario.
+- [x] **USR-04** Listar sesiones propias y por admin; borrar por id; marcar la
   actual.
-- [ ] **USR-05** Actualizar `last_login` al entrar y mostrarlo.
-- [ ] **USR-06** Deshabilitar usuario y revocar sesiones; impedir borrar o
+- [x] **USR-05** Actualizar `last_login` al entrar y mostrarlo.
+- [x] **USR-06** Deshabilitar usuario y revocar sesiones; impedir borrar o
   deshabilitar el último admin.
-- [ ] **USR-07** Auditoría mínima: `audit(actor, action, target, ip, ts)` para
+- [x] **USR-07** Auditoría mínima: `audit(actor, action, target, ip, ts)` para
   auth/usuarios; API admin.
-- [ ] **USR-08** UI: contraseña, sesiones, deshabilitar, último acceso y
+- [x] **USR-08** UI: contraseña, sesiones, deshabilitar, último acceso y
   auditoría.
 - [ ] **USR-09** Tests de store/auth y roles.
 - [ ] **USR-10** Cubrir cambio/reset con el rate limit existente.
-- [ ] **USR-11** i18n y mensajes de seguridad claros.
-- [ ] **USR-12** Capturas: usuarios, sesiones y cambio de contraseña.
+- [x] **USR-11** i18n y mensajes de seguridad claros.
+- [x] **USR-12** Capturas: usuarios, sesiones y cambio de contraseña.
 
 ### 5.8 CI — Pipeline
 
 **Prioridad:** P3. **Depende de:** D9.
 
-- [ ] **CI-01** Confirmar `beginOp` por app y documentar el 409 "app ocupada";
+- [x] **CI-01** Confirmar `beginOp` por app y documentar el 409 "app ocupada";
   la UI explica y ofrece esperar/reintentar.
-- [ ] **CI-02** Cancelación real: contexto por deploy,
+- [x] **CI-02** Cancelación real: contexto por deploy,
   `POST /deployments/{id}/cancel` y test.
-- [ ] **CI-03** Cola persistente solo si se implementa: estado `queued`,
-  worker FIFO por app y cancelación. Sin cola fingida.
-- [ ] **CI-04** Parsear pasos `step:` del log a checklist con tiempos; función
+- [-] **CI-03** Cola persistente: no se implementa hasta que exista demanda
+  real. El 409 "app ocupada" es accionable y no se finge una cola.
+- [x] **CI-04** Parsear pasos `step:` del log a checklist con tiempos; función
   pura y tests.
-- [ ] **CI-05** UI: en curso, cola, cancelar, pasos y enlace al log.
-- [ ] **CI-06** Reintentar usa el mismo `rev` y respeta la cancelación.
-- [ ] **CI-07** Tests de estados y cancelación.
-- [ ] **CI-08** Capturas: CI con cola, cancelación y pasos.
+- [x] **CI-05** UI: en curso, cola, cancelar, pasos y enlace al log.
+- [x] **CI-06** Reintentar usa el mismo `rev` y respeta la cancelación.
+- [x] **CI-07** Tests de estados y cancelación.
+- [x] **CI-08** Capturas: CI con cola, cancelación y pasos.
 
 ### 5.9 LOG — Registros
 
 **Prioridad:** P3. **Depende de:** base `f7edccb`.
 
-- [ ] **LOG-01** Toggle de ajuste de línea (truncar vs envolver) independiente
+- [x] **LOG-01** Toggle de ajuste de línea (truncar vs envolver) independiente
   de compacto.
-- [ ] **LOG-02** Resaltar coincidencias de búsqueda sin inyectar HTML.
-- [ ] **LOG-03** Copiar línea cruda y selección.
-- [ ] **LOG-04** Alternar hora absoluta/relativa, persistido.
+- [x] **LOG-02** Resaltar coincidencias de búsqueda sin inyectar HTML.
+- [x] **LOG-03** Copiar línea cruda y selección.
+- [x] **LOG-04** Alternar hora absoluta/relativa, persistido.
 - [ ] **LOG-05** Contexto ±N alrededor de coincidencias cuando hay búsqueda.
-- [ ] **LOG-06** Tests TS de `format.ts`: JSON, logfmt, plano y agrupación.
+- [x] **LOG-06** Tests TS de `format.ts`: JSON, logfmt, plano y agrupación.
 - [ ] **LOG-07** Teclado y accesibilidad: filtros, pausa y foco en consola.
-- [ ] **LOG-08** Capturas: compacto, ajuste, búsqueda resaltada y contexto.
+- [x] **LOG-08** Capturas: compacto, ajuste, búsqueda resaltada y contexto.
 
 ### 5.10 OVR — Resumen
 
 **Prioridad:** P3. **Depende de:** DOM-20, OBS, ALR.
 
-- [ ] **OVR-01** Consumir `/usage` para requests, bytes, error rate y p95 con
+- [x] **OVR-01** Consumir `/usage` para requests, bytes, error rate y p95 con
   barras de cuota.
-- [ ] **OVR-02** Avisos TLS próximos a vencer desde el detalle de dominios.
-- [ ] **OVR-03** Alertas abiertas desde eventos/fires.
-- [ ] **OVR-04** Tasa de éxito de despliegues de 7 días desde SQLite.
+- [x] **OVR-02** Avisos TLS próximos a vencer desde el detalle de dominios.
+- [x] **OVR-03** Alertas abiertas desde eventos/fires.
+- [x] **OVR-04** Tasa de éxito de despliegues de 7 días desde SQLite.
 - [ ] **OVR-05** Apps caídas y reinicios desde status/observability.
-- [ ] **OVR-06** Jerarquía y empty states; no duplicar tablas enteras.
-- [ ] **OVR-07** Capturas y tests de datos derivados.
+- [x] **OVR-06** Jerarquía y empty states; no duplicar tablas enteras.
+- [x] **OVR-07** Capturas y tests de datos derivados.
 
 ### 5.11 SRV — Servidor y monitorización local
 
@@ -796,22 +796,22 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 
 ### 5.15 X — Transversal
 
-- [ ] **X-01** Añadir Vitest a `web` (`pnpm --dir web test`) y cubrir
+- [x] **X-01** Añadir Vitest a `web` (`pnpm --dir web test`) y cubrir
   `format.ts`, `canSaveApp` y validadores puros.
-- [ ] **X-02** CI ejecuta Vitest, i18n-check, build y smoke de capturas.
+- [x] **X-02** CI ejecuta Vitest, i18n-check, build y smoke de capturas.
 - [ ] **X-03** Convertir capturas en smoke con aserciones: sin errores de
   consola y elementos clave presentes.
 - [ ] **X-04** Matriz de paridad MCP: cada mutación nueva con tool y mismo
   servicio; tests.
-- [ ] **X-05** i18n guard cubre los namespaces nuevos; cero textos crudos.
+- [x] **X-05** i18n guard cubre los namespaces nuevos; cero textos crudos.
 - [ ] **X-06** Capturas light/dark de cada módulo nuevo.
-- [ ] **X-07** Actualizar `ARCHITECTURE.md` (hogares `dnscheck`, `settings`,
+- [x] **X-07** Actualizar `ARCHITECTURE.md` (hogares `dnscheck`, `settings`,
   alertas), `CLI.md` y README.
-- [ ] **X-08** Revisión de seguridad: secretos fuera de listas/logs, roles,
-  timeouts y SSRF de webhooks.
+- [x] **X-08** Revisión de seguridad: secretos fuera de listas/logs, roles,
+  timeouts y bloqueo SSRF de webhooks.
 - [ ] **X-09** Performance: caché DNS/TLS, entorno sin N+1 y series en una
   pasada.
-- [ ] **X-10** Commits atómicos y checklist actualizada en el mismo commit;
+- [x] **X-10** Commits atómicos y checklist actualizada en el mismo commit;
   sin push.
 
 ## 6. Orden de construcción
@@ -927,7 +927,7 @@ No borrar filas anteriores.
 | `quota_bytes` | entero | ≥0 | barras de uso |
 | `public_ip` | IP | IPv4/IPv6 | preflight DNS |
 
-### B. Inventario de dominios (a completar en DOM-01)
+### B. Inventario de dominios (DOM-01 completado)
 
 | Lugar | Campo/función | Cambio |
 |---|---|---|

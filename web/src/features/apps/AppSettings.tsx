@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -296,8 +297,9 @@ export function AppSettings() {
                 submitLabel={t("apps.settings.deleteSubmit")}
                 canSubmit={confirmDel === name}
                 onSubmit={async () => {
-                  await deleteApp(name);
-                  navigate("/deployments");
+                  const res = await deleteApp(name);
+                  toast.success(t("apps.settings.deleted", { name, hint: res.hint ?? "" }));
+                  navigate("/");
                 }}
               >
                 <Field label={t("apps.settings.confirmLabel")} hint={t("apps.settings.confirmHint", { name })}>

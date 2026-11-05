@@ -101,10 +101,11 @@ credenciales: crea el primer admin con `users add`, entra en
 viewer lee, operator muta, admin gestiona usuarios.
 
 Endpoints principales (todos salvo login exigen sesión):
-`GET status|deployments|events|logs|apps|routes|settings|users|alerts`,
-`GET apps/:name|deployments/:id/log|domains/:host/tls|usage|analytics|observability`,
-`POST auth/login|auth/logout|users|routes|apps|apps/:n/restart|deploy|rollback|deployments/:id/retry|alerts`,
-`PUT apps/:name|apps/:n/env|settings`, `DELETE users/:n|routes?host|apps/:n|apps/:n/env?key|alerts/:id`.
+`GET status|deployments|events|logs|apps|routes|settings|users|alerts|env|audit`,
+`GET apps/:name|deployments/:id/log|domains/:host|domains/preflight|usage|analytics|observability`,
+`POST auth/login|auth/logout|users|routes|apps|apps/:n/restart|apps/:n/start|apps/:n/stop|deploy|rollback|deployments/:id/retry|deployments/:id/cancel|alerts|alerts/:id/test`,
+`PATCH env/global|apps/:n/env`, `PUT apps/:name|settings|users/:n/password|users/:n/sessions/:id`,
+`DELETE users/:n|users/:n/sessions/:id|routes?host|apps/:n|alerts/:id|alert-channels/:id`.
 Errores: JSON `{error}` (401 sin sesión, 403 sin rol).
 
 Páginas: Overview (métricas, usage, alertas, discovery, actividad),
@@ -127,7 +128,8 @@ comando, args, dir, estático, env_file, memoria), `build` (compila un dir
 local y registra deployment), `env_set` (solo escritura),
 `discover` (registro inmediato), `deploy_check` (preflight JSON),
 `deployment_logs` (tail del build), `wait_healthy` (gate post-deploy),
-`restart`, `rollback`, `deploy`, `retry`, `apps_remove` (baja con rutas).
+`restart`, `rollback`, `deploy`, `retry`, `apps_remove` (baja con rutas),
+`start`, `stop` (detención persistente).
 
 Catálogo extendido (control total): `app_get`, `app_env_keys`, `env_delete`,
 `env_global_list|set|delete` (variables de toda la flota; la app las anula),

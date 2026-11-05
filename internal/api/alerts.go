@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -231,6 +232,13 @@ func validWebhook(raw string) error {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return fmt.Errorf("webhook inválido: usa http(s)://host/ruta")
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "metadata.google.internal" || host == "169.254.169.254" {
+		return fmt.Errorf("webhook bloqueado: no se permite el endpoint de metadatos")
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLinkLocalUnicast() {
+		return fmt.Errorf("webhook bloqueado: IP link-local")
 	}
 	return nil
 }

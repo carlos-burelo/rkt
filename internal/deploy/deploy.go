@@ -324,11 +324,12 @@ func runStepContext(ctx context.Context, step, dir string, env map[string]string
 	cmd.Stderr = out
 	// marcador estable para checklist CI en dashboard (SPEC 12.2)
 	fmt.Fprintf(out, "▶ step: %s\n", step)
+	start := time.Now()
 	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(out, "✘ step failed: %s\n", step)
+		fmt.Fprintf(out, "✘ step failed: %s (%s)\n", step, time.Since(start).Round(time.Millisecond))
 		return err
 	}
-	fmt.Fprintf(out, "✔ step ok: %s\n", step)
+	fmt.Fprintf(out, "✔ step ok: %s (%s)\n", step, time.Since(start).Round(time.Millisecond))
 	return nil
 }
 

@@ -313,14 +313,14 @@ func appsAdd(args []string, cfgPath string) {
 		if *port != "" {
 			p, _ = strconv.Atoi(*port)
 		}
-		app, doms, portS, err := cfgfile.CreateExternalApp(db, *name, domains[0], *dir, p)
+		app, _, portS, err := cfgfile.CreateExternalApp(db, *name, domains[0], *dir, p)
 		if err != nil {
 			log.Fatalf("apps add: %v", err)
 		}
-		if err := cfgfile.AddApp(db, app, doms, portS); err != nil {
+		if err := cfgfile.AddApp(db, app, domains, portS); err != nil {
 			log.Fatalf("apps add: %v", err)
 		}
-		fmt.Printf("app externa %s → %s puerto %s (sin proceso; corre: pnpm dev)\n", app.Name, strings.Join(doms, ","), portS)
+		fmt.Printf("app externa %s → %s puerto %s (sin proceso; corre: pnpm dev)\n", app.Name, strings.Join(domains, ","), portS)
 		return
 	}
 	var sug *discover.Suggestion

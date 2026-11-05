@@ -122,6 +122,8 @@ export const overview = {
   "overview.observability.app": "app",
   "overview.observability.errorsCol": "5xx",
   "overview.observability.bytesCol": "bytes",
+  "overview.observability.emptyTitle": "Sin tráfico en la ventana",
+  "overview.observability.emptyHint": "No hay líneas de access.log para este rango. No se inventan series.",
   "overview.tlsSoon.one": "{n} certificado vence en 14 días o menos",
   "overview.tlsSoon.other": "{n} certificados vencen en 14 días o menos",
   "overview.tlsSoonAction": "revisar dominios",

@@ -40,6 +40,8 @@ cmd/rkt-proxy
 | Patch/borrado de app, rutas, env | `cfgfile/mutate.go` |
 | Vistas para API/MCP | `internal/appview` |
 | Puerto de listen y IP de cliente | `internal/netutil` |
+| Validación de ajustes de flota | `internal/settings` |
+| Resolución DNS de dominios | `internal/dnscheck` |
 | Pipeline deploy/build | `internal/deploy` |
 | Procesos y reinicios | `internal/supervisor` |
 | Historial y eventos | `internal/store` |
@@ -100,6 +102,14 @@ Hecho:
   tracking en `CreateTrack.tsx`.
 - Suite completa validada en Linux (WSL Ubuntu) y CI con job `-race`.
 - `Program.Stop` sincronizado con el arranque (`stateMu`) para el detector.
+- Dominios de app como conjunto de hosts en rutas; `cfgfile.SetAppDomains`
+  reemplaza el conjunto y el detalle DNS/TLS vive en `internal/dnscheck`.
+- Entorno con listas de claves, revelado por clave y `ApplyEnvPatch` atómico.
+- Ajustes tipados en `internal/settings`; `store` solo persiste.
+- Apps con `disabled` persistido y `health_path`; `start`/`stop` canónicos.
+- Alertas con canales, historial y outbox de entregas.
+- Sesiones revocables, cambio/reset de contraseña y auditoría mínima.
+- Despliegues cancelables con contexto; pasos con duración en el log.
 
 ## Deuda pendiente (orden sugerido)
 

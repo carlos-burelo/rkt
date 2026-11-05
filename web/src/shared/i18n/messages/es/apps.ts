@@ -138,6 +138,7 @@ export const apps = {
   "apps.settings.repoHint": "git https o ruta local",
   "apps.settings.refHint": "rama, tag o SHA",
   "apps.settings.buildHint": "un paso por línea, en orden",
+  "apps.settings.deleted": "app {name} eliminada. {hint}",
   "apps.settings.autoDeploy": "auto-deploy al recibir push",
   "apps.settings.deleteTitle": "Eliminar {name}",
   "apps.settings.deleteDesc": "quita la app y sus rutas",
