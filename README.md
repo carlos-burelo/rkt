@@ -23,7 +23,11 @@ Internet ──:80/:443──▶ rkt ──HTTP──▶ 127.0.0.1:3001  app ges
   prioridad exacta. Sin ruta → `404`; backend caído → `502`.
 - **TLS automático**: Let's Encrypt (`tls-alpn-01` + `http-01`) en producción;
   CA local y `.localhost` en desarrollo. Renovación y cache separada
-  staging/producción.
+  staging/producción. Sin `public_ip` el dominio por defecto es local; en
+  servidor público se exige `base_domain` o un dominio con acceso.
+- **Tareas programadas por app**: cron local con dos tipos, comando en el
+  directorio de la app o petición HTTP a su puerto local. Historial, log,
+  ejecución manual, timeout y bloqueo de solapes.
 - **Apps gestionadas**: supervisor con reinicio, backoff, límite de RAM,
   Job Objects (mata el árbol completo en Windows), logs por app y health checks.
 - **Apps externas**: registro de host/puerto para un dev server que corre el
@@ -39,7 +43,8 @@ Internet ──:80/:443──▶ rkt ──HTTP──▶ 127.0.0.1:3001  app ges
   analítica, métricas, alertas y backends reales.
 - **Dashboard SPA** embebida, PWA, autenticación por cookie httpOnly y roles
   `viewer < operator < admin`.
-- **CLI y MCP** sobre la misma API y el mismo modelo de datos.
+- **CLI y MCP** sobre la misma API y el mismo modelo de datos. Las tareas cron
+  se operan desde el dashboard o la API.
 
 ## Dashboard
 
@@ -176,6 +181,8 @@ internal/api           API REST / SSE
 internal/app           orquestación, deploy y runtime
 internal/supervisor    procesos, reinicios, Job Objects
 internal/deploy        clone, build, swap, rollback
+internal/cronjobs      scheduler y ejecución de tareas
+internal/domains       dominios por defecto según modo de red
 internal/github        GitHub App, tokens, repos
 internal/proxy         routing por Host
 internal/config        modelo y validación
@@ -188,8 +195,11 @@ docs/                  CLI, especificación y capturas
 ## Documentación
 
 - [CLI](docs/CLI.md)
+- [Arquitectura](docs/ARCHITECTURE.md)
 - [Especificación del dashboard](docs/SPEC.md)
 - [AADR de expansión por módulos](docs/AADR.md)
+- [Diseño del dashboard](DESIGN.md)
+- [Producto](PRODUCT.md)
 - [Capturas](docs/shots/README.md)
 
 ## Licencia

@@ -15,6 +15,14 @@ grafito y la misma señal; no es una inversión mecánica de colores.
 Firma: fila-manifiesto con tira de estado, bahía (puerto), destino
 (dominio/TLS) y revisión; tablero de salidas con duraciones tabulares.
 
+## Marca
+
+Marca propia: cohete sobre halo, naranja de señal. El SVG canónico es
+`web/public/icons/mark.svg`; `BrandMark` lo consume directamente y el favicon
+más los iconos PWA se generan con `node scripts/shots/icons.mjs` (16/32, Apple,
+192/512 y maskable con zona segura). No se redibujan los paths a mano ni se
+duplica el asset. En el panel de acceso la marca va a 44px; en el rail, 20px.
+
 ## Tokens
 
 Definidos en `web/src/index.css` (`:root` oscuro, `.light` claro). Dos capas:
@@ -151,7 +159,9 @@ señal). Sin coreografías de carga. `prefers-reduced-motion` desactiva todo.
 
 `docs/shots/` se genera con `scripts/shots/mock.mjs` (API ficticia, sin datos
 reales) y Playwright. El mock cubre auth, flota, deploys, logs SSE, analytics,
-ajustes y GitHub para que las capturas no muestren errores de consola.
+ajustes, cron y GitHub para que las capturas no muestren errores de consola.
+Los iconos y el favicon se regeneran desde el SVG canónico con
+`scripts/shots/icons.mjs`.
 
 ## No hacer
 

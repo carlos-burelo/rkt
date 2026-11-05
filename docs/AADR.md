@@ -437,7 +437,6 @@ descubrimiento, altas y CLI.
 | `/api/v1/server/history` | GET | viewer | Serie corta en memoria (`?hours=1..24`). |
 | `/api/v1/server/processes` | GET | viewer | Top procesos por CPU/RAM de la instancia (solo lectura). |
 | `/api/v1/proxy/capabilities` | GET | viewer | Protocolos soportados y límites reales (HTTP/1.1, HTTP/2, WS, WSS, SSE). |
-| `/api/v1/buildpack/frameworks` | GET | viewer | Matriz de frameworks, gestores y requisitos que el detector reconoce. |
 | `/api/v1/detect` | GET | operator | Se amplía: explica el plan elegido y los manifiestos que lo activaron. |
 | `/api/v1/cron` | GET | viewer | Tareas con próxima ejecución, estado y último resultado. |
 | `/api/v1/cron/{app}/{job}` | PUT/DELETE | operator | Crea/edita (command o http) o borra una tarea. |
@@ -967,6 +966,7 @@ Criterios:
 | Desplegar/reiniciar/rollback | POST acciones | tools actuales | existente |
 | Diff de despliegue | GET `/apps/{name}/diff` | pendiente | DOM/APP |
 | Dominios (conjunto) | PUT `/apps/{name}` | añadir tool | DOM-12 |
+| Sugerencia de dominio | GET `/domains/suggest` | `domains_suggest` | existente |
 | Detalle de dominio | GET `/domains/{host}` | añadir tool de lectura | DOM-14 |
 | Entorno (claves) | GET `/env` | `app_env_keys` | existente |
 | Entorno (mutar) | PATCH/import | decidir tool operator | ENV |
@@ -974,8 +974,9 @@ Criterios:
 | Sesiones/usuarios | API admin | no exponer al inicio | USR |
 | Cancelar deploy | POST `/deployments/{id}/cancel` | añadir tool | CI |
 | Servidor local | GET `/server` | añadir tool de lectura | SRV |
-| Buildpack | GET `/buildpack/frameworks`, `/detect` | añadir tool de lectura | BLD |
+| Buildpack | GET `/detect` | `detect_plan` | existente |
 | Capacidades proxy | GET `/proxy/capabilities` | añadir tool de lectura | PROTO |
+| Tareas cron | GET/PUT/DELETE `/cron` | pendiente | CRON |
 
 ## 10. Registro de avance
 
@@ -997,8 +998,8 @@ Criterios:
 | 2026-11-05 | MOCK: nombres neutros, dominios ejemplo.com y guard de fixtures | `350575e` | `node scripts/fixtures-check.mjs`, capturas |
 | 2026-11-05 | MOCK-06: fixtures extraídos a módulo compartido | `76ffebc` | `node --check`, `fixtures-check`, capturas |
 | 2026-11-05 | CRON: tareas por app, runner, API, UI, historial y capturas | `cca451b` | `go test ./...`, `tsc`, build, capturas |
-| 2026-11-05 | CRON: tipo HTTP al puerto local además de comandos | este commit | `go test ./...`, `tsc`, Vitest, capturas |
-| 2026-11-05 | Dominios: modo local/público, defaults locales y solicitud de dominio | este commit | `go test ./...`, `tsc`, Vitest, i18n |
+| 2026-11-05 | CRON: tipo HTTP al puerto local además de comandos | `270aa91` | `go test ./...`, `tsc`, Vitest, capturas |
+| 2026-11-05 | Dominios: modo local/público, defaults locales y solicitud de dominio | `7cd2cd3` | `go test ./...`, `tsc`, Vitest, i18n |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.
@@ -1030,6 +1031,7 @@ No borrar filas anteriores.
 | `web/src/features/apps/AppTabs.tsx` | primer host como principal visual | hecho |
 | `internal/mcpserver` | `app_update` con conjunto | hecho |
 | `internal/cli` | `apps add` acepta varios `--domain` | hecho |
+| `internal/domains` | modo local/público, defecto y sugerencias | hecho |
 
 ### C. Métricas del servidor (SRV)
 

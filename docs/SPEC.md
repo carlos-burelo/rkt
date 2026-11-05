@@ -1,22 +1,22 @@
 # SPEC — dashboard rkt estilo Vercel (inspiración, no clon)
 
-## Estado (2026-11-03, todo construido salvo nota)
+## Estado (2026-11-05)
 
-Hecho: B1–B9 (trazabilidad, discover-event, usage/analytics/
-observability, app PUT/DELETE, retry, TLS, site_name/quotas, alertas),
-UI 1–12 (layout, overview, deployments, app, logs, analytics,
-observability, domains, env, settings, users, CI, alerts, ⌘K, PWA).
-Diferido honesto: 10.2 shared env (fase 2), notificaciones push de
-alertas (solo evento+dashboard), facetas de log por línea (sin campos).
+Este documento conserva el diseño original del dashboard (2026-11-03). El
+estado verificable y la checklist viven en [AADR](AADR.md); aquí solo se
+mantiene la intención de producto y las decisiones de alcance.
 
-Fuente: 8 capturas vercel.com/coatl (Team Overview, Deployments, Analytics,
+Módulos posteriores ya implementados: servidor local, protocolos, buildpack,
+fixtures neutros, tareas cron (`command`/`http`) y política de dominios
+local/público. Las casillas sin marcar de este SPEC son contexto histórico, no
+deuda automática.
 
 Fuente: 8 capturas vercel.com/coatl (Team Overview, Deployments, Analytics,
 Project Overview, Env Vars, Domains, Settings, Logs). Marca, iconos y
 Geist NO se copian. Se copian patrones UX + densidad.
 
-Estado hoy: auth sesiones, apps, deployments+drawer, logs tail, routes,
-settings KV, users, ⌘K, toasts, PWA offline. Este spec cierra la brecha.
+Estado base: auth con sesiones, apps, deployments + drawer, logs tail, routes,
+settings KV, users, ⌘K, toasts, PWA offline.
 
 ## 0. Principios
 
@@ -177,7 +177,7 @@ Captura 7 (project settings con 20 secciones → recorte honesto).
   `DELETE /api/v1/apps/:name` (operator + confirm doble; borra solo la
   app, igual que CLI `apps rm`: avisa revisar `routes list`, no adivina
   huérfanas).
-- NO: Avatar upload, Passport, Sandboxes, Cron, Microfrontends,
+- NO: Avatar upload, Passport, Sandboxes, Microfrontends,
   Drains, Tracing, Networking, Flags, Storage (fuera de misión;
   cada uno diría “no soportado” en vez de página vacía: no se crean).
 

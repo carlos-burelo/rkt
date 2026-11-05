@@ -16,7 +16,8 @@ cmd/rkt-proxy
        │    ├─ internal/store   SQLite
        │    └─ internal/config  modelo, validación, Live
        └─ dominio: proxy, supervisor, deploy, discover, github,
-          buildpack, acme, devca, weblog, accesslog, alerts, ...
+          buildpack, acme, devca, weblog, accesslog, alerts, domains,
+          cronjobs, ...
 ```
 
 - `cmd` solo cablea. `cli` interpreta comandos y habla con el servicio o
@@ -41,9 +42,11 @@ cmd/rkt-proxy
 | Vistas para API/MCP | `internal/appview` |
 | Puerto de listen y IP de cliente | `internal/netutil` |
 | Validación de ajustes de flota | `internal/settings` |
+| Dominio por defecto local/público | `internal/domains` |
 | Resolución DNS de dominios | `internal/dnscheck` |
 | Pipeline deploy/build | `internal/deploy` |
 | Procesos y reinicios | `internal/supervisor` |
+| Tareas programadas por app | `internal/cronjobs` |
 | Historial y eventos | `internal/store` |
 
 ## Plataformas
@@ -90,10 +93,10 @@ flush inmediato. TCP crudo queda fuera de alcance.
 Hecho:
 
 - `internal/cli` separado de `internal/app` (comandos vs runtime).
-- `internal/api` dividido por recurso: `api.go` queda en ~190 líneas
+- `internal/api` dividido por recurso: `api.go` queda en ~290 líneas
   (Deps, NewHandler, helpers); handlers en `apps.go`, `routes.go`,
   `deployments.go`, `analytics.go`, `auth.go`, `env.go`, `settings.go`,
-  `github.go`, `alerts.go`, `status.go`, `domains.go`.
+  `github.go`, `alerts.go`, `status.go`, `domains.go`, `cron.go`.
 - Mutaciones de flota canónicas en `cfgfile/mutate.go`.
 - Carrera del supervisor corregida (`m.apps` bajo lock).
 - Parseo de listen y RemoteAddr unificado en `internal/netutil`.
@@ -115,6 +118,12 @@ Hecho:
 - Alertas con canales, historial y outbox de entregas.
 - Sesiones revocables, cambio/reset de contraseña y auditoría mínima.
 - Despliegues cancelables con contexto; pasos con duración en el log.
+- Dominios por defecto según modo de red: local usa `<app>.localhost`; público
+  exige `base_domain` o un dominio explícito. Hogar: `internal/domains`.
+- Tareas cron por app con dos tipos: `command` (shell/env/dir) y `http`
+  (GET/POST al puerto local). Historial en SQLite y log por ejecución.
+- Marca canónica en `web/public/icons/mark.svg`; favicon e iconos PWA se
+  generan desde ese SVG con `scripts/shots/icons.mjs`.
 
 ## Deuda pendiente (orden sugerido)
 

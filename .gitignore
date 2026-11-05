@@ -4,7 +4,6 @@ bin/
 
 # config real (con email/dominios); solo ejemplo en repo
 config.yaml
-rkt.dev.yaml
 
 # backups de config por CLI manage
 *.bak-*

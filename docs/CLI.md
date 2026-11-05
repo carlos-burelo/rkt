@@ -3,6 +3,7 @@
 Sintaxis: `rkt [-config <ruta>] [--json] <comando> [args]`.
 
 - `-config` default `rkt.db`: ancla de datos; DB y logs viven en `<dir>/logs`.
+  `dev` usa `rkt.local.db` cuando no se pasa `-config`.
 - `--json` en comandos de lectura: salida JSON en vez de tabla.
 - Códigos de salida: `0` ok · `1` error de runtime · `2` mal uso.
 
@@ -46,8 +47,8 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 | Comando | Efecto |
 |---|---|
 | `apps list [--json]` | `name, command, dir` |
-| `apps add [repo] [flags]` | Wizard si faltan flags: infiere nombre, preset, puerto, dominio, comando. Flags = override. Ej: `apps add https://github.com/o/app2.git` |
-| `apps add --external --name dev --dir C:\repo --domain dev.localhost [--port 3010]` | Registra app externa: solo proxy (sin build/deploy/supervisor). El dev server lo corrés vos. |
+| `apps add [repo] [flags]` | Wizard si faltan flags: infiere nombre, preset, puerto, dominio, comando. Flags = override. Sin `public_ip` el dominio por defecto es `<app>.localhost`; en público exige `base_domain` o `--domain`. Ej: `apps add https://github.com/o/app2.git` |
+| `apps add --external --name dev --dir C:\repo [--domain dev.localhost] [--port 3010]` | Registra app externa: solo proxy (sin build/deploy/supervisor). El dev server lo corrés vos. Sin dominio usa el defecto local/público. |
 | `apps rm <name>` | Elimina app (avisa revisar routes huérfanas) |
 | `routes list [--json]` | `hosts, target` |
 | `routes add --host (repetible) --target <url>` | Agrega ruta (hot). Target `http(s)://` o `ws(s)://`; ws/wss se normalizan y conservan el upgrade |
@@ -101,11 +102,11 @@ credenciales: crea el primer admin con `users add`, entra en
 viewer lee, operator muta, admin gestiona usuarios.
 
 Endpoints principales (todos salvo login exigen sesión):
-`GET status|deployments|events|logs|apps|routes|settings|users|alerts|env|audit`,
-`GET apps/:name|deployments/:id/log|domains/:host|domains/preflight|usage|analytics|observability`,
-`POST auth/login|auth/logout|users|routes|apps|apps/:n/restart|apps/:n/start|apps/:n/stop|deploy|rollback|deployments/:id/retry|deployments/:id/cancel|alerts|alerts/:id/test`,
-`PATCH env/global|apps/:n/env`, `PUT apps/:name|settings|users/:n/password|users/:n/sessions/:id`,
-`DELETE users/:n|users/:n/sessions/:id|routes?host|apps/:n|alerts/:id|alert-channels/:id`.
+`GET status|deployments|events|logs|apps|routes|settings|users|alerts|env|audit|cron`,
+`GET apps/:name|deployments/:id/log|domains/:host|domains/preflight|domains/suggest|usage|analytics|observability|server`,
+`POST auth/login|auth/logout|users|routes|apps|apps/:n/restart|apps/:n/start|apps/:n/stop|deploy|rollback|deployments/:id/retry|deployments/:id/cancel|alerts|alerts/:id/test|cron/:app/:job/run`,
+`PUT apps/:name|settings|users/:n/password|users/:n/sessions/:id|cron/:app/:job`,
+`DELETE users/:n|users/:n/sessions/:id|routes?host|apps/:n|alerts/:id|alert-channels/:id|cron/:app/:job`.
 Errores: JSON `{error}` (401 sin sesión, 403 sin rol).
 
 Páginas: Overview (métricas, usage, alertas, discovery, actividad),
@@ -113,7 +114,8 @@ Deployments (filtros, drawer con build log + timeline + pasos CI),
 App (production, checklist, tráfico, settings, env, danger),
 Logs (runtime/build, search, niveles, live, histograma),
 Analytics, Observability, Domains (TLS), Environment (agrupado),
-Settings, Users, CI, Alerts. ⌘K paleta, toasts, PWA offline.
+Settings, Users, CI, Alerts, Tareas (cron command/http).
+⌘K paleta, toasts, PWA offline.
 
 ## MCP (`rkt mcp`)
 
