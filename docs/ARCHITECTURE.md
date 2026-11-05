@@ -89,12 +89,18 @@ Hecho:
 - Mutaciones de flota canónicas en `cfgfile/mutate.go`.
 - Carrera del supervisor corregida (`m.apps` bajo lock).
 - Parseo de listen y RemoteAddr unificado en `internal/netutil`.
+- Mutaciones de flota de la API serializadas (`Deps.mutateFleet`) y migraciones
+  SQLite atómicas por transacción.
+- `internal/app` dividido: `service.go` (runtime), `github.go`, `background.go`.
 - `CreateDialog.tsx`: helpers/constantes en `createDialog.model.tsx` y panel
   de tracking en `CreateTrack.tsx`.
 
 ## Deuda pendiente (orden sugerido)
 
-1. **Web.** `CreateDialog.tsx` aún concentra el estado de los 3 pasos; extraer
+1. **Escrituras entre procesos.** La API serializa en proceso; CLI/MCP y el
+   servicio aún pueden competir por el mismo `ImportFleet`. Siguiente paso:
+   read-modify-write en una sola transacción SQLite con bloqueo inmediato.
+2. **Web.** `CreateDialog.tsx` aún concentra el estado de los 3 pasos; extraer
    los pasos de detalles y revisión a componentes presentacionales.
-2. **Cobertura de concurrencia.** Añadir pruebas con `-race` en CI (requiere
+3. **Cobertura de concurrencia.** Añadir pruebas con `-race` en CI (requiere
    CGO) para supervisor, API y watcher.
