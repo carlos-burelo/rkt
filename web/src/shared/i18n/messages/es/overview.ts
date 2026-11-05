@@ -51,7 +51,7 @@ export const overview = {
   "overview.activity.empty": "sin eventos",
 
   "overview.sections.events": "Eventos",
-  "overview.sections.eventsDesc": "events · local",
+  "overview.sections.eventsDesc": "eventos · local",
   "overview.sections.departures": "Despliegues",
   "overview.sections.departuresDesc": "últimos despliegues",
   "overview.sections.alerts": "Alertas",

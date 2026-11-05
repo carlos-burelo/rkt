@@ -86,7 +86,7 @@ export const create = {
   "create.track.running": "en curso",
   "create.track.ok": "ok",
   "create.track.failed": "fallido",
-  "create.track.runningHint": "Log en vivo. Se puede cerrar y seguir en Despliegues.",
+  "create.track.runningHint": "Registro en vivo. Se puede cerrar y seguir en Despliegues.",
   "create.track.okHint": "App publicada; responde HTTP.",
   "create.track.failedHint": "Despliegue fallido; revisa el log. No se publicó.",
   "create.track.waiting": "esperando salida del proceso…",

@@ -1,6 +1,6 @@
 export const ops = {
   // Logs
-  "ops.logs.title": "Logs",
+  "ops.logs.title": "Registros",
   "ops.logs.description":
     "Logs de ejecución y compilación. En vivo refresca cada 2s; Compilación muestra el último despliegue.",
   "ops.logs.level.info": "info",
@@ -19,7 +19,7 @@ export const ops = {
   "ops.logs.live": "en vivo",
   "ops.logs.reload": "recargar",
   "ops.logs.download": "descargar",
-  "ops.logs.follow": "seguir log",
+  "ops.logs.follow": "seguir registro",
   "ops.logs.visibleLines.one": "{vis} / {n} línea visible",
   "ops.logs.visibleLines.other": "{vis} / {n} líneas visibles",
   "ops.logs.activity": "Actividad 24h",
@@ -32,11 +32,11 @@ export const ops = {
   "ops.logs.lineLevel": "nivel {level}",
   "ops.logs.empty": "sin líneas para este filtro",
   "ops.logs.pickDeployment": "elige un despliegue en Despliegues",
-  "ops.logs.noLog": "sin log",
+  "ops.logs.noLog": "sin registro",
   "ops.logs.loadBuild": "cargar log de compilación",
   "ops.logs.noDeployments": "sin despliegues",
   "ops.logs.noDeploymentsApp": "sin despliegues para {app}",
-  "ops.logs.buildLog": "log de compilación",
+  "ops.logs.buildLog": "registro de compilación",
 
   // CI
   "ops.ci.title": "CI",

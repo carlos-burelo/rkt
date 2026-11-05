@@ -184,7 +184,7 @@ export const apps = {
   "apps.usage.disk": "disco del proyecto",
   "apps.usage.diskPartial": "medición parcial",
   "apps.usage.diskFull": "tamaño del directorio",
-  "apps.usage.log": "log de la app",
+  "apps.usage.log": "registro de la app",
   "apps.usage.logSub": "archivo actual",
   "apps.usage.ioRead": "i/o leído",
   "apps.usage.ioWrite": "i/o escrito",

@@ -5,7 +5,7 @@ import { rel, dur } from "../../shared/lib/time";
 import { Avatar, Dot, StateRail, StatusBadge, stateOf } from "../../shared/components/ui";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { stateLabel } from "../../shared/lib/labels";
+import { eventKindLabel, stateLabel } from "../../shared/lib/labels";
 import { Metrics } from "./Metrics";
 import { UsageStrip } from "./UsageStrip";
 import { useUI } from "../../app/ui";
@@ -102,7 +102,9 @@ function Activity({ evs }: { evs: RktEvent[] }) {
       {evs.slice(0, 8).map((e) => (
         <div key={e.id} className="grid grid-cols-[4.5rem_5rem_minmax(0,1fr)] items-baseline gap-2 px-3 py-1.5">
           <span className="tnum font-mono text-[10px] text-muted-foreground/60">{rel(e.ts)}</span>
-          <span className="truncate font-mono text-[10px] tracking-[0.06em] text-muted-foreground uppercase">{e.kind}</span>
+          <span className="truncate font-mono text-[10px] tracking-[0.06em] text-muted-foreground uppercase">
+            {eventKindLabel(e.kind)}
+          </span>
           <span className="min-w-0 truncate font-mono text-[11px] text-foreground/70">
             {e.app && <span className="text-foreground/90">{e.app}</span>} {e.msg}
           </span>

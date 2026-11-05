@@ -22,3 +22,7 @@ export function deployStateLabel(status: string): string {
 export function roleLabel(role: string): string {
   return label(role, "role");
 }
+
+export function eventKindLabel(kind: string): string {
+  return label(kind, "event");
+}

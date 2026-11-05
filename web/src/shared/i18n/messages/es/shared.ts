@@ -6,7 +6,7 @@ export const shared = {
   "shared.http.status": "HTTP {status}",
   "shared.action.appOk": "{action} · {app}: correcto",
   "shared.action.retryOk": "reintento correcto · {rev}",
-  "shared.log.none": "sin log",
+  "shared.log.none": "sin registro",
   // Paleta de comandos (CommandPalette)
   "shared.palette.aria": "paleta de comandos",
   "shared.palette.placeholder": "App, despliegue, acción…",
@@ -28,7 +28,7 @@ export const shared = {
   // Navegador de rutas (PathPicker)
   "shared.pathPicker.mode.dir": "elegir carpeta",
   "shared.pathPicker.mode.file": "elegir archivo",
-  "shared.pathPicker.title": "Rutas del host",
+  "shared.pathPicker.title": "Archivos del host",
   "shared.pathPicker.up": "subir un nivel",
   "shared.pathPicker.pathAria": "ruta",
   "shared.pathPicker.pathPlaceholder": "C:\\ruta\\exacta",

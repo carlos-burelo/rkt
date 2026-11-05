@@ -18,4 +18,14 @@ export const state = {
   "role.viewer": "lectura",
   "role.operator": "operador",
   "role.admin": "administrador",
+
+  "event.died": "caída",
+  "event.failed": "fallo",
+  "event.restarted": "reinicio",
+  "event.restart": "reinicio",
+  "event.alert": "alerta",
+  "event.discover": "descubrimiento",
+  "event.deploy": "despliegue",
+  "event.build": "compilación",
+  "event.rollback": "reversión",
 };

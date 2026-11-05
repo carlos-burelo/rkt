@@ -5,7 +5,7 @@ import { dur, rel } from "../../shared/lib/time";
 import { CopyButton } from "../../shared/components/feedback";
 import { Section, Stat, Time } from "../../shared/components/patterns";
 import { Dot } from "../../shared/components/ui";
-import { deployStateLabel } from "../../shared/lib/labels";
+import { deployStateLabel, eventKindLabel } from "../../shared/lib/labels";
 import { fetchAnalytics, Analytics } from "../overview/api";
 import { useFleet } from "../overview/hooks";
 import { useEnvCount } from "./hooks";
@@ -249,7 +249,7 @@ export function AppOverview() {
               >
                 <span className="tnum font-mono text-[10px] text-muted-foreground/60">{rel(e.ts)}</span>
                 <span className="truncate font-mono text-[10px] tracking-[0.06em] text-muted-foreground uppercase">
-                  {e.kind}
+                  {eventKindLabel(e.kind)}
                 </span>
                 <span className="min-w-0 truncate font-mono text-[11px] text-foreground/70">{e.msg}</span>
               </div>

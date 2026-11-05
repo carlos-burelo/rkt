@@ -5,7 +5,7 @@ export const serve = {
   "serve.field.hostsHint": "separados por coma",
   "serve.field.target": "destino",
   "serve.field.targetHint": "http(s)://127.0.0.1:puerto",
-  "serve.field.backend": "backend",
+  "serve.field.backend": "servicio",
   "serve.field.cert": "cert",
   "serve.field.stateShort": "est",
   "serve.field.tls": "tls",
@@ -20,7 +20,7 @@ export const serve = {
 
   // Dominios (Routes)
   "serve.routes.desc":
-    "Rutas host → backend con TLS. Editar el target recarga el proxy sin reinicio.",
+    "Rutas host → servicio con TLS. Editar el destino recarga el proxy sin reinicio.",
   "serve.routes.visitTitle": "visitar {host}",
   "serve.routes.editTitle": "Destino de {host}",
   "serve.routes.editDesc": "el proxy recarga sin reinicio · solo loopback",
@@ -77,11 +77,11 @@ export const serve = {
 
   // Proxy
   "serve.proxy.desc":
-    "Estado por ruta: dial TCP al backend y certificado ACME. Selecciona un host para filtrar. Solo lectura.",
+    "Estado por ruta: dial TCP al servicio y certificado ACME. Selecciona un host para filtrar. Solo lectura.",
   "serve.proxy.meta": "{ok}/{total} en ruta",
-  "serve.proxy.filterState": "estado del backend",
+  "serve.proxy.filterState": "estado del servicio",
   "serve.proxy.onRoute": "en ruta",
-  "serve.proxy.stranded": "sin backend",
+  "serve.proxy.stranded": "sin servicio",
   "serve.proxy.filterTls": "estado tls",
   "serve.proxy.tlsAll": "tls todo",
   "serve.proxy.withTls": "con tls",

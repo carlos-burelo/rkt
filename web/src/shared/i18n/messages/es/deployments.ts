@@ -44,11 +44,11 @@ export const deployments = {
   "deployments.lifecycle": "ciclo de vida",
   "deployments.buildSteps": "pasos de compilación",
   "deployments.noSteps": "sin pasos registrados",
-  "deployments.buildLog": "log de compilación",
+  "deployments.buildLog": "registro de compilación",
   "deployments.lines.one": "{n} línea",
   "deployments.lines.other": "{n} líneas",
   "deployments.logEmpty": "vacío",
-  "deployments.noLog": "sin log de compilación para este despliegue",
+  "deployments.noLog": "sin registro de compilación para este despliegue",
 
   "deployments.step.ok": "ok",
   "deployments.step.run": "en curso",
