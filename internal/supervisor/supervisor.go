@@ -140,7 +140,7 @@ func (m *Manager) Apply(specs []config.App, global map[string]string) {
 	}
 
 	next := make([]*app, 0, len(eff))
-	var start []*app
+	var start, stop []*app
 	for _, s := range eff {
 		old, ok := prev[s.Name]
 		if ok && specsEqual(old.cfg, s) {
@@ -148,7 +148,7 @@ func (m *Manager) Apply(specs []config.App, global map[string]string) {
 			continue
 		}
 		if ok {
-			old.stop()
+			stop = append(stop, old)
 		}
 		na := m.makeApp(s)
 		na.onEvent = m.OnEvent
@@ -157,16 +157,30 @@ func (m *Manager) Apply(specs []config.App, global map[string]string) {
 	}
 	for name, a := range prev {
 		if _, keep := want[name]; !keep {
-			a.stop()
+			stop = append(stop, a)
 		}
 	}
 	m.apps = next
 	m.mu.Unlock()
 
+	// Fuera del lock: matar procesos no debe bloquear snapshot/restart.
+	for _, a := range stop {
+		a.stop()
+	}
 	for _, a := range start {
 		a.log.Info("spec aplicada")
 		go a.loop()
 	}
+}
+
+// snapshotApps copia la lista bajo lock. m.apps se reemplaza en Apply:
+// iterar el slice vivo sin lock era una carrera real.
+func (m *Manager) snapshotApps() []*app {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]*app, len(m.apps))
+	copy(out, m.apps)
+	return out
 }
 
 // specsEqual compara lo que afecta al proceso (no metadatos de deploy).
@@ -208,7 +222,7 @@ func equalMap(a, b map[string]string) bool {
 
 // Start lanza todas en goroutines. No bloquea.
 func (m *Manager) Start() {
-	for _, a := range m.apps {
+	for _, a := range m.snapshotApps() {
 		a.onEvent = m.OnEvent
 		go a.loop()
 	}
@@ -219,7 +233,7 @@ func (m *Manager) Stop() {
 	m.mu.Lock()
 	m.stopping = true
 	m.mu.Unlock()
-	for _, a := range m.apps {
+	for _, a := range m.snapshotApps() {
 		a.stop()
 	}
 }
@@ -228,12 +242,14 @@ func (m *Manager) Stop() {
 // y salta el delay. Revive failed. False si no existe o se está parando.
 func (m *Manager) Restart(name string) bool {
 	m.mu.Lock()
-	if m.stopping {
-		m.mu.Unlock()
+	stopping := m.stopping
+	apps := make([]*app, len(m.apps))
+	copy(apps, m.apps)
+	m.mu.Unlock()
+	if stopping {
 		return false
 	}
-	m.mu.Unlock()
-	for _, a := range m.apps {
+	for _, a := range apps {
 		if a.cfg.Name != name {
 			continue
 		}
@@ -354,7 +370,7 @@ func (a *app) waitDead(d time.Duration) bool {
 // Snapshot estado actual para healthz.
 func (m *Manager) Snapshot() []Status {
 	out := []Status{}
-	for _, a := range m.apps {
+	for _, a := range m.snapshotApps() {
 		a.mu.Lock()
 		out = append(out, Status{
 			Name: a.cfg.Name, Running: a.running, Pid: a.pid,
