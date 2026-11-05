@@ -65,21 +65,21 @@ func TestSetEnvYGlobales(t *testing.T) {
 	if err := AddApp(db, validApp(t, "w", dir, "3001"), nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	cfg, dbCfg, err := LoadMerged(cfgPath)
+	_, dbCfg, err := LoadMerged(cfgPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer dbCfg.Close()
-	if err := SetGlobalEnv(db, cfg, "BASE", "https://api.test"); err != nil {
+	if err := SetGlobalEnv(db, "BASE", "https://api.test"); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetGlobalEnv(db, cfg, "", "x"); err == nil {
+	if err := SetGlobalEnv(db, "", "x"); err == nil {
 		t.Fatal("global sin clave debe fallar")
 	}
-	if err := SetEnv(db, cfg, "w", "URL", "${BASE}/v1"); err != nil {
+	if err := SetEnv(db, "w", "URL", "${BASE}/v1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetEnv(db, cfg, "nope", "K", "v"); err == nil {
+	if err := SetEnv(db, "nope", "K", "v"); err == nil {
 		t.Fatal("app inexistente debe fallar")
 	}
 	cfg2, db2, err := LoadMerged(cfgPath)
@@ -94,7 +94,7 @@ func TestSetEnvYGlobales(t *testing.T) {
 	if FindApp(cfg2, "nope") != nil {
 		t.Fatal("FindApp inexistente debe ser nil")
 	}
-	if err := UnsetGlobalEnv(db, cfg2, "BASE"); err != nil {
+	if err := UnsetGlobalEnv(db, "BASE"); err != nil {
 		t.Fatal(err)
 	}
 	cfg3, _ := Load(cfgPath)
@@ -322,7 +322,7 @@ func TestLoadMergedSnapshotYOverlayErrores(t *testing.T) {
 		t.Fatal("ApplyDev con DB cerrada debía fallar")
 	}
 	// SetGlobalEnv con DB cerrada
-	if err := SetGlobalEnv(closed, config.Default(), "K", "v"); err == nil {
+	if err := SetGlobalEnv(closed, "K", "v"); err == nil {
 		t.Fatal("SetGlobalEnv con DB cerrada debía fallar")
 	}
 }
@@ -345,7 +345,10 @@ func TestAddAppValidateRoutesYSetEnvFile(t *testing.T) {
 	defer db2.Close()
 	app := FindApp(cfg, "w")
 	app.EnvFile = filepath.Join(dir, "no.env")
-	if err := SetEnv(db2, cfg, "w", "K", "v"); err == nil {
+	if err := SaveFleet(db2, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetEnv(db2, "w", "K", "v"); err == nil {
 		t.Fatal("env_file inexistente debía fallar")
 	}
 	// env_file válido: las claves entran al scope de expansión
@@ -354,11 +357,19 @@ func TestAddAppValidateRoutesYSetEnvFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	app.EnvFile = envFile
-	if err := SetEnv(db2, cfg, "w", "K", "${FILEVAR}-mundo"); err != nil {
+	if err := SaveFleet(db2, cfg); err != nil {
 		t.Fatal(err)
 	}
-	if app.Env["K"] != "hola-mundo" {
-		t.Fatalf("expansión env_file = %q", app.Env["K"])
+	if err := SetEnv(db2, "w", "K", "${FILEVAR}-mundo"); err != nil {
+		t.Fatal(err)
+	}
+	cfg2, db3, err := LoadMerged(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db3.Close()
+	if got := FindApp(cfg2, "w").Env["K"]; got != "hola-mundo" {
+		t.Fatalf("expansión env_file = %q", got)
 	}
 }
 
@@ -471,15 +482,13 @@ func TestRamasCfgfileRestantes(t *testing.T) {
 	if err := AddApp(closed, validApp(t, "a", filepath.Join(filepath.Dir(cfgPath), "a"), "3001"), nil, ""); err == nil {
 		t.Fatal("AddApp con DB cerrada debía fallar")
 	}
-	// SetEnv con Env nil y DB cerrada (cubre init + ImportFleet)
-	cfg := &config.Config{Apps: []config.App{{Name: "a", Command: "x", Dir: t.TempDir(), RestartDelay: "5s", MinUptime: "10s"}}}
-	if err := SetEnv(closed, cfg, "a", "K", "v"); err == nil {
+	// SetEnv con DB cerrada
+	if err := SetEnv(closed, "a", "K", "v"); err == nil {
 		t.Fatal("SetEnv con DB cerrada debía fallar")
 	}
-	// SetEnv con app inválida
-	bad := &config.Config{Apps: []config.App{{Name: "b", Dir: t.TempDir()}}}
-	if err := SetEnv(db, bad, "b", "K", "v"); err == nil {
-		t.Fatal("SetEnv con app inválida debía fallar")
+	// SetEnv con app inexistente
+	if err := SetEnv(db, "b", "K", "v"); err == nil {
+		t.Fatal("SetEnv con app inexistente debía fallar")
 	}
 	// SetAppDomain con host que url.Parse no puede normalizar
 	cp := &config.Config{Apps: []config.App{{Name: "w", Env: map[string]string{"PORT": "3001"}}}}

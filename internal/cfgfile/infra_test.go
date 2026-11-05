@@ -79,16 +79,15 @@ func TestIgnoraYAMLViejo(t *testing.T) {
 func TestSetGlobalEnvPersistencia(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "rkt.dev.yaml")
 	db := openDB(t, cfgPath)
-	cfg, err := LoadBase(db, cfgPath)
-	if err != nil {
+	if _, err := LoadBase(db, cfgPath); err != nil {
 		t.Fatal(err)
 	}
 	// expansión: B referencia a A, A referencia el entorno del servicio
 	t.Setenv("RKT_TEST_BASE", "base")
-	if err := SetGlobalEnv(db, cfg, "A", "${RKT_TEST_BASE}-a"); err != nil {
+	if err := SetGlobalEnv(db, "A", "${RKT_TEST_BASE}-a"); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetGlobalEnv(db, cfg, "B", "${A}-b"); err != nil {
+	if err := SetGlobalEnv(db, "B", "${A}-b"); err != nil {
 		t.Fatal(err)
 	}
 	reload, err := LoadBase(db, cfgPath)
@@ -98,7 +97,7 @@ func TestSetGlobalEnvPersistencia(t *testing.T) {
 	if reload.GlobalEnv["A"] != "base-a" || reload.GlobalEnv["B"] != "base-a-b" {
 		t.Fatalf("globales = %+v", reload.GlobalEnv)
 	}
-	if err := UnsetGlobalEnv(db, reload, "A"); err != nil {
+	if err := UnsetGlobalEnv(db, "A"); err != nil {
 		t.Fatal(err)
 	}
 	reload, err = LoadBase(db, cfgPath)

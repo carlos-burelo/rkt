@@ -4,6 +4,7 @@
 package discover
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -183,21 +184,25 @@ func register(d Deps, owner, repo, branch, tok string) error {
 			app.Args = plan.Start[1:]
 		}
 	}
-	// App + ruta se guardan juntas: un fallo de ruta no deja app huérfana.
-	fleet, err := d.DB.LoadFleet()
-	if err != nil {
-		return err
-	}
-	fleet.Apps = append(fleet.Apps, app)
-	fleet.Routes = append(fleet.Routes, config.Route{
-		Hosts: []string{domain}, Target: fmt.Sprintf("http://127.0.0.1:%d", port),
+	// App + ruta se guardan juntas y bajo lock de escritura: un fallo de
+	// ruta no deja app huérfana y dos pasadas no se pisan.
+	err = d.DB.WithTx(context.Background(), func(tx *store.Tx) error {
+		fleet, err := tx.LoadFleet()
+		if err != nil {
+			return err
+		}
+		fleet.Apps = append(fleet.Apps, app)
+		fleet.Routes = append(fleet.Routes, config.Route{
+			Hosts: []string{domain}, Target: fmt.Sprintf("http://127.0.0.1:%d", port),
+		})
+		cfg := &config.Config{Apps: fleet.Apps, Routes: fleet.Routes}
+		cfg.ApplyDefaults()
+		if err := cfg.Validate(); err != nil {
+			return err
+		}
+		return tx.ImportFleet(cfg)
 	})
-	cfg := &config.Config{Apps: fleet.Apps, Routes: fleet.Routes}
-	cfg.ApplyDefaults()
-	if err := cfg.Validate(); err != nil {
-		return err
-	}
-	if err := d.DB.ImportFleet(cfg); err != nil {
+	if err != nil {
 		return err
 	}
 	d.Log.Info("app auto-registrada", "app", name, "domain", domain, "port", port)

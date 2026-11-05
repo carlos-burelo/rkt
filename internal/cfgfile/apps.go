@@ -33,19 +33,25 @@ func CreateAndAdd(db *store.DB, gh *github.Manager, runtime, repo, name, domain 
 	if err != nil {
 		return config.App{}, nil, "", err
 	}
-	if err := AddApp(db, app, domains, portS); err != nil {
+	if _, err := MutateFleet(db, func(cp *config.Config) error {
+		return AddAppConfig(cp, app, domains, portS)
+	}); err != nil {
 		return config.App{}, nil, "", err
 	}
 	return app, domains, portS, nil
 }
 
-// AddApp valida y persiste app+routes.
+// AddApp valida y persiste app+routes en una transacción.
 func AddApp(db *store.DB, app config.App, domains []string, port string) error {
-	fleet, err := db.LoadFleet()
-	if err != nil {
-		return err
-	}
-	for _, a := range fleet.Apps {
+	_, err := MutateFleet(db, func(cfg *config.Config) error {
+		return AddAppConfig(cfg, app, domains, port)
+	})
+	return err
+}
+
+// AddAppConfig valida y agrega app+rutas sobre la copia, sin persistir.
+func AddAppConfig(cfg *config.Config, app config.App, domains []string, port string) error {
+	for _, a := range cfg.Apps {
 		if a.Name == app.Name {
 			return fmt.Errorf("apps: %q ya existe", app.Name)
 		}
@@ -62,10 +68,10 @@ func AddApp(db *store.DB, app config.App, domains []string, port string) error {
 	if app.Runtime == "" {
 		app.Runtime = config.RuntimeManaged
 	}
-	if err := app.ValidateApp(len(fleet.Apps)); err != nil {
+	if err := app.ValidateApp(len(cfg.Apps)); err != nil {
 		return fmt.Errorf("inválido, no guardado: %w", err)
 	}
-	routes := fleet.Routes
+	routes := cfg.Routes
 	for _, h := range domains {
 		if port == "" {
 			return fmt.Errorf("domain sin port")
@@ -77,24 +83,17 @@ func AddApp(db *store.DB, app config.App, domains []string, port string) error {
 	if err := config.ValidateRoutes(routes); err != nil {
 		return fmt.Errorf("inválido, no guardado: %w", err)
 	}
-	fleet.Apps = append(fleet.Apps, app)
-	fleet.Routes = routes
-	return db.ImportFleet(fleetToConfig(fleet))
+	cfg.Apps = append(cfg.Apps, app)
+	cfg.Routes = routes
+	return nil
 }
 
-// fleetToConfig arma Config válida desde flota (ya validada por partes).
-func fleetToConfig(fleet *store.FleetData) *config.Config {
-	cfg := &config.Config{Apps: fleet.Apps, Routes: fleet.Routes}
-	cfg.ApplyDefaults()
-	return cfg
-}
-
-// SetEnv escribe var expandida en la app y persiste.
-func SetEnv(db *store.DB, cfg *config.Config, appName, key, rawVal string) error {
-	if err := SetEnvValue(cfg, appName, key, rawVal); err != nil {
-		return err
-	}
-	return db.ImportFleet(cfg)
+// SetEnv escribe var expandida en la app (transaccional).
+func SetEnv(db *store.DB, appName, key, rawVal string) error {
+	_, err := MutateFleet(db, func(cfg *config.Config) error {
+		return SetEnvValue(cfg, appName, key, rawVal)
+	})
+	return err
 }
 
 // SetEnvValue expande y aplica la variable sobre la copia, sin persistir.
@@ -137,12 +136,12 @@ func SetEnvValue(cfg *config.Config, appName, key, rawVal string) error {
 	return nil
 }
 
-// SetGlobalEnv escribe una global expandida y persiste la infra.
-func SetGlobalEnv(db *store.DB, cfg *config.Config, key, rawVal string) error {
-	if err := SetGlobalEnvValue(cfg, key, rawVal); err != nil {
-		return err
-	}
-	return SaveInfra(db, cfg)
+// SetGlobalEnv escribe una global expandida (transaccional).
+func SetGlobalEnv(db *store.DB, key, rawVal string) error {
+	_, err := MutateInfra(db, func(cfg *config.Config) error {
+		return SetGlobalEnvValue(cfg, key, rawVal)
+	})
+	return err
 }
 
 // SetGlobalEnvValue expande y aplica una global sin persistir.
@@ -163,10 +162,13 @@ func SetGlobalEnvValue(cfg *config.Config, key, rawVal string) error {
 	return nil
 }
 
-// UnsetGlobalEnv borra una global y persiste la infra.
-func UnsetGlobalEnv(db *store.DB, cfg *config.Config, key string) error {
-	UnsetGlobalEnvValue(cfg, key)
-	return SaveInfra(db, cfg)
+// UnsetGlobalEnv borra una global (transaccional).
+func UnsetGlobalEnv(db *store.DB, key string) error {
+	_, err := MutateInfra(db, func(cfg *config.Config) error {
+		UnsetGlobalEnvValue(cfg, key)
+		return nil
+	})
+	return err
 }
 
 // UnsetGlobalEnvValue borra una global sin persistir.

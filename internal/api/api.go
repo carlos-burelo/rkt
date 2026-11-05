@@ -61,11 +61,8 @@ type Deps struct {
 func (d *Deps) mutateFleet(apply bool, fn func(*config.Config) error) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	cp := d.Live.Get().Clone()
-	if err := fn(cp); err != nil {
-		return err
-	}
-	if err := cfgfile.SaveFleet(d.DB, cp); err != nil {
+	cp, err := cfgfile.MutateFleet(d.DB, fn)
+	if err != nil {
 		return err
 	}
 	d.Live.Swap(cp)
@@ -80,11 +77,8 @@ func (d *Deps) mutateFleet(apply bool, fn func(*config.Config) error) error {
 func (d *Deps) mutateInfra(apply bool, fn func(*config.Config) error) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	cp := d.Live.Get().Clone()
-	if err := fn(cp); err != nil {
-		return err
-	}
-	if err := cfgfile.SaveInfra(d.DB, cp); err != nil {
+	cp, err := cfgfile.MutateInfra(d.DB, fn)
+	if err != nil {
 		return err
 	}
 	d.Live.Swap(cp)

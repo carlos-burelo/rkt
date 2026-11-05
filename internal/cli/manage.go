@@ -67,12 +67,6 @@ func merged(cfgPath string) (*config.Config, *store.DB) {
 	return cfg, db
 }
 
-func persist(cfgPath string, db *store.DB, cfg *config.Config) {
-	if err := cfgfile.SaveFleet(db, cfg); err != nil {
-		log.Fatalf("guardar: %v", err)
-	}
-}
-
 // prompt pregunta en terminal (Enter = default). Sin stdin, default.
 func prompt(label, def string) string {
 	fmt.Printf("%s [%s]: ", label, def)
@@ -266,13 +260,16 @@ func cmdApps(args []string, cfgPath string) {
 		if len(args) != 2 || args[1] == "" {
 			log.Fatal("uso: apps rm <name>")
 		}
-		cfg, db := merged(cfgPath)
+		_, db := merged(cfgPath)
 		defer db.Close()
-		dropped, err := cfgfile.RemoveApp(cfg, args[1], false)
-		if err != nil {
+		dropped := 0
+		if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
+			n, err := cfgfile.RemoveApp(cp, args[1], false)
+			dropped = n
+			return err
+		}); err != nil {
 			log.Fatalf("apps: %v", err)
 		}
-		persist(cfgPath, db, cfg)
 		fmt.Printf("app %s eliminada de DB (restart requerido), %d rutas retiradas\n", args[1], dropped)
 	default:
 		log.Fatalf("apps: subcomando %q (list|add|rm)", args[0])
@@ -513,27 +510,31 @@ func cmdRoutes(args []string, cfgPath string) {
 		if len(hosts) == 0 || *target == "" {
 			log.Fatal("routes add requiere --host (repetible) y --target")
 		}
-		cfg, db := merged(cfgPath)
+		_, db := merged(cfgPath)
 		defer db.Close()
-		if err := cfgfile.AddRoute(cfg, hosts, *target); err != nil {
+		if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
+			return cfgfile.AddRoute(cp, hosts, *target)
+		}); err != nil {
 			log.Fatalf("routes add: %v", err)
 		}
-		persist(cfgPath, db, cfg)
 		fmt.Printf("route %s -> %s (hot-reload la aplica)\n", hosts, *target)
 	case "rm":
 		if len(args) != 2 || args[1] == "" {
 			log.Fatal("uso: routes rm <host>")
 		}
-		cfg, db := merged(cfgPath)
+		_, db := merged(cfgPath)
 		defer db.Close()
-		removed, err := cfgfile.RemoveRouteHost(cfg, args[1])
-		if err != nil {
+		removed := false
+		if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
+			ok, err := cfgfile.RemoveRouteHost(cp, args[1])
+			removed = ok
+			return err
+		}); err != nil {
 			log.Fatalf("routes rm: %v", err)
 		}
 		if !removed {
 			log.Fatalf("routes: host %q no encontrado", args[1])
 		}
-		persist(cfgPath, db, cfg)
 		fmt.Printf("host %s eliminado (hot-reload)\n", args[1])
 	default:
 		log.Fatalf("routes: subcomando %q (list|add|rm)", args[0])
@@ -567,9 +568,9 @@ func cmdEnv(args []string, cfgPath string) {
 		if !ok || strings.TrimSpace(k) == "" {
 			log.Fatalf("env set: %q no es CLAVE=valor", args[2])
 		}
-		cfg, db := merged(cfgPath)
+		_, db := merged(cfgPath)
 		defer db.Close()
-		if err := cfgfile.SetEnv(db, cfg, args[1], strings.TrimSpace(k), v); err != nil {
+		if err := cfgfile.SetEnv(db, args[1], strings.TrimSpace(k), v); err != nil {
 			log.Fatalf("env set: %v", err)
 		}
 		fmt.Printf("%s=%s (restart requerido)\n", strings.TrimSpace(k), v)
@@ -577,12 +578,13 @@ func cmdEnv(args []string, cfgPath string) {
 		if len(args) != 3 {
 			log.Fatal("uso: env unset <app> CLAVE")
 		}
-		cfg, db := merged(cfgPath)
+		_, db := merged(cfgPath)
 		defer db.Close()
-		if err := cfgfile.UnsetEnv(cfg, args[1], args[2]); err != nil {
+		if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
+			return cfgfile.UnsetEnv(cp, args[1], args[2])
+		}); err != nil {
 			log.Fatalf("env unset: %v", err)
 		}
-		persist(cfgPath, db, cfg)
 		fmt.Printf("%s eliminada (restart requerido)\n", args[2])
 	case "global":
 		cfg, db := merged(cfgPath)
@@ -611,7 +613,7 @@ func cmdEnv(args []string, cfgPath string) {
 			if !ok || strings.TrimSpace(k) == "" {
 				log.Fatalf("env global set: %q no es CLAVE=valor", args[2])
 			}
-			if err := cfgfile.SetGlobalEnv(db, cfg, strings.TrimSpace(k), v); err != nil {
+			if err := cfgfile.SetGlobalEnv(db, strings.TrimSpace(k), v); err != nil {
 				log.Fatalf("env global set: %v", err)
 			}
 			fmt.Printf("%s=%s global (las apps la heredan al reiniciar)\n", strings.TrimSpace(k), v)
@@ -619,7 +621,7 @@ func cmdEnv(args []string, cfgPath string) {
 			if len(args) != 3 {
 				log.Fatal("uso: env global unset CLAVE")
 			}
-			if err := cfgfile.UnsetGlobalEnv(db, cfg, args[2]); err != nil {
+			if err := cfgfile.UnsetGlobalEnv(db, args[2]); err != nil {
 				log.Fatalf("env global unset: %v", err)
 			}
 			fmt.Printf("%s global eliminada\n", args[2])
@@ -637,14 +639,6 @@ func findApp(cfg *config.Config, name string) config.App {
 	}
 	log.Fatalf("app %q inexistente", name)
 	return config.App{}
-}
-
-func findAppPtr(cfg *config.Config, name string) *config.App {
-	if a := cfgfile.FindApp(cfg, name); a != nil {
-		return a
-	}
-	log.Fatalf("app %q inexistente", name)
-	return nil
 }
 
 func cmdSettings(args []string, cfgPath string) {
@@ -732,16 +726,8 @@ func cmdImport(args []string, cfgPath string) {
 		log.Fatalf("import: %v", err)
 	}
 	defer db.Close()
-	if err := db.ImportFleet(cfg); err != nil {
+	if err := cfgfile.ReplaceAll(db, cfg, settings); err != nil {
 		log.Fatalf("import: %v", err)
-	}
-	if err := cfgfile.SaveInfra(db, cfg); err != nil {
-		log.Fatalf("import: %v", err)
-	}
-	for k, v := range settings {
-		if err := db.SetSetting(k, v); err != nil {
-			log.Fatalf("import: %v", err)
-		}
 	}
 	fmt.Println("flota importada (restart requerido para apps)")
 }

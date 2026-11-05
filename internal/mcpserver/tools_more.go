@@ -147,20 +147,21 @@ func (s *Server) doAppEnvKeys(app string) (string, error) {
 }
 
 func (s *Server) doEnvDelete(a envDelArg) (string, error) {
-	cfg, db, err := s.load()
+	_, db, err := s.load()
 	if err != nil {
 		return "", err
 	}
 	defer db.Close()
-	app := cfgfile.FindApp(cfg, a.App)
-	if app == nil {
-		return "", fmt.Errorf("app %q inexistente", a.App)
-	}
-	if _, ok := app.Env[a.Key]; !ok {
-		return "", fmt.Errorf("%s no tiene %s", a.App, a.Key)
-	}
-	delete(app.Env, a.Key)
-	if err := cfgfile.SaveFleet(db, cfg); err != nil {
+	if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
+		app := cfgfile.FindApp(cp, a.App)
+		if app == nil {
+			return fmt.Errorf("app %q inexistente", a.App)
+		}
+		if _, ok := app.Env[a.Key]; !ok {
+			return fmt.Errorf("%s no tiene %s", a.App, a.Key)
+		}
+		return cfgfile.UnsetEnv(cp, a.App, a.Key)
+	}); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s: %s borrada (aplica en ≤10s)", a.App, a.Key), nil
@@ -188,27 +189,30 @@ func (s *Server) doEnvGlobalList(a envGlobalListArg) (string, error) {
 }
 
 func (s *Server) doEnvGlobalSet(a envGlobalArg) (string, error) {
-	cfg, db, err := s.load()
+	_, db, err := s.load()
 	if err != nil {
 		return "", err
 	}
 	defer db.Close()
-	if err := cfgfile.SetGlobalEnv(db, cfg, a.Key, a.Value); err != nil {
+	if err := cfgfile.SetGlobalEnv(db, a.Key, a.Value); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("global %s guardada (las apps la heredan al reiniciar)", a.Key), nil
 }
 
 func (s *Server) doEnvGlobalDelete(a envGlobalArg) (string, error) {
-	cfg, db, err := s.load()
+	_, db, err := s.load()
 	if err != nil {
 		return "", err
 	}
 	defer db.Close()
-	if _, ok := cfg.GlobalEnv[a.Key]; !ok {
-		return "", fmt.Errorf("no existe la global %s", a.Key)
-	}
-	if err := cfgfile.UnsetGlobalEnv(db, cfg, a.Key); err != nil {
+	if _, err := cfgfile.MutateInfra(db, func(cp *config.Config) error {
+		if _, ok := cp.GlobalEnv[a.Key]; !ok {
+			return fmt.Errorf("no existe la global %s", a.Key)
+		}
+		cfgfile.UnsetGlobalEnvValue(cp, a.Key)
+		return nil
+	}); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("global %s eliminada", a.Key), nil
@@ -218,26 +222,14 @@ func (s *Server) doRoutesAdd(a routesAddArg) (string, error) {
 	if len(a.Hosts) == 0 || a.Target == "" {
 		return "", fmt.Errorf("faltan hosts/target")
 	}
-	r := config.Route{Hosts: a.Hosts, Target: a.Target}
-	if err := r.Resolve(); err != nil {
-		return "", err
-	}
-	cfg, db, err := s.load()
+	_, db, err := s.load()
 	if err != nil {
 		return "", err
 	}
 	defer db.Close()
-	for _, h := range a.Hosts {
-		for _, existing := range cfg.Routes {
-			for _, eh := range existing.Hosts {
-				if strings.EqualFold(eh, h) {
-					return "", fmt.Errorf("host %q ya existe (routes_update)", h)
-				}
-			}
-		}
-	}
-	cfg.Routes = append(cfg.Routes, r)
-	if err := cfgfile.SaveFleet(db, cfg); err != nil {
+	if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
+		return cfgfile.AddRoute(cp, a.Hosts, a.Target)
+	}); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("ruta %s → %s creada", strings.Join(a.Hosts, ","), a.Target), nil
@@ -247,56 +239,41 @@ func (s *Server) doRoutesUpdate(a routesUpdateArg) (string, error) {
 	if a.Host == "" || a.Target == "" {
 		return "", fmt.Errorf("faltan host/target")
 	}
-	cfg, db, err := s.load()
-	if err != nil {
-		return "", err
-	}
-	defer db.Close()
-	for i := range cfg.Routes {
-		for _, h := range cfg.Routes[i].Hosts {
-			if strings.EqualFold(h, a.Host) {
-				cfg.Routes[i].Target = a.Target
-				if err := cfg.Routes[i].Resolve(); err != nil {
-					return "", err
-				}
-				if err := cfgfile.SaveFleet(db, cfg); err != nil {
-					return "", err
-				}
-				return fmt.Sprintf("ruta %s → %s", a.Host, a.Target), nil
-			}
-		}
-	}
-	return "", fmt.Errorf("host %q no existe", a.Host)
-}
-
-func (s *Server) doRoutesRemove(a hostArg) (string, error) {
-	cfg, db, err := s.load()
+	_, db, err := s.load()
 	if err != nil {
 		return "", err
 	}
 	defer db.Close()
 	found := false
-	routes := cfg.Routes[:0]
-	for _, r := range cfg.Routes {
-		hosts := r.Hosts[:0]
-		for _, h := range r.Hosts {
-			if strings.EqualFold(h, a.Host) {
-				found = true
-				continue
-			}
-			hosts = append(hosts, h)
-		}
-		if len(hosts) > 0 {
-			r.Hosts = hosts
-			routes = append(routes, r)
-		}
+	if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
+		ok, err := cfgfile.SetRouteTarget(cp, a.Host, a.Target)
+		found = ok
+		return err
+	}); err != nil {
+		return "", err
 	}
 	if !found {
 		return "", fmt.Errorf("host %q no existe", a.Host)
 	}
-	cfg.Routes = routes
-	if err := cfgfile.SaveFleet(db, cfg); err != nil {
+	return fmt.Sprintf("ruta %s → %s", a.Host, a.Target), nil
+}
+
+func (s *Server) doRoutesRemove(a hostArg) (string, error) {
+	_, db, err := s.load()
+	if err != nil {
 		return "", err
+	}
+	defer db.Close()
+	removed := false
+	if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
+		ok, err := cfgfile.RemoveRouteHost(cp, a.Host)
+		removed = ok
+		return err
+	}); err != nil {
+		return "", err
+	}
+	if !removed {
+		return "", fmt.Errorf("host %q no existe", a.Host)
 	}
 	return fmt.Sprintf("host %s quitado", a.Host), nil
 }
@@ -869,16 +846,8 @@ func (s *Server) doConfigImport(a importArg) (string, error) {
 			}
 		}
 	}
-	if err := cfgfile.SaveInfra(db, cfg); err != nil {
+	if err := cfgfile.ReplaceAll(db, cfg, settings); err != nil {
 		return "", err
-	}
-	if err := cfgfile.SaveFleet(db, cfg); err != nil {
-		return "", err
-	}
-	for k, v := range settings {
-		if err := db.SetSetting(k, v); err != nil {
-			return "", err
-		}
 	}
 	return fmt.Sprintf("config reemplazada: %d apps, %d rutas", len(cfg.Apps), len(cfg.Routes)), nil
 }

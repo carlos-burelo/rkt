@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
@@ -42,6 +43,10 @@ func testDeps(t *testing.T) (Deps, *store.DB, func()) {
 	}
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	// La DB es la fuente de verdad: Live y DB deben empezar iguales.
+	if err := cfgfile.SaveFleet(db, cfg); err != nil {
 		t.Fatal(err)
 	}
 	d := Deps{

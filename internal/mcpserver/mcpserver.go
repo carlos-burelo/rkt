@@ -358,12 +358,12 @@ func (s *Server) doEnvSet(app, key, value string) (string, error) {
 	if app == "" || key == "" {
 		return "", fmt.Errorf("faltan app/key")
 	}
-	cfg, db, err := cfgfile.LoadMerged(s.cfgPath)
+	_, db, err := cfgfile.LoadMerged(s.cfgPath)
 	if err != nil {
 		return "", err
 	}
 	defer db.Close()
-	if err := cfgfile.SetEnv(db, cfg, app, key, value); err != nil {
+	if err := cfgfile.SetEnv(db, app, key, value); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s: %s guardada (reinicia para aplicar)", app, key), nil
@@ -527,7 +527,7 @@ func (s *Server) doAppUpdate(a appUpdateArg) (string, error) {
 	if a.App == "" {
 		return "", fmt.Errorf("falta app")
 	}
-	cfg, db, err := cfgfile.LoadMerged(s.cfgPath)
+	_, db, err := cfgfile.LoadMerged(s.cfgPath)
 	if err != nil {
 		return "", err
 	}
@@ -537,10 +537,9 @@ func (s *Server) doAppUpdate(a appUpdateArg) (string, error) {
 		EnvFile: a.EnvFile, MemoryMB: a.MemoryMB, MinUptime: a.MinUptime,
 		Port: a.Port, Domain: a.Domain,
 	}
-	if err := cfgfile.UpdateApp(cfg, a.App, patch); err != nil {
-		return "", err
-	}
-	if err := cfgfile.SaveFleet(db, cfg); err != nil {
+	if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
+		return cfgfile.UpdateApp(cp, a.App, patch)
+	}); err != nil {
 		return "", err
 	}
 	return "manifiesto actualizado (el servicio lo aplica en ≤10s)", nil
@@ -552,16 +551,17 @@ func (s *Server) doAppsRemove(a removeAppArg) (string, error) {
 	if a.App == "" {
 		return "", fmt.Errorf("falta app")
 	}
-	cfg, db, err := cfgfile.LoadMerged(s.cfgPath)
+	_, db, err := cfgfile.LoadMerged(s.cfgPath)
 	if err != nil {
 		return "", err
 	}
 	defer db.Close()
-	routesDropped, err := cfgfile.RemoveApp(cfg, a.App, a.KeepRoutes)
-	if err != nil {
-		return "", err
-	}
-	if err := cfgfile.SaveFleet(db, cfg); err != nil {
+	routesDropped := 0
+	if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
+		n, err := cfgfile.RemoveApp(cp, a.App, a.KeepRoutes)
+		routesDropped = n
+		return err
+	}); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("app %s borrada (%d rutas)", a.App, routesDropped), nil
