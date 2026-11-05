@@ -5,9 +5,13 @@ package cronjobs
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -239,24 +243,65 @@ func (r *Runner) run(appName, jobName string, runID int64, trigger string) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	runCmd := platform.ShellContext(ctx, job.Command)
-	runCmd.Dir = app.Dir
-	runCmd.Env = dotenv.EnvironList(env)
-	runCmd.Stdout = out
-	runCmd.Stderr = out
-	err = runCmd.Run()
 	status, exitCode := "ok", 0
-	if err != nil {
-		status = "failed"
-		if ee, ok := err.(interface{ ExitCode() int }); ok {
-			exitCode = ee.ExitCode()
+	switch job.Kind() {
+	case config.CronCommand:
+		runCmd := platform.ShellContext(ctx, job.Command)
+		runCmd.Dir = app.Dir
+		runCmd.Env = dotenv.EnvironList(env)
+		runCmd.Stdout = out
+		runCmd.Stderr = out
+		err = runCmd.Run()
+		if err != nil {
+			status, exitCode = "failed", 1
+			if ee, ok := err.(interface{ ExitCode() int }); ok {
+				exitCode = ee.ExitCode()
+			}
+			if ctx.Err() == context.DeadlineExceeded {
+				status, exitCode = "timeout", -1
+			}
+			fmt.Fprintf(out, "✘ %v\n", err)
 		}
-		if ctx.Err() == context.DeadlineExceeded {
-			status = "timeout"
-			exitCode = -1
+	case config.CronHTTP:
+		target, err := httpTarget(env, job.Path)
+		if err != nil {
+			status, exitCode = "failed", 1
+			fmt.Fprintf(out, "✘ %v\n", err)
+			break
 		}
-		fmt.Fprintf(out, "✘ %v\n", err)
-	} else {
+		method := job.HTTPMethod()
+		fmt.Fprintf(out, "→ %s %s\n", method, target)
+		req, err := http.NewRequestWithContext(ctx, method, target, nil)
+		if err != nil {
+			status, exitCode = "failed", 1
+			fmt.Fprintf(out, "✘ %v\n", err)
+			break
+		}
+		resp, err := cronHTTPClient.Do(req)
+		if err != nil {
+			status, exitCode = "failed", 1
+			if ctx.Err() == context.DeadlineExceeded {
+				status, exitCode = "timeout", -1
+			}
+			fmt.Fprintf(out, "✘ %v\n", err)
+			break
+		}
+		fmt.Fprintf(out, "← %s (%s)\n", resp.Status, time.Since(start).Round(time.Millisecond))
+		_, readErr := io.Copy(out, io.LimitReader(resp.Body, 64<<10))
+		_ = resp.Body.Close()
+		fmt.Fprintln(out)
+		if readErr != nil && ctx.Err() == context.DeadlineExceeded {
+			status, exitCode = "timeout", -1
+			fmt.Fprintf(out, "✘ %v\n", readErr)
+		} else if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			status, exitCode = "failed", 1
+			fmt.Fprintf(out, "✘ HTTP %s\n", resp.Status)
+		}
+	default:
+		status, exitCode = "failed", 1
+		fmt.Fprintf(out, "✘ tipo de tarea inválido %q\n", job.Type)
+	}
+	if status == "ok" {
 		fmt.Fprintln(out, "✔ ok")
 	}
 	msg := ""
@@ -267,6 +312,21 @@ func (r *Runner) run(appName, jobName string, runID int64, trigger string) {
 		r.log.Warn("cron historial", "err", err)
 	}
 	r.log.Info("cron ejecutado", "app", appName, "job", jobName, "status", status, "dur", time.Since(start).String())
+}
+
+// cronHTTPClient evita proxies del entorno para hablar con el puerto local.
+var cronHTTPClient = &http.Client{Transport: &http.Transport{Proxy: nil}}
+
+func httpTarget(env map[string]string, path string) (string, error) {
+	port := strings.TrimSpace(env["PORT"])
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return "", fmt.Errorf("app sin puerto HTTP válido (PORT=%q)", port)
+	}
+	if !strings.HasPrefix(path, "/") {
+		return "", fmt.Errorf("ruta HTTP inválida %q", path)
+	}
+	return "http://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(n)) + path, nil
 }
 
 func splitKey(key string) (string, string) {

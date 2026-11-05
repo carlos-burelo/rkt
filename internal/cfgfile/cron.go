@@ -17,7 +17,16 @@ func SetCronJob(cp *config.Config, appName string, job config.CronJob) error {
 	}
 	job.Name = strings.ToLower(strings.TrimSpace(job.Name))
 	job.Schedule = strings.TrimSpace(job.Schedule)
+	job.Type = strings.ToLower(strings.TrimSpace(job.Type))
+	if job.Type == "" {
+		job.Type = config.CronCommand
+	}
 	job.Command = strings.TrimSpace(job.Command)
+	job.Path = strings.TrimSpace(job.Path)
+	job.Method = strings.ToUpper(strings.TrimSpace(job.Method))
+	if job.Type == config.CronHTTP && job.Method == "" {
+		job.Method = "GET"
+	}
 	job.Timeout = strings.TrimSpace(job.Timeout)
 	found := false
 	for i := range app.Cron {

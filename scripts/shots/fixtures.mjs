@@ -205,17 +205,17 @@ export const serverProcs = [
 
 export const cronJobs = [
   {
-    app: "tienda", job: "limpieza", schedule: "*/15 * * * *", command: "pnpm run cleanup",
+    app: "tienda", job: "limpieza", schedule: "*/15 * * * *", type: "command", command: "pnpm run cleanup",
     timeout: "5m", disabled: false, running: false, next: iso(-12),
     last: { status: "ok", started_at: iso(7), finished_at: iso(6), exit_code: 0, message: "" },
   },
   {
-    app: "api", job: "respaldo", schedule: "0 3 * * *", command: "pnpm run backup",
+    app: "api", job: "respaldo", schedule: "0 3 * * *", type: "http", path: "/api/cron/backup", method: "POST",
     timeout: "20m", disabled: false, running: true, next: iso(-300),
     last: { status: "running", started_at: iso(1), finished_at: "", exit_code: 0, message: "" },
   },
   {
-    app: "facturacion", job: "cierre", schedule: "0 0 1 * *", command: "python -u cierre.py",
+    app: "facturacion", job: "cierre", schedule: "0 0 1 * *", type: "command", command: "python -u cierre.py",
     timeout: "30m", disabled: true, running: false, next: "",
     last: { status: "failed", started_at: iso(60 * 24 * 3), finished_at: iso(60 * 24 * 3), exit_code: 1, message: "exit 1" },
   },

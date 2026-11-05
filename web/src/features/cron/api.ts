@@ -12,11 +12,16 @@ export interface CronRun {
   message: string;
 }
 
+export type CronType = "command" | "http";
+
 export interface CronJob {
   app: string;
   job: string;
   schedule: string;
-  command: string;
+  type: CronType;
+  command?: string;
+  path?: string;
+  method?: string;
   timeout?: string;
   disabled: boolean;
   running: boolean;
@@ -32,7 +37,10 @@ export interface CronJob {
 
 export interface CronIn {
   schedule: string;
-  command: string;
+  type: CronType;
+  command?: string;
+  path?: string;
+  method?: string;
   timeout?: string;
   disabled?: boolean;
 }

@@ -1,7 +1,7 @@
 export const cron = {
   "nav.cron": "Tareas",
   "cron.description":
-    "Tareas programadas por app. Se ejecutan en su directorio con el entorno de la app y quedan en el historial.",
+    "Tareas programadas por app: comando en su directorio o petición HTTP a su puerto local. Quedan en el historial.",
   "cron.count.one": "{n} tarea",
   "cron.count.other": "{n} tareas",
   "cron.new": "nueva tarea",
@@ -19,6 +19,13 @@ export const cron = {
   "cron.timeout": "timeout",
   "cron.timeoutHint": "1s..1h · default 10m",
   "cron.disabled": "tarea desactivada",
+  "cron.type": "tipo",
+  "cron.typeHint": "comando en la app o petición a su puerto local",
+  "cron.typeCommand": "comando",
+  "cron.typeHttp": "HTTP",
+  "cron.path": "ruta",
+  "cron.pathHint": "endpoint de la app que ya está corriendo",
+  "cron.method": "método",
   "cron.disabledShort": "off",
   "cron.saved": "tarea guardada",
   "cron.total": "tareas",

@@ -38,4 +38,27 @@ func TestCronJobValida(t *testing.T) {
 	if ValidCronName("BAd") || !ValidCronName("backup-1") {
 		t.Fatal("ValidCronName")
 	}
+	if (CronJob{}).Kind() != CronCommand || (CronJob{Type: "HTTP"}).Kind() != CronHTTP {
+		t.Fatal("Kind")
+	}
+	if got := (CronJob{Type: CronHTTP}).HTTPMethod(); got != "GET" {
+		t.Fatalf("método default = %q", got)
+	}
+	app.Cron = []CronJob{{Name: "ping", Schedule: "* * * * *", Type: CronHTTP, Path: "/health", Method: "POST"}}
+	if err := app.ValidateApp(0); err != nil {
+		t.Fatalf("http válido: %v", err)
+	}
+	for _, job := range []CronJob{
+		{Name: "ping", Schedule: "* * * * *", Type: CronHTTP, Path: ""},
+		{Name: "ping", Schedule: "* * * * *", Type: CronHTTP, Path: "http://otro"},
+		{Name: "ping", Schedule: "* * * * *", Type: CronHTTP, Path: "/x", Method: "DELETE"},
+		{Name: "ping", Schedule: "* * * * *", Type: CronHTTP, Path: "/x", Command: "echo"},
+		{Name: "ping", Schedule: "* * * * *", Type: "otro", Command: "echo"},
+		{Name: "ping", Schedule: "* * * * *", Type: CronCommand, Command: "echo", Path: "/x"},
+	} {
+		app.Cron = []CronJob{job}
+		if err := app.ValidateApp(0); err == nil {
+			t.Fatalf("cron inválido aceptado: %+v", job)
+		}
+	}
 }

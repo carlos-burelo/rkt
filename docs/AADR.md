@@ -361,14 +361,17 @@ una app, pero rkt es una instancia única. Un scheduler global con agentes
 duplicaría el modelo.
 
 **Decisión.** Cada app declara `cron[]` en su manifiesto. El runner vive en el
-servicio, reconcilia contra la config viva y ejecuta con el shell en el
-directorio de la app, con `global_env` + env propio y timeout. Cada ejecución
-queda en `cron_runs` y en un log propio. Una tarea no arranca si la app está
-detenida ni si la ejecución anterior sigue viva.
+servicio, reconcilia contra la config viva y ejecuta dos tipos: `command` con el
+shell en el directorio de la app, o `http` contra el puerto local de la app
+(GET/POST a una ruta). Ambos usan `global_env` + env propio y timeout. Cada
+ejecución queda en `cron_runs` y en un log propio. Una tarea no arranca si la
+app está detenida ni si la ejecución anterior sigue viva.
 
 **Consecuencias.**
 
 - CRUD en `/api/v1/cron`, historial y log por ejecución.
+- `http` permite programar endpoints de apps sin inventar comandos; solo llama
+  a `127.0.0.1:<PORT>`, nunca a una URL arbitraria.
 - El scheduler reacciona a cambios de flota sin reiniciar el servicio.
 - Sin cron distribuido, sin agentes remotos y sin secretos en argumentos
   visibles.
@@ -437,7 +440,7 @@ descubrimiento, altas y CLI.
 | `/api/v1/buildpack/frameworks` | GET | viewer | Matriz de frameworks, gestores y requisitos que el detector reconoce. |
 | `/api/v1/detect` | GET | operator | Se amplía: explica el plan elegido y los manifiestos que lo activaron. |
 | `/api/v1/cron` | GET | viewer | Tareas con próxima ejecución, estado y último resultado. |
-| `/api/v1/cron/{app}/{job}` | PUT/DELETE | operator | Crea/edita o borra una tarea. |
+| `/api/v1/cron/{app}/{job}` | PUT/DELETE | operator | Crea/edita (command o http) o borra una tarea. |
 | `/api/v1/cron/{app}/{job}/run` | POST | operator | Ejecución manual en segundo plano. |
 | `/api/v1/cron/{app}/{job}/runs` | GET | viewer | Historial de ejecuciones. |
 | `/api/v1/cron/runs/{id}/log` | GET | viewer | Tail del log de una ejecución. |
@@ -875,16 +878,17 @@ descubrimiento, altas y CLI.
 
 **Prioridad:** P1.5. **Depende de:** D16.
 
-- [x] **CRON-01** Modelo `CronJob` con nombre, schedule, command, timeout y disabled; validación.
+- [x] **CRON-01** Modelo `CronJob` con nombre, schedule, tipo command/http, command o path+método, timeout y disabled; validación.
 - [x] **CRON-02** Mutaciones canónicas `SetCronJob`/`DeleteCronJob` en `cfgfile`.
 - [x] **CRON-03** Migración `cron_runs` + historial por app/tarea.
 - [x] **CRON-04** Runner con cron estándar, reconciliación contra config viva y arranque/parada.
-- [x] **CRON-05** Ejecución con entorno efectivo, timeout, log propio y bloqueo de solape.
+- [x] **CRON-05** Ejecución command (shell/env) y http (puerto local), timeout, log propio y bloqueo de solape.
 - [x] **CRON-06** API de lista, alta/edición, borrado, ejecución manual, historial y log.
-- [x] **CRON-07** Vista Tareas con estado, próxima, última, acciones e historial.
+- [x] **CRON-07** Vista Tareas con tipo, estado, próxima, última, acciones e historial.
 - [x] **CRON-08** Navegación, i18n y paleta.
-- [x] **CRON-09** Tests de validación, cfgfile, runner, store y API.
+- [x] **CRON-09** Tests de validación, cfgfile, runner command/http, store y API.
 - [x] **CRON-10** Fixtures, capturas desktop/móvil/light y guard.
+- [x] **CRON-11** Tareas HTTP limitadas al puerto local de la app, sin URLs externas.
 
 ## 6. Orden de construcción
 
@@ -993,6 +997,7 @@ Criterios:
 | 2026-11-05 | MOCK: nombres neutros, dominios ejemplo.com y guard de fixtures | `350575e` | `node scripts/fixtures-check.mjs`, capturas |
 | 2026-11-05 | MOCK-06: fixtures extraídos a módulo compartido | `76ffebc` | `node --check`, `fixtures-check`, capturas |
 | 2026-11-05 | CRON: tareas por app, runner, API, UI, historial y capturas | `cca451b` | `go test ./...`, `tsc`, build, capturas |
+| 2026-11-05 | CRON: tipo HTTP al puerto local además de comandos | este commit | `go test ./...`, `tsc`, Vitest, capturas |
 | 2026-11-05 | Dominios: modo local/público, defaults locales y solicitud de dominio | este commit | `go test ./...`, `tsc`, Vitest, i18n |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.

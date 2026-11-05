@@ -17,7 +17,10 @@ type cronView struct {
 	App      string         `json:"app"`
 	Job      string         `json:"job"`
 	Schedule string         `json:"schedule"`
-	Command  string         `json:"command"`
+	Type     string         `json:"type"`
+	Command  string         `json:"command,omitempty"`
+	Path     string         `json:"path,omitempty"`
+	Method   string         `json:"method,omitempty"`
 	Timeout  string         `json:"timeout,omitempty"`
 	Disabled bool           `json:"disabled"`
 	Running  bool           `json:"running"`
@@ -58,7 +61,11 @@ func (d *Deps) handleCron(w http.ResponseWriter, r *http.Request) {
 func (d *Deps) cronView(app config.App, job config.CronJob) cronView {
 	v := cronView{
 		App: app.Name, Job: job.Name, Schedule: job.Schedule,
-		Command: job.Command, Timeout: job.Timeout, Disabled: job.Disabled,
+		Type: job.Kind(), Command: job.Command, Path: job.Path,
+		Method: job.HTTPMethod(), Timeout: job.Timeout, Disabled: job.Disabled,
+	}
+	if job.Kind() == config.CronCommand {
+		v.Method = ""
 	}
 	if d.Cron != nil {
 		v.Running = d.Cron.Running(app.Name, job.Name)
@@ -137,7 +144,10 @@ func (d *Deps) putCron(w http.ResponseWriter, r *http.Request, app, job string) 
 	}
 	var in struct {
 		Schedule string `json:"schedule"`
+		Type     string `json:"type"`
 		Command  string `json:"command"`
+		Path     string `json:"path"`
+		Method   string `json:"method"`
 		Timeout  string `json:"timeout"`
 		Disabled bool   `json:"disabled"`
 	}
@@ -146,8 +156,8 @@ func (d *Deps) putCron(w http.ResponseWriter, r *http.Request, app, job string) 
 		return
 	}
 	cj := config.CronJob{
-		Name: job, Schedule: in.Schedule, Command: in.Command,
-		Timeout: in.Timeout, Disabled: in.Disabled,
+		Name: job, Schedule: in.Schedule, Type: in.Type, Command: in.Command,
+		Path: in.Path, Method: in.Method, Timeout: in.Timeout, Disabled: in.Disabled,
 	}
 	if err := d.mutateFleet(true, func(cp *config.Config) error {
 		return cfgfile.SetCronJob(cp, app, cj)

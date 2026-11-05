@@ -50,14 +50,40 @@ func (r *Route) Resolve() error {
 	return nil
 }
 
-// CronJob tarea programada de una app. Se ejecuta en su directorio con el
-// entorno efectivo (globales + app). `Disabled` evita programarla.
+// Tipos de tarea programada.
+const (
+	CronCommand = "command"
+	CronHTTP    = "http"
+)
+
+// CronJob tarea programada de una app. `command` ejecuta en su directorio con
+// el entorno efectivo; `http` llama al puerto local de la app. `Disabled`
+// evita programarla. Type vacío = command (compatibilidad).
 type CronJob struct {
 	Name     string `yaml:"name" json:"name"`
 	Schedule string `yaml:"schedule" json:"schedule"`
-	Command  string `yaml:"command" json:"command"`
+	Type     string `yaml:"type,omitempty" json:"type,omitempty"`
+	Command  string `yaml:"command,omitempty" json:"command,omitempty"`
+	Path     string `yaml:"path,omitempty" json:"path,omitempty"`
+	Method   string `yaml:"method,omitempty" json:"method,omitempty"`
 	Timeout  string `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	Disabled bool   `yaml:"disabled,omitempty" json:"disabled,omitempty"`
+}
+
+// Kind tipo efectivo, con command como default histórico.
+func (j CronJob) Kind() string {
+	if t := strings.ToLower(strings.TrimSpace(j.Type)); t != "" {
+		return t
+	}
+	return CronCommand
+}
+
+// HTTPMethod método efectivo de una tarea http (GET por defecto).
+func (j CronJob) HTTPMethod() string {
+	if m := strings.ToUpper(strings.TrimSpace(j.Method)); m != "" {
+		return m
+	}
+	return "GET"
 }
 
 // ValidCronName [a-z0-9-], igual que las apps: seguro para logs.
@@ -697,8 +723,28 @@ func (a *App) ValidateApp(idx int) error {
 		if _, err := ParseCron(job.Schedule); err != nil {
 			return fmt.Errorf("apps[%s] cron %q: %w", a.Name, job.Name, err)
 		}
-		if strings.TrimSpace(job.Command) == "" {
-			return fmt.Errorf("apps[%s] cron %q sin command", a.Name, job.Name)
+		switch job.Kind() {
+		case CronCommand:
+			if strings.TrimSpace(job.Command) == "" {
+				return fmt.Errorf("apps[%s] cron %q sin command", a.Name, job.Name)
+			}
+			if strings.TrimSpace(job.Path) != "" || strings.TrimSpace(job.Method) != "" {
+				return fmt.Errorf("apps[%s] cron %q: command no admite path/method", a.Name, job.Name)
+			}
+		case CronHTTP:
+			if strings.TrimSpace(job.Command) != "" {
+				return fmt.Errorf("apps[%s] cron %q: http no admite command", a.Name, job.Name)
+			}
+			path := strings.TrimSpace(job.Path)
+			if !strings.HasPrefix(path, "/") || strings.Contains(path, "://") ||
+				strings.ContainsAny(path, " \t\r\n") {
+				return fmt.Errorf("apps[%s] cron %q: path inválido %q (usa /ruta)", a.Name, job.Name, job.Path)
+			}
+			if m := job.HTTPMethod(); m != "GET" && m != "POST" {
+				return fmt.Errorf("apps[%s] cron %q: método %q no soportado (GET|POST)", a.Name, job.Name, m)
+			}
+		default:
+			return fmt.Errorf("apps[%s] cron %q: tipo %q inválido (command|http)", a.Name, job.Name, job.Type)
 		}
 		if _, err := job.CronTimeout(); err != nil {
 			return fmt.Errorf("apps[%s] cron %q: %w", a.Name, job.Name, err)
