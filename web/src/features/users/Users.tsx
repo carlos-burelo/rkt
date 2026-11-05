@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
+import { useI18n } from "../../shared/i18n";
 
 const ROLE_CLASS: Record<string, string> = {
   admin: "border-signal/35 bg-signal/10 text-signal",
@@ -22,6 +23,7 @@ const ROLE_CLASS: Record<string, string> = {
 };
 
 export function Users() {
+  const { t, tn } = useI18n();
   const fail = useUI((u) => u.fail);
   const me = useAuth((a) => a.who);
   const [users, setUsers] = useState<User[]>([]);
@@ -45,19 +47,19 @@ export function Users() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Usuarios"
-        description="Solo admin. Viewer lee, operator muta la flota, admin gestiona usuarios y configuración."
-        meta={<span className="tnum font-mono text-[10px] text-muted-foreground">{users.length} cuentas</span>}
+        title={t("nav.users")}
+        description={t("system.users.description")}
+        meta={<span className="tnum font-mono text-[10px] text-muted-foreground">{tn("system.users.accounts", users.length)}</span>}
         actions={
           <FormDialog
             trigger={
               <Button size="sm">
-                <Plus className="h-3 w-3" /> nuevo usuario
+                <Plus className="h-3 w-3" /> {t("system.users.new")}
               </Button>
             }
-            title="Nuevo usuario"
-            description="lectura lee · operador muta la flota · administrador gestiona todo · contraseña mín. 12"
-            submitLabel="crear"
+            title={t("system.users.newTitle")}
+            description={t("system.users.newDesc")}
+            submitLabel={t("common.create")}
             canSubmit={name.trim() !== "" && password.length >= 12}
             onSubmit={async () => {
               await createUser(name.trim(), password, role);
@@ -67,47 +69,47 @@ export function Users() {
               await load();
             }}
           >
-            <Field label="usuario">
+            <Field label={t("system.users.user")}>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="usuario"
+                placeholder={t("system.users.user")}
                 className="h-8 font-mono text-[12px]"
                 autoFocus
               />
             </Field>
-            <Field label="contraseña" hint="mín. 12">
+            <Field label={t("system.users.password")} hint={t("system.users.passwordHint")}>
               <Input
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="mínimo 12 caracteres"
+                placeholder={t("system.users.passwordPlaceholder")}
                 type="password"
                 className="tnum h-8 font-mono text-[12px]"
               />
             </Field>
-            <Field label="rol">
+            <Field label={t("system.users.role")}>
               <Select value={role} onValueChange={(v: string | null) => setRole(v ?? "viewer")}>
                 <SelectTrigger className="h-8 font-mono text-[12px]">
                   <span className="capitalize">{roleLabel(role)}</span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="viewer">lectura</SelectItem>
-                  <SelectItem value="operator">operador</SelectItem>
-                  <SelectItem value="admin">administrador</SelectItem>
+                  <SelectItem value="viewer">{roleLabel("viewer")}</SelectItem>
+                  <SelectItem value="operator">{roleLabel("operator")}</SelectItem>
+                  <SelectItem value="admin">{roleLabel("admin")}</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
           </FormDialog>
         }
       />
-      <div className="border border-border" role="table" aria-label="usuarios">
+      <div className="border border-border" role="table" aria-label={t("nav.users")}>
         <div
           className="hidden grid-cols-[minmax(0,1fr)_7rem_9rem_4rem] items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 sm:grid"
           aria-hidden
         >
-          <span className="micro">usuario</span>
-          <span className="micro">rol</span>
-          <span className="micro text-right">alta</span>
+          <span className="micro">{t("system.users.user")}</span>
+          <span className="micro">{t("system.users.role")}</span>
+          <span className="micro text-right">{t("system.users.createdAt")}</span>
           <span />
         </div>
         {users.map((u) => (
@@ -119,7 +121,7 @@ export function Users() {
               <Avatar name={u.name} />
               <span className="truncate font-mono text-[12px]">{u.name}</span>
               {me?.user === u.name && (
-                <span className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase">tú</span>
+                <span className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase">{t("system.users.you")}</span>
               )}
             </span>
             <span
@@ -135,8 +137,8 @@ export function Users() {
             <div className="flex justify-end">
               <ConfirmButton
                 disabled={me?.user === u.name}
-                title={me?.user === u.name ? "no puedes borrarte a ti mismo" : "borrar usuario"}
-                confirmLabel="confirmar"
+                title={me?.user === u.name ? t("system.users.cannotDeleteSelf") : t("system.users.deleteTitle")}
+                confirmLabel={t("common.confirm")}
                 onConfirm={() => {
                   deleteUser(u.name).then(load).catch(fail);
                 }}
@@ -144,7 +146,7 @@ export function Users() {
             </div>
           </div>
         ))}
-        {users.length === 0 && <EmptyState title="Sin usuarios" hint="Crea el primero con «nuevo usuario»." />}
+        {users.length === 0 && <EmptyState title={t("system.users.emptyTitle")} hint={t("system.users.emptyHint")} />}
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { suggestDomains, DomainSuggestion } from "../../features/routes/api";
+import { useI18n } from "../i18n";
 
 // DomainSuggest: chips de dominios libres para un nombre. Prioriza
 // *.localhost (resuelve sin hosts) y el dominio base si está configurado.
@@ -12,6 +13,7 @@ export function DomainSuggest({
   onPick: (host: string) => void;
   exclude?: string[];
 }) {
+  const { t } = useI18n();
   const [items, setItems] = useState<DomainSuggestion[]>([]);
 
   useEffect(() => {
@@ -20,12 +22,12 @@ export function DomainSuggest({
       setItems([]);
       return;
     }
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       suggestDomains(clean)
         .then((s) => setItems(s.filter((x) => !exclude.includes(x.host))))
         .catch(() => setItems([]));
     }, 250);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);
 
@@ -33,7 +35,7 @@ export function DomainSuggest({
 
   return (
     <span className="flex flex-wrap items-center gap-1.5">
-      <span className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground/70 uppercase">sugeridos</span>
+      <span className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground/70 uppercase">{t("shared.domain.suggested")}</span>
       {items.map((s) => (
         <button
           key={s.host}

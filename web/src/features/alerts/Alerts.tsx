@@ -12,8 +12,10 @@ import {
 } from "@/components/ui/select";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
+import { useI18n } from "../../shared/i18n";
 
 export function Alerts() {
+  const { t, tn } = useI18n();
   const canWrite = useAuth((a) => a.canWrite);
   const fail = useUI((u) => u.fail);
   const [rules, setRules] = useState<AlertRule[]>([]);
@@ -40,11 +42,11 @@ export function Alerts() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Alertas"
-        description="Reglas evaluadas cada minuto. El disparo queda como evento kind=alert en el manifiesto de Resumen."
+        title={t("ops.alerts.title")}
+        description={t("ops.alerts.description")}
         meta={
           <span className="tnum font-mono text-[10px] text-muted-foreground">
-            {rules.length} reglas · {fired} disparadas
+            {tn("ops.alerts.rules", rules.length)} · {tn("ops.alerts.fired", fired)}
           </span>
         }
         actions={
@@ -52,40 +54,43 @@ export function Alerts() {
             <FormDialog
               trigger={
                 <Button size="sm">
-                  <Plus className="h-3 w-3" /> nueva regla
+                  <Plus className="h-3 w-3" /> {t("ops.alerts.new")}
                 </Button>
               }
-              title="Nueva regla de alerta"
-              description="se evalúa cada minuto · el disparo queda como evento kind=alert"
-              submitLabel="crear"
+              title={t("ops.alerts.createTitle")}
+              description={t("ops.alerts.createDesc")}
+              submitLabel={t("common.create")}
               canSubmit={Number.isFinite(parseFloat(threshold)) && parseInt(windowMin, 10) > 0}
               onSubmit={async () => {
                 await addRule(app.trim() || "*", kind, parseFloat(threshold), parseInt(windowMin, 10));
                 await load();
               }}
             >
-              <Field label="app" hint="* = toda la flota">
+              <Field label={t("ops.alerts.app")} hint={t("ops.alerts.appHint")}>
                 <Input
                   value={app}
                   onChange={(e) => setApp(e.target.value)}
-                  placeholder="app o *"
+                  placeholder={t("ops.alerts.appPlaceholder")}
                   className="h-8 font-mono text-[12px]"
                   autoFocus
                 />
               </Field>
-              <Field label="tipo">
+              <Field label={t("ops.alerts.kind")}>
                 <Select value={kind} onValueChange={(v: string | null) => setKind(v ?? "failed")}>
                   <SelectTrigger className="h-8 font-mono text-[12px]">
                     <span>{kind}</span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="failed">failed (caídas)</SelectItem>
-                    <SelectItem value="error_rate">error_rate (5xx)</SelectItem>
+                    <SelectItem value="failed">{t("ops.alerts.kindFailed")}</SelectItem>
+                    <SelectItem value="error_rate">{t("ops.alerts.kindErrorRate")}</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="umbral" hint={kind === "failed" ? "fallos" : "0.1 = 10%"}>
+                <Field
+                  label={t("ops.alerts.threshold")}
+                  hint={kind === "failed" ? t("ops.alerts.thresholdFailures") : t("ops.alerts.thresholdHint")}
+                >
                   <Input
                     value={threshold}
                     onChange={(e) => setThreshold(e.target.value)}
@@ -93,7 +98,7 @@ export function Alerts() {
                     className="tnum h-8 font-mono text-[12px]"
                   />
                 </Field>
-                <Field label="ventana" hint="minutos">
+                <Field label={t("ops.alerts.window")} hint={t("ops.alerts.windowHint")}>
                   <Input
                     value={windowMin}
                     onChange={(e) => setWindowMin(e.target.value)}
@@ -106,17 +111,17 @@ export function Alerts() {
           ) : undefined
         }
       />
-      <div className="border border-border" role="table" aria-label="reglas de alerta">
+      <div className="border border-border" role="table" aria-label={t("ops.alerts.tableAria")}>
         <div
           className="hidden grid-cols-[1.5rem_3rem_minmax(0,1fr)_7rem_8rem_9rem_4rem] items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 md:grid"
           aria-hidden
         >
-          <span className="micro">est</span>
-          <span className="micro">folio</span>
-          <span className="micro">regla</span>
-          <span className="micro">tipo</span>
-          <span className="micro">umbral</span>
-          <span className="micro text-right">último disparo</span>
+          <span className="micro">{t("ops.alerts.col.state")}</span>
+          <span className="micro">{t("ops.alerts.col.folio")}</span>
+          <span className="micro">{t("ops.alerts.col.rule")}</span>
+          <span className="micro">{t("ops.alerts.col.kind")}</span>
+          <span className="micro">{t("ops.alerts.col.threshold")}</span>
+          <span className="micro text-right">{t("ops.alerts.col.lastFired")}</span>
           <span />
         </div>
         {rules.map((r) => (
@@ -131,7 +136,7 @@ export function Alerts() {
               <p className="truncate font-mono text-[12px]">{r.app}</p>
               <p className="tnum mt-0.5 font-mono text-[10px] text-muted-foreground md:hidden">
                 {r.kind} · ≥{r.threshold}/{r.window_min}min ·{" "}
-                {r.last_fired ? r.last_fired.slice(0, 16).replace("T", " ") : "sin disparos"}
+                {r.last_fired ? r.last_fired.slice(0, 16).replace("T", " ") : t("ops.alerts.neverFired")}
               </p>
             </div>
             <span className="hidden font-mono text-[11px] text-muted-foreground md:block">{r.kind}</span>
@@ -143,12 +148,12 @@ export function Alerts() {
                 {r.last_fired.slice(0, 16).replace("T", " ")}
               </span>
             ) : (
-              <span className="hidden text-right font-mono text-[11px] text-muted-foreground md:block">sin disparos</span>
+              <span className="hidden text-right font-mono text-[11px] text-muted-foreground md:block">{t("ops.alerts.neverFired")}</span>
             )}
             <div className="flex justify-end">
               {canWrite && (
                 <ConfirmButton
-                  title={`borrar regla #${r.id}`}
+                  title={t("ops.alerts.deleteTitle", { id: r.id })}
                   onConfirm={() => {
                     delRule(r.id).then(load).catch(fail);
                   }}
@@ -158,7 +163,7 @@ export function Alerts() {
           </div>
         ))}
         {rules.length === 0 && (
-          <EmptyState title="Sin reglas" hint="failed = caídas por app · error_rate = 5xx global (0.1 = 10%)." />
+          <EmptyState title={t("ops.alerts.emptyTitle")} hint={t("ops.alerts.emptyHint")} />
         )}
       </div>
     </div>

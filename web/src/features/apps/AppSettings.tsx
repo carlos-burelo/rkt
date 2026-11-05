@@ -12,12 +12,14 @@ import { updateApp, deleteApp } from "./api";
 import { useFleet } from "../overview/hooks";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
+import { useI18n } from "../../shared/i18n";
 
 type TextKey = "command" | "args" | "dir" | "static" | "env_file" | "restart_delay" | "min_uptime" | "repo" | "ref";
 
 // Ajustes por unidad: vista de solo lectura + diálogos de edición/borrado.
 // Un solo guardado aplica el manifiesto; el supervisor reinicia lo cambiado.
 export function AppSettings() {
+  const { t } = useI18n();
   const { name = "" } = useParams();
   const navigate = useNavigate();
   const { metas } = useFleet();
@@ -139,20 +141,20 @@ export function AppSettings() {
   return (
     <div className="space-y-4">
       <Section
-        title="Ajustes"
-        description="vista de solo lectura · la edición vive en un diálogo"
+        title={t("nav.settings")}
+        description={t("apps.settings.desc")}
         actions={
           canWrite ? (
             <div className="flex items-center gap-2">
               <FormDialog
                 trigger={
                   <Button variant="outline" size="sm">
-                    <Pencil className="h-3 w-3" /> editar
+                    <Pencil className="h-3 w-3" /> {t("common.edit")}
                   </Button>
                 }
-                title={`Editar ${name}`}
-                description="guardar aplica el manifiesto · el supervisor reinicia lo que cambie"
-                submitLabel="guardar"
+                title={t("apps.settings.editTitle", { name })}
+                description={t("apps.settings.editDesc")}
+                submitLabel={t("common.save")}
                 canSubmit={form.command.trim() !== ""}
                 onSubmit={save}
                 className="sm:max-w-2xl"
@@ -160,9 +162,9 @@ export function AppSettings() {
                 <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 md:grid-cols-2">
                   <div className="field-label md:col-span-2">
                     <span className="flex items-baseline justify-between gap-2">
-                      <span>dominio</span>
+                      <span>{t("apps.field.domain")}</span>
                       <span className="normal-case tracking-normal text-muted-foreground/55">
-                        vacío = sin dominio · se retira la ruta anterior
+                        {t("apps.settings.domainHint")}
                       </span>
                     </span>
                     <div className="flex items-center gap-2">
@@ -174,69 +176,69 @@ export function AppSettings() {
                       />
                       {form.domain !== "" && (
                         <Button type="button" variant="destructive" size="xs" onClick={() => set("domain", "")}>
-                          quitar
+                          {t("common.remove")}
                         </Button>
                       )}
                     </div>
                     <DomainSuggest name={meta?.name ?? name} onPick={(h) => set("domain", h)} />
                   </div>
                   <EditField
-                    label="puerto"
-                    hint="local · retargeta la ruta"
+                    label={t("apps.field.port")}
+                    hint={t("apps.settings.portHint")}
                     value={form.port}
                     onChange={(v) => set("port", v.replace(/\D/g, ""))}
                     placeholder="3001"
                   />
                   <EditField
-                    label="memoria"
-                    hint="MB · 0 = sin tope"
+                    label={t("apps.field.memory")}
+                    hint={t("apps.settings.memoryHint")}
                     value={form.memory_mb}
                     onChange={(v) => set("memory_mb", v.replace(/\D/g, ""))}
-                    placeholder="sin tope"
+                    placeholder={t("apps.settings.noLimit")}
                   />
-                  <EditField label="comando" hint="binario absoluto" value={form.command} onChange={(v) => set("command", v)} pick="file" />
+                  <EditField label={t("apps.field.command")} hint={t("apps.settings.commandHint")} value={form.command} onChange={(v) => set("command", v)} pick="file" />
                   <EditField
-                    label="argumentos"
-                    hint="separados por espacios"
+                    label={t("apps.field.args")}
+                    hint={t("apps.settings.argsHint")}
                     value={form.args}
                     onChange={(v) => set("args", v)}
                     placeholder="server.js"
                   />
-                  <EditField label="directorio" hint="cwd de la app" value={form.dir} onChange={(v) => set("dir", v)} pick="dir" />
+                  <EditField label={t("apps.field.dir")} hint={t("apps.settings.dirHint")} value={form.dir} onChange={(v) => set("dir", v)} pick="dir" />
                   <EditField
-                    label="estático"
-                    hint="sirve archivos en vez de proceso"
+                    label={t("apps.field.static")}
+                    hint={t("apps.settings.staticHint")}
                     value={form.static}
                     onChange={(v) => set("static", v)}
                     pick="dir"
                   />
-                  <EditField label="env_file" hint="dotenv adicional" value={form.env_file} onChange={(v) => set("env_file", v)} pick="file" />
-                  <EditField label="restart_delay" hint="espera entre reinicios" value={form.restart_delay} onChange={(v) => set("restart_delay", v)} />
-                  <EditField label="min_uptime" hint="uptime mínimo sano" value={form.min_uptime} onChange={(v) => set("min_uptime", v)} />
-                  <EditField label="repo" hint="git https o ruta local" value={form.repo} onChange={(v) => set("repo", v)} />
-                  <EditField label="ref" hint="rama, tag o SHA" value={form.ref} onChange={(v) => set("ref", v)} />
+                  <EditField label="env_file" hint={t("apps.settings.envFileHint")} value={form.env_file} onChange={(v) => set("env_file", v)} pick="file" />
+                  <EditField label="restart_delay" hint={t("apps.settings.restartDelayHint")} value={form.restart_delay} onChange={(v) => set("restart_delay", v)} />
+                  <EditField label="min_uptime" hint={t("apps.settings.minUptimeHint")} value={form.min_uptime} onChange={(v) => set("min_uptime", v)} />
+                  <EditField label="repo" hint={t("apps.settings.repoHint")} value={form.repo} onChange={(v) => set("repo", v)} />
+                  <EditField label="ref" hint={t("apps.settings.refHint")} value={form.ref} onChange={(v) => set("ref", v)} />
                   <label className="flex w-fit items-center gap-2 border border-border bg-card/30 px-2.5 py-1.5 text-[11px] text-muted-foreground md:col-span-2">
                     <Checkbox checked={form.auto} onCheckedChange={(v) => setForm({ ...form, auto: v === true })} />
-                    auto-deploy al recibir push
+                    {t("apps.settings.autoDeploy")}
                   </label>
                 </div>
               </FormDialog>
               <FormDialog
                 trigger={
                   <Button variant="destructive" size="sm">
-                    <Trash2 className="h-3 w-3" /> eliminar
+                    <Trash2 className="h-3 w-3" /> {t("common.delete")}
                   </Button>
                 }
-                title={`Eliminar ${name}`}
-                description="quita la app y sus rutas de la flota"
-                submitLabel="eliminar app"
+                title={t("apps.settings.deleteTitle", { name })}
+                description={t("apps.settings.deleteDesc")}
+                submitLabel={t("apps.settings.deleteSubmit")}
                 canSubmit={confirmDel === name}
                 onSubmit={async () => {
                   await deleteApp(name);
                   navigate("/deployments");
                 }}
               >
-                <Field label="confirmación" hint={`escribe ${name}`}>
+                <Field label={t("apps.settings.confirmLabel")} hint={t("apps.settings.confirmHint", { name })}>
                   <Input
                     value={confirmDel}
                     onChange={(e) => setConfirmDel(e.target.value)}
@@ -252,30 +254,30 @@ export function AppSettings() {
       >
         <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-3">
           <div>
-            <p className="micro mb-1 text-signal">red</p>
-            <Row label="dominio" value={meta?.domains?.join(", ")} />
-            <Row label="puerto" value={meta?.port} />
-            <Row label="memoria" value={meta?.memory_mb ? `${meta.memory_mb} MB` : "sin tope"} />
+            <p className="micro mb-1 text-signal">{t("apps.settings.groupNetwork")}</p>
+            <Row label={t("apps.field.domain")} value={meta?.domains?.join(", ")} />
+            <Row label={t("apps.field.port")} value={meta?.port} />
+            <Row label={t("apps.field.memory")} value={meta?.memory_mb ? `${meta.memory_mb} MB` : t("apps.settings.noLimit")} />
           </div>
           <div>
-            <p className="micro mb-1 text-signal">proceso</p>
-            <Row label="comando" value={meta?.command} />
-            <Row label="args" value={(meta?.args ?? []).join(" ")} />
-            <Row label="dir" value={meta?.dir} />
-            <Row label="estático" value={meta?.static} />
+            <p className="micro mb-1 text-signal">{t("apps.settings.groupProcess")}</p>
+            <Row label={t("apps.field.command")} value={meta?.command} />
+            <Row label={t("apps.field.args")} value={(meta?.args ?? []).join(" ")} />
+            <Row label={t("apps.field.dir")} value={meta?.dir} />
+            <Row label={t("apps.field.static")} value={meta?.static} />
             <Row label="env_file" value={meta?.env_file} />
-            <Row label="restart" value={meta?.restart_delay} />
+            <Row label={t("apps.field.restart")} value={meta?.restart_delay} />
             <Row label="min_uptime" value={meta?.min_uptime} />
           </div>
           <div>
-            <p className="micro mb-1 text-signal">despliegue</p>
+            <p className="micro mb-1 text-signal">{t("apps.settings.groupDeploy")}</p>
             {external ? (
-              <Row label="runtime" value="externo · solo proxy (sin build/deploy)" />
+              <Row label={t("apps.field.runtime")} value={t("apps.settings.externalRuntime")} />
             ) : (
               <>
                 <Row label="repo" value={meta?.deploy?.repo} />
                 <Row label="ref" value={meta?.deploy?.ref} />
-                <Row label="auto" value={meta?.deploy?.auto ? "sí" : "no"} />
+                <Row label={t("apps.field.auto")} value={meta?.deploy?.auto ? t("common.yes") : t("common.no")} />
                 <Row label="build" value={(meta?.deploy?.build ?? []).join(" · ")} />
               </>
             )}
@@ -283,7 +285,7 @@ export function AppSettings() {
         </div>
       </Section>
       <p className="font-mono text-[9px] leading-relaxed text-muted-foreground/70">
-        Los secretos no se editan aquí: viven en Entorno (globales y por proyecto).
+        {t("apps.settings.secretsNote", { environment: t("nav.environment") })}
       </p>
     </div>
   );

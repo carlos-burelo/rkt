@@ -11,6 +11,7 @@ import { deployStateLabel } from "../../shared/lib/labels";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
 import { PageHeader, Segmented } from "../../shared/components/patterns";
+import { useI18n } from "../../shared/i18n";
 
 export type DepStatus = "all" | "ok" | "running" | "failed";
 
@@ -18,6 +19,7 @@ export type DepStatus = "all" | "ok" | "running" | "failed";
 // revisión · duración · hora), filas ordenadas por tiempo, la fila en
 // curso late. Duraciones tabulares alineadas a la derecha.
 export function Deployments({ bare = false, status, max }: { bare?: boolean; status?: DepStatus; max?: number }) {
+  const { t, tn } = useI18n();
   const { deps } = useFleet();
   const appFilter = useUI((u) => u.appFilter);
   const setSel = useUI((u) => u.setSel);
@@ -44,10 +46,12 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
     <div className="space-y-4">
       {!bare && (
         <PageHeader
-          title="Despliegues"
-          description="Libro de salidas. La fila en curso late; la revisión y la duración quedan a la derecha. Click abre el manifiesto de la compilación."
+          title={t("deployments.title")}
+          description={t("deployments.description")}
           meta={<span className="tnum font-mono text-[10px] text-muted-foreground">
-            {vis.length === base.length ? `${base.length} registros` : `${vis.length} de ${base.length}`}
+            {vis.length === base.length
+              ? tn("deployments.count", base.length)
+              : t("deployments.countFiltered", { shown: vis.length, total: base.length })}
           </span>}
         />
       )}
@@ -58,20 +62,20 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="filtrar por app o rev…"
+              placeholder={t("deployments.filter.placeholder")}
               className="h-7 border-transparent bg-transparent pl-8 font-mono text-[12px] hover:border-input"
-              aria-label="filtrar despliegues"
+              aria-label={t("deployments.filter.aria")}
             />
           </div>
           <Segmented
             value={st}
             onChange={setSt}
-            label="filtrar por estado"
+            label={t("deployments.filter.statusLabel")}
             items={[
-              { value: "all", label: "todos", count: counts.all },
-              { value: "ok", label: "ok", count: counts.ok },
-              { value: "running", label: "en curso", count: counts.running },
-              { value: "failed", label: "fallidos", count: counts.failed },
+              { value: "all", label: t("deployments.filter.all"), count: counts.all },
+              { value: "ok", label: t("deployments.state.ok"), count: counts.ok },
+              { value: "running", label: t("deploy.running"), count: counts.running },
+              { value: "failed", label: t("deployments.filter.failed"), count: counts.failed },
             ]}
           />
           {(q !== "" || st !== "all") && (
@@ -83,12 +87,12 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
                 setSt("all");
               }}
             >
-              <X className="h-3 w-3" /> limpiar
+              <X className="h-3 w-3" /> {t("deployments.filter.clear")}
             </Button>
           )}
         </div>
       )}
-      <div className="border border-border" role="table" aria-label="tablero de despliegues">
+      <div className="border border-border" role="table" aria-label={t("deployments.table.aria")}>
         <div
           role="row"
           className={cn(
@@ -96,12 +100,12 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
             !bare && "sticky top-12 z-10 bg-card",
           )}
         >
-          <span role="columnheader" className="micro">est</span>
-          <span role="columnheader" className="micro">salida</span>
-          <span role="columnheader" className="micro">rev</span>
-          <span role="columnheader" className="micro text-right">dur</span>
-          <span role="columnheader" className="micro text-right">hora</span>
-          <span role="columnheader" className="sr-only">acciones</span>
+          <span role="columnheader" className="micro">{t("deployments.table.state")}</span>
+          <span role="columnheader" className="micro">{t("deployments.table.output")}</span>
+          <span role="columnheader" className="micro">{t("deployments.table.rev")}</span>
+          <span role="columnheader" className="micro text-right">{t("deployments.table.duration")}</span>
+          <span role="columnheader" className="micro text-right">{t("deployments.table.time")}</span>
+          <span role="columnheader" className="sr-only">{t("deployments.table.actions")}</span>
         </div>
         {vis.map((d) => (
           <div
@@ -115,7 +119,7 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
               }
             }}
             tabIndex={0}
-            aria-label={`abrir salida ${d.app} #${d.id}`}
+            aria-label={t("deployments.row.openAria", { app: d.app, id: d.id })}
             className={cn(
               "group relative grid cursor-pointer grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-border/70 bg-card/35 px-3 py-2.5 text-left last:border-0 hover:bg-accent/40 focus-visible:bg-accent/40 lg:grid-cols-[1.5rem_minmax(0,1fr)_8rem_4.5rem_5.5rem_1.5rem]",
               d.status === "running" && "animate-row-arrive bg-signal/[0.035] hover:bg-signal/[0.06]",
@@ -133,7 +137,7 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
               </p>
               <p className="tnum mt-0.5 truncate font-mono text-[10px] text-muted-foreground lg:hidden">
                 {deployStateLabel(d.status)} · {d.rev.slice(0, 8)} · {dur(d.started_at, d.finished_at)} ·{" "}
-                {d.status === "running" ? "en curso…" : rel(d.finished_at || d.started_at)}
+                {d.status === "running" ? t("deployments.runningEllipsis") : rel(d.finished_at || d.started_at)}
               </p>
               <p className="mt-0.5 hidden truncate font-mono text-[10px] text-muted-foreground lg:block">
                 <span
@@ -150,7 +154,7 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
                   {deployStateLabel(d.status)}
                 </span>
                 {" · "}
-                {d.triggered_by ? `por ${d.triggered_by}` : "operador local"}
+                {d.triggered_by ? t("deployments.row.by", { user: d.triggered_by }) : t("deployments.row.localOperator")}
               </p>
             </div>
             <span role="cell" className="tnum hidden items-center gap-1 font-mono text-[11px] text-muted-foreground lg:flex">
@@ -161,7 +165,7 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
               {dur(d.started_at, d.finished_at)}
             </span>
             <span role="cell" className="tnum hidden text-right font-mono text-[11px] text-muted-foreground lg:block">
-              {d.status === "running" ? "en curso…" : rel(d.finished_at || d.started_at)}
+              {d.status === "running" ? t("deployments.runningEllipsis") : rel(d.finished_at || d.started_at)}
             </span>
             <span role="cell" className="flex items-center justify-end gap-1">
               <button
@@ -170,9 +174,9 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
                   e.stopPropagation();
                   navigate(`/app/${d.app}`);
                 }}
-                aria-label={`abrir app ${d.app}`}
+                aria-label={t("deployments.row.openAppAria", { app: d.app })}
               >
-                app <ArrowRight className="h-3 w-3" />
+                {t("deployments.row.app")} <ArrowRight className="h-3 w-3" />
               </button>
               <ArrowRight aria-hidden className="hidden h-3 w-3 text-muted-foreground/35 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground lg:block" />
             </span>
@@ -180,9 +184,9 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
         ))}
         {vis.length === 0 && (
           <div className="px-4 py-8 text-center">
-            <p className="font-mono text-[11px] text-muted-foreground">sin salidas para este filtro</p>
+            <p className="font-mono text-[11px] text-muted-foreground">{t("deployments.empty.title")}</p>
             <p className="mt-1 font-mono text-[9px] text-muted-foreground/70">
-              solo producción · no hay entornos que filtrar
+              {t("deployments.empty.hint")}
             </p>
           </div>
         )}

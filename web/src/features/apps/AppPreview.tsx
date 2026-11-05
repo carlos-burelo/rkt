@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dot } from "../../shared/components/ui";
 import { useFleet } from "../overview/hooks";
 import { publicUrl, publicHost } from "../../shared/lib/url";
+import { useI18n } from "../../shared/i18n";
 
 // Vista previa en miniatura 16:9: el sitio se renderiza en un viewport
 // virtual 1280x720 y se escala completo al ancho del marco. No recorta.
@@ -32,6 +33,7 @@ function MiniFrame({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
+  const { t } = useI18n();
 
   useEffect(() => {
     const el = box.current;
@@ -48,7 +50,7 @@ function MiniFrame({
       <iframe
         key={nonce}
         src={src}
-        title={`vista previa de ${domain}`}
+        title={t("apps.preview.frameTitle", { domain })}
         loading="lazy"
         onLoad={onLoad}
         style={{
@@ -65,6 +67,7 @@ function MiniFrame({
 }
 
 export function AppPreview({ domain, running }: { domain: string; running: boolean }) {
+  const { t } = useI18n();
   const { status } = useFleet();
   const src = publicUrl(domain, status);
   const [nonce, setNonce] = useState(0);
@@ -90,21 +93,21 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
   }, [src, nonce, running]);
 
   return (
-    <section className="border border-border bg-card/30" aria-label="vista previa de la app">
+    <section className="border border-border bg-card/30" aria-label={t("apps.preview.aria")}>
       <header className="flex flex-wrap items-center gap-2 border-b border-border bg-secondary/20 px-3 py-2">
         <span aria-hidden className="h-1.5 w-1.5 bg-signal" />
-        <h2 className="text-[12px] font-medium">Vista previa</h2>
+        <h2 className="text-[12px] font-medium">{t("apps.preview.title")}</h2>
         <span className="flex min-w-0 items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
           <Dot status={running ? "running" : "stopped"} />
           <span className="truncate">{publicHost(domain, status)}</span>
         </span>
         <span className="flex-1" />
-        <div className="flex items-center gap-0.5" role="group" aria-label="tamaño de la vista previa">
+        <div className="flex items-center gap-0.5" role="group" aria-label={t("apps.preview.sizeAria")}>
           {(["s", "m", "l"] as const).map((s) => (
             <button
               key={s}
               onClick={() => changeSize(s)}
-              title={s === "s" ? "compacta" : s === "m" ? "mediana" : "amplia"}
+              title={t(`apps.preview.size.${s}`)}
               className={
                 size === s
                   ? "border border-signal/60 bg-signal/10 px-1.5 font-mono text-[9px] uppercase text-signal"
@@ -119,10 +122,10 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
           variant="ghost"
           size="xs"
           onClick={() => setNonce((n) => n + 1)}
-          aria-label="recargar vista previa"
-          title="recargar vista previa"
+          aria-label={t("apps.preview.reload")}
+          title={t("apps.preview.reload")}
         >
-          <RotateCw className="h-3 w-3" /> recargar
+          <RotateCw className="h-3 w-3" /> {t("apps.preview.reloadAction")}
         </Button>
         <a
           href={src}
@@ -130,14 +133,14 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
           rel="noreferrer"
           className="inline-flex items-center gap-1 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground"
         >
-          abrir <ExternalLink className="h-3 w-3" />
+          {t("common.open")} <ExternalLink className="h-3 w-3" />
         </a>
       </header>
 
       {!running && (
         <div className="px-4 py-10 text-center">
-          <p className="micro text-muted-foreground/60">app detenida</p>
-          <p className="mt-2 text-[12px]">La vista previa aparece cuando la unidad está en marcha.</p>
+          <p className="micro text-muted-foreground/60">{t("apps.preview.stopped")}</p>
+          <p className="mt-2 text-[12px]">{t("apps.preview.stoppedHint")}</p>
         </div>
       )}
 
@@ -150,18 +153,18 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
                 href={src}
                 target="_blank"
                 rel="noreferrer"
-                aria-label={`abrir ${domain} en pestaña`}
-                title={`abrir ${domain}`}
+                aria-label={t("apps.preview.openAria", { domain })}
+                title={t("apps.preview.openTitle", { domain })}
                 className="absolute inset-0 z-10 flex items-end justify-end bg-transparent p-2 opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100"
               >
                 <span className="border border-border bg-background/90 px-2 py-1 font-mono text-[9px] tracking-[0.08em] uppercase">
-                  abrir <ExternalLink className="inline h-3 w-3" />
+                  {t("common.open")} <ExternalLink className="inline h-3 w-3" />
                 </span>
               </a>
             )}
             {state === "loading" && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/70">
-                <p className="font-mono text-[10px] text-muted-foreground">cargando {domain}…</p>
+                <p className="font-mono text-[10px] text-muted-foreground">{t("apps.preview.loading", { domain })}</p>
               </div>
             )}
           </div>
@@ -170,16 +173,16 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
 
       {running && state === "blocked" && (
         <div className="px-4 py-8">
-          <p className="micro text-warn">no se pudo incrustar</p>
+          <p className="micro text-warn">{t("apps.preview.blocked")}</p>
           <p className="mt-2 text-[12px]">
-            El navegador bloqueó el iframe o el dominio no resolvió desde esta máquina.
+            {t("apps.preview.blockedDesc")}
           </p>
           <p className="mt-1 font-mono text-[10px] leading-relaxed text-muted-foreground">
-            revisa DNS/hosts para {domain} y que la app no envíe X-Frame-Options. La app sigue accesible en pestaña.
+            {t("apps.preview.blockedHint", { domain })}
           </p>
           <a href={src} target="_blank" rel="noreferrer" className="mt-3 inline-block">
             <Button size="sm" variant="outline">
-              <ExternalLink className="h-3 w-3" /> abrir {domain}
+              <ExternalLink className="h-3 w-3" /> {t("apps.preview.openDomain", { domain })}
             </Button>
           </a>
         </div>

@@ -55,6 +55,17 @@ bloque naranja (el CTA debe seguir siendo el único bloque sólido).
 - Una sola página puede scrollear; los headers de tablas largas son sticky
   bajo el header global (`sticky top-12`).
 
+## i18n
+
+- Textos en `web/src/shared/i18n/messages/es/<dominio>.ts`, un archivo por
+  dominio. El agregador es `messages/es.ts`.
+- Componentes: `const { t, tn } = useI18n()`; helpers no-React: `import { t }`.
+- `t(clave, vars)` interpola `{var}`; `tn(clave, n)` pluraliza con
+  `Intl.PluralRules` (`.one` / `.other`).
+- Español neutro: sin voseo ni regionalismos; "tú" o impersonal.
+- `node scripts/i18n-check.mjs` falla si una clave usada no existe o está
+  duplicada. CI lo ejecuta junto a `tsc`.
+
 ## Componentes canónicos
 
 - `PageHeader` (`shared/components/patterns.tsx`): título + regla de señal +

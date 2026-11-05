@@ -12,11 +12,13 @@ import { Timeline } from "./Timeline";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
 import { useAuth } from "../auth/store";
+import { useI18n } from "../../shared/i18n";
 
 const { Root, Portal, Backdrop, Popup, Title, Close } = DialogPrimitive;
 
 // steps checklist CI desde marcadores "▶/✔/✘ step" del build log.
 function Steps({ log }: { log: string }) {
+  const { t } = useI18n();
   const steps = useMemo(() => {
     const out: { name: string; state: "ok" | "bad" | "run" }[] = [];
     for (const line of log.split("\n")) {
@@ -43,7 +45,13 @@ function Steps({ log }: { log: string }) {
             className={`h-1.5 w-1.5 shrink-0 ${
               s.state === "ok" ? "bg-ok" : s.state === "bad" ? "bg-bad" : "bg-warn animate-signal-blink"
             }`}
-            aria-label={`paso ${s.state}`}
+            aria-label={t(
+              s.state === "ok"
+                ? "deployments.stepAria.ok"
+                : s.state === "bad"
+                  ? "deployments.stepAria.bad"
+                  : "deployments.stepAria.run",
+            )}
           />
           <span className="min-w-0 flex-1 truncate font-mono text-[10px]">{s.name}</span>
           <span
@@ -51,7 +59,11 @@ function Steps({ log }: { log: string }) {
               s.state === "ok" ? "text-ok" : s.state === "bad" ? "text-bad" : "text-warn"
             }`}
           >
-            {s.state === "run" ? "en curso" : s.state === "ok" ? "ok" : "falló"}
+            {s.state === "run"
+              ? t("deployments.step.run")
+              : s.state === "ok"
+                ? t("deployments.step.ok")
+                : t("deployments.step.failed")}
           </span>
         </li>
       ))}
@@ -69,6 +81,7 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
 }
 
 export function DeployDrawer() {
+  const { t, tn } = useI18n();
   const sel = useUI((u) => u.sel);
   const buildLog = useUI((u) => u.buildLog);
   const act = useUI((u) => u.act);
@@ -114,10 +127,10 @@ export function DeployDrawer() {
           <>
             <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border bg-secondary/20 px-4">
               <span aria-hidden className="h-1 w-4 bg-signal" />
-              <span className="micro">manifiesto de salida</span>
+              <span className="micro">{t("deployments.manifest")}</span>
               <span className="flex-1" />
               <Close className="border border-border px-2 py-0.5 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:border-input hover:text-foreground">
-                cerrar
+                {t("common.close")}
               </Close>
             </header>
 
@@ -138,10 +151,12 @@ export function DeployDrawer() {
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-px border border-border bg-border sm:grid-cols-4">
-                  <Cell label="inicio">{rel(dep.started_at)}</Cell>
-                  <Cell label="duración">{dur(dep.started_at, dep.finished_at)}</Cell>
-                  <Cell label="actor">{dep.triggered_by || "—"}</Cell>
-                  <Cell label="fin">{dep.finished_at ? rel(dep.finished_at) : "en curso"}</Cell>
+                  <Cell label={t("deployments.started")}>{rel(dep.started_at)}</Cell>
+                  <Cell label={t("deployments.duration")}>{dur(dep.started_at, dep.finished_at)}</Cell>
+                  <Cell label={t("deployments.actor")}>{dep.triggered_by || "—"}</Cell>
+                  <Cell label={t("deployments.finished")}>
+                    {dep.finished_at ? rel(dep.finished_at) : t("deploy.running")}
+                  </Cell>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
@@ -152,21 +167,21 @@ export function DeployDrawer() {
                       navigate(`/app/${dep.app}`);
                     }}
                   >
-                    abrir app
+                    {t("deployments.openApp")}
                   </Button>
                   {canWrite && (
                     <>
                       {([
-                        ["restart", "reiniciar", "outline"],
-                        ["deploy", "redesplegar", "outline"],
-                        ["rollback", "revertir", "destructive"],
-                      ] as const).map(([a, label, variant]) => (
+                        ["restart", "deployments.action.restart", "outline"],
+                        ["deploy", "deployments.action.redeploy", "outline"],
+                        ["rollback", "deployments.action.rollback", "destructive"],
+                      ] as const).map(([a, labelKey, variant]) => (
                         <Button key={a} variant={variant} size="sm" onClick={() => act(dep.app, a)}>
-                          {label}
+                          {t(labelKey)}
                         </Button>
                       ))}
                       <Button variant="ghost" size="sm" onClick={() => retry(dep.id)}>
-                        reintentar #{dep.id}
+                        {t("deployments.retryId", { id: dep.id })}
                       </Button>
                     </>
                   )}
@@ -175,29 +190,29 @@ export function DeployDrawer() {
 
               <div className="grid gap-px border-b border-border bg-border sm:grid-cols-2">
                 <section className="bg-popover p-4">
-                  <p className="micro mb-3">ciclo de vida</p>
+                  <p className="micro mb-3">{t("deployments.lifecycle")}</p>
                   <Timeline dep={dep} />
                 </section>
                 <section className="bg-popover p-4">
-                  <p className="micro mb-3">pasos de la compilación</p>
+                  <p className="micro mb-3">{t("deployments.buildSteps")}</p>
                   {buildLog ? (
                     <Steps log={buildLog} />
                   ) : (
-                    <p className="font-mono text-[10px] text-muted-foreground">sin pasos registrados</p>
+                    <p className="font-mono text-[10px] text-muted-foreground">{t("deployments.noSteps")}</p>
                   )}
                 </section>
               </div>
 
               <section>
                 <header className="flex items-center gap-2 border-b border-border bg-secondary/20 px-4 py-2">
-                  <span className="micro">build log</span>
+                  <span className="micro">{t("deployments.buildLog")}</span>
                   <span className="flex-1" />
                   <span className="tnum font-mono text-[9px] text-muted-foreground">
-                    {buildLog ? `${buildLog.split("\n").length} líneas` : "vacío"}
+                    {buildLog ? tn("deployments.lines", buildLog.split("\n").length) : t("deployments.logEmpty")}
                   </span>
                 </header>
                 <pre className="min-h-72 overflow-auto bg-ink/45 p-4 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-foreground/85">
-                  {buildLog || "sin build log para esta salida"}
+                  {buildLog || t("deployments.noLog")}
                 </pre>
               </section>
             </div>

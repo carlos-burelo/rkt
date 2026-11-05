@@ -10,6 +10,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "../i18n";
 
 // FormDialog: única forma de crear/editar en la UI. Nada de formularios
 // visibles en la página: un botón abre el diálogo, se envía y se cierra.
@@ -17,7 +18,7 @@ export function FormDialog({
   trigger,
   title,
   description,
-  submitLabel = "guardar",
+  submitLabel,
   canSubmit = true,
   onSubmit,
   children,
@@ -37,6 +38,7 @@ export function FormDialog({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
+  const { t } = useI18n();
   const [openState, setOpenState] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -83,9 +85,9 @@ export function FormDialog({
             <p className="border border-bad/30 bg-bad/5 px-2 py-1.5 font-mono text-[10px] text-bad">{err}</p>
           )}
           <DialogFooter className="pt-1">
-            <DialogClose render={<Button type="button" variant="outline" size="sm" />}>cancelar</DialogClose>
+            <DialogClose render={<Button type="button" variant="outline" size="sm" />}>{t("shared.form.cancel")}</DialogClose>
             <Button type="submit" size="sm" disabled={!canSubmit || busy}>
-              {busy ? "guardando…" : submitLabel}
+              {busy ? t("shared.form.saving") : (submitLabel ?? t("shared.form.submit"))}
             </Button>
           </DialogFooter>
         </form>

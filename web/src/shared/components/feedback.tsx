@@ -1,17 +1,20 @@
 import { Copy } from "lucide-react";
 import { Skeleton as SkeletonPrimitive } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { useI18n } from "../i18n";
 
 // CopyButton copia al portapapeles con micro-feedback.
-export function CopyButton({ text, label = "copiar" }: { text: string; label?: string }) {
+export function CopyButton({ text, label }: { text: string; label?: string }) {
+  const { t } = useI18n();
+  const title = label ?? t("common.copy");
   return (
     <button
       onClick={(e) => {
         e.stopPropagation();
         navigator.clipboard?.writeText(text).catch(() => {});
       }}
-      title={label}
-      aria-label={label}
+      title={title}
+      aria-label={title}
       className="rounded-[1px] p-0.5 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
     >
       <Copy className="h-3 w-3" />
@@ -49,6 +52,7 @@ export function Bars({
   tone?: (v: number, max: number) => string;
   showValues?: boolean;
 }) {
+  const { tn } = useI18n();
   const max = Math.max(1, ...data);
   const top = showValues ? 16 : 0;
   return (
@@ -74,7 +78,7 @@ export function Bars({
           className="absolute inset-x-0 bottom-0 flex items-end gap-1.5 border-b border-border pb-px"
           style={{ height }}
           role="img"
-          aria-label={`serie de ${data.length} puntos`}
+          aria-label={tn("shared.bars.series", data.length)}
         >
           {data.map((v, i) => (
             <div

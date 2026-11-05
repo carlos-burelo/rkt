@@ -10,10 +10,12 @@ import { useEnv } from "./hooks";
 import { useGlobalEnv } from "../env/hooks";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
+import { useI18n } from "../../shared/i18n";
 
 // AppEnv: variables heredadas de la flota (solo lectura, se editan en
 // Entorno) y propias del proyecto (sobrescriben a las globales).
 export function AppEnv() {
+  const { t, tn } = useI18n();
   const { name = "" } = useParams();
   const navigate = useNavigate();
   const { env, reload } = useEnv(name);
@@ -28,13 +30,13 @@ export function AppEnv() {
   return (
     <div className="space-y-4">
       <Section
-        title="Globales"
-        description="heredadas por toda la flota · se editan en Entorno"
+        title={t("apps.env.globalTitle")}
+        description={t("apps.env.globalDesc", { environment: t("nav.environment") })}
         actions={
           <div className="flex items-center gap-2">
-            <span className="tnum font-mono text-[9px] text-muted-foreground">{globalKeys.length} vars</span>
+            <span className="tnum font-mono text-[9px] text-muted-foreground">{tn("apps.env.vars", globalKeys.length)}</span>
             <Button variant="ghost" size="xs" onClick={() => navigate("/environment")}>
-              editar en Entorno
+              {t("apps.env.editGlobal", { environment: t("nav.environment") })}
             </Button>
           </div>
         }
@@ -48,7 +50,7 @@ export function AppEnv() {
                 className="flex items-center gap-2 border-b border-border/60 bg-card/35 px-2.5 py-1.5 last:border-0"
               >
                 <span className="folio w-5 shrink-0">{String(i + 1).padStart(2, "0")}</span>
-                <Globe2 className="h-3 w-3 shrink-0 text-muted-foreground/60" aria-label="global" />
+                <Globe2 className="h-3 w-3 shrink-0 text-muted-foreground/60" aria-label={t("apps.env.globalAria")} />
                 <span className="w-44 shrink-0 truncate font-mono text-[11px]">{k}</span>
                 <EnvSecret value={global.env[k]} />
                 <span
@@ -57,37 +59,37 @@ export function AppEnv() {
                       ? "shrink-0 border border-warn/40 px-1 font-mono text-[9px] text-warn"
                       : "shrink-0 font-mono text-[9px] text-muted-foreground/60"
                   }
-                  title={overridden ? "este proyecto define su propio valor" : "llega desde la flota"}
+                  title={overridden ? t("apps.env.overriddenTitle") : t("apps.env.inheritedTitle")}
                 >
-                  {overridden ? "anulada por el proyecto" : "heredada"}
+                  {overridden ? t("apps.env.overridden") : t("apps.env.inherited")}
                 </span>
               </div>
             );
           })}
           {globalKeys.length === 0 && (
             <p className="bg-card/30 px-3 py-4 text-center font-mono text-[10px] text-muted-foreground">
-              sin globales · créalas en Entorno
+              {t("apps.env.globalEmpty", { environment: t("nav.environment") })}
             </p>
           )}
         </div>
       </Section>
 
       <Section
-        title="Del proyecto"
-        description="sobrescriben a las globales · solo operador+ · valores enmascarados"
+        title={t("apps.env.projectTitle")}
+        description={t("apps.env.projectDesc", { role: t("role.operator") })}
         actions={
           <div className="flex items-center gap-2">
-            <span className="tnum font-mono text-[9px] text-muted-foreground">{keys.length} vars</span>
+            <span className="tnum font-mono text-[9px] text-muted-foreground">{tn("apps.env.vars", keys.length)}</span>
             {canWrite && (
               <FormDialog
                 trigger={
                   <Button size="xs" variant="outline">
-                    <Plus className="h-3 w-3" /> nueva variable
+                    <Plus className="h-3 w-3" /> {t("apps.env.newVar")}
                   </Button>
                 }
-                title="Nueva variable del proyecto"
-                description={`se inyecta solo en ${name} · sobrescribe la global del mismo nombre`}
-                submitLabel="crear"
+                title={t("apps.env.newTitle")}
+                description={t("apps.env.newDesc", { app: name })}
+                submitLabel={t("common.create")}
                 canSubmit={key.trim() !== ""}
                 onSubmit={async () => {
                   await setEnv(name, key.trim(), val);
@@ -96,20 +98,20 @@ export function AppEnv() {
                   reload();
                 }}
               >
-                <Field label="clave" hint="si ya existe como global, la anula">
+                <Field label={t("apps.env.key")} hint={t("apps.env.keyHint")}>
                   <Input
                     value={key}
                     onChange={(e) => setKey(e.target.value)}
-                    placeholder="CLAVE"
+                    placeholder={t("apps.env.keyPlaceholder")}
                     className="h-8 font-mono text-[12px]"
                     autoFocus
                   />
                 </Field>
-                <Field label="valor" hint="admite ${VAR}">
+                <Field label={t("apps.env.value")} hint={t("apps.env.valueHint")}>
                   <Input
                     value={val}
                     onChange={(e) => setVal(e.target.value)}
-                    placeholder="valor"
+                    placeholder={t("apps.env.value")}
                     className="h-8 font-mono text-[12px]"
                   />
                 </Field>
@@ -128,7 +130,7 @@ export function AppEnv() {
               <span className="w-44 shrink-0 truncate font-mono text-[11px]">{k}</span>
               <EnvSecret value={env[k]} />
               {k in global.env && (
-                <span className="shrink-0 border border-warn/40 px-1 font-mono text-[9px] text-warn">anula global</span>
+                <span className="shrink-0 border border-warn/40 px-1 font-mono text-[9px] text-warn">{t("apps.env.overridesGlobal")}</span>
               )}
               {canWrite && (
                 <Button
@@ -136,14 +138,14 @@ export function AppEnv() {
                   size="xs"
                   onClick={() => delEnv(name, k).then(reload).catch(fail)}
                 >
-                  borrar
+                  {t("common.delete")}
                 </Button>
               )}
             </div>
           ))}
           {keys.length === 0 && (
             <p className="bg-card/30 px-3 py-5 text-center font-mono text-[10px] text-muted-foreground">
-              sin vars propias · hereda las globales
+              {t("apps.env.projectEmpty")}
             </p>
           )}
         </div>

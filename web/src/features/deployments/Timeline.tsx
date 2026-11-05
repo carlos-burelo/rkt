@@ -1,17 +1,27 @@
 import { Deployment } from "../../shared/lib/types";
 import { rel, dur } from "../../shared/lib/time";
+import { useI18n } from "../../shared/i18n";
 
 // Timeline ciclo de vida del deploy (started → building → fin).
 export function Timeline({ dep }: { dep: Deployment }) {
+  const { t } = useI18n();
   const steps: { label: string; sub: string; state: "ok" | "run" | "bad" | "idle" }[] = [
-    { label: "Inicio", sub: rel(dep.started_at), state: "ok" },
+    { label: t("deployments.timeline.start"), sub: rel(dep.started_at), state: "ok" },
     dep.status === "running"
-      ? { label: "Building", sub: `en curso · ${dur(dep.started_at, "")}`, state: "run" }
-      : { label: "Build", sub: dur(dep.started_at, dep.finished_at), state: dep.status === "ok" ? "ok" : "bad" },
-    dep.status === "running"
-      ? { label: "Fin", sub: "pendiente", state: "idle" }
+      ? {
+          label: t("deployments.timeline.building"),
+          sub: t("deployments.timeline.runningSub", { dur: dur(dep.started_at, "") }),
+          state: "run",
+        }
       : {
-          label: dep.status === "ok" ? "Live" : "Fallido",
+          label: t("deployments.timeline.build"),
+          sub: dur(dep.started_at, dep.finished_at),
+          state: dep.status === "ok" ? "ok" : "bad",
+        },
+    dep.status === "running"
+      ? { label: t("deployments.timeline.end"), sub: t("deployments.timeline.pending"), state: "idle" }
+      : {
+          label: dep.status === "ok" ? t("deployments.timeline.live") : t("deployments.timeline.failed"),
           sub: rel(dep.finished_at),
           state: dep.status === "ok" ? "ok" : "bad",
         },

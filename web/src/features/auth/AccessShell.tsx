@@ -1,4 +1,5 @@
 import { BrandMark } from "../../shared/components/ui";
+import { useI18n } from "../../shared/i18n";
 
 // Marco de acceso: la terminal se presenta como manifiesto, no como landing.
 export function AccessShell({
@@ -12,6 +13,7 @@ export function AccessShell({
   children: React.ReactNode;
   footer: React.ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
       <aside className="relative hidden overflow-hidden border-r border-border bg-ink/70 lg:flex lg:w-[44%] lg:flex-col lg:justify-between lg:p-10">
@@ -23,22 +25,22 @@ export function AccessShell({
             </span>
             <div>
               <p className="text-[15px] leading-none font-semibold tracking-tight">rkt</p>
-              <p className="micro mt-1">panel de control</p>
+              <p className="micro mt-1">{t("system.access.panelControl")}</p>
             </div>
           </div>
           <div className="mt-16 max-w-sm">
             <h2 className="text-[32px] leading-[1.05] font-semibold tracking-[-0.04em] text-balance">
-              Cada app con su puerto, su dominio y un supervisor que la mantiene en marcha.
+              {t("system.access.headline")}
             </h2>
             <p className="mt-4 max-w-[36ch] text-[12px] leading-relaxed text-muted-foreground">
-              Despliega, revierte y publica sin editar YAML. Solo mostramos lo que medimos de verdad.
+              {t("system.access.subtitle")}
             </p>
           </div>
           <div className="mt-10 max-w-sm border border-border/80">
             {[
-              ["01", "operar", "despliegues · registros · CI"],
-              ["02", "servir", "dominios · proxy · entorno"],
-              ["03", "observar", "tráfico · alertas"],
+              ["01", t("nav.group.operate"), t("system.access.operateDesc")],
+              ["02", t("nav.group.serve"), t("system.access.serveDesc")],
+              ["03", t("nav.group.observe"), t("system.access.observeDesc")],
             ].map(([n, k, d]) => (
               <div key={k} className="flex items-baseline gap-3 border-b border-border/60 px-3 py-2 last:border-0">
                 <span className="folio">{n}</span>
@@ -51,9 +53,9 @@ export function AccessShell({
         </div>
         <div className="relative flex items-end justify-between gap-4 border-t border-border/70 pt-4">
           <p className="font-mono text-[9px] leading-relaxed text-muted-foreground/70">
-            acceso restringido · sesión con cookie segura
+            {t("system.access.restricted")}
             <br />
-            sin usuarios, rkt no opera
+            {t("system.access.noUsers")}
           </p>
           <span className="tnum font-mono text-[9px] text-muted-foreground/50">rkt / v1</span>
         </div>
@@ -66,7 +68,7 @@ export function AccessShell({
               <BrandMark className="h-4 w-4" />
             </span>
             <span className="text-[13px] font-semibold tracking-tight">rkt</span>
-            <span className="micro">panel</span>
+            <span className="micro">{t("system.access.panel")}</span>
           </div>
           <header className="border-b border-border pb-4">
             <div className="flex items-center gap-2.5">

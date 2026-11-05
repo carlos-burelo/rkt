@@ -9,8 +9,10 @@ import { useFleet } from "../overview/hooks";
 import { useEnvCount } from "./hooks";
 import { publicUrl, publicHost } from "../../shared/lib/url";
 import { AppPreview } from "./AppPreview";
+import { useI18n } from "../../shared/i18n";
 
 function Check({ ok, label, hint }: { ok: boolean; label: string; hint: string }) {
+  const { t } = useI18n();
   return (
     <div className="flex items-center gap-2.5 py-2">
       <span
@@ -22,7 +24,7 @@ function Check({ ok, label, hint }: { ok: boolean; label: string; hint: string }
         <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground">{hint}</span>
       </span>
       <span className={`font-mono text-[10px] tracking-[0.08em] uppercase ${ok ? "text-ok" : "text-muted-foreground/70"}`}>
-        {ok ? "listo" : "pendiente"}
+        {ok ? t("apps.overview.check.ready") : t("apps.overview.check.pending")}
       </span>
     </div>
   );
@@ -38,6 +40,7 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
 }
 
 export function AppOverview() {
+  const { t } = useI18n();
   const { name = "" } = useParams();
   const { metas, deps, status } = useFleet();
   const [stats, setStats] = useState<Analytics | null>(null);
@@ -64,24 +67,24 @@ export function AppOverview() {
     return (
       <div className="space-y-4">
         <Section
-          title="App externa (solo proxy)"
-          description="sin build, sin deploy, sin supervisor · el dev server lo corre tu terminal"
+          title={t("apps.overview.externalTitle")}
+          description={t("apps.overview.externalDesc")}
           accent={!running}
         >
           <div className="grid grid-cols-2 gap-px border border-border bg-border sm:grid-cols-4">
-            <Cell label="estado">{running ? "escuchando" : "sin backend"}</Cell>
-            <Cell label="puerto">{meta.port || "-"}</Cell>
-            <Cell label="host">{domains[0] || "-"}</Cell>
-            <Cell label="runtime">externo</Cell>
+            <Cell label={t("apps.field.state")}>{running ? t("apps.overview.listening") : t("apps.overview.noBackend")}</Cell>
+            <Cell label={t("apps.field.port")}>{meta.port || "-"}</Cell>
+            <Cell label={t("apps.field.host")}>{domains[0] || "-"}</Cell>
+            <Cell label={t("apps.field.runtime")}>{t("apps.overview.externalRuntime")}</Cell>
           </div>
           <div className="mt-3 border border-border bg-card/35 px-3 py-2">
-            <p className="micro">comando sugerido</p>
+            <p className="micro">{t("apps.overview.suggestedCommand")}</p>
             <div className="mt-1 flex items-center gap-2">
               <code className="min-w-0 flex-1 truncate font-mono text-[11px]">{cmd}</code>
               <CopyButton text={cmd} />
             </div>
             <p className="mt-1 font-mono text-[9px] text-muted-foreground">
-              correlo en {meta.dir || "la carpeta del repo"}; rkt solo enruta el dominio.
+              {t("apps.overview.externalRunHint", { dir: meta.dir || t("apps.overview.repoFolder") })}
             </p>
           </div>
         </Section>
@@ -101,41 +104,41 @@ export function AppOverview() {
         {domains[0] && <AppPreview domain={domains[0]} running={running} />}
 
         <Section
-          title="Despliegue en producción"
+          title={t("apps.overview.productionTitle")}
           className="h-full"
-          description={prod ? `rev ${prod.rev.slice(0, 8)} · ${dur(prod.started_at, prod.finished_at)}` : "sin salida correcta"}
+          description={prod ? t("apps.overview.rev", { rev: prod.rev.slice(0, 8), duration: dur(prod.started_at, prod.finished_at) }) : t("apps.overview.noSuccess")}
           accent={!prod}
         >
         {!prod && (
           <div className="border border-border bg-card/30 px-4 py-6 text-center">
-            <p className="micro text-muted-foreground/60">sin registro</p>
-            <p className="mt-2 text-[12px]">Todavía no hay un despliegue correcto.</p>
-            <p className="mt-1 font-mono text-[10px] text-muted-foreground">publica con Redesplegar desde la ficha de la unidad.</p>
+            <p className="micro text-muted-foreground/60">{t("apps.overview.noRecord")}</p>
+            <p className="mt-2 text-[12px]">{t("apps.overview.noDeploy")}</p>
+            <p className="mt-1 font-mono text-[10px] text-muted-foreground">{t("apps.overview.publishHint")}</p>
           </div>
         )}
         {prod && (
           <>
             <div className="grid grid-cols-2 gap-px border border-border bg-border sm:grid-cols-4">
-              <Cell label="revisión">
+              <Cell label={t("apps.field.revision")}>
                 <span className="flex items-center gap-1">
                   {prod.rev.slice(0, 8)}
                   <CopyButton text={prod.rev} />
                 </span>
               </Cell>
-              <Cell label="duración">{dur(prod.started_at, prod.finished_at)}</Cell>
-              <Cell label="publicó">{prod.triggered_by || "—"}</Cell>
-              <Cell label="hora">
+              <Cell label={t("apps.field.duration")}>{dur(prod.started_at, prod.finished_at)}</Cell>
+              <Cell label={t("apps.field.triggeredBy")}>{prod.triggered_by || "—"}</Cell>
+              <Cell label={t("apps.field.time")}>
                 <Time iso={prod.finished_at} />
               </Cell>
             </div>
             <div className="mt-3 border border-border">
               <div className="flex items-center gap-2 border-b border-border bg-secondary/20 px-3 py-1.5">
-                <span className="micro">destinos</span>
+                <span className="micro">{t("apps.field.destinations")}</span>
                 <span className="tnum ml-auto font-mono text-[9px] text-muted-foreground">{domains.length}</span>
               </div>
               {domains.length === 0 && (
                 <p className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
-                  sin dominios — asigna uno en Dominios.
+                  {t("apps.overview.noDomains")}
                 </p>
               )}
               {domains.map((h) => (
@@ -158,31 +161,33 @@ export function AppOverview() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Section title="Checklist de ruta" description="lo que falta para servir">
+        <Section title={t("apps.overview.checklistTitle")} description={t("apps.overview.checklistDesc")}>
           <div className="divide-y divide-border/60">
-            <Check ok={!!meta?.deploy?.repo} label="Repo conectado" hint="deploy.repo" />
-            <Check ok={domains.length > 0} label="Dominio asignado" hint="Dominios → nueva ruta" />
-            <Check ok={!!prod} label="Primer despliegue correcto" hint="Redesplegar" />
-            <Check ok={envCount > 0} label="Entorno configurado" hint="Entorno" />
-            <Check ok={running} label="App en marcha" hint="supervisor" />
+            <Check ok={!!meta?.deploy?.repo} label={t("apps.overview.checkRepo")} hint="deploy.repo" />
+            <Check ok={domains.length > 0} label={t("apps.overview.checkDomain")} hint={t("apps.overview.checkDomainHint")} />
+            <Check ok={!!prod} label={t("apps.overview.checkDeploy")} hint={t("apps.overview.checkDeployHint")} />
+            <Check ok={envCount > 0} label={t("apps.overview.checkEnv")} hint={t("nav.environment")} />
+            <Check ok={running} label={t("apps.overview.checkRunning")} hint="supervisor" />
           </div>
         </Section>
 
-        <Section title="Tráfico 7d" description={domains[0] ?? "sin dominio"}>
+        <Section title={t("apps.overview.trafficTitle")} description={domains[0] ?? t("apps.tabs.noDomain")}>
           {!stats && (
             <p className="border border-border bg-card/30 px-3 py-4 font-mono text-[10px] text-muted-foreground">
-              sin datos{domains[0] ? ` para ${domains[0]}` : ""} · access.log local
+              {t("apps.overview.noData", {
+                scope: domains[0] ? t("apps.overview.noDataFor", { domain: domains[0] }) : "",
+              })}
             </p>
           )}
           {stats && (
             <div className="grid grid-cols-2 gap-px border border-border bg-border">
-              <Stat value={`${stats.total}`} label="peticiones" sub="ventana 7d" />
-              <Stat value={`${(stats.bytes / 1048576).toFixed(1)}M`} label="tráfico" sub="access.log" />
-              <Stat value={stats.p95 || "—"} label="p95" sub="latencia" />
+              <Stat value={`${stats.total}`} label={t("apps.overview.requests")} sub={t("apps.overview.window7d")} />
+              <Stat value={`${(stats.bytes / 1048576).toFixed(1)}M`} label={t("apps.overview.traffic")} sub="access.log" />
+              <Stat value={stats.p95 || "—"} label="p95" sub={t("apps.overview.latency")} />
               <Stat
                 value={`${stats.by_class["5xx"] ?? 0}`}
                 label="5xx"
-                sub="errores servidor"
+                sub={t("apps.overview.serverErrors")}
                 tone={(stats.by_class["5xx"] ?? 0) > 0 ? "warn" : undefined}
               />
             </div>

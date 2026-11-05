@@ -7,10 +7,12 @@ import { RadialMap } from "./ProxyMap";
 import { StateRail } from "../../shared/components/ui";
 import { PageHeader, EmptyState, Segmented } from "../../shared/components/patterns";
 import { useUI } from "../../app/ui";
+import { useI18n } from "../../shared/i18n";
 
 // Proxy: lo que Vercel esconde. Cada host, a dónde va, si el backend
 // responde (dial) y estado del cert. Solo lectura.
 export function Proxy() {
+  const { t } = useI18n();
   const fail = useUI((u) => u.fail);
   const [rows, setRows] = useState<ProxyRoute[] | null>(null);
   const [fState, setFState] = useState<"all" | "ok" | "down">("all");
@@ -38,11 +40,14 @@ export function Proxy() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Proxy"
-        description="Mapa real por ruta: dial TCP al backend y cert ACME. Toca un host para aislar su haz. Solo lectura."
+        title={t("nav.proxy")}
+        description={t("serve.proxy.desc")}
         meta={
           <span className="tnum font-mono text-[10px] text-muted-foreground">
-            {links.filter((l) => l.ok).length}/{links.length} en ruta
+            {t("serve.proxy.meta", {
+              ok: links.filter((l) => l.ok).length,
+              total: links.length,
+            })}
           </span>
         }
         actions={
@@ -50,33 +55,33 @@ export function Proxy() {
             <Segmented
               value={fState}
               onChange={setFState}
-              label="estado del backend"
+              label={t("serve.proxy.filterState")}
               items={[
-                { value: "all", label: "todos" },
-                { value: "ok", label: "en ruta" },
-                { value: "down", label: "varados" },
+                { value: "all", label: t("common.all") },
+                { value: "ok", label: t("serve.proxy.onRoute") },
+                { value: "down", label: t("serve.proxy.stranded") },
               ]}
             />
             <Segmented
               value={fTls}
               onChange={setFTls}
-              label="estado tls"
+              label={t("serve.proxy.filterTls")}
               items={[
-                { value: "all", label: "tls todo" },
-                { value: "tls", label: "con tls" },
-                { value: "off", label: "sin tls" },
+                { value: "all", label: t("serve.proxy.tlsAll") },
+                { value: "tls", label: t("serve.proxy.withTls") },
+                { value: "off", label: t("serve.tls.none") },
               ]}
             />
             <Link
               to="/routes"
               className="inline-flex items-center gap-1 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground"
             >
-              gestionar <ArrowRight className="h-3 w-3" />
+              {t("serve.proxy.manage")} <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
         }
       />
-      {!rows && <p className="font-mono text-[10px] text-muted-foreground">cargando mapa…</p>}
+      {!rows && <p className="font-mono text-[10px] text-muted-foreground">{t("serve.proxy.loading")}</p>}
       {rows && (
         <>
           <RadialMap links={filteredLinks} selected={selected} onSelect={setSelected} />
@@ -85,18 +90,18 @@ export function Proxy() {
               onClick={() => setSelected(null)}
               className="tnum inline-flex w-fit items-center gap-1.5 border border-border px-2 py-1 font-mono text-[9px] text-muted-foreground hover:border-input hover:text-foreground"
             >
-              <X className="h-3 w-3" /> limpiar filtro: {selected}
+              <X className="h-3 w-3" /> {t("serve.proxy.clearFilter", { host: selected })}
             </button>
           )}
 
-          <div className="border border-border" role="table" aria-label="rutas del proxy">
+          <div className="border border-border" role="table" aria-label={t("serve.proxy.tableAria")}>
             <div
               className="hidden grid-cols-[minmax(0,1fr)_8rem_auto] items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 sm:grid"
               aria-hidden
             >
-              <span className="micro">host → target</span>
-              <span className="micro">backend</span>
-              <span className="micro text-right">cert</span>
+              <span className="micro">{t("serve.proxy.colHostTarget")}</span>
+              <span className="micro">{t("serve.field.backend")}</span>
+              <span className="micro text-right">{t("serve.field.cert")}</span>
             </div>
             {visibleRows
               .filter((r) => {
@@ -116,9 +121,9 @@ export function Proxy() {
                       {r.dns_ok?.some((v) => !v) && (
                         <span
                           className="shrink-0 font-mono text-[9px] tracking-[0.08em] uppercase text-warn"
-                          title="ese host no resuelve a 127.0.0.1 aquí: añádelo a hosts o usa .localhost"
+                          title={t("serve.proxy.dnsTitle")}
                         >
-                          no resuelve
+                          {t("serve.proxy.dnsUnresolved")}
                         </span>
                       )}
                     </p>
@@ -129,25 +134,30 @@ export function Proxy() {
                       r.ok ? "text-ok" : "text-bad"
                     }`}
                   >
-                    {r.ok ? "backend ok" : "backend caído"}
+                    {r.ok ? t("serve.proxy.backendOk") : t("serve.proxy.backendDown")}
                   </span>
                   <span className="flex flex-wrap justify-end gap-1">
-                    {r.tls.map((t, i) => (
+                    {r.tls.map((tls, i) => (
                       <span
                         key={i}
                         className={`tnum inline-flex h-5 items-center border px-1.5 font-mono text-[10px] tracking-[0.06em] uppercase ${
-                          t === "off"
+                          tls === "off"
                             ? "border-border text-muted-foreground"
                             : "border-info/30 bg-info/10 text-info"
                         }`}
                       >
-                        {t === "off" ? "sin tls" : `tls ${t}`}
+                        {tls === "off" ? t("serve.tls.none") : t("serve.tls.value", { version: tls })}
                       </span>
                     ))}
                   </span>
                 </div>
               ))}
-            {rows.length === 0 && <EmptyState title="Sin routes" hint="Agrega tu primer dominio en Domains." />}
+            {rows.length === 0 && (
+              <EmptyState
+                title={t("serve.proxy.emptyTitle")}
+                hint={t("serve.proxy.emptyHint", { domains: t("nav.routes") })}
+              />
+            )}
           </div>
         </>
       )}

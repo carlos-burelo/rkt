@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listFS, FsEntry, FsListing } from "../../features/fs/api";
 import { useUI } from "../../app/ui";
+import { useI18n } from "../i18n";
 
 const SEP = /[\\/]/;
 
@@ -36,6 +37,7 @@ export function PathPicker({
   title?: string;
 }) {
   const fail = useUI((u) => u.fail);
+  const { t } = useI18n();
   const [path, setPath] = useState("");
   const [listing, setListing] = useState<FsListing | null>(null);
   const [q, setQ] = useState("");
@@ -91,10 +93,10 @@ export function PathPicker({
         <DialogHeader className="pr-8">
           <div className="flex items-center gap-2">
             <span aria-hidden className="h-1 w-4 bg-signal" />
-            <span className="micro">{mode === "dir" ? "elegir carpeta" : "elegir archivo"}</span>
+            <span className="micro">{mode === "dir" ? t("shared.pathPicker.mode.dir") : t("shared.pathPicker.mode.file")}</span>
           </div>
           <DialogTitle className="mt-1 text-[16px] tracking-[-0.02em]">
-            {title ?? "Rutas del host"}
+            {title ?? t("shared.pathPicker.title")}
           </DialogTitle>
         </DialogHeader>
 
@@ -104,8 +106,8 @@ export function PathPicker({
             size="icon-sm"
             onClick={() => load(listing?.parent ?? "")}
             disabled={busy || !listing || listing.parent === ""}
-            aria-label="subir un nivel"
-            title="subir un nivel"
+            aria-label={t("shared.pathPicker.up")}
+            title={t("shared.pathPicker.up")}
           >
             <ArrowUp className="h-3.5 w-3.5" />
           </Button>
@@ -115,12 +117,12 @@ export function PathPicker({
             onKeyDown={(e) => {
               if (e.key === "Enter") load(path);
             }}
-            placeholder="C:\ruta\exacta"
+            placeholder={t("shared.pathPicker.pathPlaceholder")}
             className="h-7 min-w-0 flex-1 font-mono text-[11px]"
-            aria-label="ruta"
+            aria-label={t("shared.pathPicker.pathAria")}
           />
           <Button variant="outline" size="sm" onClick={() => load(path)} disabled={busy}>
-            ir
+            {t("shared.pathPicker.go")}
           </Button>
         </div>
 
@@ -129,20 +131,20 @@ export function PathPicker({
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="filtrar por nombre…"
+            placeholder={t("shared.pathPicker.filterPlaceholder")}
             className="h-7 pl-7 font-mono text-[11px]"
-            aria-label="filtrar"
+            aria-label={t("shared.pathPicker.filterAria")}
           />
         </div>
 
-        <div className="h-64 overflow-y-auto border border-border" role="listbox" aria-label="contenido del directorio">
+        <div className="h-64 overflow-y-auto border border-border" role="listbox" aria-label={t("shared.pathPicker.listAria")}>
           {busy && (
             <p className="flex items-center gap-2 px-3 py-2 font-mono text-[10px] text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" /> leyendo…
+              <Loader2 className="h-3 w-3 animate-spin" /> {t("shared.pathPicker.loading")}
             </p>
           )}
           {!busy && rows.length === 0 && (
-            <p className="px-3 py-2 font-mono text-[10px] text-muted-foreground">sin coincidencias</p>
+            <p className="px-3 py-2 font-mono text-[10px] text-muted-foreground">{t("shared.pathPicker.noMatch")}</p>
           )}
           {!busy &&
             rows.map((e) => (
@@ -161,7 +163,7 @@ export function PathPicker({
                 )}
                 <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{e.name}</span>
                 {!e.dir && mode === "file" && (
-                  <span className="font-mono text-[9px] text-muted-foreground/60 uppercase">elegir</span>
+                  <span className="font-mono text-[9px] text-muted-foreground/60 uppercase">{t("shared.pathPicker.pick")}</span>
                 )}
               </button>
             ))}
@@ -169,7 +171,7 @@ export function PathPicker({
 
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
           <p className="min-w-0 flex-1 truncate font-mono text-[9px] text-muted-foreground" title={path || listing?.path}>
-            {path || listing?.path || "raíces del disco"}
+            {path || listing?.path || t("shared.pathPicker.roots")}
           </p>
           <Button
             size="sm"
@@ -181,7 +183,7 @@ export function PathPicker({
               setOpen(false);
             }}
           >
-            <Check className="h-3 w-3" /> usar esta carpeta
+            <Check className="h-3 w-3" /> {t("shared.pathPicker.useThis")}
           </Button>
         </div>
       </DialogContent>
@@ -208,6 +210,7 @@ export function PathInput({
   className?: string;
   ariaLabel?: string;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   return (
     <div className="flex items-center gap-1">
@@ -225,8 +228,8 @@ export function PathInput({
         size="icon-sm"
         disabled={disabled}
         onClick={() => setOpen(true)}
-        aria-label={mode === "dir" ? "elegir carpeta" : "elegir archivo"}
-        title={mode === "dir" ? "elegir carpeta" : "elegir archivo"}
+        aria-label={mode === "dir" ? t("shared.pathPicker.mode.dir") : t("shared.pathPicker.mode.file")}
+        title={mode === "dir" ? t("shared.pathPicker.mode.dir") : t("shared.pathPicker.mode.file")}
       >
         {mode === "dir" ? <Folder className="h-3.5 w-3.5" /> : <File className="h-3.5 w-3.5" />}
       </Button>

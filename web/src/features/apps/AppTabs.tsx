@@ -11,15 +11,16 @@ import { publicUrl, publicHost } from "../../shared/lib/url";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
 import { fixHost } from "../routes/api";
+import { useI18n } from "../../shared/i18n";
 
 const TABS = [
-  { id: "overview", label: "Resumen" },
-  { id: "usage", label: "Consumo" },
-  { id: "deploys", label: "Despliegues" },
-  { id: "logs", label: "Registros" },
-  { id: "analytics", label: "Analítica" },
-  { id: "env", label: "Entorno" },
-  { id: "settings", label: "Ajustes" },
+  { id: "overview", label: "nav.overview" },
+  { id: "usage", label: "apps.usage.title" },
+  { id: "deploys", label: "nav.deployments" },
+  { id: "logs", label: "nav.logs" },
+  { id: "analytics", label: "nav.analytics" },
+  { id: "env", label: "nav.environment" },
+  { id: "settings", label: "nav.settings" },
 ] as const;
 
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {
@@ -34,6 +35,7 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
 // AppTabs ficha por app con tabs anidadas (el scroll-muro murió).
 // Fija appFilter para que Deployments/Logs reutilicen su filtro.
 export function AppTabs() {
+  const { t, tn } = useI18n();
   const { name = "" } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -52,7 +54,12 @@ export function AppTabs() {
   const state = st?.failed ? "failed" : st?.running ? (st.http_ok === false ? "degraded" : "running") : "stopped";
   const domains = meta?.domains ?? [];
   const external = !!meta?.external;
-  const tabs = TABS.filter((t) => !(external && t.id === "deploys"));
+  const tabs = TABS.filter((tab) => !(external && tab.id === "deploys"));
+  const port = meta?.port ? `:${meta.port}` : t("apps.header.portUnassigned");
+  const destinations =
+    domains.length > 0
+      ? tn("apps.header.destinations", domains.length)
+      : t("apps.header.noDestination");
 
   return (
     <div className="space-y-4">
@@ -61,18 +68,17 @@ export function AppTabs() {
           <span aria-hidden className="mt-1.5 h-5 w-1 shrink-0 bg-signal" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="truncate font-mono text-[24px] leading-none font-medium tracking-[-0.04em]">{name || "(sin app)"}</h1>
+              <h1 className="truncate font-mono text-[24px] leading-none font-medium tracking-[-0.04em]">{name || t("apps.tabs.noApp")}</h1>
               {external && (
                 <span className="border border-info/40 bg-info/10 px-1.5 font-mono text-[9px] tracking-[0.08em] text-info uppercase">
-                  externa
+                  {t("apps.tabs.external")}
                 </span>
               )}
               <Dot status={state} />
               <StatusBadge status={state} />
             </div>
             <p className="mt-2 font-mono text-[11px] text-muted-foreground">
-              unidad de flota · puerto {meta?.port ? `:${meta.port}` : "sin asignar"} ·{" "}
-              {domains.length > 0 ? `${domains.length} destino${domains.length > 1 ? "s" : ""}` : "sin destino"}
+              {t("apps.header.meta", { port, destinations })}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -83,30 +89,30 @@ export function AppTabs() {
                 rel="noreferrer"
                 className={buttonVariants({ variant: "outline", size: "sm" })}
               >
-                <ExternalLink className="h-3 w-3" /> Abrir
+                <ExternalLink className="h-3 w-3" /> {t("common.open")}
               </a>
             )}
             {canWrite && name && !external && (
               <>
                 <Button variant="outline" size="sm" onClick={() => act(name, "restart")}>
-                  <RotateCw className="h-3 w-3" /> Reiniciar
+                  <RotateCw className="h-3 w-3" /> {t("apps.actions.restart")}
                 </Button>
-                <Button size="sm" onClick={() => act(name, "deploy")}>Redesplegar</Button>
-                <Button variant="destructive" size="sm" onClick={() => act(name, "rollback")}>Revertir</Button>
+                <Button size="sm" onClick={() => act(name, "deploy")}>{t("apps.actions.redeploy")}</Button>
+                <Button variant="destructive" size="sm" onClick={() => act(name, "rollback")}>{t("apps.actions.rollback")}</Button>
               </>
             )}
           </div>
         </div>
         <div className="grid grid-cols-2 gap-px bg-border lg:grid-cols-4">
-          <Cell label="estado">
+          <Cell label={t("apps.field.state")}>
             <span className={st?.failed ? "text-bad" : st?.running ? "text-ok" : "text-muted-foreground"}>
               {stateLabel(state)}
             </span>
           </Cell>
-          <Cell label="reinicios">
+          <Cell label={t("apps.field.restarts")}>
             <span className="tnum">{st?.restarts ?? 0}</span>
           </Cell>
-          <Cell label="destino">
+          <Cell label={t("apps.field.destination")}>
             {domains[0] ? (
               <span className="flex min-w-0 items-center gap-1.5">
                 <a href={publicUrl(domains[0], status)} target="_blank" rel="noreferrer" className="truncate hover:text-signal hover:underline">
@@ -114,8 +120,8 @@ export function AppTabs() {
                 </a>
                 {meta?.dns_ok === false && (
                   <span className="flex shrink-0 items-center gap-1.5">
-                    <span className="font-mono text-[9px] text-warn" title="el dominio no resuelve a 127.0.0.1 en esta máquina">
-                      no resuelve
+                    <span className="font-mono text-[9px] text-warn" title={t("apps.tabs.dnsTitle")}>
+                      {t("apps.tabs.dnsUnresolved")}
                     </span>
                     {canWrite && (
                       <Button
@@ -123,30 +129,30 @@ export function AppTabs() {
                         size="xs"
                         onClick={() => {
                           fixHost(domains[0]).then((r) => {
-                            if (r.ok) toast.success(`${domains[0]} añadido a hosts`);
-                            else toast.error(r.hint ?? r.error ?? "no se pudo escribir hosts");
+                            if (r.ok) toast.success(t("apps.toast.hostAdded", { domain: domains[0] }));
+                            else toast.error(r.hint ?? r.error ?? t("apps.toast.hostError"));
                           });
                         }}
                       >
-                        arreglar
+                        {t("apps.tabs.fixHost")}
                       </Button>
                     )}
                   </span>
                 )}
               </span>
             ) : (
-              <span className="text-muted-foreground">sin dominio</span>
+              <span className="text-muted-foreground">{t("apps.tabs.noDomain")}</span>
             )}
           </Cell>
-          <Cell label="comando">
+          <Cell label={t("apps.field.command")}>
             <span className="text-muted-foreground">
-              {meta?.static ? `estático · ${meta.static}` : meta?.command || "—"}
+              {meta?.static ? t("apps.tabs.staticValue", { path: meta.static }) : meta?.command || "—"}
             </span>
           </Cell>
         </div>
       </header>
       <Tabs
-        value={TABS.some((t) => t.id === active) ? active : "overview"}
+        value={TABS.some((tab) => tab.id === active) ? active : "overview"}
         onValueChange={(v) => {
           if (v) navigate(v);
         }}
@@ -154,9 +160,9 @@ export function AppTabs() {
         {/* scroll horizontal: 6 tabs no caben a 390px sin desbordar */}
         <div className="-mx-1 overflow-x-auto px-1">
           <TabsList className="w-max gap-5 sm:w-full">
-            {tabs.map((t) => (
-              <TabsTrigger key={t.id} value={t.id}>
-                {t.label}
+            {tabs.map((tab) => (
+              <TabsTrigger key={tab.id} value={tab.id}>
+                {t(tab.label)}
               </TabsTrigger>
             ))}
           </TabsList>

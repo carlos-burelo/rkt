@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CopyButton } from "./feedback";
 import { rel } from "../lib/time";
 import { cn } from "@/lib/utils";
+import { useI18n } from "../i18n";
 
 // PageHeader: folio de terminal. La regla de señal es la firma, no un kicker.
 export function PageHeader({
@@ -202,7 +203,9 @@ export function Time({ iso, className }: { iso: string; className?: string }) {
 
 // EnvSecret valor enmascarado con revelar + copiar (higiene secretos).
 export function EnvSecret({ value }: { value: string }) {
+  const { t } = useI18n();
   const [show, setShow] = useState(false);
+  const toggle = show ? t("shared.envSecret.hide") : t("shared.envSecret.show");
   return (
     <span className="flex min-w-0 flex-1 items-center gap-1.5">
       <span className="tnum min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
@@ -211,9 +214,9 @@ export function EnvSecret({ value }: { value: string }) {
       <button
         onClick={() => setShow(!show)}
         className="shrink-0 rounded-[1px] px-1 font-mono text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-        title={show ? "ocultar" : "mostrar"}
+        title={toggle}
       >
-        {show ? "ocultar" : "mostrar"}
+        {toggle}
       </button>
       <CopyButton text={value} />
     </span>
@@ -222,9 +225,10 @@ export function EnvSecret({ value }: { value: string }) {
 
 // EmptyState terminal: folio sin registros, no tarjeta dashed.
 export function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: React.ReactNode }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col items-center gap-2 border border-border bg-card/30 px-6 py-10 text-center">
-      <span className="micro text-muted-foreground/55">sin registros</span>
+      <span className="micro text-muted-foreground/55">{t("shared.emptyState.none")}</span>
       <p className="text-[13px] font-medium">{title}</p>
       {hint && <p className="tnum max-w-[64ch] font-mono text-[11px] leading-relaxed text-muted-foreground">{hint}</p>}
       {action}

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { useFleet } from "../overview/hooks";
 import { useUI } from "../../app/ui";
+import { useI18n } from "../../shared/i18n";
 
 type Level = "info" | "warning" | "error";
 
@@ -37,10 +38,10 @@ const LEVEL_TEXT: Record<Level, string> = {
   error: "text-bad",
 };
 
-const LEVEL_ES: Record<Level, string> = {
-  info: "info",
-  warning: "aviso",
-  error: "error",
+const LEVEL_KEY: Record<Level, string> = {
+  info: "ops.logs.level.info",
+  warning: "ops.logs.level.warning",
+  error: "ops.logs.level.error",
 };
 
 function LevelToggle({
@@ -54,6 +55,7 @@ function LevelToggle({
   count: number;
   onClick: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
@@ -64,13 +66,14 @@ function LevelToggle({
       }`}
     >
       <span aria-hidden className={`h-1.5 w-1.5 ${on ? LEVEL_TONE[level] : "bg-muted-foreground/25"}`} />
-      {LEVEL_ES[level]}
+      {t(LEVEL_KEY[level])}
       <span className={`tnum ${on ? LEVEL_TEXT[level] : "text-muted-foreground/50"}`}>{count}</span>
     </button>
   );
 }
 
 export function Logs() {
+  const { t, tn } = useI18n();
   const { status, deps } = useFleet();
   const apps: AppStatus[] = status?.apps ?? [];
   const appFilter = useUI((u) => u.appFilter);
@@ -83,7 +86,7 @@ export function Logs() {
   const [levels, setLevels] = useState<Record<Level, boolean>>({ info: true, warning: true, error: true });
   const [log, setLog] = useState("");
   const [follow, setFollow] = useState(true);
-  const [build, setBuild] = useState("elige un despliegue en Despliegues");
+  const [build, setBuild] = useState(t("ops.logs.pickDeployment"));
   const logRef = useRef<HTMLDivElement>(null);
   const latest = deps.find((d: Deployment) => appFilter === "" || d.app === appFilter);
 
@@ -148,13 +151,17 @@ export function Logs() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Logs"
-        description="Ejecución por app u operativo. En vivo refresca cada 2s; Compilación muestra el último despliegue. Sin parsers de terceros."
+        title={t("ops.logs.title")}
+        description={t("ops.logs.description")}
         meta={
           <span className="tnum inline-flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
             <Dot status={tab === "runtime" && live ? "running" : "stopped"} pulse={tab === "runtime" && live} />
-            {tab === "runtime" ? (live ? "en vivo · 2s" : "pausado") : "compilación"}
-            {appFilter ? ` · ${appFilter}` : " · operativo"}
+            {tab === "runtime"
+              ? live
+                ? t("ops.logs.meta.live")
+                : t("ops.logs.meta.paused")
+              : t("ops.logs.meta.build")}
+            {appFilter ? ` · ${appFilter}` : t("ops.logs.meta.operational")}
           </span>
         }
       />
@@ -163,8 +170,8 @@ export function Logs() {
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-2">
           <Tabs value={tab} onValueChange={(v) => setTab(v as "runtime" | "build")}>
             <TabsList>
-              <TabsTrigger value="runtime">Ejecución</TabsTrigger>
-              <TabsTrigger value="build">Compilación</TabsTrigger>
+              <TabsTrigger value="runtime">{t("ops.logs.tab.runtime")}</TabsTrigger>
+              <TabsTrigger value="build">{t("ops.logs.tab.build")}</TabsTrigger>
             </TabsList>
           </Tabs>
           <span aria-hidden className="hidden h-4 w-px bg-border sm:block" />
@@ -172,10 +179,10 @@ export function Logs() {
             <>
               <Select value={appFilter || "__all"} onValueChange={(v: string | null) => setAppFilter(v === "__all" ? "" : (v ?? ""))}>
                 <SelectTrigger className="h-7 w-52 font-mono text-[10px]">
-                  <span className="truncate">{appFilter || "operativo (rkt.log)"}</span>
+                  <span className="truncate">{appFilter || t("ops.logs.operational")}</span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all">operativo (rkt.log)</SelectItem>
+                  <SelectItem value="__all">{t("ops.logs.operational")}</SelectItem>
                   {apps.map((a) => (
                     <SelectItem key={a.name} value={a.name}>
                       {a.name}
@@ -188,11 +195,11 @@ export function Logs() {
                 <Input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="buscar en consola…"
+                  placeholder={t("ops.logs.searchPlaceholder")}
                   className="h-7 pl-7 font-mono text-[10px]"
                 />
               </div>
-              <div className="flex items-center gap-px" role="group" aria-label="niveles">
+              <div className="flex items-center gap-px" role="group" aria-label={t("ops.logs.levelsAria")}>
                 {(["info", "warning", "error"] as const).map((l) => (
                   <LevelToggle
                     key={l}
@@ -206,11 +213,11 @@ export function Logs() {
               <span className="flex-1" />
               <Button variant="outline" size="sm" onClick={() => setLive(!live)}>
                 {live ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-                {live ? "pausar" : "en vivo"}
+                {live ? t("ops.logs.pause") : t("ops.logs.live")}
               </Button>
-              <Button variant="ghost" size="sm" onClick={load}>recargar</Button>
+              <Button variant="ghost" size="sm" onClick={load}>{t("ops.logs.reload")}</Button>
               <Button variant="ghost" size="sm" onClick={download}>
-                <Download className="h-3 w-3" /> descargar
+                <Download className="h-3 w-3" /> {t("ops.logs.download")}
               </Button>
             </>
           )}
@@ -221,15 +228,20 @@ export function Logs() {
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
                 <Checkbox checked={follow} onCheckedChange={(v) => setFollow(v === true)} />
-                seguir salida
+                {t("ops.logs.follow")}
               </label>
               <span className="tnum font-mono text-[9px] text-muted-foreground">
-                {lines.vis.length} / {log === "" ? 0 : log.split("\n").length} líneas visibles
+                {tn("ops.logs.visibleLines", log === "" ? 0 : log.split("\n").length, {
+                  vis: lines.vis.length,
+                })}
               </span>
             </div>
 
             {lines.stamped > 0 && (
-              <Section title="Actividad 24h" description={`${lines.stamped} líneas con hora · access.log local`}>
+              <Section
+                title={t("ops.logs.activity")}
+                description={tn("ops.logs.activityDesc", lines.stamped)}
+              >
                 <Bars data={lines.buckets} height={44} />
               </Section>
             )}
@@ -237,17 +249,17 @@ export function Logs() {
             <div className="border border-border">
               <div className="flex items-center gap-2 border-b border-border bg-secondary/25 px-3 py-1.5">
                 <span aria-hidden className="h-1 w-1 bg-ok animate-status-pulse" />
-                <span className="micro">consola</span>
+                <span className="micro">{t("ops.logs.console")}</span>
                 <span className="flex-1" />
                 <span className="tnum font-mono text-[9px] text-muted-foreground">
-                  {appFilter || "rkt.log"} · {lines.vis.length} líneas
+                  {tn("ops.logs.consoleLines", lines.vis.length, { app: appFilter || "rkt.log" })}
                 </span>
               </div>
               <div
                 ref={logRef}
                 role="log"
                 aria-live={live ? "polite" : "off"}
-                aria-label="consola de logs"
+                aria-label={t("ops.logs.logAria")}
                 className="h-[58vh] overflow-auto bg-ink/45 font-mono text-[11px] leading-[1.6]"
               >
                 {lines.vis.map((l, i) => {
@@ -257,7 +269,7 @@ export function Logs() {
                       <span className="tnum w-8 shrink-0 text-right text-[9px] text-muted-foreground/30 select-none">
                         {String(i + 1).padStart(3, "0")}
                       </span>
-                      <span aria-label={`nivel ${lv}`} className={`h-1.5 w-1.5 shrink-0 translate-y-[-1px] ${LEVEL_TONE[lv]}`} />
+                      <span aria-label={t("ops.logs.lineLevel", { level: t(LEVEL_KEY[lv]) })} className={`h-1.5 w-1.5 shrink-0 translate-y-[-1px] ${LEVEL_TONE[lv]}`} />
                       <span className={`min-w-0 flex-1 break-words whitespace-pre-wrap ${lv === "error" ? "text-bad/90" : lv === "warning" ? "text-warn/85" : "text-foreground/80"}`}>
                         {l}
                       </span>
@@ -265,7 +277,7 @@ export function Logs() {
                   );
                 })}
                 {lines.vis.length === 0 && (
-                  <p className="px-3 py-4 text-muted-foreground">sin líneas para este filtro</p>
+                  <p className="px-3 py-4 text-muted-foreground">{t("ops.logs.empty")}</p>
                 )}
               </div>
             </div>
@@ -287,24 +299,26 @@ export function Logs() {
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      setBuild("cargando…");
+                      setBuild(t("common.loading"));
                       deploymentLog(latest.id)
                         .then(setBuild)
-                        .catch((e) => setBuild(e instanceof Error ? e.message : "sin log"));
+                        .catch((e) => setBuild(e instanceof Error ? e.message : t("ops.logs.noLog")));
                     }}
                   >
-                    cargar registro de compilación
+                    {t("ops.logs.loadBuild")}
                   </Button>
                 </>
               ) : (
                 <span className="font-mono text-[10px] text-muted-foreground">
-                  sin despliegues{appFilter ? ` para ${appFilter}` : ""}
+                  {appFilter
+                    ? t("ops.logs.noDeploymentsApp", { app: appFilter })
+                    : t("ops.logs.noDeployments")}
                 </span>
               )}
             </div>
             <div className="border border-border">
               <div className="flex items-center gap-2 border-b border-border bg-secondary/25 px-3 py-1.5">
-                <span className="micro">registro de compilación</span>
+                <span className="micro">{t("ops.logs.buildLog")}</span>
                 <span className="flex-1" />
                 <span className="tnum font-mono text-[9px] text-muted-foreground">
                   {latest ? `#${latest.id}` : "—"}

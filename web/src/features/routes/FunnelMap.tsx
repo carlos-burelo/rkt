@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { ArrowRight, Plus, Server } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GraphLink, groupByTarget } from "../proxy/graph";
+import { useI18n } from "../../shared/i18n";
 
 const ROW = 34;
 const GAP = 10;
@@ -15,20 +16,21 @@ export function FunnelMap({
   links: GraphLink[];
   onAdd?: () => void;
 }) {
+  const { t, tn } = useI18n();
   const groups = groupByTarget(links);
   if (links.length === 0) return null;
 
   return (
-    <section aria-label="mapa de rutas" className="border border-border bg-card/30">
+    <section aria-label={t("serve.funnel.aria")} className="border border-border bg-card/30">
       <header className="flex flex-wrap items-center gap-2 border-b border-border bg-secondary/20 px-3 py-2">
         <span aria-hidden className="h-1.5 w-1.5 bg-signal" />
-        <h3 className="text-[12px] font-medium">Flujo de rutas</h3>
+        <h3 className="text-[12px] font-medium">{t("serve.funnel.title")}</h3>
         <span className="tnum font-mono text-[9px] text-muted-foreground">
-          {links.length} host{links.length > 1 ? "s" : ""} · {groups.length} destino{groups.length > 1 ? "s" : ""}
+          {tn("serve.hosts.count", links.length)} · {tn("serve.funnel.destinations", groups.length)}
         </span>
         <span className="flex-1" />
         <Link to="/proxy" className="inline-flex items-center gap-1 font-mono text-[9px] text-muted-foreground hover:text-foreground">
-          ver topología <ArrowRight className="h-3 w-3" />
+          {t("serve.funnel.viewTopology")} <ArrowRight className="h-3 w-3" />
         </Link>
       </header>
 
@@ -95,12 +97,14 @@ export function FunnelMap({
                 <div className="flex min-w-0 flex-1 items-center">
                   <span
                     className="flex min-w-0 items-center gap-2 border border-border bg-card/60 px-2 py-1.5"
-                    title={`${g.hosts.length} ruta${g.hosts.length > 1 ? "s" : ""} → ${g.target}`}
+                    title={`${tn("serve.routes.count", g.hosts.length)} → ${g.target}`}
                   >
                     <Server className="h-3 w-3 shrink-0 text-muted-foreground" />
                     <span className="tnum truncate font-mono text-[10px]">{g.short}</span>
                     <span className="shrink-0 font-mono text-[8px] tracking-[0.08em] text-muted-foreground/60 uppercase">
-                      {g.hosts[0]?.tls === "off" ? "sin tls" : `tls ${g.hosts[0]?.tls ?? "?"}`}
+                      {g.hosts[0]?.tls === "off"
+                        ? t("serve.tls.none")
+                        : t("serve.tls.value", { version: g.hosts[0]?.tls ?? "?" })}
                     </span>
                   </span>
                 </div>
@@ -130,7 +134,7 @@ export function FunnelMap({
           onClick={onAdd}
           className="inline-flex items-center gap-1.5 border border-border px-2 py-1 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:border-input hover:text-foreground"
         >
-          <Plus className="h-3 w-3" /> agregar ruta
+          <Plus className="h-3 w-3" /> {t("serve.funnel.addRoute")}
         </button>
       </div>
     </section>

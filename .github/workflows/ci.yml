@@ -41,6 +41,10 @@ jobs:
         run: pnpm --dir web exec tsc --noEmit
         shell: pwsh
 
+      - name: Guard i18n
+        run: node scripts/i18n-check.mjs
+        shell: pwsh
+
       - name: Formato Go
         run: |
           $out = gofmt -l .

@@ -1,3 +1,8 @@
+import { t } from "../i18n";
+
+// UnauthorizedError permite reaccionar sin comparar el texto localizado.
+export class UnauthorizedError extends Error {}
+
 // HTTP base api/v1. Sesión por cookie httpOnly (credentials en cada fetch).
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -6,11 +11,11 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   });
   if (res.status === 401) {
-    throw new Error("no autorizado (login)");
+    throw new UnauthorizedError(t("shared.http.unauthorized"));
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error ?? `http ${res.status}`);
+    throw new Error((body as { error?: string }).error ?? t("shared.http.status", { status: res.status }));
   }
   return (await res.json()) as T;
 }
@@ -32,7 +37,7 @@ export async function apiResult<T>(path: string, init?: RequestInit): Promise<Ap
     hint?: string;
   };
   if (!res.ok) {
-    return { ok: false, error: body.error ?? `http ${res.status}`, hint: body.hint };
+    return { ok: false, error: body.error ?? t("shared.http.status", { status: res.status }), hint: body.hint };
   }
   return { ok: true, data: body as T };
 }

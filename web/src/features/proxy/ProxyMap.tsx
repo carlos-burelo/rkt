@@ -3,6 +3,7 @@ import { Monitor, Network } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Dot } from "../../shared/components/ui";
 import { GraphLink, radialPos } from "./graph";
+import { useI18n } from "../../shared/i18n";
 
 // Mapa radial: edge al centro, hosts en órbita. SVG dibuja órbitas +
 // enlaces; nodos son <button> HTML (foco teclado, sin foreignObject).
@@ -15,6 +16,7 @@ export function RadialMap({
   selected: string | null;
   onSelect: (host: string | null) => void;
 }) {
+  const { t, tn } = useI18n();
   const [hover, setHover] = useState<string | null>(null);
   const active = hover ?? selected;
   if (links.length === 0) return null;
@@ -24,10 +26,10 @@ export function RadialMap({
     <div className="border border-border bg-ink/35">
       <header className="flex items-center gap-2 border-b border-border bg-secondary/20 px-3 py-1.5">
         <span aria-hidden className="h-1.5 w-1.5 bg-signal" />
-        <span className="micro">topología de borde</span>
+        <span className="micro">{t("serve.map.topology")}</span>
         <span className="flex-1" />
         <span className="tnum font-mono text-[9px] text-muted-foreground">
-          {links.length} host{links.length > 1 ? "s" : ""} · dial real
+          {tn("serve.hosts.count", links.length)} · {t("serve.map.realDial")}
         </span>
       </header>
       {/* móvil: ledger host → backend. El radial necesita ancho para
@@ -54,7 +56,7 @@ export function RadialMap({
         <div
           className={`relative mx-auto w-full ${compact ? "aspect-[16/8] max-w-xl" : "aspect-[8/5] max-w-3xl"}`}
           role="img"
-          aria-label={`topología proxy: edge con ${links.length} ruta${links.length > 1 ? "s" : ""}`}
+          aria-label={tn("serve.map.aria", links.length)}
         >
           <svg className="absolute inset-0 h-full w-full" viewBox="0 0 800 500" aria-hidden>
             <ellipse cx="400" cy="250" rx="272" ry="168" fill="none" stroke="currentColor" strokeOpacity="0.14" strokeDasharray="3 7" />
@@ -116,7 +118,9 @@ export function RadialMap({
                   top: `${p.y * 100}%`,
                   transition: "opacity 180ms ease-out, border-color 180ms ease-out",
                 }}
-                title={`${l.host} → ${l.target} · ${l.ok ? "backend ok" : "backend caído"} · ${l.tls === "off" ? "sin TLS" : `TLS ${l.tls}`}`}
+                title={`${l.host} → ${l.target} · ${
+                  l.ok ? t("serve.proxy.backendOk") : t("serve.proxy.backendDown")
+                } · ${l.tls === "off" ? t("serve.tls.noneUpper") : t("serve.tls.valueUpper", { version: l.tls })}`}
               >
                 <span className="flex items-center gap-1.5">
                   <Dot status={l.ok ? "ok" : "failed"} />
@@ -142,7 +146,8 @@ export function RadialMap({
                   <span>
                     <span className="block font-mono text-[10px]">{l.short}</span>
                     <span className="tnum block font-mono text-[9px] text-muted-foreground">
-                      {l.ok ? "backend ok" : "backend caído"} · {l.tls === "off" ? "sin TLS" : `TLS ${l.tls}`}
+                      {l.ok ? t("serve.proxy.backendOk") : t("serve.proxy.backendDown")} ·{" "}
+                      {l.tls === "off" ? t("serve.tls.noneUpper") : t("serve.tls.valueUpper", { version: l.tls })}
                     </span>
                   </span>
                 </div>

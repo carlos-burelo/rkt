@@ -4,10 +4,12 @@ import { Bars } from "../../shared/components/feedback";
 import { PageHeader, Stat, StatGrid, Section, Segmented } from "../../shared/components/patterns";
 import { Err } from "../../shared/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { useI18n } from "../../shared/i18n";
 
 const RANGES = [1, 7, 30] as const;
 
 export function AnalyticsPage() {
+  const { t, tn } = useI18n();
   const [host, setHost] = useState("");
   const [hosts, setHosts] = useState<string[]>([]);
   const [days, setDays] = useState<number>(7);
@@ -25,8 +27,8 @@ export function AnalyticsPage() {
     setErr("");
     fetchAnalytics(host, days)
       .then(setData)
-      .catch((e) => setErr(e instanceof Error ? e.message : "error"));
-  }, [host, days]);
+      .catch((e) => setErr(e instanceof Error ? e.message : t("common.error")));
+  }, [host, days, t]);
 
   const errCount = data ? (data.by_class["5xx"] ?? 0) : 0;
   const errPct = data && data.total > 0 ? `${((errCount / data.total) * 100).toFixed(1)}%` : "—";
@@ -37,17 +39,17 @@ export function AnalyticsPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Analítica"
-        description="Tráfico real desde access.log. Sin visitors ni bounce inventados; lo que no se mide, no se pinta."
-        meta={<span className="tnum font-mono text-[10px] text-muted-foreground">ventana {windowLabel}</span>}
+        title={t("nav.analytics")}
+        description={t("overview.analytics.description")}
+        meta={<span className="tnum font-mono text-[10px] text-muted-foreground">{t("overview.window", { label: windowLabel })}</span>}
       />
       <div className="flex flex-wrap items-center gap-2 border border-border bg-card/35 p-2">
         <Select value={host || "__all"} onValueChange={(v: string | null) => setHost(v === "__all" || v == null ? "" : v)}>
           <SelectTrigger className="tnum h-7 w-56 font-mono text-[10px]">
-            <span className="truncate">{host || "todos los hosts"}</span>
+            <span className="truncate">{host || t("overview.analytics.allHosts")}</span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all">todos los hosts</SelectItem>
+            <SelectItem value="__all">{t("overview.analytics.allHosts")}</SelectItem>
             {hosts.map((h) => (
               <SelectItem key={h} value={h}>
                 {h}
@@ -58,26 +60,29 @@ export function AnalyticsPage() {
         <Segmented
           value={String(days)}
           onChange={(v) => setDays(Number(v))}
-          label="rango de la ventana"
+          label={t("overview.analytics.rangeAria")}
           items={RANGES.map((d) => ({ value: String(d), label: d === 1 ? "24h" : `${d}d` }))}
         />
         <span className="flex-1" />
         <span className="folio">access.log local</span>
       </div>
       {err !== "" && <Err msg={err} />}
-      {!data && err === "" && <p className="font-mono text-[10px] text-muted-foreground">cargando serie…</p>}
+      {!data && err === "" && <p className="font-mono text-[10px] text-muted-foreground">{t("overview.loadingSeries")}</p>}
       {data && (
         <>
           <StatGrid>
-            <Stat value={`${data.total}`} label="peticiones" sub={`ventana ${windowLabel}`} />
-            <Stat value={`${(data.bytes / 1048576).toFixed(1)}M`} label="tráfico" sub="access.log" />
-            <Stat value={errPct} label="tasa de error" sub={`${errCount} 5xx`} tone={errCount > 0 ? "warn" : undefined} />
+            <Stat value={`${data.total}`} label={t("overview.requests")} sub={t("overview.window", { label: windowLabel })} />
+            <Stat value={`${(data.bytes / 1048576).toFixed(1)}M`} label={t("overview.analytics.traffic")} sub="access.log" />
+            <Stat value={errPct} label={t("overview.errorRate")} sub={`${errCount} 5xx`} tone={errCount > 0 ? "warn" : undefined} />
             <Stat value={data.p95 || "—"} label="p95" sub={`p50 ${data.p50 || "—"}`} />
           </StatGrid>
           <Section
-            title="Peticiones por día"
-            description={`${dayKeys[0] ?? "sin fecha"} → ${dayKeys[dayKeys.length - 1] ?? "sin fecha"} · access.log local`}
-            actions={<span className="tnum font-mono text-[9px] text-muted-foreground">{dayKeys.length} días</span>}
+            title={t("overview.analytics.perDay")}
+            description={t("overview.analytics.perDayDesc", {
+              from: dayKeys[0] ?? t("overview.analytics.noDate"),
+              to: dayKeys[dayKeys.length - 1] ?? t("overview.analytics.noDate"),
+            })}
+            actions={<span className="tnum font-mono text-[9px] text-muted-foreground">{tn("overview.days", dayKeys.length)}</span>}
           >
             <Bars
               data={series}
@@ -89,14 +94,14 @@ export function AnalyticsPage() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {(
               [
-                ["Top rutas", data.by_path],
-                ["Top hosts", data.by_host],
-                ["Top referers", data.by_ref],
+                ["overview.analytics.topPaths", data.by_path],
+                ["overview.analytics.topHosts", data.by_host],
+                ["overview.analytics.topRefs", data.by_ref],
               ] as const
             ).map(([title, rows]) => (
               <Section
                 key={title}
-                title={title}
+                title={t(title)}
                 actions={<span className="tnum font-mono text-[9px] text-muted-foreground">{rows.length}</span>}
               >
                 <div className="divide-y divide-border/60">
@@ -107,7 +112,7 @@ export function AnalyticsPage() {
                       <span className="tnum font-mono text-[10px] text-muted-foreground">{r.v}</span>
                     </div>
                   ))}
-                  {rows.length === 0 && <p className="py-2 font-mono text-[10px] text-muted-foreground">sin datos</p>}
+                  {rows.length === 0 && <p className="py-2 font-mono text-[10px] text-muted-foreground">{t("common.empty")}</p>}
                 </div>
               </Section>
             ))}

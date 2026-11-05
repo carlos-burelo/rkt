@@ -4,6 +4,8 @@ import { Deployment } from "../shared/lib/types";
 import { appAction } from "../features/apps/api";
 import { deploymentLog, retryDeployment } from "../features/deployments/api";
 import { useAuth } from "../features/auth/store";
+import { t } from "../shared/i18n";
+import { UnauthorizedError } from "../shared/lib/http";
 
 interface UI {
   online: boolean;
@@ -43,33 +45,33 @@ export const useUI = create<UI>()((set) => ({
   setSel: (d) => {
     set({ sel: d });
     if (d) {
-      set({ buildLog: "cargando…" });
+      set({ buildLog: t("common.loading") });
       deploymentLog(d.id)
         .then((buildLog) => set({ buildLog }))
-        .catch((e) => set({ buildLog: e instanceof Error ? e.message : "sin log" }));
+        .catch((e) => set({ buildLog: e instanceof Error ? e.message : t("shared.log.none") }));
     }
   },
   fail: (e) => {
-    if (e instanceof Error && e.message.startsWith("no autorizado")) {
+    if (e instanceof UnauthorizedError) {
       useAuth.getState().setWho(null);
       return;
     }
-    set({ err: e instanceof Error ? e.message : "error" });
+    set({ err: e instanceof Error ? e.message : t("common.error") });
   },
   act: async (app, a) => {
     try {
       await appAction(app, a);
-      toast.success(`${a} ${app} ok`);
+      toast.success(t("shared.action.appOk", { action: a, app }));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "error");
+      toast.error(e instanceof Error ? e.message : t("common.error"));
     }
   },
   retry: (id) => {
     retryDeployment(id)
       .then((rev) => {
-        toast.success(`retry ok ${rev.slice(0, 8)}`);
+        toast.success(t("shared.action.retryOk", { rev: rev.slice(0, 8) }));
         set({ sel: null });
       })
-      .catch((e) => toast.error(e instanceof Error ? e.message : "error"));
+      .catch((e) => toast.error(e instanceof Error ? e.message : t("common.error")));
   },
 }));

@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { stateLabel } from "../lib/labels";
+import { useI18n } from "../i18n";
 
 export type FleetState = "running" | "degraded" | "failed" | "stopped" | "ok";
 
@@ -19,6 +20,7 @@ const DOT: Record<string, string> = {
 };
 
 export function Dot({ status, className, pulse = false }: { status: string; className?: string; pulse?: boolean }) {
+  const { t } = useI18n();
   const key = status === "ok" ? "ok" : status === "running" ? "running" : status;
   return (
     <span
@@ -29,7 +31,7 @@ export function Dot({ status, className, pulse = false }: { status: string; clas
         className,
       )}
       title={stateLabel(status)}
-      aria-label={`estado ${stateLabel(status)}`}
+      aria-label={t("shared.dot.aria", { state: stateLabel(status) })}
     />
   );
 }

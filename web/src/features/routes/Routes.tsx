@@ -17,15 +17,17 @@ import { useAuth } from "../auth/store";
 import { LocalZones } from "./LocalZones";
 import { useFleet } from "../overview/hooks";
 import { publicUrl, publicHost } from "../../shared/lib/url";
+import { useI18n } from "../../shared/i18n";
 
 function TLSBadge({ host }: { host: string }) {
+  const { t } = useI18n();
   const [txt, setTxt] = useState("…");
   const [ok, setOk] = useState(false);
   useEffect(() => {
     tlsStatus(host)
-      .then((t) => {
-        setOk(t.managed);
-        setTxt(t.expires || "?");
+      .then((s) => {
+        setOk(s.managed);
+        setTxt(s.expires || "?");
       })
       .catch(() => {
         setOk(false);
@@ -39,12 +41,13 @@ function TLSBadge({ host }: { host: string }) {
         ok ? "border-ok/30 bg-ok/10 text-ok" : "border-border bg-transparent text-muted-foreground"
       }`}
     >
-      {ok ? `tls ${txt}` : "sin tls"}
+      {ok ? t("serve.tls.value", { version: txt }) : t("serve.tls.none")}
     </span>
   );
 }
 
 function RouteRow({ r, onChanged, status }: { r: Route; onChanged: () => void; status: Status | null }) {
+  const { t } = useI18n();
   const canWrite = useAuth((a) => a.canWrite);
   const fail = useUI((u) => u.fail);
   const [target, setTarget] = useState(r.target);
@@ -65,7 +68,7 @@ function RouteRow({ r, onChanged, status }: { r: Route; onChanged: () => void; s
             href={publicUrl(r.hosts[0], status)}
             target="_blank"
             rel="noreferrer"
-            title={`visitar ${publicHost(r.hosts[0], status)}`}
+            title={t("serve.routes.visitTitle", { host: publicHost(r.hosts[0], status) })}
             className="truncate font-mono text-[12px] hover:text-signal hover:underline"
           >
             {r.hosts.join(", ")}
@@ -87,27 +90,27 @@ function RouteRow({ r, onChanged, status }: { r: Route; onChanged: () => void; s
             onOpenChange={setEdit}
             trigger={
               <Button variant="ghost" size="xs">
-                editar
+                {t("common.edit")}
               </Button>
             }
-            title={`Target de ${r.hosts[0]}`}
-            description="el proxy recarga al instante · solo loopback"
-            submitLabel="guardar"
+            title={t("serve.routes.editTitle", { host: r.hosts[0] })}
+            description={t("serve.routes.editDesc")}
+            submitLabel={t("common.save")}
             canSubmit={target.trim() !== "" && target.trim() !== r.target}
             onSubmit={save}
           >
-            <Field label="target" hint="http(s)://127.0.0.1:puerto">
+            <Field label={t("serve.field.target")} hint={t("serve.field.targetHint")}>
               <Input
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                aria-label={`target de ${r.hosts[0]}`}
+                aria-label={t("serve.routes.targetAria", { host: r.hosts[0] })}
                 className="tnum h-8 font-mono text-[12px]"
                 autoFocus
               />
             </Field>
           </FormDialog>
           <ConfirmButton
-            title={`borrar ruta ${r.hosts[0]}`}
+            title={t("serve.routes.deleteTitle", { host: r.hosts[0] })}
             onConfirm={() => {
               delRoute(r.hosts[0]).then(onChanged).catch(fail);
             }}
@@ -119,6 +122,7 @@ function RouteRow({ r, onChanged, status }: { r: Route; onChanged: () => void; s
 }
 
 export function Routes() {
+  const { t, tn } = useI18n();
   const canWrite = useAuth((a) => a.canWrite);
   const fail = useUI((u) => u.fail);
   const { status } = useFleet();
@@ -164,11 +168,11 @@ export function Routes() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Dominios"
-        description="Host → backend con TLS real. Editar el target recarga el proxy al instante. Sin wildcards inventados."
+        title={t("nav.routes")}
+        description={t("serve.routes.desc")}
         meta={
           <span className="tnum font-mono text-[10px] text-muted-foreground">
-            {routes.length} rutas · {hostCount} hosts
+            {tn("serve.routes.count", routes.length)} · {tn("serve.hosts.count", hostCount)}
           </span>
         }
         actions={
@@ -178,12 +182,12 @@ export function Routes() {
               onOpenChange={setAddOpen}
               trigger={
                 <Button size="sm">
-                  <Plus className="h-3 w-3" /> nueva ruta
+                  <Plus className="h-3 w-3" /> {t("serve.routes.new")}
                 </Button>
               }
-              title="Nueva ruta"
-              description="alta inmediata · el proxy recarga al instante · TLS se emite al primer request"
-              submitLabel="crear"
+              title={t("serve.routes.newTitle")}
+              description={t("serve.routes.newDesc")}
+              submitLabel={t("common.create")}
               canSubmit={hosts.trim() !== "" && target.trim() !== ""}
               onSubmit={async () => {
                 await addRoute(
@@ -195,20 +199,20 @@ export function Routes() {
                 await load();
               }}
             >
-              <Field label="hosts" hint="separados por coma">
+              <Field label={t("serve.field.hosts")} hint={t("serve.field.hostsHint")}>
                 <Input
                   value={hosts}
                   onChange={(e) => setHosts(e.target.value)}
-                  placeholder="app.localhost, app.test"
+                  placeholder={t("serve.routes.hostsPlaceholder")}
                   className="h-8 font-mono text-[12px]"
                   autoFocus
                 />
               </Field>
-              <Field label="target" hint="http(s)://127.0.0.1:puerto">
+              <Field label={t("serve.field.target")} hint={t("serve.field.targetHint")}>
                 <Input
                   value={target}
                   onChange={(e) => setTarget(e.target.value)}
-                  placeholder="http://127.0.0.1:3000"
+                  placeholder={t("serve.routes.targetPlaceholder")}
                   className="tnum h-8 font-mono text-[12px]"
                 />
               </Field>
@@ -220,22 +224,24 @@ export function Routes() {
 
       <FunnelMap links={mapLinks} onAdd={() => setAddOpen(true)} />
 
-      <div className="border border-border" role="table" aria-label="rutas de dominio">
+      <div className="border border-border" role="table" aria-label={t("serve.routes.tableAria")}>
         <div
           className="hidden grid-cols-[1.5rem_minmax(0,1.4fr)_auto_1.5rem_minmax(0,1.4fr)_auto] items-center gap-2 border-b border-border bg-secondary/25 px-3 py-1.5 md:grid"
           aria-hidden
         >
-          <span className="micro">est</span>
-          <span className="micro">host</span>
-          <span className="micro">tls</span>
+          <span className="micro">{t("serve.field.stateShort")}</span>
+          <span className="micro">{t("serve.field.host")}</span>
+          <span className="micro">{t("serve.field.tls")}</span>
           <span />
-          <span className="micro">target</span>
+          <span className="micro">{t("serve.field.target")}</span>
           <span />
         </div>
         {routes.map((r) => (
           <RouteRow key={r.hosts.join(",") + r.target} r={r} onChanged={load} status={status} />
         ))}
-        {routes.length === 0 && <EmptyState title="Sin rutas" hint="Agrega tu primer dominio con «nueva ruta»." />}
+        {routes.length === 0 && (
+          <EmptyState title={t("serve.routes.emptyTitle")} hint={t("serve.routes.emptyHint")} />
+        )}
       </div>
     </div>
   );

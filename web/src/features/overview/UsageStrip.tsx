@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchUsage, Usage } from "./api";
 import { getSettings } from "../settings/api";
 import { Meter } from "../../shared/components/patterns";
+import { useI18n } from "../../shared/i18n";
 
 type Tone = "ok" | "warn" | "bad" | "signal";
 
@@ -15,6 +16,7 @@ function toneOf(frac: number | undefined): Tone {
 // UsageStrip: uso 30d vs quotas (solo visual, sin cobro). La barra solo
 // existe cuando hay tope declarado; sin tope se muestra la cifra honesta.
 export function UsageStrip() {
+  const { t } = useI18n();
   const [u, setU] = useState<Usage | null>(null);
   const [q, setQ] = useState<Record<string, string>>({});
 
@@ -23,19 +25,19 @@ export function UsageStrip() {
     getSettings().then(setQ).catch(() => {});
   }, []);
 
-  if (!u) return <p className="font-mono text-[10px] text-muted-foreground">sin lectura de access.log</p>;
+  if (!u) return <p className="font-mono text-[10px] text-muted-foreground">{t("overview.usage.empty")}</p>;
   const qReqs = parseInt(q.quota_reqs || "0", 10);
   const qBytes = parseInt(q.quota_bytes || "0", 10);
   const reqFrac = qReqs > 0 ? u.total / qReqs : undefined;
   const byteFrac = qBytes > 0 ? u.bytes / qBytes : undefined;
   const bars: { label: string; value: string; frac?: number }[] = [
-    { label: "peticiones", value: `${u.total}${qReqs > 0 ? ` / ${qReqs}` : ""}`, frac: reqFrac },
+    { label: t("overview.requests"), value: `${u.total}${qReqs > 0 ? ` / ${qReqs}` : ""}`, frac: reqFrac },
     {
-      label: "ancho de banda",
+      label: t("overview.usage.bandwidth"),
       value: `${(u.bytes / 1048576).toFixed(1)}M${qBytes > 0 ? ` / ${(qBytes / 1048576).toFixed(0)}M` : ""}`,
       frac: byteFrac,
     },
-    { label: "tasa de error", value: `${(u.err_rate * 100).toFixed(1)}%`, frac: u.err_rate },
+    { label: t("overview.errorRate"), value: `${(u.err_rate * 100).toFixed(1)}%`, frac: u.err_rate },
   ];
   return (
     <div className="space-y-3">
@@ -43,8 +45,8 @@ export function UsageStrip() {
         <Meter key={b.label} label={b.label} value={b.value} frac={b.frac} tone={toneOf(b.frac)} />
       ))}
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-border/60 pt-2">
-        <span className="font-mono text-[9px] text-muted-foreground">medido de access.log local · 30 días</span>
-        <span className="tnum font-mono text-[9px] text-muted-foreground">p95 {u.p95 || "—"}</span>
+        <span className="font-mono text-[9px] text-muted-foreground">{t("overview.usage.measured")}</span>
+        <span className="tnum font-mono text-[9px] text-muted-foreground">{t("overview.usage.p95", { value: u.p95 || "—" })}</span>
       </div>
     </div>
   );

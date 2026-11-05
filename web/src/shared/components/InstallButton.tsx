@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useI18n } from "../i18n";
 
 // InstallButton prompt de instalación PWA (Chrome/Edge; null en resto).
 export function InstallButton() {
+  const { t } = useI18n();
   const [deferred, setDeferred] = useState<Event | null>(null);
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export function InstallButton() {
       }}
       className="block w-full border border-signal/40 bg-signal/10 px-2 py-1.5 text-left font-mono text-[10px] tracking-[0.08em] text-signal uppercase hover:bg-signal/15"
     >
-      Instalar app
+      {t("shared.install.button")}
     </button>
   );
 }
