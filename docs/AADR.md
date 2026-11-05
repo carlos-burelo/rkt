@@ -8,6 +8,7 @@
 | Ámbito | backend, API, dashboard, MCP |
 | Fase activa | DOM — Dominios y Proxy |
 | Siguiente tarea | DOM-01 |
+| Ampliación | SRV, PROTO, BLD y MOCK aprobados; no iniciar hasta cerrar P1 |
 | Relacionados | [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md), [CLI](CLI.md) |
 
 **AADR** = Architecture & API Decision Record. Este documento fija las
@@ -24,6 +25,10 @@ el tema claro/oscuro es consistente y la UX resiste uso diario.
 
 No se inventan métricas, estados, botones ni integraciones. Si una capacidad
 no existe, se dice o se omite; no se simula.
+
+La ampliación SRV/PROTO/BLD/MOCK está aprobada, pero **no se inicia** hasta
+cerrar las fases P1 y P2. Este documento la registra para no perder alcance ni
+mezclarla con el trabajo activo.
 
 ## 1. Convenciones
 
@@ -98,8 +103,9 @@ Los secretos nunca viajan en listas. Los valores se revelan por clave y solo a
 ### Fuera de alcance
 
 Multi-tenant, billing, compra de dominios, CDN, WAF con UI propia, RUM en las
-apps usuarias, Kubernetes, métricas de visitantes únicos o bounce rate. Si no
-se mide, no se muestra.
+apps usuarias, Kubernetes, agentes remotos, agregación multi-servidor, túneles
+TCP crudos y métricas de visitantes únicos o bounce rate. Si no se mide, no se
+muestra.
 
 ## 3. Decisiones de arquitectura
 
@@ -273,6 +279,81 @@ o `title`. Toda vista nueva tiene captura en claro y oscuro cuando aporte.
 - No se copian assets ajenos.
 - La densidad y la jerarquía mandan sobre el adorno.
 
+### D12. rkt es una instancia única de VPS, no un panel multi-servidor
+
+**Contexto.** El producto está pensado para un solo servidor propio. Añadir
+agentes remotos, clustering o federación multiplica la superficie sin aportar
+al caso de uso.
+
+**Decisión.** La monitorización del servidor es local y de solo lectura para la
+propia instancia: CPU, memoria, swap, disco, red, load average, uptime,
+temperatura y firewall. No hay agentes remotos ni agregación de varias
+máquinas. Si un dato no está disponible en la plataforma, se omite con un
+estado honesto; no se estima.
+
+**Consecuencias.**
+
+- Un único endpoint `/api/v1/server` alimenta el módulo, con snapshot e
+  histórico corto en memoria.
+- Temperatura y firewall son capacidades opcionales por plataforma.
+- El alcance multi-servidor queda fuera de misión, no como deuda.
+
+### D13. Protocolos: HTTP/HTTPS, WS/WSS, SSE y upgrades
+
+**Contexto.** Un PaaS que solo enruta peticiones HTTP completas rompe apps con
+WebSocket, SSE o upgrades. El proxy actual usa `httputil.ReverseProxy`; hay que
+demostrar y cubrir el resto de protocolos, no asumirlos.
+
+**Decisión.** El proxy soporta y prueba: HTTP/1.1, HTTP/2 cuando el listener
+TLS lo permite, WebSocket y WSS mediante upgrade/hijack, SSE sin buffering y
+targets `http://`, `https://`, `ws://` y `wss://`. `ws`/`wss` se normalizan al
+esquema HTTP equivalente para el transporte y conservan la semántica de
+upgrade. Los túneles crudos TCP quedan fuera hasta que exista un caso de uso.
+
+**Consecuencias.**
+
+- La validación de rutas acepta los cuatro esquemas.
+- Un WebSocket no se corta por timeouts de respuesta ni por compresión.
+- Hay test de eco WS/WSS y de SSE con flush.
+- Un target no soportado devuelve error accionable, nunca un 502 opaco.
+
+### D14. Mockdata en español neutro y nombres neutros
+
+**Contexto.** Las capturas son documentación viva. Nombres regionales o copias
+de marcas ajenas hacen que el producto parezca una demo local y no un PaaS
+sobrio.
+
+**Decisión.** Los fixtures usan español neutro, nombres de persona neutros y
+nombres de app descriptivos en español cuando aporten (`tienda`, `api`,
+`documentacion`, `facturacion`, `panel`). Nada de `xavi`, `mira`, `tomas` ni
+referencias regionales. Los datos deben ser verosímiles, pero nunca fingir
+métricas que el backend no produce.
+
+**Consecuencias.**
+
+- `scripts/shots/mock.mjs` y cualquier fixture comparten un vocabulario.
+- Las capturas se regeneran tras cambiar nombres para evitar mezclas.
+- Los dominios de ejemplo usan `ejemplo.com` o el `base_domain` local.
+
+### D15. Buildpack como ventaja competitiva
+
+**Contexto.** rkt ya detecta Node, Python, Go y estáticos. Para superar a los
+buildpacks existentes necesita detección amplia, builds deterministas, caché,
+logs claros y monorepos, sin ejecutar `npm`.
+
+**Decisión.** El buildpack es un módulo de primera clase: detección por
+manifiestos y lockfiles, frameworks modernos, monorepos, gestores `pnpm`,
+`yarn` y `bun` (nunca `npm`), pasos de build declarativos, caché de
+dependencias, salida estructurada y tests por matriz. La detección explica por
+qué eligió un plan; si no puede, falla con una acción concreta.
+
+**Consecuencias.**
+
+- `internal/buildpack` y `internal/discover` comparten una matriz única.
+- Cada framework soportado tiene fixture y test de plan.
+- El build log muestra pasos, tiempos y causa de fallo.
+- No se promete Dockerfile, Nix ni builds arbitrarios sin diseño previo.
+
 ## 4. Contratos de API
 
 ### 4.1 Nuevos o cambiados
@@ -307,6 +388,12 @@ o `title`. Toda vista nueva tiene captura en claro y oscuro cuando aporte.
 | `/api/v1/deployments/{id}/cancel` | POST | operator | Cancelación real con contexto. |
 | `/api/v1/observability` | GET | viewer | Añade `by_app`, `classes`, `latency`, `events`. |
 | `/api/v1/settings` | PUT | operator | Valida con `settings.Validate`; error accionable. |
+| `/api/v1/server` | GET | viewer | Snapshot local: CPU, RAM, swap, load, uptime, disco, red, temperatura y firewall. |
+| `/api/v1/server/history` | GET | viewer | Serie corta en memoria (`?hours=1..24`). |
+| `/api/v1/server/processes` | GET | viewer | Top procesos por CPU/RAM de la instancia (solo lectura). |
+| `/api/v1/proxy/capabilities` | GET | viewer | Protocolos soportados y límites reales (HTTP/1.1, HTTP/2, WS, WSS, SSE). |
+| `/api/v1/buildpack/frameworks` | GET | viewer | Matriz de frameworks, gestores y requisitos que el detector reconoce. |
+| `/api/v1/detect` | GET | operator | Se amplía: explica el plan elegido y los manifiestos que lo activaron. |
 
 ### 4.2 Se mantienen
 
@@ -588,7 +675,126 @@ o `title`. Toda vista nueva tiene captura en claro y oscuro cuando aporte.
 - [ ] **OVR-06** Jerarquía y empty states; no duplicar tablas enteras.
 - [ ] **OVR-07** Capturas y tests de datos derivados.
 
-### 5.11 X — Transversal
+### 5.11 SRV — Servidor y monitorización local
+
+**Prioridad:** P1.5. **Depende de:** D12. **Alcance:** una sola instancia VPS.
+
+- [ ] **SRV-01** Inventariar colectores disponibles por plataforma y decidir
+  qué se mide, qué es opcional y qué se omite.
+- [ ] **SRV-02** Crear `internal/servermetrics` con `Snapshot` tipado: CPU
+  total/por núcleo, load 1/5/15, RAM, swap, uptime, discos, red, temperatura y
+  firewall.
+- [ ] **SRV-03** Colector Windows: CPU, memoria, discos, red, uptime y
+  temperatura (best effort); firewall de solo lectura.
+- [ ] **SRV-04** Colector Linux: `/proc/stat`, `/proc/meminfo`,
+  `/proc/loadavg`, `/proc/uptime`, `/proc/net/dev`, `statfs`,
+  `/sys/class/thermal` y nft/iptables de solo lectura.
+- [ ] **SRV-05** Cálculo de CPU por delta con reloj inyectable; test.
+- [ ] **SRV-06** Parseo de memoria/swap con fixtures; test.
+- [ ] **SRV-07** Discos por punto de montaje, ignorando pseudo-filesystems;
+  test.
+- [ ] **SRV-08** Tasas de red por delta; test.
+- [ ] **SRV-09** Temperatura opcional: si el sensor no existe, estado vacío
+  honesto; nunca valor inventado.
+- [ ] **SRV-10** Firewall de solo lectura: estado, puertos y reglas visibles;
+  sin mutación desde el dashboard.
+- [ ] **SRV-11** Top procesos por CPU/RAM con `procstat`/`appusage`, acotado y
+  sin bloquear el request.
+- [ ] **SRV-12** Histórico en memoria de 24h con muestras de 1 min y límite
+  duro; sin persistir series en SQLite.
+- [ ] **SRV-13** Endpoints `/server`, `/server/history` y
+  `/server/processes`; cache corta y rol viewer.
+- [ ] **SRV-14** Módulo "Servidor" en el dashboard: placas, sparklines, discos,
+  temperatura, red y firewall.
+- [ ] **SRV-15** Alertas nuevas: `cpu_pct`, `mem_pct`, `disk_pct`, `temp_c`;
+  evaluador con datos del snapshot.
+- [ ] **SRV-16** Enlazar alertas de servidor con el mismo outbox de canales.
+- [ ] **SRV-17** Empty states por plataforma: "sensor no disponible" y "firewall
+  no legible" sin romper la vista.
+- [ ] **SRV-18** i18n español neutro para todas las métricas y unidades.
+- [ ] **SRV-19** Tests de colectores y handlers; snapshot determinista con
+  fixtures.
+- [ ] **SRV-20** Capturas desktop, móvil y light/dark del módulo Servidor.
+
+### 5.12 PROTO — Protocolos y upgrades
+
+**Prioridad:** P1.5. **Depende de:** D13.
+
+- [ ] **PROTO-01** Inventariar el proxy actual: `ReverseProxy`, timeouts,
+  compresión, flush y manejo de `Connection: Upgrade`.
+- [ ] **PROTO-02** Aceptar y normalizar targets `http`, `https`, `ws` y `wss`
+  en validación de rutas.
+- [ ] **PROTO-03** Test de eco WebSocket a través del proxy, incluyendo
+  mensajes binarios y cierre limpio.
+- [ ] **PROTO-04** Test WSS con la CA local y certificado de desarrollo.
+- [ ] **PROTO-05** Test SSE: eventos llegan sin buffering y el cliente puede
+  cancelar.
+- [ ] **PROTO-06** Verificar HTTP/2 en listener TLS y ALPN; documentar límites.
+- [ ] **PROTO-07** Preservar cabeceras de upgrade y no comprimir respuestas de
+  upgrade.
+- [ ] **PROTO-08** Ajustar timeouts e idle connections para conexiones largas
+  sin afectar peticiones normales.
+- [ ] **PROTO-09** UI de rutas: aceptar los cuatro esquemas, mostrarlos y
+  explicar el destino.
+- [ ] **PROTO-10** `GET /proxy/capabilities` con protocolos y límites reales.
+- [ ] **PROTO-11** Errores accionables para esquema no soportado o upgrade
+  rechazado; nunca un 502 opaco.
+- [ ] **PROTO-12** Documentar ejemplos de app con WebSocket y SSE.
+- [ ] **PROTO-13** Prueba de carga ligera con conexiones WS concurrentes.
+- [ ] **PROTO-14** Capturas o demo de app WS/SSE funcionando a través de rkt.
+
+### 5.13 BLD — Buildpack
+
+**Prioridad:** P1.5. **Depende de:** D15.
+
+- [ ] **BLD-01** Inventariar `internal/buildpack` y `internal/discover`: qué
+  detecta hoy, con qué evidencia y qué promete.
+- [ ] **BLD-02** Modelo `FrameworkPlan` con `kind`, `evidence`, `install`,
+  `build`, `start`, `staticDir` y `nodeVersion`.
+- [ ] **BLD-03** Gestores Node: `pnpm`, `yarn` y `bun` por lockfile; nunca
+  `npm`; normalización canónica y tests.
+- [ ] **BLD-04** Frameworks: Next standalone, Nuxt, Astro, Vite, SvelteKit,
+  Remix, SolidStart, Go, Python (FastAPI/Django/Flask), Rust y Java básico.
+- [ ] **BLD-05** Monorepos: detectar workspace, app concreta y filtro de build;
+  no asumir la raíz.
+- [ ] **BLD-06** Salidas estáticas: `dist`, `build`, `out`, `.output/public`,
+  `public`; servir con el binario.
+- [ ] **BLD-07** Build determinista: `NODE_ENV`, `CI=1`, sin prompts, sin
+  telemetría y sin `npm`.
+- [ ] **BLD-08** Caché de dependencias por hash de lockfile, invalidación
+  segura y limpieza.
+- [ ] **BLD-09** Log de build con pasos, tiempos y causa exacta del fallo.
+- [ ] **BLD-10** Errores de detección con manifiesto faltante y comando
+  sugerido.
+- [ ] **BLD-11** Fixtures por framework y test de matriz (detección + plan).
+- [ ] **BLD-12** `GET /detect` devuelve evidencia y explicación del plan.
+- [ ] **BLD-13** UI de creación muestra evidencia y permite editar pasos.
+- [ ] **BLD-14** Versión de Node desde `.nvmrc`, `engines` o default seguro.
+- [ ] **BLD-15** Python: `requirements.txt`, `pyproject`, `uv` y `poetry` con
+  entorno aislado.
+- [ ] **BLD-16** Go: flags de build, `-trimpath`, binario esperado y test.
+- [ ] **BLD-17** Seguridad: allowlist de env de build, secretos fuera de logs y
+  timeouts.
+- [ ] **BLD-18** Documentar matriz soportada y límites; actualizar capturas.
+
+### 5.14 MOCK — Fixtures y capturas
+
+**Prioridad:** P1.5. **Depende de:** D14.
+
+- [ ] **MOCK-01** Inventariar nombres, dominios y textos de
+  `scripts/shots/mock.mjs`.
+- [ ] **MOCK-02** Sustituir nombres regionales por nombres neutros.
+- [ ] **MOCK-03** Usar apps descriptivas: `tienda`, `api`, `documentacion`,
+  `facturacion`, `panel`.
+- [ ] **MOCK-04** Revisar todo el copy de fixtures en español neutro.
+- [ ] **MOCK-05** Dominios de ejemplo `ejemplo.com` o base local.
+- [ ] **MOCK-06** Extraer fixtures compartidos para capturas y tests.
+- [ ] **MOCK-07** Eliminar regionalismos y lenguaje de marketing.
+- [ ] **MOCK-08** Regenerar todas las capturas y revisar dark/light/móvil.
+- [ ] **MOCK-09** Asegurar que ninguna vista usa datos fuera del fixture.
+- [ ] **MOCK-10** Guard que detecte nombres prohibidos en fixtures.
+
+### 5.15 X — Transversal
 
 - [ ] **X-01** Añadir Vitest a `web` (`pnpm --dir web test`) y cubrir
   `format.ts`, `canSaveApp` y validadores puros.
@@ -618,6 +824,9 @@ o `title`. Toda vista nueva tiene captura en claro y oscuro cuando aporte.
 5. **Fase 4:** OBS y ALR. Comparten `weblog`, eventos y tick de fondo.
 6. **Fase 5:** USR. Independiente, pero toca auth y sesiones.
 7. **Fase 6:** CI, LOG y OVR. Mejoras sobre lo ya construido.
+8. **Fase 7 (posterior, no iniciar sin cerrar P1):** SRV, PROTO y BLD.
+   MOCK se ejecuta junto a las capturas de cada fase.
+9. **Fase 8:** MOCK completo y regeneración global de capturas.
 
 Cada fase termina verde y con commit atómico. No se abre la siguiente fase con
 tests rojos.
@@ -634,6 +843,11 @@ tests rojos.
 | Cola de CI añade complejidad | Solo se implementa persistente; mientras tanto, 409 accionable y sin UI de cola. |
 | Valores de entorno en listas | Listas solo con claves; revelado por clave y rol operator. |
 | Start/stop y restart con caminos duplicados | Una sola función de servicio; API/CLI/MCP solo la llaman. |
+| Sensores de temperatura no disponibles en VPS | Mostrar "sensor no disponible"; nunca estimar. |
+| Firewall ilegible sin privilegios | Lectura best effort; estado honesto y sin acciones de escritura. |
+| WebSocket roto por timeouts/compresión | Tests WS/WSS/SSE y configuración explícita de upgrade. |
+| Buildpack con detección ambigua | Evidencia obligatoria y error accionable; matriz de fixtures. |
+| Fixtures regionales o de marcas ajenas | Guard de nombres prohibidos y revisión de capturas. |
 
 ## 8. Verificación
 
@@ -683,6 +897,9 @@ Criterios:
 | Alertas (editar/probar) | PUT/POST | añadir tools | ALR |
 | Sesiones/usuarios | API admin | no exponer al inicio | USR |
 | Cancelar deploy | POST `/deployments/{id}/cancel` | añadir tool | CI |
+| Servidor local | GET `/server` | añadir tool de lectura | SRV |
+| Buildpack | GET `/buildpack/frameworks`, `/detect` | añadir tool de lectura | BLD |
+| Capacidades proxy | GET `/proxy/capabilities` | añadir tool de lectura | PROTO |
 
 ## 10. Registro de avance
 
@@ -690,6 +907,7 @@ Criterios:
 |---|---|---|---|
 | 2026-11-05 | Línea base: diff, resumen y logs compactos | `01e227e`, `f7edccb` | `go test ./...`, `tsc`, build, capturas |
 | 2026-11-05 | Spec creada (este documento) | `812da8c` | revisión manual |
+| 2026-11-05 | AADR ampliado: servidor local, protocolos, buildpack y fixtures neutros | pendiente | revisión manual |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.
@@ -720,3 +938,48 @@ No borrar filas anteriores.
 | `web/src/features/apps/AppOverview.tsx` | `domains[0]` | lista |
 | `internal/mcpserver` | patch de app | conjunto |
 | `internal/cli` | comando de app | conjunto |
+
+### C. Métricas del servidor (SRV)
+
+| Grupo | Datos | Fuente |
+|---|---|---|
+| CPU | uso total, por núcleo, load 1/5/15 | `GetSystemTimes` / `/proc/stat` + `/proc/loadavg` |
+| Memoria | total, usada, disponible, caché, swap | `GlobalMemoryStatusEx` / `/proc/meminfo` |
+| Disco | por montaje: total, libre, usado, % | `GetDiskFreeSpaceEx` / `statfs` |
+| Red | bytes y paquetes rx/tx, tasa por segundo | `GetIfTable2` / `/proc/net/dev` |
+| Tiempo | uptime del host | API del SO / `/proc/uptime` |
+| Temperatura | °C por sensor, si existe | WMI térmico / `/sys/class/thermal` |
+| Firewall | estado, puertos y reglas de solo lectura | API del SO / nft/iptables |
+| Procesos | top por CPU/RAM, PID y nombre | `procstat` |
+
+Sin agentes remotos. Sin multi-servidor. Sin valores estimados.
+
+### D. Matriz inicial del buildpack (BLD)
+
+| Familia | Detección | Salida / arranque |
+|---|---|---|
+| Next.js | `next.config.*`, `package.json` | standalone + `server.js` |
+| Nuxt | `nuxt.config.*` | `.output/server/index.mjs` |
+| Astro | `astro.config.*` | `dist/` estático o SSR |
+| Vite | `vite.config.*` | `dist/` estático |
+| SvelteKit | `svelte.config.*` | `build/` o adapter-node |
+| Remix | `remix.config.*` / `@remix-run` | `build/` + server |
+| SolidStart | `app.config.*` / `solid-start` | `.output/` |
+| Go | `go.mod` | binario `cmd/*` o raíz |
+| Python | `pyproject.toml`, `requirements.txt`, `uv.lock`, `poetry.lock` | ASGI/WSGI o script |
+| Rust | `Cargo.toml` | binario release |
+| Java | `pom.xml`, `build.gradle*` | jar ejecutable |
+
+La matriz se amplía solo con fixture y test. Un plan sin evidencia no se elige.
+
+### E. Protocolos soportados (PROTO)
+
+| Protocolo | Estado objetivo | Verificación |
+|---|---|---|
+| HTTP/1.1 | obligatorio | tests actuales + smoke |
+| HTTPS | obligatorio | TLS local/ACME |
+| HTTP/2 | cuando el listener TLS lo permita | ALPN y test |
+| WebSocket (`ws`) | obligatorio | eco binario/texto |
+| WebSocket seguro (`wss`) | obligatorio | eco con CA local |
+| SSE | obligatorio | eventos sin buffering |
+| TCP crudo | fuera de alcance | decisión explícita |
