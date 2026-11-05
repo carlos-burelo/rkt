@@ -9,15 +9,17 @@ de los detalles, no en decoración.
 Terminal intermodal: tinta de puerto sobre grafito azulado. Rail de tinta
 profunda, suelo acero frío, hairlines de 1px en vez de sombras, esquinas de
 2px, micro-etiquetas monoespaciadas. Naranja-señal solo en la acción primaria
-y la selección. Semáforo solo donde hay estado.
+y la selección. Semáforo solo donde hay estado. En claro: papel técnico,
+grafito y la misma señal; no es una inversión mecánica de colores.
 
 Firma: fila-manifiesto con tira de estado, bahía (puerto), destino
 (dominio/TLS) y revisión; tablero de salidas con duraciones tabulares.
 
 ## Tokens
 
-Definidos en `web/src/index.css` (`:root`). Tema único oscuro; no hay modo
-claro ni multi-entorno.
+Definidos en `web/src/index.css` (`:root` oscuro, `.light` claro). Tema
+`system`/`light`/`dark`, persistido en `localStorage` (`rkt-theme`) y aplicado
+antes del primer paint. Toggle en el rail y en el panel de acceso.
 
 | Token | Rol |
 |---|---|

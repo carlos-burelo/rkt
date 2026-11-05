@@ -1,5 +1,6 @@
 import { BrandMark } from "../../shared/components/ui";
 import { useI18n } from "../../shared/i18n";
+import { ThemeToggle } from "../../shared/theme/ThemeToggle";
 
 // Marco de acceso: la terminal se presenta como manifiesto, no como landing.
 export function AccessShell({
@@ -16,7 +17,7 @@ export function AccessShell({
   const { t } = useI18n();
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
-      <aside className="relative hidden overflow-hidden border-r border-border bg-ink/70 lg:flex lg:w-[44%] lg:flex-col lg:justify-between lg:p-10">
+      <aside className="relative hidden overflow-hidden border-r border-border bg-card/50 lg:flex lg:w-[44%] lg:flex-col lg:justify-between lg:p-10">
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-signal/60" />
         <div className="relative">
           <div className="flex items-center gap-3">
@@ -39,7 +40,8 @@ export function AccessShell({
         </div>
       </aside>
 
-      <main className="flex flex-1 items-center justify-center px-5 py-10">
+      <main className="relative flex flex-1 items-center justify-center px-5 py-10">
+        <ThemeToggle compact className="absolute top-4 right-4" />
         <div className="w-full max-w-[22rem]">
           <div className="mb-8 flex items-center gap-2.5 lg:hidden">
             <span className="flex h-8 w-8 items-center justify-center border border-signal/40 bg-signal/10 text-signal">

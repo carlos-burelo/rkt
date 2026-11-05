@@ -263,7 +263,7 @@ const main = async () => {
   const browser = await chromium.launch();
   const errors = [];
 
-  const ctx = await browser.newContext({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
+  const ctx = await browser.newContext({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1, colorScheme: "dark" });
   const page = await ctx.newPage();
   await mockApi(page);
   page.on("console", (m) => { if (m.type() === "error") errors.push(`[consola] ${m.text()}`); });
@@ -319,7 +319,7 @@ const main = async () => {
   await ctx.close();
 
   // mobile
-  const mctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const mctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, colorScheme: "dark" });
   const mpage = await mctx.newPage();
   await mockApi(mpage);
   mpage.on("console", (m) => { if (m.type() === "error") errors.push(`[móvil consola] ${m.text()}`); });
@@ -340,7 +340,7 @@ const main = async () => {
   await mctx.close();
 
   // login + setup sin sesión
-  const lctx = await browser.newContext({ viewport: { width: 1600, height: 900 } });
+  const lctx = await browser.newContext({ viewport: { width: 1600, height: 900 }, colorScheme: "dark" });
   const lpage = await lctx.newPage();
   await mockApi(lpage, { authed: false });
   await lpage.goto(`${BASE}/login`, { waitUntil: "networkidle" });
@@ -349,7 +349,7 @@ const main = async () => {
   console.log("ok login");
   await lctx.close();
 
-  const sctx = await browser.newContext({ viewport: { width: 1600, height: 900 } });
+  const sctx = await browser.newContext({ viewport: { width: 1600, height: 900 }, colorScheme: "dark" });
   const spage = await sctx.newPage();
   await mockApi(spage, { authed: false, setupRequired: true });
   await spage.goto(`${BASE}/setup`, { waitUntil: "networkidle" });
@@ -357,6 +357,28 @@ const main = async () => {
   await spage.screenshot({ path: join(OUT, "setup.png"), fullPage: true });
   console.log("ok setup");
   await sctx.close();
+
+  // tema claro
+  const wctx = await browser.newContext({ viewport: { width: 1600, height: 900 }, colorScheme: "light" });
+  const wpage = await wctx.newPage();
+  await mockApi(wpage);
+  wpage.on("console", (m) => { if (m.type() === "error") errors.push(`[light consola] ${m.text()}`); });
+  wpage.on("pageerror", (e) => errors.push(`[light pageerror] ${e.message}`));
+  wpage.on("response", (r) => { if (r.status() >= 400) errors.push(`[light http ${r.status()}] ${r.url()}`); });
+  await wpage.goto(`${BASE}/overview`, { waitUntil: "networkidle" });
+  await wpage.waitForTimeout(500);
+  await wpage.screenshot({ path: join(OUT, "overview-light.png"), fullPage: true });
+  console.log("ok overview-light");
+  await wctx.close();
+
+  const wlctx = await browser.newContext({ viewport: { width: 1600, height: 900 }, colorScheme: "light" });
+  const wlpage = await wlctx.newPage();
+  await mockApi(wlpage, { authed: false });
+  await wlpage.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+  await wlpage.waitForTimeout(400);
+  await wlpage.screenshot({ path: join(OUT, "login-light.png"), fullPage: true });
+  console.log("ok login-light");
+  await wlctx.close();
 
   await browser.close();
   if (errors.length) {

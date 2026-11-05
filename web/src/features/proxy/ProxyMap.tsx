@@ -23,7 +23,7 @@ export function RadialMap({
   const compact = links.length <= 2;
 
   return (
-    <div className="border border-border bg-ink/35">
+    <div className="border border-border bg-muted/30">
       <header className="flex items-center gap-2 border-b border-border bg-secondary/20 px-3 py-1.5">
         <span aria-hidden className="h-1.5 w-1.5 bg-signal" />
         <span className="micro">{t("serve.map.topology")}</span>

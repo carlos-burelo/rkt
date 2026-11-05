@@ -33,4 +33,9 @@ export const common = {
   "common.units.mb": "MB",
   "common.units.gb": "GB",
   "common.units.tb": "TB",
+  "theme.system": "Sistema",
+  "theme.light": "Claro",
+  "theme.dark": "Oscuro",
+  "theme.label": "Tema",
+  "theme.toggle": "Tema: {current}. Pulsa para cambiar.",
 };

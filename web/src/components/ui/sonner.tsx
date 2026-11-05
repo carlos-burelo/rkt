@@ -1,9 +1,12 @@
 import { Toaster as Sonner, type ToasterProps } from "sonner";
+import { useTheme } from "../../shared/theme";
 
-// Toaster fijo dark (sin next-themes: SPA Vite, no Next).
-const Toaster = ({ ...props }: ToasterProps) => (
+// Toaster sigue el tema resuelto (claro/oscuro).
+const Toaster = ({ ...props }: ToasterProps) => {
+  const { resolved } = useTheme();
+  return (
   <Sonner
-    theme="dark"
+    theme={resolved}
     className="toaster group"
     toastOptions={{
       classNames: {
@@ -15,6 +18,7 @@ const Toaster = ({ ...props }: ToasterProps) => (
     }}
     {...props}
   />
-);
+  );
+};
 
 export { Toaster };

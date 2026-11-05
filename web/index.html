@@ -4,7 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="rkt dashboard: opera tu PaaS Windows." />
-    <meta name="theme-color" content="#09090b" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090b" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f4f0" />
+    <script>
+      // Aplica el tema antes del primer paint (sin flash).
+      (function () {
+        try {
+          var t = localStorage.getItem("rkt-theme") || "system";
+          var d = t === "dark" || (t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var r = document.documentElement;
+          r.classList.toggle("dark", d);
+          r.classList.toggle("light", !d);
+          r.style.colorScheme = d ? "dark" : "light";
+        } catch (e) {}
+      })();
+    </script>
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>rkt dashboard</title>

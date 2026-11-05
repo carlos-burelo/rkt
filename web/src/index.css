@@ -56,6 +56,56 @@
   --paper: oklch(0.93 0.012 85);
 }
 
+/* Tema claro: papel técnico, grafito y la misma señal naranja. */
+.light {
+  color-scheme: light;
+  --background: oklch(0.982 0.004 95);
+  --foreground: oklch(0.235 0.012 250);
+  --card: oklch(0.995 0.002 95);
+  --card-foreground: oklch(0.235 0.012 250);
+  --popover: oklch(0.995 0.002 95);
+  --popover-foreground: oklch(0.235 0.012 250);
+  --primary: oklch(0.6 0.17 50);
+  --primary-foreground: oklch(0.99 0.005 95);
+  --secondary: oklch(0.94 0.006 95);
+  --secondary-foreground: oklch(0.27 0.012 250);
+  --muted: oklch(0.945 0.005 95);
+  --muted-foreground: oklch(0.48 0.012 250);
+  --accent: oklch(0.925 0.008 95);
+  --accent-foreground: oklch(0.23 0.012 250);
+  --destructive: oklch(0.56 0.2 25);
+  --border: oklch(0.25 0.012 250 / 14%);
+  --input: oklch(0.25 0.012 250 / 20%);
+  --ring: oklch(0.6 0.17 50);
+  --chart-1: oklch(0.6 0.17 50);
+  --chart-2: oklch(0.52 0.13 165);
+  --chart-3: oklch(0.52 0.1 230);
+  --chart-4: oklch(0.62 0.14 78);
+  --chart-5: oklch(0.56 0.2 25);
+  --sidebar: oklch(0.958 0.006 95);
+  --sidebar-foreground: oklch(0.27 0.012 250);
+  --sidebar-primary: oklch(0.6 0.17 50);
+  --sidebar-primary-foreground: oklch(0.99 0.005 95);
+  --sidebar-accent: oklch(0.25 0.012 250 / 6%);
+  --sidebar-accent-foreground: oklch(0.2 0.012 250);
+  --sidebar-border: oklch(0.25 0.012 250 / 10%);
+  --sidebar-ring: oklch(0.6 0.17 50);
+  --signal: oklch(0.6 0.17 50);
+  --ok: oklch(0.52 0.13 165);
+  --warn: oklch(0.62 0.14 78);
+  --bad: oklch(0.55 0.2 25);
+  --info: oklch(0.52 0.1 230);
+  --field: oklch(0.97 0.004 95);
+  --ink: oklch(0.22 0.012 250);
+  --paper: oklch(0.99 0.005 95);
+}
+
+.light body {
+  background-image:
+    radial-gradient(1100px 520px at 16% -12%, oklch(0.6 0.17 50 / 7%), transparent 62%),
+    linear-gradient(180deg, oklch(0.982 0.004 95), oklch(0.965 0.005 95));
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Inter Variable', 'Inter', sans-serif;
@@ -146,14 +196,14 @@
   }
   * {
     scrollbar-width: thin;
-    scrollbar-color: oklch(1 0 0 / 28%) transparent;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 28%, transparent) transparent;
   }
   *::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
   *::-webkit-scrollbar-thumb {
-    background: oklch(1 0 0 / 26%);
+    background: color-mix(in oklch, var(--foreground) 26%, transparent);
     border-radius: 0;
     border: 2px solid transparent;
     background-clip: content-box;
@@ -180,7 +230,7 @@
     font-size: 10px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: oklch(0.58 0.012 245);
+    color: var(--muted-foreground);
   }
   .hairline {
     border-color: var(--border);
@@ -220,8 +270,8 @@
   }
   .grid-paper {
     background-image:
-      linear-gradient(oklch(1 0 0 / 4%) 1px, transparent 1px),
-      linear-gradient(90deg, oklch(1 0 0 / 4%) 1px, transparent 1px);
+      linear-gradient(color-mix(in oklch, var(--foreground) 7%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in oklch, var(--foreground) 7%, transparent) 1px, transparent 1px);
     background-size: 24px 24px;
   }
   .noise {
@@ -273,7 +323,7 @@
   }
   .plate-top {
     height: 1px;
-    background: oklch(1 0 0 / 12%);
+    background: color-mix(in oklch, var(--foreground) 12%, transparent);
   }
   .plate-top-signal {
     background: var(--signal);

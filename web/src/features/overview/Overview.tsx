@@ -217,7 +217,7 @@ export function Overview() {
               </div>
             </div>
             <div className="border border-border" role="table" aria-label={t("overview.units.tableAria")}>
-              <div role="row" className="hidden grid-cols-[1.5rem_minmax(0,1.5fr)_5rem_minmax(0,1.5fr)_7rem_5.5rem_4.5rem] items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 lg:grid">
+              <div role="row" className="hidden grid-cols-[3.5rem_minmax(0,1.5fr)_5rem_minmax(0,1.5fr)_7rem_5.5rem_4.5rem] items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 lg:grid">
                 <span role="columnheader" className="micro">{t("overview.col.state")}</span>
                 <span role="columnheader" className="micro">{t("overview.col.unit")}</span>
                 <span role="columnheader" className="micro">{t("overview.col.port")}</span>
@@ -245,7 +245,7 @@ export function Overview() {
                     tabIndex={0}
                     aria-label={t("overview.units.open", { name: a.name })}
                     className={cn(
-                      "group relative grid cursor-pointer grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-border/70 bg-card/35 px-3 py-2.5 last:border-0 hover:bg-accent/40 focus-visible:bg-accent/40 lg:grid-cols-[1.5rem_minmax(0,1.5fr)_5rem_minmax(0,1.5fr)_7rem_5.5rem_4.5rem]",
+                      "group relative grid cursor-pointer grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-border/70 bg-card/35 px-3 py-2.5 last:border-0 hover:bg-accent/40 focus-visible:bg-accent/40 lg:grid-cols-[3.5rem_minmax(0,1.5fr)_5rem_minmax(0,1.5fr)_7rem_5.5rem_4.5rem]",
                       state === "failed" && "bg-bad/[0.045] hover:bg-bad/[0.075] focus-visible:bg-bad/[0.075]",
                     )}
                     role="row"

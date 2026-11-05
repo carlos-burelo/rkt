@@ -23,6 +23,7 @@ import { useFleet } from "../features/overview/hooks";
 import { CreateDialog } from "../features/apps/CreateDialog";
 import { DeployDrawer } from "../features/deployments/DeployDrawer";
 import { useI18n } from "../shared/i18n";
+import { ThemeToggle } from "../shared/theme/ThemeToggle";
 import { GROUPS, PAGE_LABEL } from "./nav";
 
 export function ShellLayout() {
@@ -91,7 +92,7 @@ export function ShellLayout() {
 
   return (
     <SidebarProvider>
-      <Toaster theme="dark" position="bottom-right" />
+      <Toaster position="bottom-right" />
       <Sidebar collapsible="icon" className="border-r border-sidebar-border">
         <SidebarHeader className="gap-0 border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:px-2">
           <SidebarMenu>
@@ -245,6 +246,7 @@ export function ShellLayout() {
               {t("shell.noConnection")}
             </p>
           )}
+          <ThemeToggle />
           <div className="group-data-[collapsible=icon]:hidden">
             <InstallButton />
           </div>
