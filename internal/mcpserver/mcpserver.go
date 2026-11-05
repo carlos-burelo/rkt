@@ -619,7 +619,7 @@ func (s *Server) doWaitHealthy(app string, timeoutS int) (string, error) {
 
 // Run registra tools y sirve por stdio (bloquea).
 func (s *Server) Run(ctx context.Context) error {
-	srv := mcp.NewServer(&mcp.Implementation{Name: "rkt", Title: "rkt PaaS Windows"}, nil)
+	srv := mcp.NewServer(&mcp.Implementation{Name: "rkt", Title: "rkt PaaS"}, nil)
 	mcp.AddTool(srv, &mcp.Tool{Name: "status", Description: "Salud: versión, backends y apps (JSON). Requiere servicio en marcha."},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
 			return text(s.doStatus())

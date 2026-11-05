@@ -1,6 +1,6 @@
 // Package hosts gestiona el bloque de rkt en el archivo hosts del sistema.
 // Solo toca un tramo marcado: no reescribe entradas ajenas. Escribir exige
-// privilegios de administrador (en Windows el archivo es del sistema).
+// privilegios de administrador (el archivo pertenece al sistema).
 package hosts
 
 import (

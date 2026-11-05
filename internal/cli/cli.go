@@ -33,7 +33,7 @@ var JSON = flag.Bool("json", false, "salida JSON en comandos de lectura")
 // deployTimeout POSTs largos al servicio (deploy/rollback tardan minutos).
 const deployTimeout = 10 * time.Minute
 
-// Run cablea logger (consola+archivo), servicio Windows y despacha.
+// Run cablea logger (consola+archivo), servicio del sistema y despacha.
 // Sin args: ayuda si interactivo, servicio si no (arranque por SCM).
 func Run(cfgPath string) {
 	logger, closeLog, err := logx.Setup(cfgPath)
@@ -187,7 +187,7 @@ func usage(code int) {
 	fmt.Fprintln(out, `rkt [-config path] [--json] <comando>
 
 Servicio:
-  install | uninstall | start | stop     servicio Windows
+  install | uninstall | start | stop     servicio del sistema
   run                                    foreground (Ctrl+C limpio)
   dev [--http 127.0.0.1:80] [--https 127.0.0.1:443]
                                          foreground local con puertos de prod

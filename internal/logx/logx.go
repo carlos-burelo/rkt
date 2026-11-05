@@ -1,5 +1,5 @@
-// Package logx: logger a consola + archivo. El servicio Windows
-// no tiene stdout visible, el archivo es el único log real.
+// Package logx: logger a consola + archivo. Como servicio no hay stdout
+// visible, el archivo es el único log real.
 package logx
 
 import (
@@ -16,8 +16,8 @@ import (
 const maxBytes = 10 << 20 // 10MB
 
 // Abs resuelve un path relativo de forma determinista: primero junto al
-// CWD (dev desde el repo) y, si no existe, junto al .exe (servicio Windows,
-// que arranca en System32). Un mismo -config no debe cambiar la carpeta
+// CWD (dev desde el repo) y, si no existe, junto al .exe (servicio del
+// sistema, que arranca en otro CWD). Un mismo -config no debe cambiar la carpeta
 // de datos según cómo se escriba.
 // getwd/executable inyectables para tests de rutas.
 var (

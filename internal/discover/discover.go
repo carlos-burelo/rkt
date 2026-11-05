@@ -38,7 +38,7 @@ type Deps struct {
 	DB       *store.DB
 	Log      *slog.Logger
 	DeployFn func(name, actor string) (string, error)
-	// DirBase dir padre de apps (default C:\apps). Tests lo aíslan.
+	// DirBase dir padre de apps (default por plataforma). Tests lo aíslan.
 	DirBase string
 }
 

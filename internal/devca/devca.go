@@ -33,7 +33,7 @@ type CA struct {
 	cert     *x509.Certificate
 	key      *ecdsa.PrivateKey
 	certPath string
-	thumb    string // SHA-1 hex, como lo muestra Windows
+	thumb    string // SHA-1 hex (formato de thumbprint estándar)
 
 	mu     sync.Mutex
 	leaves map[string]*tls.Certificate
@@ -189,6 +189,6 @@ func (c *CA) issue(name string) (*tls.Certificate, error) {
 }
 
 func thumbprint(der []byte) string {
-	sum := sha1.Sum(der) //nolint:gosec // Windows usa SHA-1 para thumbprints, no es seguridad
+	sum := sha1.Sum(der) //nolint:gosec // SHA-1 solo para thumbprint, no es seguridad
 	return strings.ToUpper(hex.EncodeToString(sum[:]))
 }
