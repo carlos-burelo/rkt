@@ -130,15 +130,24 @@ func register(d Deps, owner, repo, branch, tok string) error {
 	var bin string
 	if !plan.IsStatic() {
 		binKey, ok := presetBinKey[plan.Kind]
-		if !ok {
-			return fmt.Errorf("plan %q sin binario", plan.Kind)
-		}
-		bin = d.DB.GetSetting(binKey)
-		if bin == "" {
-			return fmt.Errorf("sin %s (settings set %s=...)", binKey, binKey)
-		}
-		if st, err := os.Stat(bin); err != nil || st.IsDir() {
-			return fmt.Errorf("%s no es ejecutable: %s", binKey, bin)
+		if ok {
+			bin = d.DB.GetSetting(binKey)
+			if bin == "" {
+				return fmt.Errorf("sin %s (settings set %s=...)", binKey, binKey)
+			}
+			if st, err := os.Stat(bin); err != nil || st.IsDir() {
+				return fmt.Errorf("%s no es ejecutable: %s", binKey, bin)
+			}
+		} else {
+			// Sin setting propio: el comando del plan debe estar en PATH.
+			if len(plan.Start) == 0 {
+				return fmt.Errorf("plan %q sin arranque", plan.Kind)
+			}
+			found, err := exec.LookPath(plan.Start[0])
+			if err != nil {
+				return fmt.Errorf("plan %q requiere %q en PATH", plan.Kind, plan.Start[0])
+			}
+			bin = found
 		}
 	}
 	port, err := freePort(d.DB)

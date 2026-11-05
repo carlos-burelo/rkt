@@ -13,50 +13,50 @@ const now = Date.now();
 const iso = (minsAgo) => new Date(now - minsAgo * 60000).toISOString();
 
 const apps = [
-  { name: "checkout", running: true, restarts: 0, failed: false },
-  { name: "api-core", running: true, restarts: 0, failed: false },
-  { name: "docs", running: true, restarts: 1, failed: false },
-  { name: "billing-worker", running: false, restarts: 7, failed: true },
-  { name: "admin", running: true, restarts: 0, failed: false },
-  { name: "legacy", running: false, restarts: 2, failed: false },
-  { name: "edge-preview", running: true, restarts: 0, failed: false },
+  { name: "tienda", running: true, restarts: 0, failed: false },
+  { name: "api", running: true, restarts: 0, failed: false },
+  { name: "documentacion", running: true, restarts: 1, failed: false },
+  { name: "facturacion", running: false, restarts: 7, failed: true },
+  { name: "panel", running: true, restarts: 0, failed: false },
+  { name: "legado", running: false, restarts: 2, failed: false },
+  { name: "vista-previa", running: true, restarts: 0, failed: false },
 ];
 
 const metas = [
-  { name: "checkout", command: "node .next/standalone/server.js", args: [], dir: "C:/rkt/apps/checkout", restart_delay: "2s", min_uptime: "10s", memory_mb: 512, port: "3001", domains: ["checkout.rkt.dev"], deploy: { repo: "https://github.com/xavi/checkout", ref: "main", build: ["pnpm install", "pnpm build"], auto: true } },
-  { name: "api-core", command: "C:/rkt/apps/api-core/api-core.exe", args: [], dir: "C:/rkt/apps/api-core", restart_delay: "1s", min_uptime: "5s", memory_mb: 256, port: "3002", domains: ["api.rkt.dev"], deploy: { repo: "https://github.com/xavi/api-core", ref: "main", build: ["go build ./cmd/api"], auto: true } },
-  { name: "docs", command: "node server.js", args: [], dir: "C:/rkt/apps/docs", restart_delay: "2s", min_uptime: "10s", memory_mb: 256, port: "3003", domains: ["docs.rkt.dev", "www.rkt.dev"], deploy: { repo: "https://github.com/xavi/docs", ref: "main", build: ["pnpm install", "pnpm build"], auto: false } },
-  { name: "billing-worker", command: "python worker.py", args: [], dir: "C:/rkt/apps/billing", restart_delay: "5s", min_uptime: "30s", memory_mb: 512, port: "3004", domains: [], deploy: { repo: "https://github.com/xavi/billing", ref: "main", build: ["pip install -r requirements.txt"], auto: true } },
-  { name: "admin", command: "node dist/server.js", args: [], dir: "C:/rkt/apps/admin", restart_delay: "2s", min_uptime: "10s", memory_mb: 256, port: "3005", domains: ["admin.rkt.dev"], deploy: { repo: "https://github.com/xavi/admin", ref: "main", build: ["pnpm install", "pnpm build"], auto: false } },
-  { name: "legacy", command: "C:/rkt/apps/legacy/legacy.exe", args: [], dir: "C:/rkt/apps/legacy", restart_delay: "3s", min_uptime: "15s", memory_mb: 128, port: "3006", domains: [], deploy: null },
-  { name: "edge-preview", runtime: "external", external: true, command: "", args: [], dir: "C:/dev/edge-preview", restart_delay: "5s", min_uptime: "10s", memory_mb: 0, port: "3010", domains: ["preview.rkt.dev"], deploy: null, run_command: "pnpm exec vite --host 127.0.0.1 --port 3010 --strictPort" },
+  { name: "tienda", command: "node .next/standalone/server.js", args: [], dir: "C:/rkt/apps/tienda", restart_delay: "2s", min_uptime: "10s", memory_mb: 512, port: "3001", domains: ["tienda.ejemplo.com"], deploy: { repo: "https://github.com/alex/tienda", ref: "main", build: ["pnpm install", "pnpm build"], auto: true } },
+  { name: "api", command: "C:/rkt/apps/api/api.exe", args: [], dir: "C:/rkt/apps/api", restart_delay: "1s", min_uptime: "5s", memory_mb: 256, port: "3002", domains: ["api.ejemplo.com"], deploy: { repo: "https://github.com/alex/api", ref: "main", build: ["go build ./cmd/api"], auto: true } },
+  { name: "documentacion", command: "node server.js", args: [], dir: "C:/rkt/apps/documentacion", restart_delay: "2s", min_uptime: "10s", memory_mb: 256, port: "3003", domains: ["documentacion.ejemplo.com", "www.ejemplo.com"], deploy: { repo: "https://github.com/alex/documentacion", ref: "main", build: ["pnpm install", "pnpm build"], auto: false } },
+  { name: "facturacion", command: "python worker.py", args: [], dir: "C:/rkt/apps/facturacion", restart_delay: "5s", min_uptime: "30s", memory_mb: 512, port: "3004", domains: [], deploy: { repo: "https://github.com/alex/facturacion", ref: "main", build: ["pip install -r requirements.txt"], auto: true } },
+  { name: "panel", command: "node dist/server.js", args: [], dir: "C:/rkt/apps/panel", restart_delay: "2s", min_uptime: "10s", memory_mb: 256, port: "3005", domains: ["panel.ejemplo.com"], deploy: { repo: "https://github.com/alex/panel", ref: "main", build: ["pnpm install", "pnpm build"], auto: false } },
+  { name: "legado", command: "C:/rkt/apps/legado/legado.exe", args: [], dir: "C:/rkt/apps/legado", restart_delay: "3s", min_uptime: "15s", memory_mb: 128, port: "3006", domains: [], deploy: null },
+  { name: "vista-previa", runtime: "external", external: true, command: "", args: [], dir: "C:/dev/vista-previa", restart_delay: "5s", min_uptime: "10s", memory_mb: 0, port: "3010", domains: ["vista-previa.ejemplo.com"], deploy: null, run_command: "pnpm exec vite --host 127.0.0.1 --port 3010 --strictPort" },
 ];
 
 const depSeed = [
-  [23, "checkout", "ok", "9f3c2a1", "xavi"],
-  [22, "api-core", "ok", "4b8e1d7", "xavi"],
-  [21, "billing-worker", "failed", "c1a9f02", "auto"],
-  [20, "docs", "ok", "77d2e4a", "xavi"],
-  [19, "admin", "ok", "2e6b9c4", "auto"],
-  [18, "checkout", "ok", "5a1d8f3", "xavi"],
-  [17, "api-core", "failed", "e4c7a90", "auto"],
-  [16, "docs", "ok", "0f8b3d1", "xavi"],
-  [15, "checkout", "ok", "aa72c65", "auto"],
-  [14, "billing-worker", "failed", "b3d1e77", "auto"],
-  [13, "admin", "ok", "6c4f2b8", "xavi"],
-  [12, "api-core", "ok", "d8e2a41", "auto"],
-  [11, "docs", "ok", "1a9c7f0", "xavi"],
-  [10, "checkout", "ok", "f2b8d63", "auto"],
-  [9, "legacy", "failed", "7e1a4c9", "xavi"],
-  [8, "api-core", "ok", "3c6f9a2", "auto"],
-  [7, "admin", "ok", "8d4b1e6", "xavi"],
-  [6, "docs", "ok", "5f7a2c8", "auto"],
-  [5, "checkout", "ok", "c9e3b70", "xavi"],
-  [4, "billing-worker", "ok", "1d8f6a3", "auto"],
-  [3, "api-core", "ok", "6a2c9e5", "auto"],
-  [2, "checkout", "ok", "b4d7f12", "xavi"],
-  [1, "docs", "ok", "e8a1c36", "auto"],
-  [0.4, "checkout", "running", "pending", "xavi"],
+  [23, "tienda", "ok", "9f3c2a1", "alex"],
+  [22, "api", "ok", "4b8e1d7", "alex"],
+  [21, "facturacion", "failed", "c1a9f02", "auto"],
+  [20, "documentacion", "ok", "77d2e4a", "alex"],
+  [19, "panel", "ok", "2e6b9c4", "auto"],
+  [18, "tienda", "ok", "5a1d8f3", "alex"],
+  [17, "api", "failed", "e4c7a90", "auto"],
+  [16, "documentacion", "ok", "0f8b3d1", "alex"],
+  [15, "tienda", "ok", "aa72c65", "auto"],
+  [14, "facturacion", "failed", "b3d1e77", "auto"],
+  [13, "panel", "ok", "6c4f2b8", "alex"],
+  [12, "api", "ok", "d8e2a41", "auto"],
+  [11, "documentacion", "ok", "1a9c7f0", "alex"],
+  [10, "tienda", "ok", "f2b8d63", "auto"],
+  [9, "legado", "failed", "7e1a4c9", "alex"],
+  [8, "api", "ok", "3c6f9a2", "auto"],
+  [7, "panel", "ok", "8d4b1e6", "alex"],
+  [6, "documentacion", "ok", "5f7a2c8", "auto"],
+  [5, "tienda", "ok", "c9e3b70", "alex"],
+  [4, "facturacion", "ok", "1d8f6a3", "auto"],
+  [3, "api", "ok", "6a2c9e5", "auto"],
+  [2, "tienda", "ok", "b4d7f12", "alex"],
+  [1, "documentacion", "ok", "e8a1c36", "auto"],
+  [0.4, "tienda", "running", "pending", "alex"],
 ];
 const fullRev = (rev) =>
   rev === "pending" ? "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678" : `${rev}${"0123456789abcdef".slice(0, 33)}`;
@@ -76,25 +76,25 @@ const deps = depSeed.map(([mins, app, status, rev, by], i) => {
 });
 
 const evs = [
-  { id: 91, ts: iso(3), kind: "deploy", app: "checkout", msg: "deploy ok rev 9f3c2a1" },
-  { id: 90, ts: iso(7), kind: "alert", app: "billing-worker", msg: "failed · 7 reinicios en 60min" },
-  { id: 89, ts: iso(12), kind: "restart", app: "docs", msg: "restart manual" },
-  { id: 88, ts: iso(18), kind: "deploy", app: "api-core", msg: "deploy ok rev 4b8e1d7" },
-  { id: 87, ts: iso(24), kind: "discover", app: "checkout", msg: "repo detectado · xavi/checkout" },
-  { id: 86, ts: iso(31), kind: "alert", app: "api-core", msg: "error_rate 5xx 2.4% en 15min" },
-  { id: 85, ts: iso(44), kind: "deploy", app: "docs", msg: "deploy ok rev 77d2e4a" },
-  { id: 84, ts: iso(58), kind: "died", app: "billing-worker", msg: "exit code 1 · reinicio programado" },
-  { id: 83, ts: iso(66), kind: "route", app: "docs", msg: "TLS emitido para www.rkt.dev" },
-  { id: 82, ts: iso(80), kind: "deploy", app: "admin", msg: "deploy ok rev 2e6b9c4" },
+  { id: 91, ts: iso(3), kind: "deploy", app: "tienda", msg: "deploy ok rev 9f3c2a1" },
+  { id: 90, ts: iso(7), kind: "alert", app: "facturacion", msg: "failed · 7 reinicios en 60min" },
+  { id: 89, ts: iso(12), kind: "restart", app: "documentacion", msg: "restart manual" },
+  { id: 88, ts: iso(18), kind: "deploy", app: "api", msg: "deploy ok rev 4b8e1d7" },
+  { id: 87, ts: iso(24), kind: "discover", app: "tienda", msg: "repo detectado · alex/tienda" },
+  { id: 86, ts: iso(31), kind: "alert", app: "api", msg: "error_rate 5xx 2.4% en 15min" },
+  { id: 85, ts: iso(44), kind: "deploy", app: "documentacion", msg: "deploy ok rev 77d2e4a" },
+  { id: 84, ts: iso(58), kind: "died", app: "facturacion", msg: "exit code 1 · reinicio programado" },
+  { id: 83, ts: iso(66), kind: "route", app: "documentacion", msg: "TLS emitido para www.ejemplo.com" },
+  { id: 82, ts: iso(80), kind: "deploy", app: "panel", msg: "deploy ok rev 2e6b9c4" },
 ];
 
 const routes = [
-  { hosts: ["checkout.rkt.dev"], target: "http://127.0.0.1:3001" },
-  { hosts: ["api.rkt.dev"], target: "http://127.0.0.1:3002" },
-  { hosts: ["docs.rkt.dev", "www.rkt.dev"], target: "http://127.0.0.1:3003" },
-  { hosts: ["admin.rkt.dev"], target: "http://127.0.0.1:3005" },
-  { hosts: ["legacy.rkt.dev"], target: "http://127.0.0.1:3006" },
-  { hosts: ["preview.rkt.dev"], target: "http://127.0.0.1:3010" },
+  { hosts: ["tienda.ejemplo.com"], target: "http://127.0.0.1:3001" },
+  { hosts: ["api.ejemplo.com"], target: "http://127.0.0.1:3002" },
+  { hosts: ["documentacion.ejemplo.com", "www.ejemplo.com"], target: "http://127.0.0.1:3003" },
+  { hosts: ["panel.ejemplo.com"], target: "http://127.0.0.1:3005" },
+  { hosts: ["legado.ejemplo.com"], target: "http://127.0.0.1:3006" },
+  { hosts: ["vista-previa.ejemplo.com"], target: "http://127.0.0.1:3010" },
 ];
 
 const proxy = routes.map((r, i) => ({
@@ -116,18 +116,18 @@ const analytics = {
   by_day: byDay,
   by_path: [
     { k: "/", v: 1840 },
-    { k: "/api/checkout", v: 1212 },
+    { k: "/api/tienda", v: 1212 },
     { k: "/pricing", v: 804 },
-    { k: "/docs/getting-started", v: 611 },
+    { k: "/documentacion/getting-started", v: 611 },
     { k: "/api/health", v: 522 },
     { k: "/blog/edge", v: 318 },
   ],
   by_host: [
-    { k: "checkout.rkt.dev", v: 2914 },
-    { k: "api.rkt.dev", v: 2041 },
-    { k: "docs.rkt.dev", v: 1322 },
-    { k: "www.rkt.dev", v: 611 },
-    { k: "admin.rkt.dev", v: 217 },
+    { k: "tienda.ejemplo.com", v: 2914 },
+    { k: "api.ejemplo.com", v: 2041 },
+    { k: "documentacion.ejemplo.com", v: 1322 },
+    { k: "www.ejemplo.com", v: 611 },
+    { k: "panel.ejemplo.com", v: 217 },
   ],
   by_ref: [
     { k: "https://news.ycombinator.com", v: 322 },
@@ -159,14 +159,14 @@ const obs = {
   hours: 6, buckets: obsBuckets,
   classes: { "2xx": 9120, "3xx": 180, "4xx": 156, "5xx": 63 },
   by_app: [
-    { app: "checkout", req: 4210, err: 18, bytes: 18400000, p95: "28ms" },
-    { app: "api-core", req: 3120, err: 41, bytes: 9200000, p95: "64ms" },
-    { app: "docs", req: 1630, err: 2, bytes: 4100000, p95: "19ms" },
-    { app: "admin", req: 559, err: 2, bytes: 1200000, p95: "31ms" },
+    { app: "tienda", req: 4210, err: 18, bytes: 18400000, p95: "28ms" },
+    { app: "api", req: 3120, err: 41, bytes: 9200000, p95: "64ms" },
+    { app: "documentacion", req: 1630, err: 2, bytes: 4100000, p95: "19ms" },
+    { app: "panel", req: 559, err: 2, bytes: 1200000, p95: "31ms" },
   ],
   p50: "12ms", p95: "28ms", p99: "91ms",
   events: { deploy: 4, died: 2, alert: 1 },
-  restarts: 3, down: ["billing-worker"],
+  restarts: 3, down: ["facturacion"],
 };
 
 const serverHistory = Array.from({ length: 12 }, (_, i) => ({
@@ -215,7 +215,7 @@ const serverProcs = [
 const settings = {
   node_bin: "C:/Program Files/nodejs/node.exe",
   python_bin: "C:/Python312/python.exe",
-  base_domain: "rkt.dev",
+  base_domain: "ejemplo.com",
   port_pool: "3000-3999",
   site_name: "rkt",
   quota_reqs: "50000",
@@ -224,9 +224,9 @@ const settings = {
 };
 
 const users = [
-  { name: "xavi", role: "admin", created_at: iso(60 * 24 * 90), last_login: iso(2), disabled: false },
-  { name: "mira", role: "operator", created_at: iso(60 * 24 * 31), last_login: iso(60 * 24), disabled: false },
-  { name: "tomas", role: "viewer", created_at: iso(60 * 24 * 12), last_login: iso(60 * 24 * 8), disabled: true },
+  { name: "alex", role: "admin", created_at: iso(60 * 24 * 90), last_login: iso(2), disabled: false },
+  { name: "dani", role: "operator", created_at: iso(60 * 24 * 31), last_login: iso(60 * 24), disabled: false },
+  { name: "noa", role: "viewer", created_at: iso(60 * 24 * 12), last_login: iso(60 * 24 * 8), disabled: true },
 ];
 
 const channels = [
@@ -239,27 +239,27 @@ const fires = [
 ];
 
 const audit = [
-  { id: 4, ts: iso(2), actor: "xavi", action: "login", target: "xavi", ip: "127.0.0.1" },
-  { id: 3, ts: iso(31), actor: "xavi", action: "user.role", target: "mira", ip: "127.0.0.1" },
-  { id: 2, ts: iso(60 * 8), actor: "xavi", action: "session.revoke", target: "tomas", ip: "127.0.0.1" },
-  { id: 1, ts: iso(60 * 24 * 3), actor: "xavi", action: "user.create", target: "tomas", ip: "127.0.0.1" },
+  { id: 4, ts: iso(2), actor: "alex", action: "login", target: "alex", ip: "127.0.0.1" },
+  { id: 3, ts: iso(31), actor: "alex", action: "user.role", target: "dani", ip: "127.0.0.1" },
+  { id: 2, ts: iso(60 * 8), actor: "alex", action: "session.revoke", target: "noa", ip: "127.0.0.1" },
+  { id: 1, ts: iso(60 * 24 * 3), actor: "alex", action: "user.create", target: "noa", ip: "127.0.0.1" },
 ];
 
 const alerts = [
   { id: 5, app: "*", kind: "cpu_pct", threshold: 85, window_min: 15, enabled: true, channel_id: 1, last_fired: "", created_at: iso(60 * 24 * 2) },
-  { id: 4, app: "billing-worker", kind: "failed", threshold: 1, window_min: 60, enabled: true, channel_id: 1, last_fired: iso(7), created_at: iso(60 * 24 * 20) },
-  { id: 3, app: "api-core", kind: "error_rate", threshold: 0.02, window_min: 15, enabled: true, channel_id: 1, last_fired: iso(31), created_at: iso(60 * 24 * 16) },
+  { id: 4, app: "facturacion", kind: "failed", threshold: 1, window_min: 60, enabled: true, channel_id: 1, last_fired: iso(7), created_at: iso(60 * 24 * 20) },
+  { id: 3, app: "api", kind: "error_rate", threshold: 0.02, window_min: 15, enabled: true, channel_id: 1, last_fired: iso(31), created_at: iso(60 * 24 * 16) },
   { id: 2, app: "*", kind: "latency_p95", threshold: 250, window_min: 60, enabled: true, channel_id: 0, last_fired: "", created_at: iso(60 * 24 * 9) },
   { id: 1, app: "*", kind: "failed", threshold: 2, window_min: 30, enabled: false, channel_id: 0, last_fired: "", created_at: iso(60 * 24 * 4) },
 ];
 
 const envs = {
-  checkout: { NODE_ENV: "production", STRIPE_KEY: "sk_live_51N...", PUBLIC_URL: "https://checkout.rkt.dev", REDIS_URL: "redis://127.0.0.1:6379" },
-  "api-core": { DATABASE_URL: "postgres://rkt:...@127.0.0.1:5432/rkt", JWT_SECRET: "9f3c...", LOG_LEVEL: "info" },
-  docs: { PUBLIC_URL: "https://docs.rkt.dev", NODE_ENV: "production" },
-  "billing-worker": { DATABASE_URL: "postgres://rkt:...@127.0.0.1:5432/rkt", STRIPE_KEY: "sk_live_51N...", SENTRY_DSN: "https://..." },
-  admin: { NODE_ENV: "production", SESSION_SECRET: "b4d7..." },
-  legacy: {},
+  tienda: { NODE_ENV: "production", STRIPE_KEY: "sk_live_51N...", PUBLIC_URL: "https://tienda.ejemplo.com", REDIS_URL: "redis://127.0.0.1:6379" },
+  "api": { DATABASE_URL: "postgres://rkt:...@127.0.0.1:5432/rkt", JWT_SECRET: "9f3c...", LOG_LEVEL: "info" },
+  documentacion: { PUBLIC_URL: "https://documentacion.ejemplo.com", NODE_ENV: "production" },
+  "facturacion": { DATABASE_URL: "postgres://rkt:...@127.0.0.1:5432/rkt", STRIPE_KEY: "sk_live_51N...", SENTRY_DSN: "https://..." },
+  panel: { NODE_ENV: "production", SESSION_SECRET: "b4d7..." },
+  legado: {},
 };
 
 const buildLog = [
@@ -279,10 +279,10 @@ const buildLog = [
 const logText = Array.from({ length: 120 }, (_, i) => {
   const level = i % 37 === 0 ? "ERROR" : i % 17 === 0 ? "WARN" : "INFO";
   const msg = level === "ERROR"
-    ? "checkout: upstream timeout after 2000ms path=/api/checkout"
+    ? "tienda: upstream timeout after 2000ms path=/api/tienda"
     : level === "WARN"
-      ? "checkout: slow query 412ms path=/api/checkout"
-      : `checkout: request ok path=/api/checkout status=200 dur=${18 + (i % 44)}ms`;
+      ? "tienda: slow query 412ms path=/api/tienda"
+      : `tienda: request ok path=/api/tienda status=200 dur=${18 + (i % 44)}ms`;
   return `time=2026-11-02T${String(9 + Math.floor(i / 12)).padStart(2, "0")}:${String((i * 5) % 60).padStart(2, "0")}:00Z level=${level} ${msg}`;
 }).join("\n");
 
@@ -298,9 +298,9 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
 
     if (p === "/api/v1/auth/status") return json(route, { setup_required: setupRequired });
     if (p === "/api/v1/auth/me") {
-      return authed ? json(route, { user: "xavi", role: "admin" }) : json(route, { error: "no autorizado" }, 401);
+      return authed ? json(route, { user: "alex", role: "admin" }) : json(route, { error: "no autorizado" }, 401);
     }
-    if (p === "/api/v1/auth/login" || p === "/api/v1/auth/setup") return json(route, { user: "xavi", role: "admin" });
+    if (p === "/api/v1/auth/login" || p === "/api/v1/auth/setup") return json(route, { user: "alex", role: "admin" });
     if (p === "/api/v1/auth/logout") return json(route, { ok: "bye" });
     if (p === "/api/v1/status") return json(route, { version: "0.6.6", routes: routes.length, apps });
     if (p === "/api/v1/deployments") return json(route, deps);
@@ -317,7 +317,7 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
         files: [
           { status: "M", path: "app/page.tsx" },
           { status: "A", path: "public/og.png" },
-          { status: "D", path: "src/legacy.ts" },
+          { status: "D", path: "src/legado.ts" },
           { status: "R100", from: "src/client.ts", path: "src/api/client.ts" },
         ],
       });
@@ -358,7 +358,7 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
         host,
         target: routeDef?.target ?? "http://127.0.0.1:3001",
         app: metas.find((m) => (m.domains ?? []).includes(host))?.name ?? "",
-        tls: { managed: true, expires: host.includes("docs") ? "2026-10-14" : "2026-12-14" },
+        tls: { managed: true, expires: host.includes("documentacion") ? "2026-10-14" : "2026-12-14" },
         dns: { a: ["127.0.0.1"], aaaa: [], resolves: true },
         expected: "127.0.0.1",
         dns_ok: true,
@@ -380,8 +380,8 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
       return json(route, {
         current: "sess-current",
         sessions: [
-          { id: "sess-current", user: "xavi", created_at: iso(2), expires_at: new Date(Date.now() + 30 * 86400000).toISOString() },
-          { id: "sess-old", user: "xavi", created_at: iso(60 * 24 * 9), expires_at: new Date(Date.now() + 12 * 86400000).toISOString() },
+          { id: "sess-current", user: "alex", created_at: iso(2), expires_at: new Date(Date.now() + 30 * 86400000).toISOString() },
+          { id: "sess-old", user: "alex", created_at: iso(60 * 24 * 9), expires_at: new Date(Date.now() + 12 * 86400000).toISOString() },
         ],
       });
     }
@@ -434,9 +434,9 @@ const main = async () => {
   await shot("settings", "settings");
   await shot("users", "users");
   for (const tab of ["overview", "deploys", "logs", "analytics", "env", "settings"]) {
-    await shot(`app-${tab}`, `app/checkout/${tab}`);
+    await shot(`app-${tab}`, `app/tienda/${tab}`);
   }
-  await shot("app-external", "app/edge-preview/overview");
+  await shot("app-external", "app/vista-previa/overview");
 
   // overlays desktop
   await page.goto(`${BASE}/overview`, { waitUntil: "networkidle" });
@@ -472,7 +472,7 @@ const main = async () => {
   for (const [name, route] of [
     ["mobile-overview", "overview"],
     ["mobile-deployments", "deployments"],
-    ["mobile-app-overview", "app/checkout/overview"],
+    ["mobile-app-overview", "app/tienda/overview"],
     ["mobile-proxy", "proxy"],
     ["mobile-logs", "logs"],
     ["mobile-server", "server"],

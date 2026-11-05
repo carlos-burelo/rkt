@@ -182,6 +182,26 @@ func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
 			Evidence: []string{"Cargo.toml"},
 		}
 	}
+	if file("pom.xml") {
+		return Plan{
+			Kind:     "java",
+			Build:    []string{"mvn -q -DskipTests package"},
+			Start:    []string{"mvn", "-q", "spring-boot:run"},
+			Evidence: []string{"pom.xml"},
+		}
+	}
+	if file("build.gradle") || file("build.gradle.kts") {
+		wrapper := "./gradlew"
+		if runtime.GOOS == "windows" {
+			wrapper = "gradlew.bat"
+		}
+		return Plan{
+			Kind:     "java",
+			Build:    []string{wrapper + " build -x test"},
+			Start:    []string{wrapper, "bootRun"},
+			Evidence: []string{"build.gradle"},
+		}
+	}
 	if file("uv.lock") || file("poetry.lock") || file("pyproject.toml") || file("requirements.txt") {
 		entry := "app.py"
 		if !file("app.py") {
@@ -206,12 +226,8 @@ func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
 	}
 
 	if !hasPkg {
-		if file("index.html") || file("public/index.html") {
-			root := "."
-			if !file("index.html") && file("public/index.html") {
-				root = "public"
-			}
-			return Plan{Kind: "static", StaticDir: root, Evidence: []string{"index.html"}}
+		if dir := pickStatic(file); dir != "" {
+			return Plan{Kind: "static", StaticDir: dir, Evidence: []string{"index.html"}}
 		}
 		return Plan{}
 	}
@@ -311,9 +327,22 @@ func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
 			}
 			plan.Kind = "static"
 			plan.StaticDir = "dist"
+			if dir := pickStatic(file); dir != "" {
+				plan.StaticDir = dir
+			}
 		}
 	}
 	return plan
+}
+
+// pickStatic elige una salida estática ya presente o el default dist.
+func pickStatic(file func(string) bool) string {
+	for _, d := range []string{".", "public", "dist", "build", "out", ".output/public"} {
+		if file(filepath.ToSlash(filepath.Join(d, "index.html"))) {
+			return d
+		}
+	}
+	return ""
 }
 
 // DevHint sugiere el comando para levantar el dev server local. Solo es

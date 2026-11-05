@@ -251,3 +251,19 @@ func TestDetectSolidStart(t *testing.T) {
 		t.Fatalf("solidstart = %+v", p)
 	}
 }
+
+func TestDetectJavaYStaticBuild(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "pom.xml", "<project/>")
+	p, err := DetectDir(dir)
+	if err != nil || p.Kind != "java" || !strings.Contains(p.Build[0], "mvn") {
+		t.Fatalf("java = %+v %v", p, err)
+	}
+
+	dir2 := t.TempDir()
+	write(t, dir2, "build/index.html", "<html></html>")
+	p2, err := DetectDir(dir2)
+	if err != nil || p2.Kind != "static" || p2.StaticDir != "build" {
+		t.Fatalf("static build = %+v %v", p2, err)
+	}
+}

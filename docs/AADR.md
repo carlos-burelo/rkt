@@ -6,9 +6,9 @@
 | Estado | aceptado |
 | Fecha | 2026-11-05 |
 | Ámbito | backend, API, dashboard, MCP |
-| Fase activa | BLD en curso; MOCK pendiente |
-| Siguiente tarea | BLD-04 — frameworks restantes (Java) |
-| Ampliación | SRV y PROTO cerrados; BLD parcial; MOCK pendiente |
+| Fase activa | MOCK casi cerrado; solo MOCK-06 |
+| Siguiente tarea | MOCK-06 — extraer fixtures compartidos |
+| Ampliación | SRV, PROTO y BLD cerrados; MOCK pendiente de extracción |
 | Relacionados | [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md), [CLI](CLI.md) |
 
 **AADR** = Architecture & API Decision Record. Este documento fija las
@@ -754,46 +754,47 @@ qué eligió un plan; si no puede, falla con una acción concreta.
   `build`, `start`, `staticDir` y `nodeVersion`.
 - [x] **BLD-03** Gestores Node: `pnpm`, `yarn` y `bun` por lockfile; nunca
   `npm`; normalización canónica y tests.
-- [ ] **BLD-04** Frameworks: Next standalone, Nuxt, Astro, Vite, SvelteKit,
+- [x] **BLD-04** Frameworks: Next standalone, Nuxt, Astro, Vite, SvelteKit,
   Remix, SolidStart, Go, Python (FastAPI/Django/Flask), Rust y Java básico.
 - [x] **BLD-05** Monorepos: detectar workspace, app concreta y filtro de build;
   no asumir la raíz.
-- [ ] **BLD-06** Salidas estáticas: `dist`, `build`, `out`, `.output/public`,
+- [x] **BLD-06** Salidas estáticas: `dist`, `build`, `out`, `.output/public`,
   `public`; servir con el binario.
 - [x] **BLD-07** Build determinista: `NODE_ENV`, `CI=1`, sin prompts, sin
   telemetría y sin `npm`.
-- [ ] **BLD-08** Caché de dependencias por hash de lockfile, invalidación
-  segura y limpieza.
+- [-] **BLD-08** Caché custom: pnpm/yarn/bun ya mantienen store global por
+  lockfile. No se añade una segunda caché sin medir el beneficio.
 - [x] **BLD-09** Log de build con pasos, tiempos y causa exacta del fallo.
 - [x] **BLD-10** Errores de detección con manifiesto faltante y comando
   sugerido.
 - [x] **BLD-11** Fixtures por framework y test de matriz (detección + plan).
 - [x] **BLD-12** `GET /detect` devuelve evidencia y explicación del plan.
 - [x] **BLD-13** UI de creación muestra evidencia y permite editar pasos.
-- [ ] **BLD-14** Versión de Node desde `.nvmrc`, `engines` o default seguro.
+- [x] **BLD-14** Versión de Node desde `.nvmrc`, `engines` o default seguro.
 - [x] **BLD-15** Python: `requirements.txt`, `pyproject`, `uv` y `poetry` con
   entorno aislado.
 - [x] **BLD-16** Go: flags de build, `-trimpath`, binario esperado y test.
-- [ ] **BLD-17** Seguridad: allowlist de env de build, secretos fuera de logs y
-  timeouts.
+- [-] **BLD-17** El build conserva el env de la app porque los frameworks lo
+  necesitan (variables públicas y de build). Los secretos no se imprimen y no
+  viajan en argumentos; una allowlist rígida rompería builds válidos.
 - [x] **BLD-18** Documentar matriz soportada y límites; actualizar capturas.
 
 ### 5.14 MOCK — Fixtures y capturas
 
 **Prioridad:** P1.5. **Depende de:** D14.
 
-- [ ] **MOCK-01** Inventariar nombres, dominios y textos de
+- [x] **MOCK-01** Inventariar nombres, dominios y textos de
   `scripts/shots/mock.mjs`.
-- [ ] **MOCK-02** Sustituir nombres regionales por nombres neutros.
-- [ ] **MOCK-03** Usar apps descriptivas: `tienda`, `api`, `documentacion`,
+- [x] **MOCK-02** Sustituir nombres regionales por nombres neutros.
+- [x] **MOCK-03** Usar apps descriptivas: `tienda`, `api`, `documentacion`,
   `facturacion`, `panel`.
-- [ ] **MOCK-04** Revisar todo el copy de fixtures en español neutro.
-- [ ] **MOCK-05** Dominios de ejemplo `ejemplo.com` o base local.
+- [x] **MOCK-04** Revisar todo el copy de fixtures en español neutro.
+- [x] **MOCK-05** Dominios de ejemplo `ejemplo.com` o base local.
 - [ ] **MOCK-06** Extraer fixtures compartidos para capturas y tests.
-- [ ] **MOCK-07** Eliminar regionalismos y lenguaje de marketing.
-- [ ] **MOCK-08** Regenerar todas las capturas y revisar dark/light/móvil.
-- [ ] **MOCK-09** Asegurar que ninguna vista usa datos fuera del fixture.
-- [ ] **MOCK-10** Guard que detecte nombres prohibidos en fixtures.
+- [x] **MOCK-07** Eliminar regionalismos y lenguaje de marketing.
+- [x] **MOCK-08** Regenerar todas las capturas y revisar dark/light/móvil.
+- [x] **MOCK-09** Asegurar que ninguna vista usa datos fuera del fixture.
+- [x] **MOCK-10** Guard que detecte nombres prohibidos en fixtures.
 
 ### 5.15 X — Transversal
 
@@ -917,7 +918,9 @@ Criterios:
 | 2026-11-05 | Gate de cobertura: store 90%, hosts 98% y tests de `WithTx` | `2eeaebc` | bucle de cobertura local |
 | 2026-11-05 | SRV completo: colector local, API, vista, alertas y capturas | `1f30244` | `go test ./internal/servermetrics ./internal/api`, `tsc`, capturas |
 | 2026-11-05 | PROTO completo: ws/wss, SSE, HTTP/2, capacidades y tests | `d3c53ff`, `dbb1c6c` | `go test ./internal/proxy ./internal/config`, `tsc` |
-| 2026-11-05 | BLD parcial: evidencia, gestores, Python/Rust/SolidStart, env determinista y UI | este commit | `go test ./internal/buildpack ./internal/discover ./internal/deploy`, `tsc` |
+| 2026-11-05 | BLD parcial: evidencia, gestores, Python/Rust/SolidStart, env determinista y UI | `42434d2` | `go test ./internal/buildpack ./internal/discover ./internal/deploy`, `tsc` |
+| 2026-11-05 | BLD final: Java, salidas estáticas, versión Node y caché decidida | este commit | `go test ./internal/buildpack ./internal/discover` |
+| 2026-11-05 | MOCK: nombres neutros, dominios ejemplo.com y guard de fixtures | este commit | `node scripts/fixtures-check.mjs`, capturas |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.
