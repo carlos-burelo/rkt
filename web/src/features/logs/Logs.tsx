@@ -40,9 +40,9 @@ const LEVEL_KEY: Record<Level, string> = {
 const LEVEL_SHORT: Record<Level, string> = { info: "INF", warning: "WRN", error: "ERR" };
 
 const LEVEL_BADGE: Record<Level, string> = {
-  info: "border-info/40 bg-info/10 text-info",
-  warning: "border-warn/45 bg-warn/10 text-warn",
-  error: "border-bad/45 bg-bad/10 text-bad",
+  info: "border-console-info/45 bg-console-info/10 text-console-info",
+  warning: "border-console-warn/45 bg-console-warn/10 text-console-warn",
+  error: "border-console-bad/45 bg-console-bad/10 text-console-bad",
 };
 
 const FIELD_SHORT: Record<string, string> = {
@@ -74,20 +74,20 @@ function fieldTone(key: string, value: string): string {
   const short = shortField(key);
   if (short === "st") {
     const n = Number(value);
-    if (n >= 500) return "text-bad";
-    if (n >= 400) return "text-warn";
-    if (n >= 200) return "text-ok";
+    if (n >= 500) return "text-console-bad";
+    if (n >= 400) return "text-console-warn";
+    if (n >= 200) return "text-console-ok";
   }
   if (short === "m") {
     const v = value.toUpperCase();
-    if (v === "DELETE") return "text-bad";
-    if (v === "POST" || v === "PUT" || v === "PATCH") return "text-signal";
-    return "text-info";
+    if (v === "DELETE") return "text-console-bad";
+    if (v === "POST" || v === "PUT" || v === "PATCH") return "text-console-signal";
+    return "text-console-info";
   }
-  if (short === "dur" || short === "lat") return "text-info";
-  if (short === "err") return "text-bad";
-  if (short === "level" || short === "lvl") return "text-foreground/70";
-  return "text-foreground/85";
+  if (short === "dur" || short === "lat") return "text-console-info";
+  if (short === "err") return "text-console-bad";
+  if (short === "level" || short === "lvl") return "text-console-muted";
+  return "text-console-foreground/85";
 }
 
 function splitScope(msg: string): { scope: string; text: string } {
@@ -105,7 +105,7 @@ function Highlight({ text, q }: { text: string; q: string }) {
     const i = m.index ?? 0;
     if (i > last) out.push(text.slice(last, i));
     out.push(
-      <mark key={`${i}-${m[0]}`} className="bg-warn/25 text-warn">
+      <mark key={`${i}-${m[0]}`} className="bg-console-warn/25 text-console-warn">
         {m[0]}
       </mark>,
     );
@@ -363,11 +363,11 @@ export function Logs() {
             )}
 
             <div className="border border-border">
-              <div className="flex items-center gap-2 border-b border-border bg-secondary/25 px-3 py-1.5">
-                <span aria-hidden className="h-1 w-1 bg-ok animate-status-pulse" />
-                <span className="micro">{t("ops.logs.console")}</span>
+              <div className="flex items-center gap-2 border-b border-console-border bg-console-raised px-3 py-1.5">
+                <span aria-hidden className="h-1 w-1 bg-console-ok animate-status-pulse" />
+                <span className="micro text-console-muted">{t("ops.logs.console")}</span>
                 <span className="flex-1" />
-                <span className="tnum font-mono text-[9px] text-muted-foreground">
+                <span className="tnum font-mono text-[9px] text-console-muted">
                   {tn("ops.logs.consoleLines", lines.vis.length, { app: appFilter || "rkt.log" })}
                 </span>
               </div>
@@ -377,7 +377,7 @@ export function Logs() {
                 tabIndex={0}
                 aria-live={live ? "polite" : "off"}
                 aria-label={t("ops.logs.logAria")}
-                className="h-[58vh] overflow-auto bg-ink/45 font-mono text-[11px] leading-[1.6]"
+                className="console h-[58vh] overflow-auto font-mono text-[11px] leading-[1.6]"
               >
                 {rendered.map(({ line: p, count }, i) => {
                   const lv = p.level;
@@ -386,12 +386,12 @@ export function Logs() {
                     <div
                       key={i}
                       title={p.raw}
-                      className="flex items-center gap-2 px-3 py-0.5 hover:bg-accent/25"
+                      className="flex items-center gap-2 px-3 py-0.5 hover:bg-console-accent"
                     >
-                      <span className="tnum w-8 shrink-0 self-start text-right text-[9px] text-muted-foreground/30 select-none">
+                      <span className="tnum w-8 shrink-0 self-start text-right text-[9px] text-console-muted/60 select-none">
                         {String(i + 1).padStart(3, "0")}
                       </span>
-                      <span className="tnum w-14 shrink-0 self-start text-[9px] text-muted-foreground/55">{absolute ? p.time : ago(p.timestamp)}</span>
+                      <span className="tnum w-14 shrink-0 self-start text-[9px] text-console-muted">{absolute ? p.time : ago(p.timestamp)}</span>
                       <span
                         aria-label={t("ops.logs.lineLevel", { level: t(LEVEL_KEY[lv]) })}
                         title={t(LEVEL_KEY[lv])}
@@ -402,7 +402,7 @@ export function Logs() {
                       {compact && p.structured && scope && (
                         <span
                           title={scope}
-                          className="hidden shrink-0 self-start border border-border bg-card/40 px-1 font-mono text-[9px] tracking-[0.04em] text-muted-foreground uppercase sm:inline"
+                          className="hidden shrink-0 self-start border border-console-border bg-console-raised px-1 font-mono text-[9px] tracking-[0.04em] text-console-muted uppercase sm:inline"
                         >
                           {scope}
                         </span>
@@ -411,7 +411,7 @@ export function Logs() {
                         className={`min-w-0 flex-1 font-mono text-[11px] ${
                           wrap ? "break-words whitespace-pre-wrap" : "truncate"
                         } ${
-                          lv === "error" ? "text-bad/90" : lv === "warning" ? "text-warn/85" : "text-foreground/80"
+                          lv === "error" ? "text-console-bad" : lv === "warning" ? "text-console-warn" : "text-console-foreground/85"
                         }`}
                       >
                         {compact ? (p.structured ? <Highlight text={text} q={q} /> : <Highlight text={p.raw} q={q} />) : <Highlight text={p.raw} q={q} />}
@@ -421,10 +421,10 @@ export function Logs() {
                           {p.fields.slice(0, 4).map((f, idx) => (
                             <span
                               key={`${f.key}-${idx}`}
-                              className="whitespace-nowrap border border-border bg-secondary/35 px-1 font-mono text-[9px]"
+                              className="whitespace-nowrap border border-console-border bg-console-raised/65 px-1 font-mono text-[9px]"
                               title={`${f.key}=${f.value}`}
                             >
-                              <span className="text-muted-foreground">{shortField(f.key)}=</span>
+                              <span className="text-console-muted">{shortField(f.key)}=</span>
                               <span className={fieldTone(f.key, f.value)}>
                                 {f.value.length > 32 ? `${f.value.slice(0, 32)}…` : f.value}
                               </span>
@@ -433,7 +433,7 @@ export function Logs() {
                           {p.fields.length > 4 && (
                             <span
                               title={p.fields.slice(4).map((f) => `${f.key}=${f.value}`).join(" ")}
-                              className="border border-border/60 px-1 font-mono text-[9px] text-muted-foreground"
+                              className="border border-console-border/60 px-1 font-mono text-[9px] text-console-muted"
                             >
                               +{p.fields.length - 4}
                             </span>
@@ -441,13 +441,17 @@ export function Logs() {
                         </span>
                       )}
                       {count > 1 && (
-                        <span className="tnum shrink-0 font-mono text-[9px] text-muted-foreground/60">×{count}</span>
+                        <span className="tnum shrink-0 font-mono text-[9px] text-console-muted/80">×{count}</span>
                       )}
-                      <CopyButton text={p.raw} />                    </div>
+                      <CopyButton
+                        text={p.raw}
+                        className="text-console-muted/70 hover:bg-console-accent hover:text-console-foreground"
+                      />
+                    </div>
                   );
                 })}
                 {lines.vis.length === 0 && (
-                  <p className="px-3 py-4 text-muted-foreground">{t("ops.logs.empty")}</p>
+                  <p className="px-3 py-4 text-console-muted">{t("ops.logs.empty")}</p>
                 )}
               </div>
             </div>
@@ -487,14 +491,14 @@ export function Logs() {
               )}
             </div>
             <div className="border border-border">
-              <div className="flex items-center gap-2 border-b border-border bg-secondary/25 px-3 py-1.5">
-                <span className="micro">{t("ops.logs.buildLog")}</span>
+              <div className="flex items-center gap-2 border-b border-console-border bg-console-raised px-3 py-1.5">
+                <span className="micro text-console-muted">{t("ops.logs.buildLog")}</span>
                 <span className="flex-1" />
-                <span className="tnum font-mono text-[9px] text-muted-foreground">
+                <span className="tnum font-mono text-[9px] text-console-muted">
                   {latest ? `#${latest.id}` : "—"}
                 </span>
               </div>
-              <pre className="h-[58vh] overflow-auto bg-ink/45 p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-foreground/80">
+              <pre className="console h-[58vh] overflow-auto p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
                 {build}
               </pre>
             </div>

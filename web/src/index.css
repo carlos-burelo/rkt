@@ -13,97 +13,119 @@
   --radius: 0.25rem;
 }
 
+/*
+ * Paleta definitiva. Una familia, un valor canónico: primario, foco,
+ * gráficos y rail consumen el semáforo por alias para que no deriven.
+ * Los estados del tema claro son tinta (no relleno): pasan AA sobre
+ * papel y sobre sus propios tintes al 10–15 %.
+ */
 :root {
   color-scheme: dark;
-  --background: oklch(0.155 0.012 245);
-  --foreground: oklch(0.935 0.006 245);
-  --card: oklch(0.19 0.012 245);
-  --card-foreground: oklch(0.935 0.006 245);
-  --popover: oklch(0.175 0.013 245);
-  --popover-foreground: oklch(0.935 0.006 245);
-  --primary: oklch(0.72 0.185 52);
-  --primary-foreground: oklch(0.17 0.02 45);
-  --secondary: oklch(0.245 0.012 245);
-  --secondary-foreground: oklch(0.92 0.006 245);
-  --muted: oklch(0.23 0.011 245);
-  --muted-foreground: oklch(0.665 0.012 245);
-  --accent: oklch(0.25 0.014 245);
-  --accent-foreground: oklch(0.95 0.006 245);
-  --destructive: oklch(0.66 0.2 25);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.72 0.185 52);
-  --chart-1: oklch(0.72 0.185 52);
-  --chart-2: oklch(0.74 0.12 165);
-  --chart-3: oklch(0.72 0.08 230);
-  --chart-4: oklch(0.78 0.14 78);
-  --chart-5: oklch(0.66 0.2 25);
-  --sidebar: oklch(0.11 0.016 250);
-  --sidebar-foreground: oklch(0.9 0.008 245);
-  --sidebar-primary: oklch(0.72 0.185 52);
-  --sidebar-primary-foreground: oklch(0.17 0.02 45);
-  --sidebar-accent: oklch(1 0 0 / 5%);
-  --sidebar-accent-foreground: oklch(0.96 0.006 245);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.72 0.185 52);
+
   --signal: oklch(0.72 0.185 52);
   --ok: oklch(0.74 0.12 165);
   --warn: oklch(0.78 0.14 78);
   --bad: oklch(0.66 0.2 25);
   --info: oklch(0.72 0.08 230);
+
+  --background: oklch(0.155 0.012 245);
+  --card: oklch(0.19 0.012 245);
+  --popover: oklch(0.175 0.013 245);
   --field: oklch(0.205 0.012 245);
   --ink: oklch(0.085 0.014 250);
-  --paper: oklch(0.93 0.012 85);
+  --sidebar: oklch(0.11 0.016 250);
+
+  --foreground: oklch(0.935 0.006 245);
+  --muted-foreground: oklch(0.665 0.012 245);
+
+  --primary: var(--signal);
+  --primary-foreground: oklch(0.17 0.02 45);
+  --secondary: oklch(0.245 0.012 245);
+  --secondary-foreground: oklch(0.92 0.006 245);
+  --muted: oklch(0.23 0.011 245);
+  --accent: oklch(0.25 0.014 245);
+  --accent-foreground: oklch(0.95 0.006 245);
+  --destructive: var(--bad);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: var(--signal);
+
+  --card-foreground: var(--foreground);
+  --popover-foreground: var(--foreground);
+
+  --sidebar-foreground: oklch(0.9 0.008 245);
+  --sidebar-primary: var(--signal);
+  --sidebar-primary-foreground: oklch(0.17 0.02 45);
+  --sidebar-accent: oklch(1 0 0 / 5%);
+  --sidebar-accent-foreground: oklch(0.96 0.006 245);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: var(--signal);
+
+  --chart-1: var(--signal);
+  --chart-2: var(--ok);
+  --chart-3: var(--info);
+  --chart-4: var(--warn);
+  --chart-5: var(--bad);
+
+  /*
+   * Consola: placa de máquina. Misma en claro y oscuro para que el
+   * registro conserve legibilidad y jerarquía al cambiar de tema.
+   */
+  --console: oklch(0.125 0.012 250);
+  --console-raised: oklch(0.165 0.012 250);
+  --console-border: oklch(1 0 0 / 12%);
+  --console-foreground: oklch(0.92 0.006 245);
+  --console-muted: oklch(0.68 0.012 245);
+  --console-accent: oklch(1 0 0 / 6%);
+  --console-signal: oklch(0.76 0.17 52);
+  --console-ok: oklch(0.78 0.12 165);
+  --console-warn: oklch(0.82 0.14 78);
+  --console-bad: oklch(0.72 0.19 25);
+  --console-info: oklch(0.76 0.09 230);
+
+  --wash: oklch(0.24 0.018 250 / 55%);
+  --floor-top: oklch(0.155 0.012 245);
+  --floor-bottom: oklch(0.145 0.012 245);
 }
 
 /* Tema claro: papel técnico, grafito y la misma señal naranja. */
 .light {
   color-scheme: light;
+
+  --signal: oklch(0.53 0.16 50);
+  --ok: oklch(0.5 0.13 165);
+  --warn: oklch(0.51 0.13 78);
+  --bad: oklch(0.53 0.2 25);
+  --info: oklch(0.5 0.1 230);
+
   --background: oklch(0.982 0.004 95);
-  --foreground: oklch(0.235 0.012 250);
   --card: oklch(0.995 0.002 95);
-  --card-foreground: oklch(0.235 0.012 250);
   --popover: oklch(0.995 0.002 95);
-  --popover-foreground: oklch(0.235 0.012 250);
-  --primary: oklch(0.6 0.17 50);
+  --field: oklch(0.97 0.004 95);
+  --ink: oklch(0.22 0.012 250);
+  --sidebar: oklch(0.958 0.006 95);
+
+  --foreground: oklch(0.235 0.012 250);
+  --muted-foreground: oklch(0.48 0.012 250);
+
   --primary-foreground: oklch(0.99 0.005 95);
   --secondary: oklch(0.94 0.006 95);
   --secondary-foreground: oklch(0.27 0.012 250);
   --muted: oklch(0.945 0.005 95);
-  --muted-foreground: oklch(0.48 0.012 250);
   --accent: oklch(0.925 0.008 95);
   --accent-foreground: oklch(0.23 0.012 250);
-  --destructive: oklch(0.56 0.2 25);
   --border: oklch(0.25 0.012 250 / 14%);
   --input: oklch(0.25 0.012 250 / 20%);
-  --ring: oklch(0.6 0.17 50);
-  --chart-1: oklch(0.6 0.17 50);
-  --chart-2: oklch(0.52 0.13 165);
-  --chart-3: oklch(0.52 0.1 230);
-  --chart-4: oklch(0.62 0.14 78);
-  --chart-5: oklch(0.56 0.2 25);
-  --sidebar: oklch(0.958 0.006 95);
+
   --sidebar-foreground: oklch(0.27 0.012 250);
-  --sidebar-primary: oklch(0.6 0.17 50);
   --sidebar-primary-foreground: oklch(0.99 0.005 95);
   --sidebar-accent: oklch(0.25 0.012 250 / 6%);
   --sidebar-accent-foreground: oklch(0.2 0.012 250);
   --sidebar-border: oklch(0.25 0.012 250 / 10%);
-  --sidebar-ring: oklch(0.6 0.17 50);
-  --signal: oklch(0.6 0.17 50);
-  --ok: oklch(0.52 0.13 165);
-  --warn: oklch(0.62 0.14 78);
-  --bad: oklch(0.55 0.2 25);
-  --info: oklch(0.52 0.1 230);
-  --field: oklch(0.97 0.004 95);
-  --ink: oklch(0.22 0.012 250);
-  --paper: oklch(0.99 0.005 95);
-}
 
-.light body {
-  background-image:
-    radial-gradient(1100px 520px at 16% -12%, oklch(0.6 0.17 50 / 7%), transparent 62%),
-    linear-gradient(180deg, oklch(0.982 0.004 95), oklch(0.965 0.005 95));
+  --wash: oklch(0.53 0.16 50 / 7%);
+  --floor-top: oklch(0.982 0.004 95);
+  --floor-bottom: oklch(0.965 0.005 95);
 }
 
 @theme inline {
@@ -131,7 +153,17 @@
   --color-info: var(--info);
   --color-field: var(--field);
   --color-ink: var(--ink);
-  --color-paper: var(--paper);
+  --color-console: var(--console);
+  --color-console-raised: var(--console-raised);
+  --color-console-border: var(--console-border);
+  --color-console-foreground: var(--console-foreground);
+  --color-console-muted: var(--console-muted);
+  --color-console-accent: var(--console-accent);
+  --color-console-signal: var(--console-signal);
+  --color-console-ok: var(--console-ok);
+  --color-console-warn: var(--console-warn);
+  --color-console-bad: var(--console-bad);
+  --color-console-info: var(--console-info);
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
@@ -169,8 +201,8 @@
   body {
     @apply bg-background text-foreground;
     background-image:
-      radial-gradient(1100px 520px at 16% -12%, oklch(0.24 0.018 250 / 55%), transparent 62%),
-      linear-gradient(180deg, oklch(0.155 0.012 245), oklch(0.145 0.012 245));
+      radial-gradient(1100px 520px at 16% -12%, var(--wash), transparent 62%),
+      linear-gradient(180deg, var(--floor-top), var(--floor-bottom));
     background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     font-feature-settings: "cv05" 1, "cv11" 1, "ss01" 1;
@@ -183,8 +215,8 @@
     text-wrap: pretty;
   }
   ::selection {
-    background: oklch(0.72 0.185 52 / 35%);
-    color: oklch(0.98 0.005 245);
+    background: color-mix(in oklch, var(--signal) 32%, transparent);
+    color: var(--foreground);
   }
   :where(button, a, input, select, textarea, [tabindex]):focus-visible {
     outline: 2px solid var(--ring);
@@ -292,10 +324,10 @@
 
 @keyframes status-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 oklch(0.74 0.12 165 / 0%);
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--ok) 0%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 3px oklch(0.74 0.12 165 / 16%);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ok) 16%, transparent);
   }
 }
 
@@ -313,6 +345,20 @@
   }
   .animate-signal-blink {
     animation: signal-blink 1.6s steps(2, end) infinite;
+  }
+  .console {
+    background-color: var(--console);
+    color: var(--console-foreground);
+    scrollbar-color: color-mix(in oklch, var(--console-muted) 55%, transparent) transparent;
+  }
+  .console ::selection {
+    background: color-mix(in oklch, var(--console-signal) 35%, transparent);
+    color: var(--console-foreground);
+  }
+  .console::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--console-muted) 55%, transparent);
+    border: 2px solid transparent;
+    background-clip: content-box;
   }
   .manifest-rail {
     position: absolute;

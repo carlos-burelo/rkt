@@ -282,14 +282,14 @@ export function DeployDrawer() {
               </section>
 
               <section>
-                <header className="flex items-center gap-2 border-b border-border bg-secondary/20 px-4 py-2">
-                  <span className="micro">{t("deployments.buildLog")}</span>
+                <header className="flex items-center gap-2 border-b border-console-border bg-console-raised px-4 py-2">
+                  <span className="micro text-console-muted">{t("deployments.buildLog")}</span>
                   <span className="flex-1" />
-                  <span className="tnum font-mono text-[9px] text-muted-foreground">
+                  <span className="tnum font-mono text-[9px] text-console-muted">
                     {buildLog ? tn("deployments.lines", buildLog.split("\n").length) : t("deployments.logEmpty")}
                   </span>
                 </header>
-                <pre className="min-h-72 overflow-auto bg-ink/45 p-4 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-foreground/85">
+                <pre className="console min-h-72 overflow-auto p-4 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
                   {buildLog || t("deployments.noLog")}
                 </pre>
               </section>

@@ -165,7 +165,7 @@ function RunsDialog({ job }: { job: CronJob }) {
           ))}
           {runs.length === 0 && <p className="px-2 py-4 font-mono text-[10px] text-muted-foreground">{t("cron.noRuns")}</p>}
         </div>
-        <pre className="max-h-56 overflow-auto border border-border bg-ink/40 p-2 font-mono text-[9px] leading-relaxed whitespace-pre-wrap">
+        <pre className="console max-h-56 overflow-auto border border-console-border p-2 font-mono text-[9px] leading-relaxed whitespace-pre-wrap">
           {log || t("cron.pickRun")}
         </pre>
       </div>

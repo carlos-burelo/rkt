@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "../i18n";
 
 // CopyButton copia al portapapeles con micro-feedback.
-export function CopyButton({ text, label }: { text: string; label?: string }) {
+export function CopyButton({ text, label, className }: { text: string; label?: string; className?: string }) {
   const { t } = useI18n();
   const title = label ?? t("common.copy");
   return (
@@ -15,7 +15,10 @@ export function CopyButton({ text, label }: { text: string; label?: string }) {
       }}
       title={title}
       aria-label={title}
-      className="rounded-[1px] p-0.5 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+      className={cn(
+        "rounded-[1px] p-0.5 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground",
+        className,
+      )}
     >
       <Copy className="h-3 w-3" />
     </button>
