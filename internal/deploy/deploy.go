@@ -74,7 +74,15 @@ func RunContext(ctx context.Context, app config.App, token string, ctl Controlle
 		return "", err
 	}
 	rev := gitRev(ctx, staging)
-	if err := RunStepsContext(ctx, d.Build, staging, app.Env, out); err != nil {
+	buildEnv := map[string]string{}
+	for k, v := range app.Env {
+		buildEnv[k] = v
+	}
+	buildEnv["CI"] = "1"
+	if _, ok := buildEnv["NODE_ENV"]; !ok {
+		buildEnv["NODE_ENV"] = "production"
+	}
+	if err := RunStepsContext(ctx, d.Build, staging, buildEnv, out); err != nil {
 		_ = os.RemoveAll(staging)
 		return "", err
 	}

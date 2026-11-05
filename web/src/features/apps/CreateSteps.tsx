@@ -361,8 +361,21 @@ export function ReviewStep({
                 <p className="truncate font-mono text-[10px] text-muted-foreground">
                   {plan.static_dir
                     ? `${t("create.static")}: ${plan.static_abs}`
-                    : `${t("create.start")}: ${plan.start.join(" ") || "—"}`}
+                    : `${t("create.start")}: ${plan.start.join(" ") || "-"}`}
                 </p>
+                {(plan.evidence?.length ?? 0) > 0 && (
+                  <p className="truncate font-mono text-[10px] text-muted-foreground">
+                    {t("create.evidence")}: {plan.evidence?.join(" · ")}
+                  </p>
+                )}
+                {plan.node_version && (
+                  <p className="font-mono text-[10px] text-muted-foreground">
+                    {t("create.nodeVersion")}: {plan.node_version}
+                  </p>
+                )}
+                {plan.workspace && (
+                  <p className="font-mono text-[10px] text-warn">{t("create.workspace")}</p>
+                )}
               </>
             )}
             {!plan && !planBusy && (

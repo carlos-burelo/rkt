@@ -25,6 +25,7 @@ import (
 // presetBinKey qué setting de binario usa cada preset.
 var presetBinKey = map[string]string{
 	"next": store.KeyNodeBin, "node": store.KeyNodeBin, "python": store.KeyPythonBin,
+	"sveltekit": store.KeyNodeBin, "nuxt": store.KeyNodeBin, "remix": store.KeyNodeBin, "solidstart": store.KeyNodeBin,
 }
 
 // PresetBinKey expone la clave de setting del binario de un preset.

@@ -6,9 +6,9 @@
 | Estado | aceptado |
 | Fecha | 2026-11-05 |
 | Ámbito | backend, API, dashboard, MCP |
-| Fase activa | SRV y PROTO cerrados; siguiente BLD |
-| Siguiente tarea | BLD-01 — inventario del buildpack |
-| Ampliación | SRV y PROTO implementados; BLD y MOCK pendientes |
+| Fase activa | BLD en curso; MOCK pendiente |
+| Siguiente tarea | BLD-04 — frameworks restantes (Java) |
+| Ampliación | SRV y PROTO cerrados; BLD parcial; MOCK pendiente |
 | Relacionados | [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md), [CLI](CLI.md) |
 
 **AADR** = Architecture & API Decision Record. Este documento fija las
@@ -748,35 +748,35 @@ qué eligió un plan; si no puede, falla con una acción concreta.
 
 **Prioridad:** P1.5. **Depende de:** D15.
 
-- [ ] **BLD-01** Inventariar `internal/buildpack` y `internal/discover`: qué
+- [x] **BLD-01** Inventariar `internal/buildpack` y `internal/discover`: qué
   detecta hoy, con qué evidencia y qué promete.
-- [ ] **BLD-02** Modelo `FrameworkPlan` con `kind`, `evidence`, `install`,
+- [x] **BLD-02** Modelo `FrameworkPlan` con `kind`, `evidence`, `install`,
   `build`, `start`, `staticDir` y `nodeVersion`.
-- [ ] **BLD-03** Gestores Node: `pnpm`, `yarn` y `bun` por lockfile; nunca
+- [x] **BLD-03** Gestores Node: `pnpm`, `yarn` y `bun` por lockfile; nunca
   `npm`; normalización canónica y tests.
 - [ ] **BLD-04** Frameworks: Next standalone, Nuxt, Astro, Vite, SvelteKit,
   Remix, SolidStart, Go, Python (FastAPI/Django/Flask), Rust y Java básico.
-- [ ] **BLD-05** Monorepos: detectar workspace, app concreta y filtro de build;
+- [x] **BLD-05** Monorepos: detectar workspace, app concreta y filtro de build;
   no asumir la raíz.
 - [ ] **BLD-06** Salidas estáticas: `dist`, `build`, `out`, `.output/public`,
   `public`; servir con el binario.
-- [ ] **BLD-07** Build determinista: `NODE_ENV`, `CI=1`, sin prompts, sin
+- [x] **BLD-07** Build determinista: `NODE_ENV`, `CI=1`, sin prompts, sin
   telemetría y sin `npm`.
 - [ ] **BLD-08** Caché de dependencias por hash de lockfile, invalidación
   segura y limpieza.
-- [ ] **BLD-09** Log de build con pasos, tiempos y causa exacta del fallo.
-- [ ] **BLD-10** Errores de detección con manifiesto faltante y comando
+- [x] **BLD-09** Log de build con pasos, tiempos y causa exacta del fallo.
+- [x] **BLD-10** Errores de detección con manifiesto faltante y comando
   sugerido.
-- [ ] **BLD-11** Fixtures por framework y test de matriz (detección + plan).
-- [ ] **BLD-12** `GET /detect` devuelve evidencia y explicación del plan.
-- [ ] **BLD-13** UI de creación muestra evidencia y permite editar pasos.
+- [x] **BLD-11** Fixtures por framework y test de matriz (detección + plan).
+- [x] **BLD-12** `GET /detect` devuelve evidencia y explicación del plan.
+- [x] **BLD-13** UI de creación muestra evidencia y permite editar pasos.
 - [ ] **BLD-14** Versión de Node desde `.nvmrc`, `engines` o default seguro.
-- [ ] **BLD-15** Python: `requirements.txt`, `pyproject`, `uv` y `poetry` con
+- [x] **BLD-15** Python: `requirements.txt`, `pyproject`, `uv` y `poetry` con
   entorno aislado.
-- [ ] **BLD-16** Go: flags de build, `-trimpath`, binario esperado y test.
+- [x] **BLD-16** Go: flags de build, `-trimpath`, binario esperado y test.
 - [ ] **BLD-17** Seguridad: allowlist de env de build, secretos fuera de logs y
   timeouts.
-- [ ] **BLD-18** Documentar matriz soportada y límites; actualizar capturas.
+- [x] **BLD-18** Documentar matriz soportada y límites; actualizar capturas.
 
 ### 5.14 MOCK — Fixtures y capturas
 
@@ -917,6 +917,7 @@ Criterios:
 | 2026-11-05 | Gate de cobertura: store 90%, hosts 98% y tests de `WithTx` | `2eeaebc` | bucle de cobertura local |
 | 2026-11-05 | SRV completo: colector local, API, vista, alertas y capturas | `1f30244` | `go test ./internal/servermetrics ./internal/api`, `tsc`, capturas |
 | 2026-11-05 | PROTO completo: ws/wss, SSE, HTTP/2, capacidades y tests | `d3c53ff`, `dbb1c6c` | `go test ./internal/proxy ./internal/config`, `tsc` |
+| 2026-11-05 | BLD parcial: evidencia, gestores, Python/Rust/SolidStart, env determinista y UI | este commit | `go test ./internal/buildpack ./internal/discover ./internal/deploy`, `tsc` |
 
 Al cerrar una tarea, añadir fila con fecha, ID, commit y comandos ejecutados.
 No borrar filas anteriores.

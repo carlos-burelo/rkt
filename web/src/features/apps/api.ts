@@ -90,6 +90,9 @@ export interface DetectOut {
   start: string[];
   static_dir?: string;
   static_abs?: string;
+  evidence?: string[];
+  node_version?: string;
+  workspace?: boolean;
 }
 
 export function detectApp(path: string): Promise<DetectOut> {

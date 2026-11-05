@@ -60,19 +60,96 @@ func TestDetectNextArranca(t *testing.T) {
 	}
 }
 
-func TestDetectIgnoraLockfilesAjenos(t *testing.T) {
+func TestDetectYarnGanaYnpmNunca(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "package.json", `{"dependencies":{}}`)
-	write(t, dir, "package-lock.json", "{}")
 	write(t, dir, "yarn.lock", "")
+	write(t, dir, "package-lock.json", "{}")
 
 	p, err := DetectDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.PM != "pnpm" || p.Install[0] != "pnpm install" {
-		t.Fatalf("npm/yarn no deben ganar: %+v", p)
+	if p.PM != "yarn" || p.Install[0] != "yarn install" {
+		t.Fatalf("yarn debe ganar: %+v", p)
 	}
+
+	dir2 := t.TempDir()
+	write(t, dir2, "package.json", `{"dependencies":{}}`)
+	write(t, dir2, "package-lock.json", "{}")
+	p2, err := DetectDir(dir2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p2.PM != "pnpm" || p2.Install[0] != "pnpm install" {
+		t.Fatalf("npm nunca gana: %+v", p2)
+	}
+}
+
+func TestDetectBunYWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "package.json", `{"workspaces":["apps/*"],"engines":{"node":">=20"}}`)
+	write(t, dir, "bun.lock", "")
+	write(t, dir, ".nvmrc", "v22.1.0\n")
+
+	p, err := DetectDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.PM != "bun" || !p.Workspace || p.NodeVersion != ">=20" {
+		t.Fatalf("plan = %+v", p)
+	}
+	if !contains(p.Evidence, "workspaces") || !contains(p.Evidence, "bun.lock") {
+		t.Fatalf("evidence = %v", p.Evidence)
+	}
+}
+
+func TestDetectPythonUVYPoetry(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "uv.lock", "")
+	write(t, dir, "pyproject.toml", "")
+	p, err := DetectDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Kind != "python" || p.Install[0] != "uv sync" {
+		t.Fatalf("uv = %+v", p)
+	}
+
+	dir2 := t.TempDir()
+	write(t, dir2, "poetry.lock", "")
+	write(t, dir2, "main.py", "")
+	p2, err := DetectDir(dir2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p2.Install[0] != "poetry install" || strings.Join(p2.Start, " ") != "python -u main.py" {
+		t.Fatalf("poetry = %+v", p2)
+	}
+}
+
+func TestDetectRust(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "Cargo.toml", "[package]\nname = \"servicio\"\n")
+	p, err := DetectDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Kind != "rust" || !strings.Contains(p.Start[0], "servicio") {
+		t.Fatalf("rust = %+v", p)
+	}
+	if cargoName("[package]\nname = 'x'") != "x" {
+		t.Fatal("cargoName")
+	}
+}
+
+func contains(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestDetectNodeServer(t *testing.T) {
@@ -160,5 +237,17 @@ func TestDevHint(t *testing.T) {
 	}
 	if DevHint(t.TempDir(), "3010") != "" {
 		t.Fatal("sin señales no debe sugerir comando")
+	}
+}
+
+func TestDetectSolidStart(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "package.json", `{"scripts":{"build":"vinxi build"},"dependencies":{"@solidjs/start":"^1"}}`)
+	p, err := DetectDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Kind != "solidstart" || !strings.Contains(strings.Join(p.Start, " "), ".output") {
+		t.Fatalf("solidstart = %+v", p)
 	}
 }

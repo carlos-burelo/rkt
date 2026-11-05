@@ -18,6 +18,9 @@ type detectOut struct {
 	Start     []string `json:"start"`
 	StaticDir string   `json:"static_dir,omitempty"`
 	StaticAbs string   `json:"static_abs,omitempty"`
+	Evidence  []string `json:"evidence,omitempty"`
+	Node      string   `json:"node_version,omitempty"`
+	Workspace bool     `json:"workspace,omitempty"`
 }
 
 // handleDetect GET /api/v1/detect?path=<dir> (operator+).
@@ -56,6 +59,9 @@ func (d *Deps) handleDetect(w http.ResponseWriter, r *http.Request) {
 		Build:     nonNil(plan.Build),
 		Start:     nonNil(plan.Start),
 		StaticDir: plan.StaticDir,
+		Evidence:  plan.Evidence,
+		Node:      plan.NodeVersion,
+		Workspace: plan.Workspace,
 	}
 	if plan.IsStatic() {
 		out.StaticAbs = plan.Static(abs)
