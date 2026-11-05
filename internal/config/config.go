@@ -468,6 +468,49 @@ func ValidateRoutes(routes []Route) error {
 	return nil
 }
 
+// Clone devuelve una copia profunda y editable de la config. La config viva
+// se comparte entre goroutines sin lock: toda mutación pasa por una copia.
+func (c *Config) Clone() *Config {
+	if c == nil {
+		return nil
+	}
+	out := *c
+	out.DenyPaths = append([]string(nil), c.DenyPaths...)
+	if c.GlobalEnv != nil {
+		out.GlobalEnv = make(map[string]string, len(c.GlobalEnv))
+		for k, v := range c.GlobalEnv {
+			out.GlobalEnv[k] = v
+		}
+	}
+	if c.Github != nil {
+		g := *c.Github
+		out.Github = &g
+	}
+	out.Apps = make([]App, len(c.Apps))
+	for i, a := range c.Apps {
+		out.Apps[i] = a
+		out.Apps[i].Args = append([]string(nil), a.Args...)
+		if a.Env != nil {
+			env := make(map[string]string, len(a.Env))
+			for k, v := range a.Env {
+				env[k] = v
+			}
+			out.Apps[i].Env = env
+		}
+		if a.Deploy != nil {
+			d := *a.Deploy
+			d.Build = append([]string(nil), a.Deploy.Build...)
+			out.Apps[i].Deploy = &d
+		}
+	}
+	out.Routes = make([]Route, len(c.Routes))
+	for i, r := range c.Routes {
+		out.Routes[i] = r
+		out.Routes[i].Hosts = append([]string(nil), r.Hosts...)
+	}
+	return &out
+}
+
 // Live es la config activa con swap atómico para hot-reload.
 // Los handlers leen Get() por request; el watcher hace Swap().
 type Live struct {
@@ -530,7 +573,7 @@ func githubEqual(a, b *Github) bool {
 
 // ValidateApp verifica una app aislada (para escritura en DB).
 func (a *App) ValidateApp(idx int) error {
-	if !validAppName(a.Name) {
+	if !ValidAppName(a.Name) {
 		return fmt.Errorf("apps[%d] name inválido %q: [a-z0-9-]", idx, a.Name)
 	}
 	switch a.Runtime {
@@ -583,8 +626,9 @@ func (a *App) ValidateApp(idx int) error {
 	return nil
 }
 
-// validAppName [a-z0-9-] para nombres de archivo de log seguros.
-func validAppName(s string) bool {
+// ValidAppName [a-z0-9-] para nombres de archivo de log seguros.
+// Único hogar: CLI, API y MCP validan con esta regla.
+func ValidAppName(s string) bool {
 	if s == "" {
 		return false
 	}
