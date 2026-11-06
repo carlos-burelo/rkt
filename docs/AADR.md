@@ -3,12 +3,12 @@
 | Campo | Valor |
 |---|---|
 | ID | AADR-002 |
-| Estado | abierto |
+| Estado | en curso |
 | Fecha | 2026-11-05 |
 | Base auditada | `4c0feb8` |
 | Ámbito | seguridad, proxy, auth, deploy, operación, producto |
-| Fase | auditoría |
-| Siguiente tarea | Sprint 1 — secretos y validación |
+| Fase | implementación |
+| Siguiente tarea | P2 restante: path routing, HTTP/3, email, upgrade, HA |
 | Relacionados | [ARCHITECTURE](ARCHITECTURE.md), [CLI](CLI.md), [PRODUCT](../PRODUCT.md), [SPEC](SPEC.md) |
 
 Este documento reemplaza al AADR-001 (checklist histórico ya cerrado). El
@@ -489,3 +489,58 @@ release, volúmenes, alertas nativas y cadena de suministro firmada.
 | Fecha | ID | Commit | Nota |
 |---|---|---|---|
 | 2026-11-05 | AADR-002 | — | Auditoría inicial sobre `4c0feb8`. Sin tareas cerradas. |
+| 2026-11-05 | P0 | `e62f682` | Cerrados SEC-01..07, REL-01, BUG-01, BUG-02. |
+| 2026-11-05 | P1/P2 | `c64426a` | Auth, edge, operación, deploy, CLI y features P2 viables. |
+
+## 10. Estado de implementación (2026-11-05)
+
+### Cerrado y verde
+
+- **P0 completo:** SEC-01 a SEC-07, REL-01, BUG-01, BUG-02.
+- **SEC-09:** rate limit por host + allowlist, `Retry-After`, WAF con
+  normalización y sufijos anidados.
+- **OPS-01:** HSTS condicionado a TLS, `nosniff`, `Referrer-Policy`, CSP del
+  dashboard y gzip opt-in.
+- **OPS-04:** `VACUUM INTO` programado, `rkt backup`, `rkt restore` con
+  verificación de integridad y retención.
+- **OPS-05:** rotación viva (log operativo, access log, logs de app), poda
+  programada de deployments/events/logs y retención configurable.
+- **PLAT-02:** sin dial TCP por request, pool de `ReverseProxy` y reintento
+  de dial durante `restart_grace`.
+- **FEAT-03:** basic auth por app, allowlist CIDR y modo mantenimiento.
+- **FEAT-05:** `persist` copia data/uploads/sqlite al staging antes del swap.
+- **CLI:** `backup`, `restore`, `doctor`, `audit`, `alerts`, `cron` (list),
+  `domains`; `settings set` valida clave y valor.
+
+### Parcial
+
+- **SEC-08:** tokens de API, idle timeout de 7 días, purga de sesiones,
+  auditoría automática de toda mutación y cookie `Secure` si hay TLS.
+  **MFA/TOTP excluido por decisión del operador.**
+- **OPS-02:** cierre ordenado con CTRL_BREAK/SIGTERM y timeout; el deploy
+  sigue siendo stop→swap→start, sin solape azul/verde.
+- **OPS-03:** tope de RAM agregado del Job Object; cuotas de disco/requests
+  siguen sin aplicarse (solo alertas/uso).
+- **OPS-06:** `/metrics`, request ID, alertas `cert_days`/`deploy_failed`,
+  Slack/Discord; email pendiente.
+- **PLAT-01:** entorno saneado (no hereda secretos de máquina) y timeout de
+  build/release; falta usuario de build dedicado y límites CPU/red.
+- **PLAT-03:** falta `rkt tls` y ejecución de cron por CLI.
+- **FEAT-01:** certificados propios por host/wildcard; DNS-01 pendiente.
+- **FEAT-04:** hooks `release`; cola de deploys y rollback por SHA pendientes.
+- **FEAT-07:** Slack/Discord; email SMTP pendiente.
+- **FEAT-08:** `doctor`; `upgrade`, SBOM y firma pendientes.
+
+### Pendiente (requiere otra iteración)
+
+- FEAT-02 rutas por path, rewrites, redirects y cabeceras por regla.
+- FEAT-06 HTTP/3.
+- FEAT-07 email SMTP con gestión de secreto.
+- FEAT-08 `rkt upgrade`, SBOM y firma del binario.
+- FEAT-09 HA/multi-nodo: incompatible con el diseño actual de binario único;
+  requiere AADR propio.
+- CI-01: `govulncheck`, `staticcheck`, E2E del dashboard, firma y actions
+  pineadas por SHA.
+
+Ninguna tarea pendiente se considera cerrada. La checklist de la sección 8
+queda como referencia; este estado manda hasta que se marquen una a una.
