@@ -14,6 +14,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"rkt-proxy/internal/config"
@@ -139,6 +140,9 @@ type SetupDeps struct {
 	// Manifest: canjea code y guarda credenciales. Devuelve install URL.
 	Exchange   func(code string) (*github.ManifestCredentials, error)
 	OnManifest func(c *github.ManifestCredentials) (string, error)
+	// ConsumeState valida el state one-time del manifest. Sin él no se
+	// guardan credenciales: el endpoint es público.
+	ConsumeState func(state string) bool
 	// DashboardURL destino tras instalar (vacío = "/").
 	DashboardURL string
 }
@@ -250,7 +254,14 @@ func setupInstall(w http.ResponseWriter, r *http.Request, d SetupDeps) {
 }
 
 func setupManifest(w http.ResponseWriter, r *http.Request, d SetupDeps) {
-	code := r.URL.Query().Get("code")
+	q := r.URL.Query()
+	state := q.Get("state")
+	if state == "" || d.ConsumeState == nil || !d.ConsumeState(state) {
+		writeHookPage(w, http.StatusForbidden, "Setup no autorizado",
+			`<h1>Setup no autorizado</h1><p>Falta el state del dashboard o ya caducó. Vuelve a <b>Ajustes</b> e inicia el flujo otra vez.</p>`)
+		return
+	}
+	code := q.Get("code")
 	if code == "" || d.Exchange == nil || d.OnManifest == nil {
 		writeHookPage(w, http.StatusBadRequest, "Código faltante",
 			`<h1>Falta el código</h1><p>GitHub no devolvió <code>code</code> en la URL.</p>`)
@@ -326,16 +337,16 @@ func NewAppFormHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		name, domain, org := q.Get("name"), q.Get("domain"), q.Get("org")
-		if name == "" || domain == "" {
+		if name == "" || domain == "" || q.Get("state") == "" {
 			writeHookPage(w, http.StatusBadRequest, "Faltan datos",
-				`<h1>Faltan datos</h1><p>Se requiere <code>?name=&amp;domain=</code>.</p>`)
+				`<h1>Faltan datos</h1><p>Se requiere <code>?name=&amp;domain=&amp;state=</code>.</p>`)
 			return
 		}
 		target := "https://github.com/settings/apps/new"
 		if org != "" {
 			target = "https://github.com/organizations/" + org + "/settings/apps/new"
 		}
-		manifest := manifestJSON(name, domain, q.Get("local") == "1", q.Get("tls") == "1")
+		manifest := manifestJSON(name, domain, q.Get("local") == "1", q.Get("tls") == "1", q.Get("state"))
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 		_ = manifestTemplate.Execute(w, map[string]string{
@@ -351,18 +362,22 @@ func NewAppFormHandler() http.Handler {
 // public=true: una App privada solo puede instalarse en la cuenta dueña.
 // Para cubrir repos de organizaciones donde el usuario es admin, la App
 // debe ser pública (GitHub no permite elegir orgs en el manifest).
-func manifestJSON(name, domain string, local, tls bool) []byte {
+func manifestJSON(name, domain string, local, tls bool, state string) []byte {
 	scheme := "https"
 	if local && !tls {
 		scheme = "http"
 	}
 	base := scheme + "://" + domain
+	setup := base + "/_rkt/setup"
+	if state != "" {
+		setup += "?state=" + url.QueryEscape(state)
+	}
 	m := map[string]any{
 		"name":         name,
 		"description":  "Deploy PaaS rkt (auto TLS + supervisor). Acceso a todos los repositorios para clonar privados.",
 		"url":          base,
-		"redirect_url": base + "/_rkt/setup",
-		"setup_url":    base + "/_rkt/setup",
+		"redirect_url": setup,
+		"setup_url":    setup,
 		"public":       true,
 		"default_permissions": map[string]string{
 			"contents": "read", "metadata": "read",

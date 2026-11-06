@@ -41,17 +41,21 @@ func NewHandler(live *config.Live, log *slog.Logger) http.Handler {
 			Director: func(req *http.Request) {
 				req.URL.Scheme = target.Scheme
 				req.URL.Host = target.Host
-				// Nota: ReverseProxy ya inyecta X-Forwarded-For solo.
-				// Aquí solo Proto + Host + Real-IP.
+				// El edge no confía en cabeceras de reenvío del cliente:
+				// se borran y se escriben solo las calculadas aquí.
+				// ReverseProxy añade X-Forwarded-For desde RemoteAddr
+				// después del Director; sin el valor previo no hay spoof.
+				for _, h := range []string{
+					"Forwarded", "X-Forwarded-For", "X-Forwarded-Host",
+					"X-Forwarded-Proto", "X-Forwarded-Port", "X-Real-IP",
+				} {
+					req.Header.Del(h)
+				}
 				proto := "http"
 				if req.TLS != nil {
 					proto = "https"
 				}
-				if prior := req.Header.Get("X-Forwarded-Proto"); prior != "" {
-					req.Header.Set("X-Forwarded-Proto", prior+", "+proto)
-				} else {
-					req.Header.Set("X-Forwarded-Proto", proto)
-				}
+				req.Header.Set("X-Forwarded-Proto", proto)
 				req.Header.Set("X-Forwarded-Host", req.Host)
 				req.Host = target.Host
 				if ip, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {

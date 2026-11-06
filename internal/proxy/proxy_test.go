@@ -216,7 +216,7 @@ func TestClienteCanceladoNoEsBackendCaido(t *testing.T) {
 	}
 }
 
-// TestForwardedProtoYHost: TLS y X-Forwarded-Proto previo se propagan.
+// TestForwardedProtoYHost: el edge ignora cabeceras de reenvío del cliente.
 func TestForwardedProtoYHost(t *testing.T) {
 	var got http.Header
 	var gotHost string
@@ -231,14 +231,22 @@ func TestForwardedProtoYHost(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Host = "public.test"
 	req.TLS = &tls.ConnectionState{}
-	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Proto", "http")
+	req.Header.Set("X-Forwarded-For", "10.0.0.9")
+	req.Header.Set("X-Real-IP", "10.0.0.9")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("proxy = %d", rec.Code)
 	}
-	if got.Get("X-Forwarded-Proto") != "https, https" {
+	if got.Get("X-Forwarded-Proto") != "https" {
 		t.Fatalf("proto = %q", got.Get("X-Forwarded-Proto"))
+	}
+	if strings.Contains(got.Get("X-Forwarded-For"), "10.0.0.9") {
+		t.Fatalf("X-Forwarded-For spoofeado: %q", got.Get("X-Forwarded-For"))
+	}
+	if got.Get("X-Real-IP") == "10.0.0.9" {
+		t.Fatalf("X-Real-IP spoofeado: %q", got.Get("X-Real-IP"))
 	}
 	if got.Get("X-Forwarded-Host") != "public.test" {
 		t.Fatalf("xfh = %q", got.Get("X-Forwarded-Host"))

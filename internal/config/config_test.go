@@ -290,7 +290,7 @@ func TestExportImportJSON(t *testing.T) {
 		Apps:   []App{{Name: "a", Command: "x", Env: map[string]string{"K": "v"}}},
 		Routes: []Route{{Hosts: []string{"a.test"}, Target: "http://127.0.0.1:1"}},
 	})
-	data, err := ExportJSON(cfg, map[string]string{"site_name": "rkt"})
+	data, err := ExportJSONWithSecrets(cfg, map[string]string{"site_name": "rkt"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,6 +300,28 @@ func TestExportImportJSON(t *testing.T) {
 	}
 	if len(back.Apps) != 1 || len(back.Routes) != 1 || settings["site_name"] != "rkt" {
 		t.Fatalf("roundtrip = %+v %v", back, settings)
+	}
+	if back.Apps[0].Env["K"] != "v" {
+		t.Fatalf("export con secretos perdió env: %+v", back.Apps[0].Env)
+	}
+
+	// Export por defecto: claves presentes, valores redactados.
+	safe, err := ExportJSON(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(safe), SecretMask) || strings.Contains(string(safe), `"K": "v"`) {
+		t.Fatalf("export saneado filtró secretos: %s", safe)
+	}
+	if _, _, err := ImportJSON(safe); err == nil {
+		t.Fatal("importar un export redactado sin config previa debe fallar")
+	}
+	merged, _, err := ImportJSONMerged(safe, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merged.Apps[0].Env["K"] != "v" {
+		t.Fatalf("merge de export redactado perdió env: %+v", merged.Apps[0].Env)
 	}
 	if _, _, err := ImportJSON([]byte("{bad")); err == nil {
 		t.Fatal("JSON inválido debe fallar")

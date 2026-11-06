@@ -53,7 +53,7 @@ func TestScanErroresConVistas(t *testing.T) {
 			_, err := db.LoadFleet()
 			return err
 		}},
-		{"deployments", "deployments", `CREATE VIEW deployments AS SELECT id, NULL AS app, rev, status, started_at, finished_at, triggered_by, env_snapshot FROM deployments_real`, func(db *DB) error {
+		{"deployments", "deployments", `CREATE VIEW deployments AS SELECT id, NULL AS app, rev, status, started_at, finished_at, triggered_by FROM deployments_real`, func(db *DB) error {
 			_, err := db.ListDeployments("", 10)
 			return err
 		}},
@@ -80,7 +80,7 @@ func TestScanErroresConVistas(t *testing.T) {
 			case "routes":
 				_, _ = db.AddRoute([]string{"a.test"}, "http://127.0.0.1:1")
 			case "deployments":
-				_, _ = db.InsertDeployment("a", "r", "", "", nil)
+				_, _ = db.InsertDeployment("a", "r", "", "")
 			case "events":
 				_ = db.InsertEvent("died", "a", "m")
 			case "infra":

@@ -624,7 +624,7 @@ func TestDeploymentLog(t *testing.T) {
 	dir := t.TempDir()
 	lp := filepath.Join(dir, "w-1.log")
 	os.WriteFile(lp, []byte("b1\nb2\n"), 0o644)
-	id, err := db.InsertDeployment("w", "abc", lp, "tester", nil)
+	id, err := db.InsertDeployment("w", "abc", lp, "tester")
 	if err != nil {
 		t.Fatal(err)
 	}

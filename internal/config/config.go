@@ -238,7 +238,12 @@ type Config struct {
 	ACMEStaging  bool   `yaml:"acme_staging" json:"acme_staging"`
 	ACMECacheDir string `yaml:"acme_cache_dir" json:"acme_cache_dir"`
 	// LocalCA firma TLS con la CA propia de rkt (dev). Sin ACME.
-	LocalCA             bool            `yaml:"local_ca" json:"local_ca,omitempty"`
+	LocalCA bool `yaml:"local_ca" json:"local_ca,omitempty"`
+	// ACMEMaxNewHosts limita emisiones nuevas por hora (-1 = sin tope).
+	// Evita que subdominios random de un wildcard agoten el rate limit.
+	ACMEMaxNewHosts int `yaml:"acme_max_new_hosts" json:"acme_max_new_hosts"`
+	// ACMEDNSPrecheck exige que el host resuelva antes de pedir cert.
+	ACMEDNSPrecheck     bool            `yaml:"acme_dns_precheck" json:"acme_dns_precheck"`
 	RedirectHTTPToHTTPS bool            `yaml:"redirect_http_to_https" json:"redirect_http_to_https"`
 	Healthz             HealthzConfig   `yaml:"healthz" json:"healthz"`
 	RateLimit           RateLimitConfig `yaml:"rate_limit" json:"rate_limit"`
@@ -283,6 +288,7 @@ func defaultConfig() Config {
 		ListenHTTP:          ":80",
 		ListenHTTPS:         "",
 		ACMECacheDir:        platform.DefaultCertsDir(),
+		ACMEMaxNewHosts:     30,
 		RedirectHTTPToHTTPS: true,
 		Healthz:             HealthzConfig{Enabled: true, Listen: "127.0.0.1:8090"},
 		RateLimit:           RateLimitConfig{Enabled: true, RPS: 20, Burst: 40},
@@ -315,14 +321,57 @@ type Portable struct {
 	Settings map[string]string `json:"settings,omitempty"`
 }
 
-// ExportJSON serializa config + flota + settings.
+// SecretMask sustituye valores de entorno en un export redactado.
+// ImportJSONMerged los rellena desde la config actual; ImportJSON los rechaza.
+const SecretMask = "__RKT_REDACTED__"
+
+// ExportJSON serializa config + flota + settings con los secretos
+// redactados. Para un respaldo restaurable usar ExportJSONWithSecrets.
 func ExportJSON(cfg *Config, settings map[string]string) ([]byte, error) {
-	doc := Portable{Config: *cfg, Apps: cfg.Apps, Routes: cfg.Routes, Settings: settings}
+	return exportJSON(cfg, settings, false)
+}
+
+// ExportJSONWithSecrets incluye los valores de entorno. Solo para
+// respaldos cifrados o destinos de confianza.
+func ExportJSONWithSecrets(cfg *Config, settings map[string]string) ([]byte, error) {
+	return exportJSON(cfg, settings, true)
+}
+
+func exportJSON(cfg *Config, settings map[string]string, includeSecrets bool) ([]byte, error) {
+	cp := cfg
+	if !includeSecrets {
+		cp = redactConfig(cfg)
+	}
+	doc := Portable{Config: *cp, Apps: cp.Apps, Routes: cp.Routes, Settings: settings}
 	return json.MarshalIndent(doc, "", "  ")
 }
 
+// redactConfig copia la config conservando claves y sustituyendo valores.
+func redactConfig(cfg *Config) *Config {
+	cp := cfg.Clone()
+	if cp.GlobalEnv != nil {
+		for k := range cp.GlobalEnv {
+			cp.GlobalEnv[k] = SecretMask
+		}
+	}
+	for i := range cp.Apps {
+		for k := range cp.Apps[i].Env {
+			cp.Apps[i].Env[k] = SecretMask
+		}
+	}
+	return cp
+}
+
 // ImportJSON valida un documento portable y devuelve config + settings.
+// Rechaza exports redactados: no se pueden restaurar sin los valores.
 func ImportJSON(data []byte) (*Config, map[string]string, error) {
+	return ImportJSONMerged(data, nil)
+}
+
+// ImportJSONMerged como ImportJSON, pero rellena los valores redactados
+// desde prev. Es el camino para importar un export saneado sin perder
+// secretos. Si falta una clave, devuelve error accionable.
+func ImportJSONMerged(data []byte, prev *Config) (*Config, map[string]string, error) {
 	doc := Portable{Config: *Default()}
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return nil, nil, fmt.Errorf("json inválido: %w", err)
@@ -333,7 +382,46 @@ func ImportJSON(data []byte) (*Config, map[string]string, error) {
 	if err := cfg.Finalize(); err != nil {
 		return nil, nil, err
 	}
+	if err := fillMasked(&cfg, prev); err != nil {
+		return nil, nil, err
+	}
 	return &cfg, doc.Settings, nil
+}
+
+// fillMasked restaura los valores marcados con SecretMask desde prev.
+func fillMasked(dst, prev *Config) error {
+	var prevGlobal map[string]string
+	prevApps := map[string]map[string]string{}
+	if prev != nil {
+		prevGlobal = prev.GlobalEnv
+		for _, a := range prev.Apps {
+			prevApps[a.Name] = a.Env
+		}
+	}
+	for k, v := range dst.GlobalEnv {
+		if v != SecretMask {
+			continue
+		}
+		old, ok := prevGlobal[k]
+		if !ok {
+			return fmt.Errorf("global_env %s redactado y sin valor previo: usa config export --include-secrets", k)
+		}
+		dst.GlobalEnv[k] = old
+	}
+	for i := range dst.Apps {
+		a := &dst.Apps[i]
+		for k, v := range a.Env {
+			if v != SecretMask {
+				continue
+			}
+			old, ok := prevApps[a.Name][k]
+			if !ok {
+				return fmt.Errorf("apps[%s].env %s redactado y sin valor previo: usa config export --include-secrets", a.Name, k)
+			}
+			a.Env[k] = old
+		}
+	}
+	return nil
 }
 
 // ApplyDefaults rellena valores omitidos. Idempotente.
@@ -344,6 +432,9 @@ func (cfg *Config) ApplyDefaults() {
 	// listen_https vacío = TLS desactivado (modo local). A propósito sin default.
 	if cfg.ACMECacheDir == "" {
 		cfg.ACMECacheDir = platform.DefaultCertsDir()
+	}
+	if cfg.ACMEMaxNewHosts == 0 {
+		cfg.ACMEMaxNewHosts = 30
 	}
 	if cfg.RestartGrace == "" {
 		cfg.RestartGrace = restartGraceDefault
@@ -474,6 +565,9 @@ func (cfg *Config) Validate() error {
 	cfg.grace = g
 	if cfg.MaxBodyMB < 0 {
 		return fmt.Errorf("max_body_mb inválido %d (>=0, 0 = sin tope)", cfg.MaxBodyMB)
+	}
+	if cfg.ACMEMaxNewHosts < -1 {
+		return fmt.Errorf("acme_max_new_hosts inválido %d (>=-1, -1 = sin tope)", cfg.ACMEMaxNewHosts)
 	}
 	if cfg.Github != nil {
 		gh := cfg.Github
@@ -631,6 +725,9 @@ func NeedRestart(old, new *Config) []string {
 	}
 	if old.ACMECacheDir != new.ACMECacheDir {
 		out = append(out, "acme_cache_dir")
+	}
+	if old.ACMEMaxNewHosts != new.ACMEMaxNewHosts || old.ACMEDNSPrecheck != new.ACMEDNSPrecheck {
+		out = append(out, "acme_limites")
 	}
 	if old.Healthz != new.Healthz {
 		out = append(out, "healthz")

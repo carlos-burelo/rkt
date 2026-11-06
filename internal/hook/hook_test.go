@@ -233,10 +233,23 @@ func TestSetupManifest(t *testing.T) {
 		OnManifest: func(c *github.ManifestCredentials) (string, error) {
 			savedSlug = c.Slug
 			return "https://github.com/apps/" + c.Slug + "/installations/new", nil
-		}})
+		},
+		ConsumeState: func(state string) bool { return state == "buen-state" }})
+
+	// Sin state o con state inválido no se canjea el código.
+	for _, u := range []string{
+		"/_rkt/setup?setup_action=manifest&code=buen-code",
+		"/_rkt/setup?setup_action=manifest&code=buen-code&state=mal-state",
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, u, nil))
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("%s: code=%d, quiere 403", u, rec.Code)
+		}
+	}
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?setup_action=manifest&code=buen-code", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?setup_action=manifest&code=buen-code&state=buen-state", nil))
 	if rec.Code != http.StatusSeeOther || savedSlug != "mi-app" {
 		t.Fatalf("code=%d slug=%q", rec.Code, savedSlug)
 	}
@@ -245,7 +258,7 @@ func TestSetupManifest(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?setup_action=manifest&code=mal-code", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?setup_action=manifest&code=mal-code&state=buen-state", nil))
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("code malo: code=%d", rec.Code)
 	}
@@ -264,10 +277,11 @@ func TestSetupManifestBareCode(t *testing.T) {
 		OnManifest: func(c *github.ManifestCredentials) (string, error) {
 			called = true
 			return "https://github.com/apps/x/installations/new", nil
-		}})
-	// redirect real de GitHub: ?code= sin setup_action
+		},
+		ConsumeState: func(state string) bool { return state == "st" }})
+	// redirect real de GitHub: ?code= sin setup_action, con state del dashboard
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?code=abc123", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?code=abc123&state=st", nil))
 	if rec.Code != http.StatusSeeOther || !called {
 		t.Fatalf("code pelado: code=%d called=%v", rec.Code, called)
 	}
@@ -276,7 +290,7 @@ func TestSetupManifestBareCode(t *testing.T) {
 func TestNewAppForm(t *testing.T) {
 	h := NewAppFormHandler()
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/new-app?name=mi-app&domain=vps.test&org=miorg", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/new-app?name=mi-app&domain=vps.test&org=miorg&state=s1", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("code=%d", rec.Code)
 	}
@@ -298,7 +312,7 @@ func TestNewAppForm(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/new-app?name=&domain=", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/new-app?name=&domain=&state=s1", nil))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("sin params: code=%d", rec.Code)
 	}
@@ -315,7 +329,7 @@ func TestManifestJSON(t *testing.T) {
 		DefaultEvents      []string          `json:"default_events"`
 		HookAttributes     map[string]any    `json:"hook_attributes"`
 	}
-	if err := json.Unmarshal(manifestJSON("mi-app", "vps.test", false, true), &m); err != nil {
+	if err := json.Unmarshal(manifestJSON("mi-app", "vps.test", false, true, "st"), &m); err != nil {
 		t.Fatal(err)
 	}
 	if m.Name != "mi-app" || !m.Public || m.DefaultPermissions["contents"] != "read" {
@@ -325,7 +339,7 @@ func TestManifestJSON(t *testing.T) {
 	if len(m.DefaultEvents) != 1 || m.DefaultEvents[0] != "push" {
 		t.Fatalf("eventos manifest mal: %v", m.DefaultEvents)
 	}
-	if m.RedirectURL != "https://vps.test/_rkt/setup" || m.SetupURL != m.RedirectURL {
+	if m.RedirectURL != "https://vps.test/_rkt/setup?state=st" || m.SetupURL != m.RedirectURL {
 		t.Fatalf("urls mal: %+v", m)
 	}
 	if m.HookAttributes["url"] != "https://vps.test/_rkt/hook/github" {
@@ -341,10 +355,10 @@ func TestManifestLocalSinWebhook(t *testing.T) {
 		DefaultEvents  []string       `json:"default_events"`
 		HookAttributes map[string]any `json:"hook_attributes"`
 	}
-	if err := json.Unmarshal(manifestJSON("rkt-local", "127.0.0.1:8080", true, false), &m); err != nil {
+	if err := json.Unmarshal(manifestJSON("rkt-local", "127.0.0.1:8080", true, false, "st"), &m); err != nil {
 		t.Fatal(err)
 	}
-	if m.URL != "http://127.0.0.1:8080" || m.RedirectURL != "http://127.0.0.1:8080/_rkt/setup" {
+	if m.URL != "http://127.0.0.1:8080" || m.RedirectURL != "http://127.0.0.1:8080/_rkt/setup?state=st" {
 		t.Fatalf("urls locales mal: %+v", m)
 	}
 	if !m.Public {

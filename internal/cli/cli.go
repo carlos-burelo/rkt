@@ -33,6 +33,23 @@ var JSON = flag.Bool("json", false, "salida JSON en comandos de lectura")
 // deployTimeout POSTs largos al servicio (deploy/rollback tardan minutos).
 const deployTimeout = 10 * time.Minute
 
+// controlPost llama una acción de control con el token compartido que el
+// servicio escribe en logs/control.token (nunca viaja por la red pública).
+func controlPost(cfgPath, url string, timeout time.Duration) (*http.Response, error) {
+	tok, err := logx.EnsureControlToken(cfgPath)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Rkt-Control", tok)
+	client := &http.Client{Timeout: timeout}
+	return client.Do(req)
+}
+
 // Run cablea logger (consola+archivo), servicio del sistema y despacha.
 // Sin args: ayuda si interactivo, servicio si no (arranque por SCM).
 func Run(cfgPath string) {
@@ -301,7 +318,7 @@ func cmdRestart(args []string, cfgPath string) {
 	if !cfg.Healthz.Enabled {
 		log.Fatal("restart: healthz desactivado en config")
 	}
-	resp, err := http.Post("http://"+cfg.Healthz.Listen+"/restart/"+args[0], "application/json", nil)
+	resp, err := controlPost(cfgPath, "http://"+cfg.Healthz.Listen+"/restart/"+args[0], deployTimeout)
 	if err != nil {
 		log.Fatalf("restart: sin contacto con el servicio: %v", err)
 	}
@@ -342,8 +359,7 @@ func cmdDeploy(args []string, cfgPath string) {
 	if !cfg.Healthz.Enabled {
 		log.Fatal("deploy: requiere healthz activado")
 	}
-	client := &http.Client{Timeout: deployTimeout}
-	resp, err := client.Post("http://"+cfg.Healthz.Listen+"/deploy/"+args[0], "application/json", nil)
+	resp, err := controlPost(cfgPath, "http://"+cfg.Healthz.Listen+"/deploy/"+args[0], deployTimeout)
 	if err != nil {
 		log.Fatalf("deploy: sin contacto con el servicio: %v", err)
 	}

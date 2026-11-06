@@ -27,6 +27,7 @@ import (
 	"rkt-proxy/internal/hosts"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/platform"
+	"rkt-proxy/internal/settings"
 	"rkt-proxy/internal/store"
 )
 
@@ -675,10 +676,17 @@ func cmdSettings(args []string, cfgPath string) {
 		if !ok || strings.TrimSpace(k) == "" {
 			log.Fatalf("settings set: %q no es CLAVE=valor", args[1])
 		}
-		if err := db.SetSetting(strings.TrimSpace(k), v); err != nil {
+		k = strings.TrimSpace(k)
+		if _, known := settings.Get(k); !known {
+			log.Fatalf("settings: clave desconocida %q (usa: settings list)", k)
+		}
+		if err := settings.Validate(k, v); err != nil {
 			log.Fatalf("settings: %v", err)
 		}
-		fmt.Printf("%s=%s\n", strings.TrimSpace(k), v)
+		if err := db.SetSetting(k, v); err != nil {
+			log.Fatalf("settings: %v", err)
+		}
+		fmt.Printf("%s=%s\n", k, v)
 	default:
 		log.Fatalf("settings: subcomando %q (list|set)", args[0])
 	}
@@ -700,11 +708,21 @@ func cmdConfig(args []string, cfgPath string) {
 
 func cmdExport(args []string, cfgPath string) {
 	out := cfgPath + ".export.json"
-	if len(args) > 1 {
-		log.Fatal("uso: config export [salida]")
+	includeSecrets := false
+	pos := []string{}
+	for _, a := range args {
+		switch a {
+		case "--include-secrets":
+			includeSecrets = true
+		default:
+			pos = append(pos, a)
+		}
 	}
-	if len(args) == 1 {
-		out = args[0]
+	if len(pos) > 1 {
+		log.Fatal("uso: config export [salida] [--include-secrets]")
+	}
+	if len(pos) == 1 {
+		out = pos[0]
 	}
 	cfg, db := merged(cfgPath)
 	defer db.Close()
@@ -714,14 +732,23 @@ func cmdExport(args []string, cfgPath string) {
 			settings[k] = v
 		}
 	}
-	data, err := config.ExportJSON(cfg, settings)
+	export := config.ExportJSON
+	if includeSecrets {
+		export = config.ExportJSONWithSecrets
+	}
+	data, err := export(cfg, settings)
 	if err != nil {
 		log.Fatalf("export: %v", err)
 	}
-	if err := os.WriteFile(out, data, 0o644); err != nil {
+	if err := os.WriteFile(out, data, 0o600); err != nil {
 		log.Fatalf("export: %v", err)
 	}
-	fmt.Printf("exportado a %s (respaldo en git)\n", out)
+	_ = os.Chmod(out, 0o600)
+	if includeSecrets {
+		fmt.Printf("exportado a %s CON secretos (0600). No lo subas a git ni lo compartas.\n", out)
+		return
+	}
+	fmt.Printf("exportado a %s (redactado; usa --include-secrets para restaurar)\n", out)
 }
 
 func cmdImport(args []string, cfgPath string) {
@@ -732,15 +759,12 @@ func cmdImport(args []string, cfgPath string) {
 	if err != nil {
 		log.Fatalf("import: %v", err)
 	}
-	cfg, settings, err := config.ImportJSON(data)
-	if err != nil {
-		log.Fatalf("import: %v", err)
-	}
-	db, err := store.Open(logx.DBPath(cfgPath))
-	if err != nil {
-		log.Fatalf("import: %v", err)
-	}
+	prev, db := merged(cfgPath)
 	defer db.Close()
+	cfg, settings, err := config.ImportJSONMerged(data, prev)
+	if err != nil {
+		log.Fatalf("import: %v", err)
+	}
 	if err := cfgfile.ReplaceAll(db, cfg, settings); err != nil {
 		log.Fatalf("import: %v", err)
 	}
@@ -804,8 +828,7 @@ func cmdRollback(args []string, cfgPath string) {
 	if !cfg.Healthz.Enabled {
 		log.Fatal("rollback: requiere healthz activado")
 	}
-	client := &http.Client{Timeout: deployTimeout}
-	resp, err := client.Post("http://"+cfg.Healthz.Listen+"/rollback/"+args[0], "application/json", nil)
+	resp, err := controlPost(cfgPath, "http://"+cfg.Healthz.Listen+"/rollback/"+args[0], deployTimeout)
 	if err != nil {
 		log.Fatalf("rollback: sin contacto: %v", err)
 	}

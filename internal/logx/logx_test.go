@@ -8,6 +8,18 @@ import (
 	"testing"
 )
 
+func TestControlTokenPersistente(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "rkt.yaml")
+	t1, err := EnsureControlToken(cfg)
+	if err != nil || len(t1) < 32 {
+		t.Fatalf("crear token: %q %v", t1, err)
+	}
+	t2, err := EnsureControlToken(cfg)
+	if err != nil || t2 != t1 {
+		t.Fatalf("token no persistente: %q != %q (%v)", t2, t1, err)
+	}
+}
+
 // TestRutasCanonicas: db, log operativo y access log viven bajo logs/.
 func TestRutasCanonicas(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "rkt.local.yaml")

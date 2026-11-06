@@ -883,21 +883,17 @@ func (s *Server) doConfigExport(a exportArg) (string, error) {
 		return "", err
 	}
 	defer db.Close()
-	cp := *cfg
-	if !a.IncludeSecrets {
-		cp.Apps = make([]config.App, len(cfg.Apps))
-		for i, x := range cfg.Apps {
-			x.Env = nil
-			cp.Apps[i] = x
-		}
-	}
 	settings := map[string]string{}
 	for _, k := range store.KnownSettings() {
 		if v := db.GetSetting(k); v != "" {
 			settings[k] = v
 		}
 	}
-	out, err := config.ExportJSON(&cp, settings)
+	export := config.ExportJSON
+	if a.IncludeSecrets {
+		export = config.ExportJSONWithSecrets
+	}
+	out, err := export(cfg, settings)
 	if err != nil {
 		return "", err
 	}
@@ -908,30 +904,14 @@ func (s *Server) doConfigImport(a importArg) (string, error) {
 	if a.Confirm != "replace" {
 		return "", fmt.Errorf(`confirmación requerida: {"confirm":"replace"}`)
 	}
-	cfg, settings, err := config.ImportJSON([]byte(a.JSON))
-	if err != nil {
-		return "", err
-	}
-	_, db, err := s.load()
+	prev, db, err := s.load()
 	if err != nil {
 		return "", err
 	}
 	defer db.Close()
-	// Los exports saneados no traen Env: conserva el actual por app.
-	prev, err := db.LoadFleet()
+	cfg, settings, err := config.ImportJSONMerged([]byte(a.JSON), prev)
 	if err != nil {
 		return "", err
-	}
-	oldEnv := map[string]map[string]string{}
-	for _, a := range prev.Apps {
-		oldEnv[a.Name] = a.Env
-	}
-	for i := range cfg.Apps {
-		if len(cfg.Apps[i].Env) == 0 {
-			if env, ok := oldEnv[cfg.Apps[i].Name]; ok {
-				cfg.Apps[i].Env = env
-			}
-		}
 	}
 	if err := cfgfile.ReplaceAll(db, cfg, settings); err != nil {
 		return "", err

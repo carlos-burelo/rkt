@@ -275,7 +275,8 @@ func (p *Program) Run() {
 			Exchange: func(code string) (*github.ManifestCredentials, error) {
 				return github.ExchangeManifestCode("", code)
 			},
-			OnManifest: p.onManifest,
+			OnManifest:   p.onManifest,
+			ConsumeState: db.ConsumeSetupState,
 		}))
 		control = mux
 	}
@@ -311,7 +312,11 @@ func (p *Program) Run() {
 		}
 	}()
 	if cfg.Healthz.Enabled {
-		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.restartApp, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal})
+		controlToken, err := logx.EnsureControlToken(p.cfgPath)
+		if err != nil {
+			p.log.Error("token de control no disponible; acciones bloqueadas", "err", err)
+		}
+		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.restartApp, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal, Token: controlToken})
 		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
 			p.sup.Apply(apps, global)
 			if p.cron != nil {
@@ -599,7 +604,7 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 	var depID int64
 	target := p.runtimeApp(*app, cfg)
 	if p.db != nil {
-		depID, _ = p.db.InsertDeployment(app.Name, "local", out.Name(), actor, target.Env)
+		depID, _ = p.db.InsertDeployment(app.Name, "local", out.Name(), actor)
 	}
 	release = false
 	go func() {
@@ -696,7 +701,7 @@ func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, 
 	var depID int64
 	prevRev := deploy.HeadRev(app.Dir)
 	if p.db != nil {
-		depID, _ = p.db.InsertDeployment(app.Name, "", out.Name(), actor, app.Env)
+		depID, _ = p.db.InsertDeployment(app.Name, "", out.Name(), actor)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	if depID > 0 {
@@ -781,10 +786,17 @@ func (p *Program) appToken(app *config.App) (string, error) {
 		}
 		return tok, nil
 	}
+	if file := os.Getenv("RKT_GITHUB_TOKEN_FILE"); file != "" {
+		if b, err := os.ReadFile(file); err == nil {
+			if token := strings.TrimSpace(string(b)); token != "" {
+				return token, nil
+			}
+		}
+	}
 	if token := os.Getenv(app.Deploy.TokenEnv); token != "" {
 		return token, nil
 	}
-	return "", fmt.Errorf("falta token en env %s (variable de máquina para el servicio)", app.Deploy.TokenEnv)
+	return "", fmt.Errorf("falta token en env %s o archivo RKT_GITHUB_TOKEN_FILE (secreto de máquina para el servicio)", app.Deploy.TokenEnv)
 }
 
 // tlsStatus interroga la cache ACME (existe/expira). Sin manager/TLS: off.
@@ -874,7 +886,7 @@ func (p *Program) rollbackApp(name, actor string) error {
 	}
 	var depID int64
 	if p.db != nil {
-		depID, _ = p.db.InsertDeployment(app.Name, "", "", actor, app.Env)
+		depID, _ = p.db.InsertDeployment(app.Name, "", "", actor)
 	}
 	err := deploy.Rollback(*app, &supCtl{sup: p.sup}, p.log)
 	if p.db != nil && depID > 0 {

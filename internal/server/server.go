@@ -46,12 +46,14 @@ func NewHTTP(cfg *config.Config, live *config.Live, challenge http.Handler, back
 		backend.ServeHTTP(w, r)
 	})
 	return &http.Server{
-		Addr:         cfg.ListenHTTP,
-		Handler:      mux,
-		ErrorLog:     errLog,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:     cfg.ListenHTTP,
+		Handler:  mux,
+		ErrorLog: errLog,
+		// Solo cabeceras: ReadTimeout acota el body completo y rompe
+		// uploads lentos. WriteTimeout 0: SSE/vídeo pueden durar más de
+		// 60s; los límites se aplican por ruta en el proxy.
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 }
 
@@ -74,12 +76,11 @@ func NewHTTPS(cfg *config.Config, getCert func(*tls.ClientHelloInfo) (*tls.Certi
 		backend.ServeHTTP(w, r)
 	})
 	return &http.Server{
-		Addr:         cfg.ListenHTTPS,
-		Handler:      mux,
-		ErrorLog:     errLog,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:              cfg.ListenHTTPS,
+		Handler:           mux,
+		ErrorLog:          errLog,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 		TLSConfig: &tls.Config{
 			GetCertificate: getCert,
 			MinVersion:     tls.VersionTLS12,

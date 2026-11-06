@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"os"
@@ -15,6 +16,26 @@ import (
 )
 
 func init() { stableFor = 10 * time.Millisecond }
+
+// TestGitTokenNoVaEnArgv: el token viaja en el entorno del hijo, no en la
+// línea de comandos visible desde la lista de procesos.
+func TestGitTokenNoVaEnArgv(t *testing.T) {
+	cmd := gitCmd(context.Background(), "secreto-super-largo", "clone", "https://github.com/o/r.git", "dst")
+	for _, a := range cmd.Args {
+		if strings.Contains(a, "secreto-super-largo") {
+			t.Fatalf("token en argv: %v", cmd.Args)
+		}
+	}
+	found := false
+	for _, e := range cmd.Env {
+		if strings.HasPrefix(e, "GIT_CONFIG_VALUE_0=AUTHORIZATION: basic ") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("falta GIT_CONFIG_VALUE_0 con la credencial")
+	}
+}
 
 func gitOK(t *testing.T) {
 	t.Helper()

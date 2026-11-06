@@ -26,14 +26,14 @@ func TestDeploymentsRoundtrip(t *testing.T) {
 	}
 	defer db.Close()
 
-	id, err := db.InsertDeployment("web", "", "/tmp/x.log", "tester", map[string]string{"A": "1"})
+	id, err := db.InsertDeployment("web", "", "/tmp/x.log", "tester")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := db.FinishDeployment(id, "ok", "prevrev", "newrev"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.InsertDeployment("web", "", "", "tester", nil); err != nil {
+	if _, err := db.InsertDeployment("web", "", "", "tester"); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.FinishDeployment(id+1, "failed", "", ""); err != nil {
@@ -47,7 +47,7 @@ func TestDeploymentsRoundtrip(t *testing.T) {
 	if all[0].Status != "failed" || all[1].Rev != "newrev" || all[1].Status != "ok" {
 		t.Fatalf("orden/contenido mal: %+v", all)
 	}
-	if all[1].TriggeredBy != "tester" || all[1].EnvSnapshot != `{"A":"1"}` {
+	if all[1].TriggeredBy != "tester" {
 		t.Fatalf("trazabilidad mal: %+v", all[1])
 	}
 	mine, err := db.ListDeployments("web", 1)

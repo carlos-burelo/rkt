@@ -3,6 +3,7 @@
 package health
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -49,13 +50,23 @@ type Deps struct {
 	Rollback func(name, actor string) error
 	Retry    func(id int64, actor string) (string, error)
 	Build    func(name, actor string) (int64, error)
+	// Token protege las acciones de control. /healthz queda abierto para
+	// monitoreo; restart/deploy/rollback/build/retry exigen el token que
+	// comparte el CLI en logs/control.token.
+	Token string
 }
 
 // NewHandler responde GET /healthz, POST /restart/<name>,
 // POST /deploy/<name>, /rollback/<name>, /retry/<id> y /build/<name>;
-// resto 404/405. Solo para listener loopback: sin auth.
+// resto 404/405. Las acciones exigen token de control.
 func NewHandler(d Deps) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isControlAction(r.URL.Path) && !controlOK(r, d.Token) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "token de control requerido"})
+			return
+		}
 		if strings.HasPrefix(r.URL.Path, "/restart/") {
 			restart(w, r, d.Restart)
 			return
@@ -106,6 +117,27 @@ func NewHandler(d Deps) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(st)
 	})
+}
+
+func isControlAction(path string) bool {
+	for _, p := range []string{"/restart/", "/build/", "/deploy/", "/rollback/", "/retry/"} {
+		if strings.HasPrefix(path, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// controlOK compara Bearer o X-Rkt-Control en tiempo constante.
+func controlOK(r *http.Request, token string) bool {
+	if token == "" {
+		return false
+	}
+	got := r.Header.Get("X-Rkt-Control")
+	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+		got = strings.TrimPrefix(h, "Bearer ")
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(token)) == 1
 }
 
 // BackendOK dial TCP corto a host:puerto (único hogar del alcance).

@@ -3,6 +3,8 @@
 package logx
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -74,6 +76,35 @@ func DBPath(configPath string) string {
 // AppKeyPath ruta del PEM de la GitHub App (lo escribe el setup).
 func AppKeyPath(configPath string) string {
 	return filepath.Join(DirFor(configPath), "github-app.pem")
+}
+
+// ControlTokenPath ruta del token de control loopback (acciones admin).
+func ControlTokenPath(configPath string) string {
+	return filepath.Join(DirFor(configPath), "control.token")
+}
+
+// EnsureControlToken lee o crea el token de control con ACL del directorio
+// de logs. Nunca se sirve por API: CLI y servicio comparten el archivo.
+func EnsureControlToken(configPath string) (string, error) {
+	path := ControlTokenPath(configPath)
+	if b, err := os.ReadFile(path); err == nil {
+		if t := strings.TrimSpace(string(b)); len(t) >= 32 {
+			return t, nil
+		}
+	}
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", fmt.Errorf("token de control: %w", err)
+	}
+	tok := hex.EncodeToString(raw)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, []byte(tok+"\n"), 0o600); err != nil {
+		return "", fmt.Errorf("token de control: %w", err)
+	}
+	_ = os.Chmod(path, 0o600)
+	return tok, nil
 }
 
 // Tail últimas n líneas de un archivo. n<1 = 50. Canónica; CLI y MCP

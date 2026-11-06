@@ -163,11 +163,11 @@ func TestRuntimeExternalRoundtrip(t *testing.T) {
 
 func TestPruneYDeployments(t *testing.T) {
 	db := newDB(t)
-	oldID, err := db.InsertDeployment("w", "rev1", `C:\logs\a.log`, "yo", nil)
+	oldID, err := db.InsertDeployment("w", "rev1", `C:\logs\a.log`, "yo")
 	if err != nil {
 		t.Fatal(err)
 	}
-	newID, err := db.InsertDeployment("w", "rev2", "", "yo", map[string]string{"A": "b"})
+	newID, err := db.InsertDeployment("w", "rev2", "", "yo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ func TestPruneYDeployments(t *testing.T) {
 	if _, _, ok := db.DeploymentLogPath(99999); ok {
 		t.Fatal("id inexistente no debe devolver ok")
 	}
-	withLog, _ := db.InsertDeployment("w", "rev3", `C:\logs\b.log`, "yo", map[string]string{})
+	withLog, _ := db.InsertDeployment("w", "rev3", `C:\logs\b.log`, "yo")
 	app, lp, ok = db.DeploymentLogPath(withLog)
 	if !ok || app != "w" || !strings.HasSuffix(lp, "b.log") {
 		t.Fatalf("log path = %q %q %v", app, lp, ok)
@@ -386,7 +386,7 @@ func TestOpenCloseYErrores(t *testing.T) {
 	if _, err := db.PruneEvents(time.Now()); err == nil {
 		t.Fatal("PruneEvents cerrada debe fallar")
 	}
-	if _, err := db.InsertDeployment("a", "b", "", "", nil); err == nil {
+	if _, err := db.InsertDeployment("a", "b", "", ""); err == nil {
 		t.Fatal("InsertDeployment cerrada debe fallar")
 	}
 	if err := db.FinishDeployment(1, "ok", "", ""); err == nil {

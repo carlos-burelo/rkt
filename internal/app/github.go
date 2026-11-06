@@ -170,8 +170,16 @@ func (p *Program) githubStatus() (map[string]any, error) {
 		label = strings.ReplaceAll(strings.Split(domain, ".")[0], "_", "-")
 	}
 	name := "rkt-" + label + "-" + strconv.FormatInt(time.Now().UnixNano()%10000, 10)
-	out["setup_url"] = origin + "/_rkt/new-app?name=" + url.QueryEscape(name) +
+	setupURL := origin + "/_rkt/new-app?name=" + url.QueryEscape(name) +
 		"&domain=" + url.QueryEscape(domain) + "&local=" + boolStr(local) + "&tls=" + boolStr(tls)
+	if p.db != nil {
+		if state, err := p.db.NewSetupState(10 * time.Minute); err == nil {
+			setupURL += "&state=" + url.QueryEscape(state)
+		} else {
+			p.log.Warn("setup state no generado", "err", err)
+		}
+	}
+	out["setup_url"] = setupURL
 	out["local"] = local
 	cfg := p.live.Get()
 	if cfg.Github == nil || p.gh() == nil || p.db.GetSetting("github_app_id") == "" {

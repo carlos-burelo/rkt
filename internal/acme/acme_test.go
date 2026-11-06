@@ -21,6 +21,25 @@ func writeTemp(t *testing.T, content string) string {
 	return f.Name()
 }
 
+func TestLimitPolicy(t *testing.T) {
+	next := func(context.Context, string) error { return nil }
+	p := limitPolicy(1, next)
+	ctx := context.Background()
+	if err := p(ctx, "a.test"); err != nil {
+		t.Fatalf("primera emisión: %v", err)
+	}
+	// El mismo host ya visto no consume cupo (reintento de emisión).
+	if err := p(ctx, "a.test"); err != nil {
+		t.Fatalf("host ya visto: %v", err)
+	}
+	if err := p(ctx, "b.test"); err == nil {
+		t.Fatal("segunda emisión en la ventana debe fallar")
+	}
+	if err := limitPolicy(-1, next)(ctx, "c.test"); err != nil {
+		t.Fatalf("límite desactivado: %v", err)
+	}
+}
+
 func TestHostPolicy(t *testing.T) {
 	cfg := config.Default()
 	cfg.Routes = []config.Route{

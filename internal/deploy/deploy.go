@@ -155,7 +155,11 @@ func WaitAppHTTP(app config.App, timeout time.Duration) error {
 	if port == "" {
 		return nil
 	}
-	url := "http://127.0.0.1:" + port + "/"
+	path := app.HealthPath
+	if path == "" {
+		path = "/"
+	}
+	url := "http://127.0.0.1:" + port + path
 	client := &http.Client{Timeout: 2 * time.Second}
 	deadline := time.Now().Add(timeout)
 	var last error
@@ -262,30 +266,37 @@ func isSHA(s string) bool {
 	return true
 }
 
-// gitArgs clona con credenciales solo en memoria (-c, sin persistir).
-func gitArgs(token string, sub ...string) []string {
-	args := []string{"-c", "credential.helper="}
+// gitCmd construye git con credenciales en el entorno del hijo, nunca en
+// argv: la lista de procesos no debe mostrar el token.
+func gitCmd(ctx context.Context, token string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	env := append([]string{}, os.Environ()...)
+	env = append(env, "GIT_TERMINAL_PROMPT=0")
 	if token != "" {
 		cred := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
-		args = append(args, "-c", "http.extraHeader=AUTHORIZATION: basic "+cred)
+		env = append(env,
+			"GIT_CONFIG_COUNT=1",
+			"GIT_CONFIG_KEY_0=http.extraHeader",
+			"GIT_CONFIG_VALUE_0=AUTHORIZATION: basic "+cred,
+		)
 	}
-	return append(args, sub...)
+	cmd.Env = env
+	return cmd
 }
 
 func gitClone(ctx context.Context, d *config.Deploy, token, staging string, log *slog.Logger) error {
 	log.Info("clonando", "repo", d.Repo, "ref", d.Ref)
 	if isSHA(d.Ref) {
-		if out, err := exec.CommandContext(ctx, "git", gitArgs(token, "clone", d.Repo, staging)...).CombinedOutput(); err != nil {
+		if out, err := gitCmd(ctx, token, "clone", d.Repo, staging).CombinedOutput(); err != nil {
 			return fmt.Errorf("clone: %v: %s", err, OneLine(out))
 		}
-		if out, err := exec.CommandContext(ctx, "git", gitArgs(token, "-C", staging, "checkout", d.Ref)...).CombinedOutput(); err != nil {
+		if out, err := gitCmd(ctx, token, "-C", staging, "checkout", d.Ref).CombinedOutput(); err != nil {
 			_ = os.RemoveAll(staging)
 			return fmt.Errorf("checkout %s: %v: %s", d.Ref, err, OneLine(out))
 		}
 		return nil
 	}
-	args := gitArgs(token, "clone", "--depth", "1", "--branch", d.Ref, d.Repo, staging)
-	if out, err := exec.CommandContext(ctx, "git", args...).CombinedOutput(); err != nil {
+	if out, err := gitCmd(ctx, token, "clone", "--depth", "1", "--branch", d.Ref, d.Repo, staging).CombinedOutput(); err != nil {
 		return fmt.Errorf("clone: %v: %s", err, OneLine(out))
 	}
 	return nil

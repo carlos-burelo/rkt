@@ -42,10 +42,16 @@ $bak = "$exe.bak"
 $verFile = Join-Path $InstallDir "VERSION.txt"
 New-Item -ItemType Directory -Force $InstallDir | Out-Null
 
-# 0b. token deploy como env de máquina (lo ve el servicio SYSTEM)
+# 0b. token deploy en archivo con ACL, nunca en env de máquina (legible
+# por usuarios locales desde el registro). El servicio lee la ruta.
 if ($GithubToken -ne "") {
-  [Environment]::SetEnvironmentVariable("GITHUB_TOKEN", $GithubToken, "Machine")
-  Write-Host "GITHUB_TOKEN guardado (máquina)."
+  $secretDir = Join-Path $InstallDir "secrets"
+  New-Item -ItemType Directory -Force $secretDir | Out-Null
+  $tokenFile = Join-Path $secretDir "github.token"
+  Set-Content -Path $tokenFile -Value $GithubToken -NoNewline -Encoding ascii
+  icacls $secretDir /inheritance:r /grant:r "SYSTEM:(F)" "Administradores:(F)" | Out-Null
+  [Environment]::SetEnvironmentVariable("RKT_GITHUB_TOKEN_FILE", $tokenFile, "Machine")
+  Write-Host "GITHUB_TOKEN guardado en $tokenFile (ACL SYSTEM+Admins)."
 }
 
 # 0. rollback a versión anterior

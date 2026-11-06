@@ -63,9 +63,11 @@ func TestOKAndDegraded(t *testing.T) {
 
 func TestRestartEndpoint(t *testing.T) {
 	var restarted string
+	const token = "token-de-control-de-prueba"
 	h := NewHandler(Deps{
 		Live:    liveWithRoutes(t),
 		Version: "x",
+		Token:   token,
 		Restart: func(name string) bool {
 			if name != "web" {
 				return false
@@ -74,30 +76,40 @@ func TestRestartEndpoint(t *testing.T) {
 			return true
 		},
 	})
+	post := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req.Header.Set("X-Rkt-Control", token)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	// sin token -> 401
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/restart/web", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("sin token: code=%d", rec.Code)
+	}
 
 	// POST ok
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/restart/web", nil)
-	h.ServeHTTP(rec, req)
+	rec = post("/restart/web")
 	if rec.Code != http.StatusOK || restarted != "web" {
 		t.Fatalf("POST web: code=%d restarted=%q", rec.Code, restarted)
 	}
 
 	// app inexistente -> 404
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/restart/otra", nil))
+	rec = post("/restart/otra")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("POST otra: code=%d", rec.Code)
 	}
 
-	// GET -> 405, traversal -> 404
+	// GET sin token -> 401; traversal con token -> 404
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/restart/web", nil))
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("GET: code=%d", rec.Code)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("GET sin token: code=%d", rec.Code)
 	}
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/restart/a/b", nil))
+	rec = post("/restart/a/b")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("traversal: code=%d", rec.Code)
 	}
@@ -112,9 +124,11 @@ func TestNotFound(t *testing.T) {
 }
 
 func TestRetryEndpoint(t *testing.T) {
+	const token = "token-de-control-de-prueba"
 	h := NewHandler(Deps{
 		Live:    liveWithRoutes(t),
 		Version: "x",
+		Token:   token,
 		Retry: func(id int64, actor string) (string, error) {
 			if id != 7 || actor != "local" {
 				return "", fmt.Errorf("no")
@@ -122,13 +136,18 @@ func TestRetryEndpoint(t *testing.T) {
 			return "rev7", nil
 		},
 	})
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/retry/7", nil))
+	post := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	rec := post("/retry/7")
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "rev7") {
 		t.Fatalf("POST retry: code=%d body=%s", rec.Code, rec.Body.String())
 	}
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/retry/8", nil))
+	rec = post("/retry/8")
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("retry malo: code=%d", rec.Code)
 	}
