@@ -52,7 +52,7 @@ func App(cfg *config.Config, a config.App) map[string]any {
 	if a.Deploy != nil {
 		deploy = map[string]any{
 			"repo": a.Deploy.Repo, "ref": a.Deploy.Ref,
-			"build": a.Deploy.Build, "auto": a.Deploy.Auto,
+			"build": a.Deploy.Build, "release": a.Deploy.Release, "auto": a.Deploy.Auto,
 		}
 	}
 	domains := Domains(cfg, a)
@@ -69,7 +69,8 @@ func App(cfg *config.Config, a config.App) map[string]any {
 	return map[string]any{
 		"name": a.Name, "runtime": a.Runtime, "external": a.External(),
 		"command": a.Command, "args": a.Args,
-		"dir": a.Dir, "static": static, "env_file": a.EnvFile,
+		"dir": a.Dir, "static": static, "persist": a.Persist, "env_file": a.EnvFile,
+		"basic_auth": a.BasicAuth != "", "allow_ips": a.AllowIPs, "maintenance": a.Maintenance,
 		"restart_delay": a.RestartDelay, "min_uptime": a.MinUptime,
 		"memory_mb": a.MemoryMB, "port": Port(a),
 		"disabled": a.Disabled, "health_path": a.HealthPath,

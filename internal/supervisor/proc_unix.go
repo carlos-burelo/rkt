@@ -12,3 +12,8 @@ import (
 func configureProc(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
+
+// requestStop pide cierre ordenado al grupo (SIGTERM).
+func requestStop(pid int) error {
+	return syscall.Kill(-pid, syscall.SIGTERM)
+}

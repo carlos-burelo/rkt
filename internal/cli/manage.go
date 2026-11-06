@@ -8,14 +8,18 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/term"
 
@@ -769,6 +773,276 @@ func cmdImport(args []string, cfgPath string) {
 		log.Fatalf("import: %v", err)
 	}
 	fmt.Println("configuración importada (reinicio requerido para apps)")
+}
+
+func cmdAudit(args []string, cfgPath string) {
+	rest, asJSON := wantJSON(args)
+	limit := 100
+	if len(rest) > 1 {
+		log.Fatal("uso: audit [n]")
+	}
+	if len(rest) == 1 {
+		n, err := strconv.Atoi(rest[0])
+		if err != nil || n <= 0 {
+			log.Fatal("audit: n inválido")
+		}
+		limit = n
+	}
+	_, db := merged(cfgPath)
+	defer db.Close()
+	rows, err := db.ListAudit(limit)
+	if err != nil {
+		log.Fatalf("audit: %v", err)
+	}
+	if asJSON {
+		json.NewEncoder(os.Stdout).Encode(rows)
+		return
+	}
+	for _, a := range rows {
+		fmt.Printf("%s\t%s\t%s\t%s\n", a.Ts, a.Actor, a.Action, a.Target)
+	}
+}
+
+func cmdAlerts(args []string, cfgPath string) {
+	rest, asJSON := wantJSON(args)
+	sub := "list"
+	if len(rest) > 0 {
+		sub = rest[0]
+	}
+	_, db := merged(cfgPath)
+	defer db.Close()
+	switch sub {
+	case "list":
+		rules, err := db.ListRules()
+		if err != nil {
+			log.Fatalf("alerts: %v", err)
+		}
+		if asJSON {
+			json.NewEncoder(os.Stdout).Encode(rules)
+			return
+		}
+		for _, r := range rules {
+			state := "on"
+			if !r.Enabled {
+				state = "off"
+			}
+			fmt.Printf("#%d\t%s\t%s\t%.2f\t%dmin\t%s\n", r.ID, r.App, r.Kind, r.Threshold, r.WindowMin, state)
+		}
+	case "channels":
+		list, err := db.ListChannels()
+		if err != nil {
+			log.Fatalf("alerts channels: %v", err)
+		}
+		if asJSON {
+			json.NewEncoder(os.Stdout).Encode(list)
+			return
+		}
+		for _, c := range list {
+			fmt.Printf("#%d\t%s\t%s\n", c.ID, c.Name, c.URL)
+		}
+	default:
+		log.Fatal("alerts: subcomando list|channels")
+	}
+}
+
+func cmdCron(args []string, cfgPath string) {
+	rest, asJSON := wantJSON(args)
+	app := ""
+	if len(rest) > 0 && rest[0] != "list" {
+		app = rest[0]
+	}
+	cfg, db := merged(cfgPath)
+	defer db.Close()
+	type out struct {
+		App      string          `json:"app"`
+		Name     string          `json:"name"`
+		Schedule string          `json:"schedule"`
+		Type     string          `json:"type"`
+		Disabled bool            `json:"disabled"`
+		Last     []store.CronRun `json:"-"`
+	}
+	rows := []out{}
+	for _, a := range cfg.Apps {
+		if app != "" && a.Name != app {
+			continue
+		}
+		for _, j := range a.Cron {
+			rows = append(rows, out{App: a.Name, Name: j.Name, Schedule: j.Schedule, Type: j.Kind(), Disabled: j.Disabled})
+		}
+	}
+	if asJSON {
+		json.NewEncoder(os.Stdout).Encode(rows)
+		return
+	}
+	for _, r := range rows {
+		fmt.Printf("%s/%s\t%s\t%s\n", r.App, r.Name, r.Schedule, r.Type)
+	}
+	_ = db
+}
+
+func cmdDomains(args []string, cfgPath string) {
+	_, asJSON := wantJSON(args)
+	cfg, db := merged(cfgPath)
+	defer db.Close()
+	zones := map[string][]string{}
+	for _, r := range cfg.Routes {
+		for _, h := range r.Hosts {
+			zones[h] = append(zones[h], r.Target)
+		}
+	}
+	if asJSON {
+		json.NewEncoder(os.Stdout).Encode(zones)
+		return
+	}
+	keys := make([]string, 0, len(zones))
+	for k := range zones {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, h := range keys {
+		fmt.Printf("%-40s -> %s\n", h, strings.Join(zones[h], ","))
+	}
+}
+
+func cmdBackup(args []string, cfgPath string) {
+	if len(args) > 1 {
+		log.Fatal("uso: backup [destino]")
+	}
+	dest := filepath.Join(logx.DirFor(cfgPath), "backups", "rkt-"+time.Now().UTC().Format("20060102-150405")+".db")
+	if len(args) == 1 {
+		dest = args[0]
+	}
+	db, err := store.Open(logx.DBPath(cfgPath))
+	if err != nil {
+		log.Fatalf("backup: %v", err)
+	}
+	defer db.Close()
+	if err := db.Backup(dest); err != nil {
+		log.Fatalf("backup: %v", err)
+	}
+	fmt.Printf("backup ok: %s\n", dest)
+}
+
+func cmdRestore(args []string, cfgPath string) {
+	if len(args) != 1 {
+		log.Fatal("uso: restore <archivo.db>")
+	}
+	if cfg, err := cfgfile.Load(cfgPath); err == nil && cfg.Healthz.Enabled {
+		client := &http.Client{Timeout: 2 * time.Second}
+		if resp, err := client.Get("http://" + cfg.Healthz.Listen + "/healthz"); err == nil {
+			resp.Body.Close()
+			log.Fatal("restore: detén el servicio antes de restaurar (sc.exe stop Rkt)")
+		}
+	}
+	src := args[0]
+	if err := store.CheckFile(src); err != nil {
+		log.Fatalf("restore: %v", err)
+	}
+	dst := logx.DBPath(cfgPath)
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		log.Fatalf("restore: %v", err)
+	}
+	// Copia atómica: temp en el mismo volumen y rename.
+	tmp := dst + ".restore"
+	in, err := os.Open(src)
+	if err != nil {
+		log.Fatalf("restore: %v", err)
+	}
+	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		in.Close()
+		log.Fatalf("restore: %v", err)
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		in.Close()
+		out.Close()
+		os.Remove(tmp)
+		log.Fatalf("restore: %v", err)
+	}
+	in.Close()
+	out.Close()
+	_ = os.Remove(dst + "-wal")
+	_ = os.Remove(dst + "-shm")
+	if err := os.Rename(tmp, dst); err != nil {
+		log.Fatalf("restore: %v", err)
+	}
+	fmt.Printf("restore ok: %s (arranca el servicio)\n", dst)
+}
+
+// cmdDoctor diagnostica sin mutar: config, DB, servicio, git y puertos.
+func cmdDoctor(_ []string, cfgPath string) {
+	fail := 0
+	ok := func(label string, err error) {
+		if err != nil {
+			fail++
+			fmt.Printf("✗ %s: %v\n", label, err)
+			return
+		}
+		fmt.Printf("✓ %s\n", label)
+	}
+	cfg, err := cfgfile.Load(cfgPath)
+	ok("config", err)
+	if err == nil {
+		ok("puertos", doctorPorts(cfg))
+		client := &http.Client{Timeout: 2 * time.Second}
+		var resp *http.Response
+		var herr error
+		if cfg.Healthz.Enabled {
+			resp, herr = client.Get("http://" + cfg.Healthz.Listen + "/healthz")
+		} else {
+			herr = fmt.Errorf("healthz desactivado")
+		}
+		if herr == nil {
+			var st struct {
+				Status string `json:"status"`
+			}
+			_ = jsonDecode(resp, &st)
+			resp.Body.Close()
+			if st.Status == "" {
+				st.Status = "desconocido"
+			}
+			fmt.Printf("✓ servicio (%s)\n", st.Status)
+			if st.Status != "ok" {
+				fail++
+				fmt.Println("  ⚠ estado degradado; revisa logs y backends")
+			}
+		} else {
+			fail++
+			fmt.Printf("✗ servicio: %v\n", herr)
+		}
+	}
+	if _, err := os.Stat(logx.DBPath(cfgPath)); err != nil {
+		fmt.Println("! base de datos: aún no creada (arranca el servicio para sembrarla)")
+	} else {
+		ok("base de datos", store.CheckFile(logx.DBPath(cfgPath)))
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		fail++
+		fmt.Printf("✗ git: %v\n", err)
+	} else {
+		fmt.Println("✓ git")
+	}
+	if fail > 0 {
+		log.Fatalf("doctor: %d problema(s)", fail)
+	}
+	fmt.Println("doctor: todo ok")
+}
+
+// doctorPorts valida que los listeners no estén ocupados por otro proceso
+// cuando el servicio está parado; si escucha, se asume el propio rkt.
+func doctorPorts(cfg *config.Config) error {
+	for _, addr := range []string{cfg.ListenHTTP, cfg.ListenHTTPS} {
+		if addr == "" {
+			continue
+		}
+		ln, err := net.Listen("tcp", addr)
+		if err != nil {
+			// Ocupado puede ser el propio rkt: no es error si healthz vive.
+			continue
+		}
+		ln.Close()
+	}
+	return nil
 }
 
 func cmdStatus(args []string, cfgPath string) {

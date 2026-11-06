@@ -11,10 +11,12 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/net/websocket"
 
 	"rkt-proxy/internal/config"
@@ -253,6 +255,37 @@ func TestForwardedProtoYHost(t *testing.T) {
 	}
 	if gotHost == "public.test" {
 		t.Fatal("Host al backend no debe ser el público")
+	}
+}
+
+func TestGuardApp(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	hash, _ := bcrypt.GenerateFromPassword([]byte("clave-larga-1"), bcrypt.MinCost)
+	cfg := &config.Config{Apps: []config.App{{
+		Name: "a", Env: map[string]string{"PORT": "3000"},
+		AllowIPs: []string{"10.0.0.0/8"}, BasicAuth: "u:" + string(hash),
+	}}}
+	target, _ := url.Parse("http://127.0.0.1:3000")
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "1.2.3.4:123"
+	rec := httptest.NewRecorder()
+	if guardApp(cfg, target, rec, req, log) || rec.Code != http.StatusForbidden {
+		t.Fatalf("IP fuera de allowlist: code=%d", rec.Code)
+	}
+	req.RemoteAddr = "10.1.2.3:123"
+	rec = httptest.NewRecorder()
+	if guardApp(cfg, target, rec, req, log) || rec.Code != http.StatusUnauthorized {
+		t.Fatalf("sin basic auth: code=%d", rec.Code)
+	}
+	req.SetBasicAuth("u", "clave-larga-1")
+	rec = httptest.NewRecorder()
+	if !guardApp(cfg, target, rec, req, log) {
+		t.Fatal("basic auth válida debe pasar")
+	}
+	cfg.Apps[0].Maintenance = true
+	rec = httptest.NewRecorder()
+	if guardApp(cfg, target, rec, req, log) || rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("mantenimiento: code=%d", rec.Code)
 	}
 }
 

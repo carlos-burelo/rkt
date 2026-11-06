@@ -84,7 +84,7 @@ type alertDelArg struct {
 type alertUpdateArg struct {
 	ID        int64    `json:"id" jsonschema:"id de la regla"`
 	App       string   `json:"app,omitempty" jsonschema:"app o *"`
-	Kind      string   `json:"kind,omitempty" jsonschema:"failed|error_rate|latency_p95|memory_mb|down_min|disk_pct"`
+	Kind      string   `json:"kind,omitempty" jsonschema:"failed|error_rate|latency_p95|memory_mb|down_min|disk_pct|cert_days|deploy_failed"`
 	Threshold *float64 `json:"threshold,omitempty" jsonschema:"umbral"`
 	WindowMin *int     `json:"window_min,omitempty" jsonschema:"ventana minutos"`
 	Enabled   *bool    `json:"enabled,omitempty" jsonschema:"activar/desactivar"`

@@ -22,8 +22,11 @@ const (
 	RoleViewer   = "viewer"
 )
 
-// SessionTTL vida de sesión login (renovable con re-login).
+// SessionTTL vida absoluta de sesión login (renovable con re-login).
 const SessionTTL = 30 * 24 * time.Hour
+
+// SessionIdle cierra una sesión sin actividad aunque no haya expirado.
+const SessionIdle = 7 * 24 * time.Hour
 
 // User fila pública (sin hash).
 type User struct {
@@ -303,26 +306,36 @@ func (d *DB) NewSession(user string, ttl time.Duration) (string, error) {
 	sum := sha256.Sum256([]byte(token))
 	now := time.Now().UTC()
 	_, err := d.sql.Exec(
-		`INSERT INTO sessions(token_hash, user, created_at, expires_at) VALUES(?,?,?,?)`,
+		`INSERT INTO sessions(token_hash, user, created_at, expires_at, last_seen) VALUES(?,?,?,?,?)`,
 		hex.EncodeToString(sum[:]), user,
-		now.Format(time.RFC3339), now.Add(ttl).Format(time.RFC3339))
+		now.Format(time.RFC3339), now.Add(ttl).Format(time.RFC3339), now.Format(time.RFC3339))
 	if err != nil {
 		return "", err
 	}
 	return token, nil
 }
 
-// SessionUser valida bearer -> (usuario, rol). Expiradas se purgan.
+// SessionUser valida bearer -> (usuario, rol). Expiradas o inactivas se
+// purgan; la actividad renueva el reloj de idle sin tocar el TTL absoluto.
 func (d *DB) SessionUser(token string) (string, string, bool) {
 	sum := sha256.Sum256([]byte(token))
 	want := hex.EncodeToString(sum[:])
-	var user, exp string
+	var user, exp, created, seen string
 	if err := d.sql.QueryRow(
-		`SELECT user, expires_at FROM sessions WHERE token_hash=?`, want).
-		Scan(&user, &exp); err != nil {
+		`SELECT user, expires_at, created_at, last_seen FROM sessions WHERE token_hash=?`, want).
+		Scan(&user, &exp, &created, &seen); err != nil {
 		return "", "", false
 	}
-	if t, err := time.Parse(time.RFC3339, exp); err != nil || time.Now().UTC().After(t) {
+	now := time.Now().UTC()
+	if t, err := time.Parse(time.RFC3339, exp); err != nil || now.After(t) {
+		_, _ = d.sql.Exec(`DELETE FROM sessions WHERE token_hash=?`, want)
+		return "", "", false
+	}
+	if seen == "" {
+		seen = created
+	}
+	last, err := time.Parse(time.RFC3339, seen)
+	if err != nil || now.Sub(last) > SessionIdle {
 		_, _ = d.sql.Exec(`DELETE FROM sessions WHERE token_hash=?`, want)
 		return "", "", false
 	}
@@ -331,7 +344,20 @@ func (d *DB) SessionUser(token string) (string, string, bool) {
 	if err := d.sql.QueryRow(`SELECT role, disabled FROM users WHERE name=?`, user).Scan(&role, &disabled); err != nil || disabled {
 		return "", "", false
 	}
+	_, _ = d.sql.Exec(`UPDATE sessions SET last_seen=? WHERE token_hash=?`, now.Format(time.RFC3339), want)
 	return user, role, true
+}
+
+// PurgeSessions borra expiradas y sin actividad. Devuelve cuántas quitó.
+func (d *DB) PurgeSessions() (int64, error) {
+	now := time.Now().UTC()
+	res, err := d.sql.Exec(
+		`DELETE FROM sessions WHERE expires_at<=? OR (CASE WHEN last_seen='' THEN created_at ELSE last_seen END)<=?`,
+		now.Format(time.RFC3339), now.Add(-SessionIdle).Format(time.RFC3339))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 // TokenHash id público de una sesión (hash sha256 del bearer).

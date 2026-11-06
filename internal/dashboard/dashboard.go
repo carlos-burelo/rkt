@@ -44,6 +44,14 @@ func NewHandler(fsys fs.FS) http.Handler {
 		http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(data))
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("Content-Security-Policy",
+			"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "+
+				"script-src 'self'; connect-src 'self'; font-src 'self' data:; "+
+				"frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		path := strings.TrimPrefix(r.URL.Path, "/")
 		if path == "" {
 			serveIndex(w, r)

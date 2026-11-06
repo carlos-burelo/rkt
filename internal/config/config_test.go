@@ -441,3 +441,29 @@ func TestRouteResolveProtocolos(t *testing.T) {
 		}
 	}
 }
+
+func TestValidaPersistProteccionYCerts(t *testing.T) {
+	base := func() *App {
+		return &App{Name: "a", Command: "x", RestartDelay: "5s", MinUptime: "10s"}
+	}
+	a := base()
+	a.Persist = []string{"data", "../fuera"}
+	if err := a.ValidateApp(0); err == nil {
+		t.Fatal("persist traversal debe fallar")
+	}
+	a = base()
+	a.BasicAuth = "u:plain"
+	if err := a.ValidateApp(0); err == nil {
+		t.Fatal("basic_auth sin bcrypt debe fallar")
+	}
+	a = base()
+	a.AllowIPs = []string{"nope"}
+	if err := a.ValidateApp(0); err == nil {
+		t.Fatal("allow_ips inválido debe fallar")
+	}
+	cfg := Default()
+	cfg.TLSCerts = []TLSCert{{Hosts: []string{"a.test"}, CertFile: "no", KeyFile: "no"}}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("tls_certs inexistente debe fallar")
+	}
+}

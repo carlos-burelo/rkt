@@ -18,6 +18,7 @@ import (
 	"rkt-proxy/internal/dnscheck"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
+	"rkt-proxy/internal/netutil"
 	"rkt-proxy/internal/servermetrics"
 	"rkt-proxy/internal/store"
 )
@@ -165,6 +166,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("/api/v1/auth/me", d.handleMe)
 	mux.HandleFunc("/api/v1/users", d.handleUsers)
 	mux.HandleFunc("/api/v1/users/", d.handleUser)
+	mux.HandleFunc("/api/v1/tokens", d.handleTokens)
+	mux.HandleFunc("/api/v1/tokens/", d.handleToken)
 	mux.HandleFunc("/api/v1/audit", d.handleAudit)
 
 	mux.HandleFunc("/api/v1/status", d.handleStatus)
@@ -249,7 +252,8 @@ func NewHandler(d Deps) http.Handler {
 	// todo autenticado salvo login/status/setup: envuelve mux (login y
 	// setup se validan aparte por ruta para no romper el bootstrap
 	// sin usuarios).
-	authed := RequireAuth(d.DB, mux)
+	audited := auditMutations(d, mux)
+	authed := RequireAuth(d.DB, audited)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/auth/login", "/api/v1/auth/status", "/api/v1/auth/setup":
@@ -257,6 +261,20 @@ func NewHandler(d Deps) http.Handler {
 			return
 		}
 		authed.ServeHTTP(w, r)
+	})
+}
+
+// auditMutations registra toda mutación autenticada sin duplicar lógica en
+// cada handler. El actor ya está en contexto (RequireAuth envuelve esto).
+func auditMutations(d Deps, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			return
+		}
+		actor, _ := UserOf(r)
+		_ = d.DB.AddAudit(actor, r.Method+" "+r.URL.Path, r.URL.Query().Get("host"), netutil.ClientIP(r))
 	})
 }
 

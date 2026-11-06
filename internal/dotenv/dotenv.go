@@ -92,6 +92,44 @@ func EnvironList(over map[string]string) []string {
 	return out
 }
 
+// inheritedOS variables del sistema que sí pasan a apps/builds. El resto
+// (tokens, credenciales cloud, rutas de secretos) NO se hereda: un repo
+// malicioso o una app no debe leer el entorno del servicio SYSTEM.
+var inheritedOS = map[string]bool{
+	"PATH": true, "PATHEXT": true, "COMSPEC": true, "SYSTEMROOT": true,
+	"WINDIR": true, "SYSTEMDRIVE": true, "TEMP": true, "TMP": true,
+	"TMPDIR": true, "HOME": true, "USERPROFILE": true, "APPDATA": true,
+	"LOCALAPPDATA": true, "PROGRAMDATA": true, "PROGRAMFILES": true,
+	"PROGRAMFILES(X86)": true, "OS": true, "NUMBER_OF_PROCESSORS": true,
+	"PROCESSOR_ARCHITECTURE": true, "LANG": true, "LC_ALL": true, "TZ": true,
+	"SSL_CERT_FILE": true, "SSL_CERT_DIR": true,
+	"HTTP_PROXY": true, "HTTPS_PROXY": true, "NO_PROXY": true,
+	"http_proxy": true, "https_proxy": true, "no_proxy": true,
+	"GOROOT": true, "GOPATH": true, "GOMODCACHE": true, "GOCACHE": true,
+	"CARGO_HOME": true, "RUSTUP_HOME": true, "JAVA_HOME": true,
+	"DOTNET_ROOT": true, "PNPM_HOME": true, "NPM_CONFIG_PREFIX": true,
+	"PYTHONPATH": true, "VIRTUAL_ENV": true,
+}
+
+// EnvironListApp entorno saneado para procesos de app/build/cron:
+// allowlist del OS + variables propias. Nunca hereda secretos de máquina.
+func EnvironListApp(over map[string]string) []string {
+	m := map[string]string{}
+	for k, v := range EnvironMap() {
+		if inheritedOS[strings.ToUpper(k)] {
+			m[k] = v
+		}
+	}
+	for k, v := range over {
+		m[k] = v
+	}
+	out := make([]string, 0, len(m))
+	for k, v := range m {
+		out = append(out, k+"="+v)
+	}
+	return out
+}
+
 // Expand resuelve ${VAR} y $VAR en cada valor contra scope.
 // scope previo = OS ∪ file; inline se aplica ordenado (determinista):
 // cada clave ve OS+file+inline-anteriores. $ suelto se deja literal.

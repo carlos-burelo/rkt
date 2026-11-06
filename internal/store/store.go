@@ -179,6 +179,25 @@ var migrations = []string{
 		expires_at TEXT NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_setup_states_exp ON setup_states(expires_at);`,
+	// v17: idle timeout de sesiones y tokens de API con alcance.
+	`ALTER TABLE sessions ADD COLUMN last_seen TEXT NOT NULL DEFAULT '';
+	CREATE TABLE IF NOT EXISTS api_tokens (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL,
+		token_hash TEXT NOT NULL UNIQUE,
+		role TEXT NOT NULL DEFAULT 'viewer',
+		created_at TEXT NOT NULL DEFAULT '',
+		expires_at TEXT NOT NULL DEFAULT '',
+		last_used TEXT NOT NULL DEFAULT ''
+	);`,
+	// v18: rutas persistentes por app (sobreviven al swap de deploy).
+	`ALTER TABLE apps ADD COLUMN persist TEXT NOT NULL DEFAULT '[]';`,
+	// v19: pasos de release/migración del deploy.
+	`ALTER TABLE apps ADD COLUMN deploy_release TEXT NOT NULL DEFAULT '[]';`,
+	// v20: protección de apps en el edge y modo mantenimiento.
+	`ALTER TABLE apps ADD COLUMN basic_auth TEXT NOT NULL DEFAULT '';
+	ALTER TABLE apps ADD COLUMN allow_ips TEXT NOT NULL DEFAULT '[]';
+	ALTER TABLE apps ADD COLUMN maintenance INTEGER NOT NULL DEFAULT 0;`,
 }
 
 // DB wrapper.
@@ -194,7 +213,14 @@ func Open(path string) (*DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
-	sqlDB, err := sqlOpen("sqlite", path)
+	// Pragmas en el DSN: sql.DB abre conexiones nuevas y el PRAGMA de una
+	// sola conexión no protege al resto (SQLITE_BUSY bajo concurrencia).
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	dsn := path + sep + "_pragma=busy_timeout(10000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)"
+	sqlDB, err := sqlOpen("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}

@@ -246,6 +246,11 @@ func (p *Program) Run() {
 		p.stateMu.Unlock()
 		challenge = mgr.HTTPHandler(nil) // eager: activa http-01 como fallback
 	}
+	customCerts, err := loadCustomCerts(cfg.TLSCerts)
+	if err != nil {
+		p.log.Error("tls_certs inválidos", "err", err)
+		os.Exit(1)
+	}
 	errLog := slog.NewLogLogger(p.log.Handler(), slog.LevelError)
 	var control http.Handler
 	{
@@ -284,10 +289,10 @@ func (p *Program) Run() {
 	var srvTLS *http.Server
 	switch {
 	case cfg.LocalCA:
-		srvTLS = server.NewHTTPS(cfg, ca.GetCertificate, handler, control, errLog)
+		srvTLS = server.NewHTTPS(cfg, wrapCert(customCerts, ca.GetCertificate), handler, control, errLog)
 		p.log.Info("TLS de desarrollo con CA local", "ca", ca.CertPath())
 	case cfg.ListenHTTPS != "":
-		srvTLS = server.NewHTTPS(cfg, mgr.GetCertificate, handler, control, errLog)
+		srvTLS = server.NewHTTPS(cfg, wrapCert(customCerts, mgr.GetCertificate), handler, control, errLog)
 	default:
 		p.log.Warn("TLS desactivado (listen_https vacío): solo HTTP")
 	}
@@ -332,6 +337,12 @@ func (p *Program) Run() {
 		srvHealth := &http.Server{
 			Addr: cfg.Healthz.Listen,
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Métricas Prometheus solo en loopback.
+				if r.URL.Path == "/metrics" {
+					w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+					_, _ = io.WriteString(w, p.metricsText())
+					return
+				}
 				// API primero: nada del SPA puede tapar /api/v1.
 				if strings.HasPrefix(r.URL.Path, "/api/") {
 					apiH.ServeHTTP(w, r)
@@ -371,6 +382,7 @@ func (p *Program) Run() {
 	p.log.Info("hot-reload activo", "poll", pollInterval.String())
 	go p.watchMerged(live, db)
 	go p.alertLoop(live, db)
+	go p.maintenanceLoop(live, db)
 	if cfg.Github != nil {
 		gh, err := github.New(cfg.Github.AppID, cfg.Github.KeyFile, "")
 		if err != nil {
@@ -610,7 +622,9 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 	go func() {
 		defer p.endOp(target.Name)
 		defer out.Close()
-		err := deploy.RunSteps(steps, target.Dir, target.Env, out)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+		defer cancel()
+		err := deploy.RunStepsContext(ctx, steps, target.Dir, target.Env, out)
 		if err == nil && p.sup != nil {
 			// el build no basta: la unidad debe responder HTTP tras reiniciar
 			p.sup.Restart(target.Name)

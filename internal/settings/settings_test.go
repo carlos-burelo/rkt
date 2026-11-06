@@ -8,7 +8,7 @@ import (
 
 func TestKeysYGet(t *testing.T) {
 	keys := Keys()
-	if len(keys) != 8 || keys[0] != KeyNodeBin {
+	if len(keys) != 12 || keys[0] != KeyNodeBin {
 		t.Fatalf("keys = %v", keys)
 	}
 	if s, ok := Get(KeyBaseDomain); !ok || s.Key != KeyBaseDomain {
@@ -28,6 +28,8 @@ func TestValidateSettings(t *testing.T) {
 		KeyNodeBin: exe, KeyPythonBin: exe, KeyBaseDomain: "ejemplo.com",
 		KeyPortPool: "3000-3999", KeySiteName: "rkt", KeyQuotaReqs: "100",
 		KeyQuotaBytes: "0", KeyPublicIP: "203.0.113.7",
+		KeyRetentionDeployDays: "30", KeyRetentionEventDays: "30",
+		KeyRetentionLogDays: "30", KeyRetentionBackupDays: "7",
 	}
 	for k, v := range ok {
 		if err := Validate(k, v); err != nil {

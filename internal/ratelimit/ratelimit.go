@@ -4,7 +4,9 @@ package ratelimit
 
 import (
 	"log/slog"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,16 +31,23 @@ type Limiter struct {
 	clients map[string]*client
 	rps     rate.Limit
 	burst   int
+	allow   []*net.IPNet
 	done    chan struct{}
 }
 
 // New arranca limpieza de fondo. Stop la detiene (tests/apagado).
-func New(rps float64, burst int) *Limiter {
+// allow lista CIDR exentos (opcional).
+func New(rps float64, burst int, allow ...string) *Limiter {
 	l := &Limiter{
 		clients: map[string]*client{},
 		rps:     rate.Limit(rps),
 		burst:   burst,
 		done:    make(chan struct{}),
+	}
+	for _, raw := range allow {
+		if _, n, err := net.ParseCIDR(strings.TrimSpace(raw)); err == nil {
+			l.allow = append(l.allow, n)
+		}
 	}
 	go func() {
 		t := time.NewTicker(sweepEvery)
@@ -88,12 +97,35 @@ func (l *Limiter) Allow(ip string) bool {
 	return c.limiter.Allow()
 }
 
-// Middleware responde 429 sin tocar el backend.
+func (l *Limiter) ipAllowed(ip string) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	for _, n := range l.allow {
+		if n.Contains(parsed) {
+			return true
+		}
+	}
+	return false
+}
+
+// Middleware responde 429 sin tocar el backend. Bucket por (IP, host):
+// una app pesada no consume el cupo de las demás para esa IP.
 func (l *Limiter) Middleware(next http.Handler, log *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := netutil.ClientIP(r)
-		if !l.Allow(ip) {
-			log.Warn("rate limit", "ip", ip, "host", r.Host, "path", r.URL.Path)
+		if l.ipAllowed(ip) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		if !l.Allow(ip + "|" + strings.ToLower(host)) {
+			log.Warn("rate limit", "ip", ip, "host", host, "path", r.URL.Path)
+			w.Header().Set("Retry-After", "1")
 			http.Error(w, "demasiadas peticiones", http.StatusTooManyRequests)
 			return
 		}

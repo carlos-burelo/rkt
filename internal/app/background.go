@@ -3,9 +3,12 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"rkt-proxy/internal/alerts"
@@ -126,6 +129,39 @@ func (p *Program) metricsFor(r store.AlertRule, cfg *config.Config, entries []we
 			m.Failed++
 		}
 	}
+	if deps, err := p.db.ListDeployments("", 200); err == nil {
+		for _, d := range deps {
+			t, err := time.Parse(time.RFC3339, d.StartedAt)
+			if err != nil || t.Before(since) || d.Status != "failed" {
+				continue
+			}
+			if r.App != "*" && d.App != r.App {
+				continue
+			}
+			m.DeployFailed++
+		}
+	}
+	// Certificado más próximo a caducar entre los hosts de la regla.
+	m.CertDays = 9999
+	for i := range cfg.Routes {
+		for _, host := range cfg.Routes[i].Hosts {
+			if r.App != "*" && !hosts[host] {
+				continue
+			}
+			managed, exp := p.tlsStatus(host)
+			if !managed || exp == "" {
+				continue
+			}
+			t, err := time.Parse("2006-01-02", exp)
+			if err != nil {
+				continue
+			}
+			days := time.Until(t).Hours() / 24
+			if days < m.CertDays {
+				m.CertDays = days
+			}
+		}
+	}
 	if len(durs) > 0 {
 		sortDurations(durs)
 		i := int(float64(len(durs)) * 0.95)
@@ -172,9 +208,21 @@ func (p *Program) deliverAlerts(db *store.DB, now time.Time) {
 		if d.NextAt != "" && now.Before(ts) {
 			continue
 		}
-		body, _ := json.Marshal(map[string]any{
-			"source": "rkt", "fire_id": d.FireID, "channel_id": d.ChannelID, "ts": now.Format(time.RFC3339),
-		})
+		msg := d.Message
+		if msg == "" {
+			msg = fmt.Sprintf("alerta #%d", d.FireID)
+		}
+		payload := map[string]any{
+			"source": "rkt", "fire_id": d.FireID, "channel_id": d.ChannelID,
+			"message": msg, "ts": now.Format(time.RFC3339),
+		}
+		switch {
+		case strings.Contains(d.URL, "hooks.slack.com"):
+			payload = map[string]any{"text": "rkt · " + msg}
+		case strings.Contains(d.URL, "discord.com/api/webhooks"), strings.Contains(d.URL, "discordapp.com/api/webhooks"):
+			payload = map[string]any{"content": "rkt · " + msg}
+		}
+		body, _ := json.Marshal(payload)
 		req, err := http.NewRequest(http.MethodPost, d.URL, bytes.NewReader(body))
 		if err != nil {
 			continue
@@ -200,6 +248,113 @@ func (p *Program) deliverAlerts(db *store.DB, now time.Time) {
 		}
 		resp.Body.Close()
 		_ = db.MarkDelivery(d.ID, "sent", attempts, "", "")
+	}
+}
+
+// maintenanceLoop hace la limpieza periódica: sesiones, states, historial,
+// logs viejos y backup diario de SQLite.
+func (p *Program) maintenanceLoop(live *config.Live, db *store.DB) {
+	p.runMaintenance(live, db)
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
+	for range t.C {
+		p.runMaintenance(live, db)
+	}
+}
+
+func (p *Program) runMaintenance(live *config.Live, db *store.DB) {
+	now := time.Now()
+	if _, err := db.PurgeSessions(); err != nil {
+		p.log.Warn("poda sesiones", "err", err)
+	}
+	if err := db.PruneSetupStates(); err != nil {
+		p.log.Warn("poda setup states", "err", err)
+	}
+	if d := settingDays(db, store.KeyRetentionDeployDays, 30); d > 0 {
+		if n, err := db.PruneDeployments(now.AddDate(0, 0, -d)); err != nil {
+			p.log.Warn("poda deployments", "err", err)
+		} else if n > 0 {
+			p.log.Info("deployments podados", "n", n)
+		}
+	}
+	if d := settingDays(db, store.KeyRetentionEventDays, 30); d > 0 {
+		if n, err := db.PruneEvents(now.AddDate(0, 0, -d)); err != nil {
+			p.log.Warn("poda events", "err", err)
+		} else if n > 0 {
+			p.log.Info("events podados", "n", n)
+		}
+	}
+	if d := settingDays(db, store.KeyRetentionLogDays, 30); d > 0 {
+		cutoff := now.AddDate(0, 0, -d)
+		logs := logx.DirFor(p.cfgPath)
+		for _, sub := range []string{"deploys", "cron"} {
+			if n := pruneFiles(filepath.Join(logs, sub), cutoff); n > 0 {
+				p.log.Info("logs podados", "dir", sub, "n", n)
+			}
+		}
+		// Solo rotados: el log activo de una app sigue en uso.
+		if entries, err := os.ReadDir(filepath.Join(logs, "apps")); err == nil {
+			for _, e := range entries {
+				if e.IsDir() || filepath.Ext(e.Name()) != ".1" {
+					continue
+				}
+				full := filepath.Join(logs, "apps", e.Name())
+				if info, err := e.Info(); err == nil && info.ModTime().Before(cutoff) {
+					_ = os.Remove(full)
+				}
+			}
+		}
+	}
+	p.backupDaily(db, now)
+}
+
+func settingDays(db *store.DB, key string, def int) int {
+	raw := db.GetSetting(key)
+	if raw == "" {
+		return def
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return def
+	}
+	return n
+}
+
+func pruneFiles(dir string, cutoff time.Time) int {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if info, err := e.Info(); err == nil && info.ModTime().Before(cutoff) {
+			if os.Remove(filepath.Join(dir, e.Name())) == nil {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// backupDaily crea una copia por día y poda las antiguas.
+func (p *Program) backupDaily(db *store.DB, now time.Time) {
+	dir := filepath.Join(logx.DirFor(p.cfgPath), "backups")
+	dest := filepath.Join(dir, "rkt-"+now.UTC().Format("20060102")+".db")
+	if _, err := os.Stat(dest); err == nil {
+		return
+	}
+	if err := db.Backup(dest); err != nil {
+		p.log.Warn("backup diario", "err", err)
+		return
+	}
+	p.log.Info("backup diario", "path", dest)
+	if d := settingDays(db, store.KeyRetentionBackupDays, 7); d > 0 {
+		if n, err := store.PruneBackups(dir, now.AddDate(0, 0, -d)); err == nil && n > 0 {
+			p.log.Info("backups podados", "n", n)
+		}
 	}
 }
 

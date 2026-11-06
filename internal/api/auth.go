@@ -40,6 +40,17 @@ func roleLevel(r string) int {
 	return 0
 }
 
+// setSessionCookie fija la cookie httpOnly. Secure solo cuando el request
+// llegó por TLS: el dashboard local usa HTTP en loopback.
+func setSessionCookie(w http.ResponseWriter, r *http.Request, tok string) {
+	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	http.SetCookie(w, &http.Cookie{
+		Name: "rkt_token", Value: tok, Path: "/",
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure,
+		MaxAge: int(store.SessionTTL.Seconds()),
+	})
+}
+
 func bearerOf(r *http.Request) string {
 	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 		return strings.TrimPrefix(h, "Bearer ")
@@ -70,7 +81,10 @@ func RequireAuth(db *store.DB, next http.Handler) http.Handler {
 		}
 		user, role, ok := db.SessionUser(tok)
 		if !ok {
-			writeErr(w, http.StatusUnauthorized, "sesión inválida o expirada")
+			user, role, ok = db.TokenUser(tok)
+		}
+		if !ok {
+			writeErr(w, http.StatusUnauthorized, "sesión o token inválido/expirado")
 			return
 		}
 		ctx := context.WithValue(r.Context(), ctxUser, user)
@@ -192,11 +206,7 @@ func (d *Deps) handleSetup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name: "rkt_token", Value: tok, Path: "/",
-		HttpOnly: true, SameSite: http.SameSiteLaxMode,
-		MaxAge: int((store.SessionTTL).Seconds()),
-	})
+	setSessionCookie(w, r, tok)
 	writeJSON(w, map[string]any{"user": in.User, "role": store.RoleAdmin, "token": tok})
 }
 
@@ -234,11 +244,7 @@ func (d *Deps) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name: "rkt_token", Value: tok, Path: "/",
-		HttpOnly: true, SameSite: http.SameSiteLaxMode,
-		MaxAge: int((store.SessionTTL).Seconds()),
-	})
+	setSessionCookie(w, r, tok)
 	writeJSON(w, map[string]any{"user": in.User, "role": role, "token": tok})
 }
 
@@ -391,11 +397,7 @@ func (d *Deps) handleUser(w http.ResponseWriter, r *http.Request) {
 				writeErr(w, http.StatusInternalServerError, err.Error())
 				return
 			}
-			http.SetCookie(w, &http.Cookie{
-				Name: "rkt_token", Value: tok, Path: "/",
-				HttpOnly: true, SameSite: http.SameSiteLaxMode,
-				MaxAge: int(store.SessionTTL.Seconds()),
-			})
+			setSessionCookie(w, r, tok)
 			writeJSON(w, map[string]any{"ok": true, "token": tok})
 			return
 		}

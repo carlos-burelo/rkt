@@ -132,16 +132,12 @@ var ansiRx = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
 func StripANSI(s string) string { return ansiRx.ReplaceAllString(s, "") }
 
 // Setup abre (creando dir) el log y devuelve logger multi
-// consola+archivo más closer.
+// consola+archivo más closer. Rota en caliente al pasar maxBytes.
 func Setup(configPath string) (*slog.Logger, func(), error) {
 	if err := os.MkdirAll(DirFor(configPath), 0o755); err != nil {
 		return nil, nil, fmt.Errorf("crear log dir: %w", err)
 	}
-	path := Path(configPath)
-	if st, err := os.Stat(path); err == nil && st.Size() > maxBytes {
-		_ = os.Rename(path, path+".1")
-	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	f, err := NewRotating(Path(configPath), maxBytes)
 	if err != nil {
 		return nil, nil, fmt.Errorf("abrir log: %w", err)
 	}

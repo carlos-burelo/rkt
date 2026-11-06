@@ -35,6 +35,11 @@ const (
 	KeyQuotaReqs  = settings.KeyQuotaReqs
 	KeyQuotaBytes = settings.KeyQuotaBytes
 	KeyPublicIP   = settings.KeyPublicIP
+
+	KeyRetentionDeployDays = settings.KeyRetentionDeployDays
+	KeyRetentionEventDays  = settings.KeyRetentionEventDays
+	KeyRetentionLogDays    = settings.KeyRetentionLogDays
+	KeyRetentionBackupDays = settings.KeyRetentionBackupDays
 )
 
 // KnownSettings lista para `settings list` y export.
@@ -108,6 +113,7 @@ func insertApp(ex execer, a *config.App) error {
 	args, _ := json.Marshal(a.Args)
 	env, _ := json.Marshal(a.Env)
 	build := []string{}
+	release := []string{}
 	ref, repo, tokenEnv := "", "", ""
 	auto := 0
 	if a.Deploy != nil {
@@ -115,33 +121,48 @@ func insertApp(ex execer, a *config.App) error {
 		if a.Deploy.Build != nil {
 			build = a.Deploy.Build
 		}
+		if a.Deploy.Release != nil {
+			release = a.Deploy.Release
+		}
 		if a.Deploy.Auto {
 			auto = 1
 		}
 	}
 	buildJSON, _ := json.Marshal(build)
+	releaseJSON, _ := json.Marshal(release)
 	cronJSON, _ := json.Marshal(a.Cron)
+	persistJSON, _ := json.Marshal(a.Persist)
+	allowJSON, _ := json.Marshal(a.AllowIPs)
+	maint := 0
+	if a.Maintenance {
+		maint = 1
+	}
 	disabled := 0
 	if a.Disabled {
 		disabled = 1
 	}
 	_, err := ex.Exec(`INSERT INTO apps(name, runtime, command, args, dir, env_file, env,
-		restart_delay_ms, min_uptime_ms, memory_mb, disabled, health_path, static, cron,
-		deploy_repo, deploy_ref, deploy_token_env, deploy_build, deploy_auto)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		restart_delay_ms, min_uptime_ms, memory_mb, disabled, health_path, static, cron, persist,
+		basic_auth, allow_ips, maintenance,
+		deploy_repo, deploy_ref, deploy_token_env, deploy_build, deploy_release, deploy_auto)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(name) DO UPDATE SET runtime=excluded.runtime,
 		command=excluded.command, args=excluded.args,
 		dir=excluded.dir, env_file=excluded.env_file, env=excluded.env,
 		restart_delay_ms=excluded.restart_delay_ms, min_uptime_ms=excluded.min_uptime_ms,
 		memory_mb=excluded.memory_mb, disabled=excluded.disabled,
 		health_path=excluded.health_path, static=excluded.static, cron=excluded.cron,
+		persist=excluded.persist, basic_auth=excluded.basic_auth,
+		allow_ips=excluded.allow_ips, maintenance=excluded.maintenance,
 		deploy_repo=excluded.deploy_repo,
 		deploy_ref=excluded.deploy_ref, deploy_token_env=excluded.deploy_token_env,
-		deploy_build=excluded.deploy_build, deploy_auto=excluded.deploy_auto`,
+		deploy_build=excluded.deploy_build, deploy_release=excluded.deploy_release,
+		deploy_auto=excluded.deploy_auto`,
 		a.Name, a.Runtime, a.Command, string(args), a.Dir, a.EnvFile, string(env),
 		a.Delay().Milliseconds(), a.MinUp().Milliseconds(), a.MemoryMB,
-		disabled, a.HealthPath, a.Static, string(cronJSON),
-		repo, ref, tokenEnv, string(buildJSON), auto)
+		disabled, a.HealthPath, a.Static, string(cronJSON), string(persistJSON),
+		a.BasicAuth, string(allowJSON), maint,
+		repo, ref, tokenEnv, string(buildJSON), string(releaseJSON), auto)
 	return err
 }
 
@@ -156,24 +177,29 @@ func (d *DB) LoadFleet() (*FleetData, error) { return loadFleet(d.sql) }
 func loadFleet(q queryer) (*FleetData, error) {
 	out := &FleetData{}
 	rows, err := q.Query(`SELECT name, runtime, command, args, dir, env_file, env,
-		restart_delay_ms, min_uptime_ms, memory_mb, disabled, health_path, static, cron,
-		deploy_repo, deploy_ref, deploy_token_env, deploy_build, deploy_auto FROM apps`)
+		restart_delay_ms, min_uptime_ms, memory_mb, disabled, health_path, static, cron, persist,
+		basic_auth, allow_ips, maintenance,
+		deploy_repo, deploy_ref, deploy_token_env, deploy_build, deploy_release, deploy_auto FROM apps`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var a config.App
-		var argsS, envS, buildS, cronS string
-		var delayMs, minUpMs, memMB, auto, disabled int64
+		var argsS, envS, buildS, releaseS, cronS, persistS, allowS string
+		var delayMs, minUpMs, memMB, auto, disabled, maint int64
 		var repo, ref, tokenEnv string
 		if err := rows.Scan(&a.Name, &a.Runtime, &a.Command, &argsS, &a.Dir, &a.EnvFile, &envS,
-			&delayMs, &minUpMs, &memMB, &disabled, &a.HealthPath, &a.Static, &cronS,
-			&repo, &ref, &tokenEnv, &buildS, &auto); err != nil {
+			&delayMs, &minUpMs, &memMB, &disabled, &a.HealthPath, &a.Static, &cronS, &persistS,
+			&a.BasicAuth, &allowS, &maint,
+			&repo, &ref, &tokenEnv, &buildS, &releaseS, &auto); err != nil {
 			return nil, err
 		}
 		a.Disabled = disabled != 0
+		a.Maintenance = maint != 0
 		_ = json.Unmarshal([]byte(cronS), &a.Cron)
+		_ = json.Unmarshal([]byte(persistS), &a.Persist)
+		_ = json.Unmarshal([]byte(allowS), &a.AllowIPs)
 		if a.Runtime == "" {
 			a.Runtime = config.RuntimeManaged
 		}
@@ -183,11 +209,12 @@ func loadFleet(q queryer) (*FleetData, error) {
 		a.SetDelays(time.Duration(delayMs)*time.Millisecond, time.Duration(minUpMs)*time.Millisecond)
 		a.MemoryMB = uint64(memMB)
 		if repo != "" {
-			var build []string
+			var build, release []string
 			_ = json.Unmarshal([]byte(buildS), &build)
+			_ = json.Unmarshal([]byte(releaseS), &release)
 			a.Deploy = &config.Deploy{
 				Repo: repo, Ref: ref, TokenEnv: tokenEnv,
-				Build: build, Auto: auto != 0,
+				Build: build, Release: release, Auto: auto != 0,
 			}
 		}
 		out.Apps = append(out.Apps, a)

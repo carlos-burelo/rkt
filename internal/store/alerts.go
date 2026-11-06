@@ -48,12 +48,13 @@ type AlertDelivery struct {
 	Attempts  int    `json:"attempts"`
 	NextAt    string `json:"next_at"`
 	LastError string `json:"last_error"`
+	Message   string `json:"message,omitempty"`
 }
 
 // ValidAlertKind kinds aceptados por el evaluador.
 func ValidAlertKind(kind string) bool {
 	switch kind {
-	case "failed", "error_rate", "latency_p95", "memory_mb", "down_min", "disk_pct", "cpu_pct", "mem_pct", "temp_c":
+	case "failed", "error_rate", "latency_p95", "memory_mb", "down_min", "disk_pct", "cpu_pct", "mem_pct", "temp_c", "cert_days", "deploy_failed":
 		return true
 	}
 	return false
@@ -85,7 +86,7 @@ func (d *DB) AddRule(app, kind string, threshold float64, windowMin int) (int64,
 // AddRuleFull valida y crea una regla completa.
 func (d *DB) AddRuleFull(app, kind string, threshold float64, windowMin int, enabled bool, channelID int64) (int64, error) {
 	if !ValidAlertKind(kind) {
-		return 0, fmt.Errorf("kind inválido (failed|error_rate|latency_p95|memory_mb|down_min|disk_pct|cpu_pct|mem_pct|temp_c)")
+		return 0, fmt.Errorf("kind inválido (failed|error_rate|latency_p95|memory_mb|down_min|disk_pct|cpu_pct|mem_pct|temp_c|cert_days|deploy_failed)")
 	}
 	if threshold <= 0 {
 		return 0, fmt.Errorf("threshold debe ser > 0")
@@ -253,8 +254,10 @@ func (d *DB) PendingDeliveries(limit int) ([]AlertDelivery, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := d.sql.Query(`SELECT d.id, d.fire_id, d.channel_id, c.url, d.status, d.attempts, d.next_at, d.last_error
-		FROM alert_deliveries d JOIN alert_channels c ON c.id=d.channel_id
+	rows, err := d.sql.Query(`SELECT d.id, d.fire_id, d.channel_id, c.url, d.status, d.attempts, d.next_at, d.last_error, f.message
+		FROM alert_deliveries d
+		JOIN alert_channels c ON c.id=d.channel_id
+		LEFT JOIN alert_fires f ON f.id=d.fire_id
 		WHERE d.status='pending' AND c.enabled=1 ORDER BY d.id LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
@@ -263,7 +266,7 @@ func (d *DB) PendingDeliveries(limit int) ([]AlertDelivery, error) {
 	out := []AlertDelivery{}
 	for rows.Next() {
 		var x AlertDelivery
-		if err := rows.Scan(&x.ID, &x.FireID, &x.ChannelID, &x.URL, &x.Status, &x.Attempts, &x.NextAt, &x.LastError); err != nil {
+		if err := rows.Scan(&x.ID, &x.FireID, &x.ChannelID, &x.URL, &x.Status, &x.Attempts, &x.NextAt, &x.LastError, &x.Message); err != nil {
 			return nil, err
 		}
 		out = append(out, x)

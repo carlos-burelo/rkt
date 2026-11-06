@@ -118,7 +118,10 @@ type Deploy struct {
 	Ref      string   `yaml:"ref"`
 	TokenEnv string   `yaml:"token_env"`
 	Build    []string `yaml:"build"`
-	Auto     bool     `yaml:"auto"`
+	// Release pasos de migración/release; corren en staging tras el build
+	// y antes del swap, con el env efectivo de la app.
+	Release []string `yaml:"release,omitempty"`
+	Auto    bool     `yaml:"auto"`
 }
 
 // Github auth vía GitHub App para repos privados (tokens 1h, cacheados).
@@ -173,8 +176,17 @@ type App struct {
 	// HealthPath ruta HTTP de la sonda local (default "/").
 	HealthPath string `yaml:"health_path,omitempty" json:"health_path,omitempty"`
 	// Static dir servido por el propio binario (sitios: astro/vite/export).
-	Static string  `yaml:"static,omitempty" json:"static,omitempty"`
-	Deploy *Deploy `yaml:"deploy" json:"deploy"`
+	Static string `yaml:"static,omitempty" json:"static,omitempty"`
+	// Persist rutas relativas que sobreviven al swap de deploy (data,
+	// uploads, sqlite local). Se copian de live a staging antes del swap.
+	Persist []string `yaml:"persist,omitempty" json:"persist,omitempty"`
+	// BasicAuth "usuario:hash_bcrypt" para proteger la app en el edge.
+	BasicAuth string `yaml:"basic_auth,omitempty" json:"basic_auth,omitempty"`
+	// AllowIPs CIDRs permitidos (vacío = todos).
+	AllowIPs []string `yaml:"allow_ips,omitempty" json:"allow_ips,omitempty"`
+	// Maintenance responde 503 sin tocar el backend.
+	Maintenance bool    `yaml:"maintenance,omitempty" json:"maintenance,omitempty"`
+	Deploy      *Deploy `yaml:"deploy" json:"deploy"`
 	// Cron tareas programadas de la app.
 	Cron []CronJob `yaml:"cron,omitempty" json:"cron,omitempty"`
 
@@ -198,6 +210,13 @@ func (a *App) SetDelays(delay, minUp time.Duration) {
 	a.delay, a.minUp = delay, minUp
 }
 
+// TLSCert certificado propio para uno o varios hosts (sin ACME).
+type TLSCert struct {
+	Hosts    []string `yaml:"hosts" json:"hosts"`
+	CertFile string   `yaml:"cert_file" json:"cert_file"`
+	KeyFile  string   `yaml:"key_file" json:"key_file"`
+}
+
 // HealthzConfig expone salud en listener loopback dedicado
 // (no compite con paths de backends ni se expone a internet).
 type HealthzConfig struct {
@@ -207,9 +226,10 @@ type HealthzConfig struct {
 
 // RateLimitConfig frena abuso por IP (bots) antes del backend.
 type RateLimitConfig struct {
-	Enabled bool    `yaml:"enabled" json:"enabled"`
-	RPS     float64 `yaml:"requests_per_second" json:"requests_per_second"`
-	Burst   int     `yaml:"burst" json:"burst"`
+	Enabled bool     `yaml:"enabled" json:"enabled"`
+	RPS     float64  `yaml:"requests_per_second" json:"requests_per_second"`
+	Burst   int      `yaml:"burst" json:"burst"`
+	Allow   []string `yaml:"allow" json:"allow,omitempty"`
 }
 
 // maxBodyDefaultMB tope de body por request (anti-DoS a backends).
@@ -251,6 +271,7 @@ type Config struct {
 	MaxBodyMB           int64           `yaml:"max_body_mb" json:"max_body_mb"`
 	Github              *Github         `yaml:"github" json:"github,omitempty"`
 	DenyPaths           []string        `yaml:"deny_paths" json:"deny_paths"`
+	TLSCerts            []TLSCert       `yaml:"tls_certs" json:"tls_certs,omitempty"`
 	// GlobalEnv se aplica a todas las apps; la app puede sobrescribir claves.
 	GlobalEnv map[string]string `yaml:"global_env" json:"global_env,omitempty"`
 	Apps      []App             `yaml:"apps" json:"-"`
@@ -558,6 +579,11 @@ func (cfg *Config) Validate() error {
 	if cfg.RateLimit.Enabled && (cfg.RateLimit.RPS <= 0 || cfg.RateLimit.Burst < 1) {
 		return fmt.Errorf("rate_limit inválido: rps>0 y burst>=1")
 	}
+	for _, raw := range cfg.RateLimit.Allow {
+		if _, _, err := net.ParseCIDR(raw); err != nil {
+			return fmt.Errorf("rate_limit.allow inválido %q (usa CIDR, ej 10.0.0.0/8)", raw)
+		}
+	}
 	g, err := time.ParseDuration(cfg.RestartGrace)
 	if err != nil || g < 0 {
 		return fmt.Errorf("restart_grace inválido %q (ej 10s, 0 = directo a 502)", cfg.RestartGrace)
@@ -592,6 +618,23 @@ func (cfg *Config) Validate() error {
 	for _, p := range cfg.DenyPaths {
 		if _, err := pathpkg.Match(p, ""); err != nil {
 			return fmt.Errorf("deny_paths patrón inválido %q", p)
+		}
+	}
+	for _, c := range cfg.TLSCerts {
+		if len(c.Hosts) == 0 || c.CertFile == "" || c.KeyFile == "" {
+			return fmt.Errorf("tls_certs incompleto: hosts, cert_file y key_file")
+		}
+		if _, err := os.Stat(c.CertFile); err != nil {
+			return fmt.Errorf("tls_certs cert_file inaccesible %q", c.CertFile)
+		}
+		if _, err := os.Stat(c.KeyFile); err != nil {
+			return fmt.Errorf("tls_certs key_file inaccesible %q", c.KeyFile)
+		}
+		for _, h := range c.Hosts {
+			h = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(h)), "*.")
+			if h == "" || strings.ContainsAny(h, " /\\") {
+				return fmt.Errorf("tls_certs host inválido %q", h)
+			}
 		}
 	}
 	seenApps := map[string]bool{}
@@ -652,6 +695,11 @@ func (c *Config) Clone() *Config {
 	}
 	out := *c
 	out.DenyPaths = append([]string(nil), c.DenyPaths...)
+	out.TLSCerts = make([]TLSCert, len(c.TLSCerts))
+	for i, t := range c.TLSCerts {
+		out.TLSCerts[i] = t
+		out.TLSCerts[i].Hosts = append([]string(nil), t.Hosts...)
+	}
 	if c.GlobalEnv != nil {
 		out.GlobalEnv = make(map[string]string, len(c.GlobalEnv))
 		for k, v := range c.GlobalEnv {
@@ -667,6 +715,8 @@ func (c *Config) Clone() *Config {
 		out.Apps[i] = a
 		out.Apps[i].Args = append([]string(nil), a.Args...)
 		out.Apps[i].Cron = append([]CronJob(nil), a.Cron...)
+		out.Apps[i].Persist = append([]string(nil), a.Persist...)
+		out.Apps[i].AllowIPs = append([]string(nil), a.AllowIPs...)
 		if a.Env != nil {
 			env := make(map[string]string, len(a.Env))
 			for k, v := range a.Env {
@@ -677,6 +727,7 @@ func (c *Config) Clone() *Config {
 		if a.Deploy != nil {
 			d := *a.Deploy
 			d.Build = append([]string(nil), a.Deploy.Build...)
+			d.Release = append([]string(nil), a.Deploy.Release...)
 			out.Apps[i].Deploy = &d
 		}
 	}
@@ -729,16 +780,33 @@ func NeedRestart(old, new *Config) []string {
 	if old.ACMEMaxNewHosts != new.ACMEMaxNewHosts || old.ACMEDNSPrecheck != new.ACMEDNSPrecheck {
 		out = append(out, "acme_limites")
 	}
+	if len(old.TLSCerts) != len(new.TLSCerts) {
+		out = append(out, "tls_certs")
+	}
 	if old.Healthz != new.Healthz {
 		out = append(out, "healthz")
 	}
-	if old.RateLimit != new.RateLimit {
+	if !rateLimitEqual(old.RateLimit, new.RateLimit) {
 		out = append(out, "rate_limit")
 	}
 	if !githubEqual(old.Github, new.Github) {
 		out = append(out, "github")
 	}
 	return out
+}
+
+// rateLimitEqual compara también la allowlist (slice no comparable).
+func rateLimitEqual(a, b RateLimitConfig) bool {
+	if a.Enabled != b.Enabled || a.RPS != b.RPS || a.Burst != b.Burst ||
+		len(a.Allow) != len(b.Allow) {
+		return false
+	}
+	for i := range a.Allow {
+		if a.Allow[i] != b.Allow[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // githubEqual compara bloque github (nil = ausente).
@@ -787,6 +855,24 @@ func (a *App) ValidateApp(idx int) error {
 			return fmt.Errorf("apps[%s] health_path inválido %q (debe empezar por /)", a.Name, a.HealthPath)
 		}
 	}
+	for _, p := range a.Persist {
+		clean := pathpkg.Clean(strings.TrimSpace(p))
+		if p == "" || clean == "." || clean == ".." || strings.HasPrefix(clean, "../") ||
+			pathpkg.IsAbs(clean) || strings.ContainsAny(clean, " \t\r\n") {
+			return fmt.Errorf("apps[%s] persist inválido %q (ruta relativa dentro de la app)", a.Name, p)
+		}
+	}
+	if a.BasicAuth != "" {
+		user, hash, ok := strings.Cut(a.BasicAuth, ":")
+		if !ok || user == "" || !strings.HasPrefix(hash, "$2") {
+			return fmt.Errorf("apps[%s] basic_auth inválido: usa usuario:<hash bcrypt>", a.Name)
+		}
+	}
+	for _, raw := range a.AllowIPs {
+		if _, _, err := net.ParseCIDR(raw); err != nil {
+			return fmt.Errorf("apps[%s] allow_ips inválido %q (usa CIDR)", a.Name, raw)
+		}
+	}
 	d, err := time.ParseDuration(a.RestartDelay)
 	if err != nil || d <= 0 {
 		return fmt.Errorf("apps[%s] restart_delay inválido %q (ej 5s)", a.Name, a.RestartDelay)
@@ -805,6 +891,11 @@ func (a *App) ValidateApp(idx int) error {
 		for _, s := range d.Build {
 			if strings.TrimSpace(s) == "" {
 				return fmt.Errorf("apps[%s] deploy con build vacío", a.Name)
+			}
+		}
+		for _, s := range d.Release {
+			if strings.TrimSpace(s) == "" {
+				return fmt.Errorf("apps[%s] deploy con release vacío", a.Name)
 			}
 		}
 	}
@@ -863,6 +954,17 @@ func ValidAppName(s string) bool {
 		return false
 	}
 	return true
+}
+
+// AppForTarget devuelve la app cuyo puerto sirve target ("" si no es app).
+func (c *Config) AppForTarget(target string) *App {
+	for i := range c.Apps {
+		port := c.Apps[i].Env["PORT"]
+		if port != "" && "http://127.0.0.1:"+port == target {
+			return &c.Apps[i]
+		}
+	}
+	return nil
 }
 
 // Match resuelve Host -> backend. Exacto primero, luego *.dominio.

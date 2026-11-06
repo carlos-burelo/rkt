@@ -3,6 +3,7 @@ package dotenv
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -95,6 +96,17 @@ func TestParseErroresYExportSolo(t *testing.T) {
 
 func TestEnvironListYExpandBordes(t *testing.T) {
 	t.Setenv("RKT_DOTENV_TEST", "base")
+	if t.Setenv("GITHUB_TOKEN", "no-debe-pasar"); true {
+		list := EnvironListApp(map[string]string{"APP_VAR": "1"})
+		joined := strings.Join(list, "\n")
+		if strings.Contains(joined, "GITHUB_TOKEN") || strings.Contains(joined, "no-debe-pasar") {
+			t.Fatalf("secreto de máquina heredado: %v", list)
+		}
+		if !strings.Contains(joined, "APP_VAR=1") {
+			t.Fatalf("falta env propio: %v", list)
+		}
+	}
+
 	list := EnvironList(map[string]string{"RKT_DOTENV_TEST": "override", "OTRA": "x"})
 	seen := map[string]bool{}
 	for _, kv := range list {

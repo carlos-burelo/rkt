@@ -7,9 +7,15 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
+	"strings"
+	"sync"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/netutil"
 	"rkt-proxy/internal/ratelimit"
 	"rkt-proxy/internal/waf"
 )
@@ -18,26 +24,31 @@ import (
 // con rate-limit por IP delante si la config lo activa.
 // Lee la config viva por request (hot-reload de rutas).
 func NewHandler(live *config.Live, log *slog.Logger) http.Handler {
-	transport := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          200,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
+	transport := &graceTransport{
+		live: live,
+		log:  log,
+		base: &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          200,
+			MaxIdleConnsPerHost:   32,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 30 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
 	}
 
-	backend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg := live.Get()
-		target := cfg.Match(r.Host)
-		if target == nil {
-			log.Warn("sin ruta", "host", r.Host, "remote", r.RemoteAddr, "path", r.URL.Path)
-			http.Error(w, "dominio no configurado", http.StatusNotFound)
-			return
+	// Un ReverseProxy por target vivo: se reutiliza entre requests en vez
+	// de asignar uno nuevo en cada llamada.
+	var proxies sync.Map // target.String() -> *httputil.ReverseProxy
+	proxyFor := func(target *url.URL) *httputil.ReverseProxy {
+		key := target.String()
+		if v, ok := proxies.Load(key); ok {
+			return v.(*httputil.ReverseProxy)
 		}
-		proxy := &httputil.ReverseProxy{
+		p := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
 				req.URL.Scheme = target.Scheme
 				req.URL.Host = target.Host
@@ -83,47 +94,131 @@ func NewHandler(live *config.Live, log *slog.Logger) http.Handler {
 				http.Error(rw, "backend no disponible", http.StatusBadGateway)
 			},
 		}
-		start := time.Now()
-		// Hueco de restart: si el backend no acepta TCP, espera hasta
-		// restart_grace en vez de 502 inmediato (cero fallos en deploys).
-		waited := false
-		deadline := start.Add(cfg.Grace())
-		for !dialOpen(target.Host) {
-			if time.Now().After(deadline) {
-				break
-			}
-			if !waited {
-				log.Info("backend aún no, esperando hueco", "host", r.Host, "target", target.Host)
-				waited = true
-			}
-			time.Sleep(250 * time.Millisecond)
+		actual, _ := proxies.LoadOrStore(key, p)
+		return actual.(*httputil.ReverseProxy)
+	}
+
+	backend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfg := live.Get()
+		target := cfg.Match(r.Host)
+		if target == nil {
+			log.Warn("sin ruta", "host", r.Host, "remote", r.RemoteAddr, "path", r.URL.Path)
+			http.Error(w, "dominio no configurado", http.StatusNotFound)
+			return
 		}
-		proxy.ServeHTTP(w, r)
+		if !guardApp(cfg, target, w, r, log) {
+			return
+		}
+		start := time.Now()
+		proxyFor(target).ServeHTTP(w, r)
 		log.Info("proxy",
 			"host", r.Host,
 			"method", r.Method,
 			"path", r.URL.Path,
 			"target", target.Host,
+			"req", r.Header.Get("X-Request-Id"),
 			"dur", time.Since(start).String(),
 		)
 	})
 
-	if !live.Get().RateLimit.Enabled {
-		return secureChain(live, backend, log)
+	inner := http.Handler(backend)
+	if rl := live.Get().RateLimit; rl.Enabled {
+		// waf fuera: lo denegado no gasta tokens ni toca backend.
+		inner = ratelimit.New(rl.RPS, rl.Burst, rl.Allow...).Middleware(inner, log)
 	}
-	rl := live.Get().RateLimit
-	// waf fuera: lo denegado no gasta tokens ni toca backend.
-	return secureChain(live, ratelimit.New(rl.RPS, rl.Burst).Middleware(backend, log), log)
+	inner = Compress(inner)
+	inner = maxBody(live, waf.Middleware(live, inner, log), log)
+	inner = recovery(log, inner)
+	return RequestID(EdgeHeaders(inner))
 }
 
-// secureChain envuelve con recovery (anti-panic) + tope de body + waf.
-func secureChain(live *config.Live, next http.Handler, log *slog.Logger) http.Handler {
-	return recovery(log, maxBody(live, waf.Middleware(live, next, log), log))
+// guardApp aplica protección declarada por app: allowlist IP, mantenimiento
+// y basic auth. No toca apps sin estas opciones ni rutas sin app.
+func guardApp(cfg *config.Config, target *url.URL, w http.ResponseWriter, r *http.Request, log *slog.Logger) bool {
+	app := cfg.AppForTarget(target.String())
+	if app == nil {
+		return true
+	}
+	ip := netutil.ClientIP(r)
+	if len(app.AllowIPs) > 0 && !ipAllowed(ip, app.AllowIPs) {
+		log.Warn("app ip denegada", "app", app.Name, "ip", ip)
+		http.Error(w, "acceso denegado", http.StatusForbidden)
+		return false
+	}
+	if app.Maintenance {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Retry-After", "300")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("<!doctype html><title>Mantenimiento</title><h1>En mantenimiento</h1>"))
+		return false
+	}
+	if app.BasicAuth != "" {
+		user, hash, _ := strings.Cut(app.BasicAuth, ":")
+		u, p, ok := r.BasicAuth()
+		if !ok || u != user || bcrypt.CompareHashAndPassword([]byte(hash), []byte(p)) != nil {
+			w.Header().Set("WWW-Authenticate", `Basic realm="rkt"`)
+			http.Error(w, "autenticación requerida", http.StatusUnauthorized)
+			return false
+		}
+	}
+	return true
+}
+
+func ipAllowed(ip string, cidrs []string) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	for _, raw := range cidrs {
+		if _, n, err := net.ParseCIDR(raw); err == nil && n.Contains(parsed) {
+			return true
+		}
+	}
+	return false
+}
+
+// graceTransport reintenta solo errores de dial hasta restart_grace. Antes
+// cada request hacía un dial TCP extra para comprobar el backend.
+type graceTransport struct {
+	base http.RoundTripper
+	live *config.Live
+	log  *slog.Logger
+}
+
+func (t *graceTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	grace := t.live.Get().Grace()
+	deadline := time.Now().Add(grace)
+	for {
+		resp, err := t.base.RoundTrip(req)
+		if err == nil {
+			return resp, nil
+		}
+		if req.Context().Err() != nil || time.Now().After(deadline) || !isDialErr(err) {
+			return nil, err
+		}
+		if req.Body != nil {
+			if req.GetBody == nil {
+				return nil, err
+			}
+			body, gerr := req.GetBody()
+			if gerr != nil {
+				return nil, err
+			}
+			req.Body = body
+		}
+		t.log.Info("backend aún no, reintento", "host", req.URL.Host, "err", err)
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+func isDialErr(err error) bool {
+	var op *net.OpError
+	return errors.As(err, &op) && op.Op == "dial"
 }
 
 // recovery convierte un panic en 500 sin tumbar el servicio.
-// http.ErrAbortHandler es el sentinel de net/http cuando el cliente corta la
-// conexión a mitad de respuesta (p. ej. un video): no es un fallo del handler,
+// http.ErrAbortHandler es el sentinel de net/http cuando el cliente corta
+// la conexión a mitad de respuesta (p. ej. un video): no es un fallo del handler,
 // así que no se escribe 500 ni se ensucia el log.
 func recovery(log *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -159,14 +254,4 @@ func maxBody(live *config.Live, next http.Handler, log *slog.Logger) http.Handle
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		next.ServeHTTP(w, r)
 	})
-}
-
-// dialOpen true si el backend acepta TCP (sondeo barato loopback).
-func dialOpen(hostport string) bool {
-	c, err := net.DialTimeout("tcp", hostport, 500*time.Millisecond)
-	if err != nil {
-		return false
-	}
-	_ = c.Close()
-	return true
 }

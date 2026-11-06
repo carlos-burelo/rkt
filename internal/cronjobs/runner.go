@@ -248,7 +248,7 @@ func (r *Runner) run(appName, jobName string, runID int64, trigger string) {
 	case config.CronCommand:
 		runCmd := platform.ShellContext(ctx, job.Command)
 		runCmd.Dir = app.Dir
-		runCmd.Env = dotenv.EnvironList(env)
+		runCmd.Env = dotenv.EnvironListApp(env)
 		runCmd.Stdout = out
 		runCmd.Stderr = out
 		err = runCmd.Run()

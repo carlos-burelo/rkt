@@ -142,6 +142,27 @@ func Run(cfgPath string) {
 		case "config":
 			cmdConfig(flag.Args()[1:], cfgPath)
 			return
+		case "backup":
+			cmdBackup(flag.Args()[1:], cfgPath)
+			return
+		case "restore":
+			cmdRestore(flag.Args()[1:], cfgPath)
+			return
+		case "doctor":
+			cmdDoctor(flag.Args()[1:], cfgPath)
+			return
+		case "audit":
+			cmdAudit(flag.Args()[1:], cfgPath)
+			return
+		case "alerts":
+			cmdAlerts(flag.Args()[1:], cfgPath)
+			return
+		case "cron":
+			cmdCron(flag.Args()[1:], cfgPath)
+			return
+		case "domains":
+			cmdDomains(flag.Args()[1:], cfgPath)
+			return
 		case "apps":
 			cmdApps(flag.Args()[1:], cfgPath)
 			return

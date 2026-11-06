@@ -20,6 +20,11 @@ const (
 	KeyQuotaReqs  = "quota_reqs"
 	KeyQuotaBytes = "quota_bytes"
 	KeyPublicIP   = "public_ip"
+	// Retención de historial y logs (días). 0 = conservar siempre.
+	KeyRetentionDeployDays = "retention_deploy_days"
+	KeyRetentionEventDays  = "retention_event_days"
+	KeyRetentionLogDays    = "retention_log_days"
+	KeyRetentionBackupDays = "retention_backup_days"
 )
 
 // Spec describe un ajuste y si exige reiniciar el servicio.
@@ -38,6 +43,10 @@ var specs = []Spec{
 	{Key: KeyQuotaReqs, Restart: false, Validate: validateNonNegative},
 	{Key: KeyQuotaBytes, Restart: false, Validate: validateNonNegative},
 	{Key: KeyPublicIP, Restart: false, Validate: validateIP},
+	{Key: KeyRetentionDeployDays, Restart: false, Validate: validateNonNegative},
+	{Key: KeyRetentionEventDays, Restart: false, Validate: validateNonNegative},
+	{Key: KeyRetentionLogDays, Restart: false, Validate: validateNonNegative},
+	{Key: KeyRetentionBackupDays, Restart: false, Validate: validateNonNegative},
 }
 
 // Keys lista canónica ordenada.

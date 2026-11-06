@@ -10,15 +10,17 @@ import (
 
 // Metrics valores medidos para la ventana de una regla.
 type Metrics struct {
-	Failed   int
-	ErrRate  float64
-	P95ms    float64
-	MemoryMB float64
-	DownMin  int
-	DiskPct  float64
-	CPUPct   float64
-	MemPct   float64
-	TempC    float64
+	Failed       int
+	ErrRate      float64
+	P95ms        float64
+	MemoryMB     float64
+	DownMin      int
+	DiskPct      float64
+	CPUPct       float64
+	MemPct       float64
+	TempC        float64
+	CertDays     float64
+	DeployFailed int
 }
 
 // Value métrica usada por el kind (para historial y mensajes).
@@ -42,6 +44,10 @@ func (m Metrics) Value(kind string) float64 {
 		return m.MemPct
 	case "temp_c":
 		return m.TempC
+	case "cert_days":
+		return m.CertDays
+	case "deploy_failed":
+		return float64(m.DeployFailed)
 	}
 	return 0
 }
@@ -78,6 +84,10 @@ func Fired(r store.AlertRule, m Metrics, now time.Time) bool {
 		return m.MemPct >= r.Threshold
 	case "temp_c":
 		return m.TempC >= r.Threshold
+	case "cert_days":
+		return m.CertDays <= r.Threshold
+	case "deploy_failed":
+		return float64(m.DeployFailed) >= r.Threshold
 	}
 	return false
 }

@@ -32,7 +32,7 @@ func TestSettingsYVersion(t *testing.T) {
 	if db.GetSetting(KeySiteName) != "rkt" || db.ConfigVersion() <= v1 {
 		t.Fatalf("setting/version mal: %q v=%d", db.GetSetting(KeySiteName), db.ConfigVersion())
 	}
-	if len(KnownSettings()) != 8 {
+	if len(KnownSettings()) != 12 {
 		t.Fatalf("KnownSettings = %v", KnownSettings())
 	}
 }
@@ -42,14 +42,21 @@ func TestFleetRoundtripYColisiones(t *testing.T) {
 	a := &config.App{
 		Name: "w", Command: "node", Args: []string{"server.js"},
 		Dir: "C:/apps/w", EnvFile: ".env", Env: map[string]string{"PORT": "3000"},
-		MemoryMB:   512,
-		Disabled:   true,
-		HealthPath: "/health",
-		Static:     "dist",
+		MemoryMB:    512,
+		Disabled:    true,
+		HealthPath:  "/health",
+		Static:      "dist",
+		Persist:     []string{"data", "uploads"},
+		BasicAuth:   "u:$2a$10$abcdefghijklmnopqrstuv",
+		AllowIPs:    []string{"10.0.0.0/8"},
+		Maintenance: true,
 		Cron: []config.CronJob{{
 			Name: "backup", Schedule: "0 3 * * *", Command: "node backup.js", Timeout: "20m",
 		}},
-		Deploy: &config.Deploy{Repo: "https://github.com/x/y", Ref: "main", TokenEnv: "T", Build: []string{"pnpm build"}, Auto: true},
+		Deploy: &config.Deploy{
+			Repo: "https://github.com/x/y", Ref: "main", TokenEnv: "T",
+			Build: []string{"pnpm build"}, Release: []string{"pnpm migrate"}, Auto: true,
+		},
 	}
 	a.SetDelays(2*time.Second, 10*time.Second)
 	if err := db.UpsertApp(a); err != nil {
@@ -67,8 +74,12 @@ func TestFleetRoundtripYColisiones(t *testing.T) {
 		t.Fatalf("fleet = %+v", fleet)
 	}
 	got := fleet.Apps[0]
-	if got.Deploy == nil || got.Deploy.Repo != a.Deploy.Repo || !got.Deploy.Auto || len(got.Deploy.Build) != 1 {
+	if got.Deploy == nil || got.Deploy.Repo != a.Deploy.Repo || !got.Deploy.Auto ||
+		len(got.Deploy.Build) != 1 || len(got.Deploy.Release) != 1 {
 		t.Fatalf("deploy = %+v", got.Deploy)
+	}
+	if len(got.Persist) != 2 || got.BasicAuth == "" || len(got.AllowIPs) != 1 || !got.Maintenance {
+		t.Fatalf("protección/persist = %+v", got)
 	}
 	if got.Env["PORT"] != "3000" || got.Delay() != 2*time.Second || got.MinUp() != 10*time.Second {
 		t.Fatalf("app = %+v", got)

@@ -15,6 +15,7 @@ import (
 
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/dotenv"
+	"rkt-proxy/internal/logx"
 )
 
 // crashWindow / maxCrashes: tope anti-crashloop.
@@ -43,6 +44,8 @@ type app struct {
 	mu       sync.Mutex
 	cmd      *exec.Cmd
 	job      *jobCtx
+	logFile  *logx.RotatingFile
+	done     chan struct{}
 	running  bool
 	alive    bool
 	held     bool
@@ -420,6 +423,16 @@ func (a *app) loop() {
 		}
 		startedAt := a.startedAt()
 		err := a.cmd.Wait()
+		a.mu.Lock()
+		done, lf := a.done, a.logFile
+		a.done, a.logFile = nil, nil
+		a.mu.Unlock()
+		if done != nil {
+			close(done)
+		}
+		if lf != nil {
+			_ = lf.Close()
+		}
 		uptime := time.Since(startedAt)
 		fast := uptime < a.cfg.MinUp()
 
@@ -551,15 +564,15 @@ func (a *app) start(job *jobCtx) bool {
 		a.mu.Unlock()
 		return false
 	}
-	defer f.Close()
 
 	cmd := exec.Command(a.cfg.Command, a.cfg.Args...)
 	configureProc(cmd)
 	cmd.Dir = a.cfg.Dir
-	cmd.Env = dotenv.EnvironList(a.cfg.Env)
+	cmd.Env = dotenv.EnvironListApp(a.cfg.Env)
 	cmd.Stdout = f
 	cmd.Stderr = f
 	if err := cmd.Start(); err != nil {
+		_ = f.Close()
 		a.log.Error("no arrancó", "err", err)
 		a.mu.Lock()
 		a.failed = true
@@ -569,6 +582,8 @@ func (a *app) start(job *jobCtx) bool {
 	}
 	a.mu.Lock()
 	a.cmd = cmd
+	a.logFile = f
+	a.done = make(chan struct{})
 	a.running = true
 	a.pid = cmd.Process.Pid
 	a.started = time.Now()
@@ -582,12 +597,9 @@ func (a *app) start(job *jobCtx) bool {
 	return true
 }
 
-// openAppLog abre en append, rotando a .1 si pasa 10MB.
-func openAppLog(path string) (*os.File, error) {
-	if st, err := os.Stat(path); err == nil && st.Size() > 10<<20 {
-		_ = os.Rename(path, path+".1")
-	}
-	return os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+// openAppLog abre con rotación en caliente (10MB, un .1).
+func openAppLog(path string) (*logx.RotatingFile, error) {
+	return logx.NewRotating(path, 10<<20)
 }
 
 func (a *app) stop() {
@@ -600,20 +612,39 @@ func (a *app) stop() {
 	a.killCurrent()
 }
 
-// killCurrent mata el proceso actual sin marcar stop (el loop reinicia).
+// stopGrace ventana para que la app cierre ordenadamente antes del kill.
+var stopGrace = 5 * time.Second
+
+// killCurrent pide cierre ordenado y cae al kill duro si no termina.
+// El Wait único lo hace el loop; aquí solo se espera su señal.
 func (a *app) killCurrent() {
 	a.mu.Lock()
 	cmd := a.cmd
 	job := a.job
+	done := a.done
 	a.mu.Unlock()
+	if cmd == nil || cmd.Process == nil {
+		if job != nil {
+			job.Kill()
+		}
+		return
+	}
+	pid := cmd.Process.Pid
+	if err := requestStop(pid); err == nil && done != nil {
+		select {
+		case <-done:
+			return
+		case <-time.After(stopGrace):
+		}
+	}
 	// Job Object: mata npm + node/hijos. Sin esto, el hijo conserva el
 	// puerto y el cwd, el swap no puede renombrar y la app nueva muere.
 	if job != nil {
 		job.Kill()
 	}
-	if cmd != nil && cmd.Process != nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait() // cosecha: libera handles y evita carrera con loop
+	_ = cmd.Process.Kill()
+	if done != nil {
+		<-done
 	}
 }
 

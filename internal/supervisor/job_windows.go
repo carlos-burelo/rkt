@@ -22,8 +22,9 @@ func newJob(memoryMB uint64) (*jobCtx, error) {
 	var info windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
 	info.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
 	if memoryMB > 0 {
-		info.BasicLimitInformation.LimitFlags |= windows.JOB_OBJECT_LIMIT_PROCESS_MEMORY
-		info.ProcessMemoryLimit = uintptr(memoryMB * 1024 * 1024)
+		// Tope agregado del job (padre + hijos), no solo por proceso.
+		info.BasicLimitInformation.LimitFlags |= windows.JOB_OBJECT_LIMIT_JOB_MEMORY
+		info.JobMemoryLimit = uintptr(memoryMB * 1024 * 1024)
 	}
 	_, err = windows.SetInformationJobObject(
 		h,

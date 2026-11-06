@@ -5,29 +5,21 @@ package accesslog
 import (
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
-	"sync"
 	"time"
+
+	"rkt-proxy/internal/logx"
 )
 
 const maxBytes = 10 << 20 // 10MB, luego rota a .1
 
-// Logger escribe líneas con lock (concurrente).
+// Logger escribe líneas con rotación en caliente y lock interno.
 type Logger struct {
-	mu sync.Mutex
-	f  *os.File
+	f *logx.RotatingFile
 }
 
 // New abre (creando dir) el archivo en append.
 func New(path string) (*Logger, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return nil, fmt.Errorf("crear access dir: %w", err)
-	}
-	if st, err := os.Stat(path); err == nil && st.Size() > maxBytes {
-		_ = os.Rename(path, path+".1")
-	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	f, err := logx.NewRotating(path, maxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("abrir access log: %w", err)
 	}
@@ -78,15 +70,13 @@ func (l *Logger) Middleware(next http.Handler) http.Handler {
 		if rec.status == 0 {
 			rec.status = http.StatusOK
 		}
-		l.mu.Lock()
-		fmt.Fprintf(l.f, "%s - - [%s] %q %d %d %q %q host=%q dur=%s\n",
+		fmt.Fprintf(l.f, "%s - - [%s] %q %d %d %q %q host=%q req=%q dur=%s\n",
 			r.RemoteAddr,
 			start.Format("02/Jan/2006:15:04:05 -0700"),
 			r.Method+" "+r.URL.RequestURI()+" "+r.Proto,
 			rec.status, rec.bytes,
 			r.Referer(), r.UserAgent(),
-			r.Host, time.Since(start).Truncate(time.Microsecond),
+			r.Host, r.Header.Get("X-Request-Id"), time.Since(start).Truncate(time.Microsecond),
 		)
-		l.mu.Unlock()
 	})
 }

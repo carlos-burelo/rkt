@@ -17,6 +17,28 @@ import (
 
 func init() { stableFor = 10 * time.Millisecond }
 
+func TestPreservePersist(t *testing.T) {
+	root := t.TempDir()
+	live := filepath.Join(root, "live")
+	staging := filepath.Join(root, "staging")
+	os.MkdirAll(filepath.Join(live, "data"), 0o755)
+	os.MkdirAll(filepath.Join(staging, "data"), 0o755)
+	os.WriteFile(filepath.Join(live, "data", "db.sqlite"), []byte("persistente"), 0o644)
+	os.WriteFile(filepath.Join(staging, "data", "db.sqlite"), []byte("nuevo"), 0o644)
+	app := config.App{Name: "a", Persist: []string{"data"}}
+	if err := preservePersist(app, live, staging); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(staging, "data", "db.sqlite"))
+	if err != nil || string(b) != "persistente" {
+		t.Fatalf("no preservó data: %q %v", b, err)
+	}
+	bad := config.App{Name: "a", Persist: []string{"../fuera"}}
+	if err := preservePersist(bad, live, staging); err == nil {
+		t.Fatal("persist traversal debe fallar")
+	}
+}
+
 // TestGitTokenNoVaEnArgv: el token viaja en el entorno del hijo, no en la
 // línea de comandos visible desde la lista de procesos.
 func TestGitTokenNoVaEnArgv(t *testing.T) {

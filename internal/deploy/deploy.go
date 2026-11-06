@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -33,6 +34,9 @@ import (
 
 // healthWait tope esperando app sana tras restart.
 const healthWait = 45 * time.Second
+
+// maxDeploy acota clone+build+swap: un repo colgado no bloquea la cola.
+const maxDeploy = 30 * time.Minute
 
 // stableFor ventana continua sana antes de dar el deploy por bueno:
 // atrapa apps que arrancan y mueren al segundo (puerto ocupado, crashloop).
@@ -57,6 +61,8 @@ func Run(app config.App, token string, ctl Controller, out io.Writer, log *slog.
 
 // RunContext despliega y devuelve la rev publicada.
 func RunContext(ctx context.Context, app config.App, token string, ctl Controller, out io.Writer, log *slog.Logger) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, maxDeploy)
+	defer cancel()
 	d := app.Deploy
 	live := app.Dir
 	staging := live + ".staging"
@@ -83,6 +89,14 @@ func RunContext(ctx context.Context, app config.App, token string, ctl Controlle
 		buildEnv["NODE_ENV"] = "production"
 	}
 	if err := RunStepsContext(ctx, d.Build, staging, buildEnv, out); err != nil {
+		_ = os.RemoveAll(staging)
+		return "", err
+	}
+	if err := preservePersist(app, live, staging); err != nil {
+		_ = os.RemoveAll(staging)
+		return "", err
+	}
+	if err := RunStepsContext(ctx, d.Release, staging, buildEnv, out); err != nil {
 		_ = os.RemoveAll(staging)
 		return "", err
 	}
@@ -338,7 +352,7 @@ func RunStepsContext(ctx context.Context, steps []string, dir string, env map[st
 func runStepContext(ctx context.Context, step, dir string, env map[string]string, out io.Writer) error {
 	cmd := platform.ShellContext(ctx, step)
 	cmd.Dir = dir
-	cmd.Env = dotenv.EnvironList(env)
+	cmd.Env = dotenv.EnvironListApp(env)
 	cmd.Stdout = out
 	cmd.Stderr = out
 	// marcador estable para checklist CI en dashboard (SPEC 12.2)
@@ -355,6 +369,70 @@ func runStepContext(ctx context.Context, step, dir string, env map[string]string
 func dirExists(p string) bool {
 	st, err := os.Stat(p)
 	return err == nil && st.IsDir()
+}
+
+// preservePersist copia las rutas persistentes del live anterior al staging
+// nuevo antes del swap. Sin esto, data/uploads/sqlite se pierden en cada
+// deploy porque staging reemplaza el árbol completo.
+func preservePersist(app config.App, live, staging string) error {
+	for _, rel := range app.Persist {
+		clean := filepath.Clean(filepath.FromSlash(rel))
+		if clean == "." || clean == ".." || filepath.IsAbs(clean) ||
+			strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("persist inválido %q", rel)
+		}
+		src := filepath.Join(live, clean)
+		if _, err := os.Stat(src); err != nil {
+			continue // aún no existe: primer deploy
+		}
+		dst := filepath.Join(staging, clean)
+		if err := os.RemoveAll(dst); err != nil {
+			return fmt.Errorf("persist %s: %w", rel, err)
+		}
+		if err := copyTree(src, dst); err != nil {
+			return fmt.Errorf("persist %s: %w", rel, err)
+		}
+	}
+	return nil
+}
+
+func copyTree(src, dst string) error {
+	st, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if !st.IsDir() {
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return err
+		}
+		in, err := os.Open(src)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, st.Mode())
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(out, in); err != nil {
+			out.Close()
+			return err
+		}
+		return out.Close()
+	}
+	if err := os.MkdirAll(dst, st.Mode()); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if err := copyTree(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // FileChange cambio entre dos revisiones del repo.

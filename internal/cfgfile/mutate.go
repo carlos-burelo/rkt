@@ -11,10 +11,11 @@ import (
 
 // DeployPatch campos editables del bloque deploy (token_env no se expone).
 type DeployPatch struct {
-	Repo  string   `json:"repo"`
-	Ref   string   `json:"ref"`
-	Build []string `json:"build"`
-	Auto  bool     `json:"auto"`
+	Repo    string   `json:"repo"`
+	Ref     string   `json:"ref"`
+	Build   []string `json:"build"`
+	Release []string `json:"release"`
+	Auto    bool     `json:"auto"`
 }
 
 // AppPatch cambio parcial de una app. nil = no tocar el campo.
@@ -24,6 +25,10 @@ type AppPatch struct {
 	Dir          *string           `json:"dir"`
 	EnvFile      *string           `json:"env_file"`
 	Static       *string           `json:"static"`
+	Persist      *[]string         `json:"persist"`
+	BasicAuth    *string           `json:"basic_auth"`
+	AllowIPs     *[]string         `json:"allow_ips"`
+	Maintenance  *bool             `json:"maintenance"`
 	RestartDelay *string           `json:"restart_delay"`
 	MinUptime    *string           `json:"min_uptime"`
 	MemoryMB     *uint64           `json:"memory_mb"`
@@ -58,6 +63,18 @@ func UpdateApp(cp *config.Config, name string, p AppPatch) error {
 	if p.Static != nil {
 		app.Static = *p.Static
 	}
+	if p.Persist != nil {
+		app.Persist = append([]string(nil), (*p.Persist)...)
+	}
+	if p.BasicAuth != nil {
+		app.BasicAuth = *p.BasicAuth
+	}
+	if p.AllowIPs != nil {
+		app.AllowIPs = append([]string(nil), (*p.AllowIPs)...)
+	}
+	if p.Maintenance != nil {
+		app.Maintenance = *p.Maintenance
+	}
 	if p.RestartDelay != nil {
 		app.RestartDelay = *p.RestartDelay
 	}
@@ -79,7 +96,7 @@ func UpdateApp(cp *config.Config, name string, p AppPatch) error {
 	if p.Deploy != nil {
 		app.Deploy = &config.Deploy{
 			Repo: p.Deploy.Repo, Ref: p.Deploy.Ref,
-			Build: p.Deploy.Build, Auto: p.Deploy.Auto,
+			Build: p.Deploy.Build, Release: p.Deploy.Release, Auto: p.Deploy.Auto,
 		}
 	}
 	if p.Port != nil {
