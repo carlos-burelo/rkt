@@ -42,6 +42,9 @@ func dirOf(path string) string {
 
 func (r *RotatingFile) open() error {
 	if st, err := os.Stat(r.path); err == nil {
+		if st.IsDir() {
+			return fmt.Errorf("log path es un directorio: %s", r.path)
+		}
 		if st.Size() > r.max {
 			_ = os.Rename(r.path, r.path+".1")
 		} else {

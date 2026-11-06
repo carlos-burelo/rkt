@@ -45,6 +45,14 @@ func TestRotatingFile(t *testing.T) {
 	if _, err := os.Stat(p + ".1"); err != nil {
 		t.Fatalf("rotación al abrir: %v", err)
 	}
+	// Padre que es archivo: MkdirAll falla.
+	padre := filepath.Join(dir, "archivo2")
+	if err := os.WriteFile(padre, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewRotating(filepath.Join(padre, "x.log"), 10); err == nil {
+		t.Fatal("MkdirAll sobre archivo debe fallar")
+	}
 	// max<=0 usa default y un path directorio falla.
 	r3, err := NewRotating(filepath.Join(dir, "sub", "b.log"), 0)
 	if err != nil {
@@ -87,6 +95,18 @@ func TestControlTokenErrores(t *testing.T) {
 	tok, err := EnsureControlToken(cfg)
 	if err != nil || len(tok) < 32 {
 		t.Fatalf("token corto debe regenerarse: %q %v", tok, err)
+	}
+	// WriteFile falla si el path del token es un directorio.
+	cfg2 := filepath.Join(dir, "otro", "rkt.yaml")
+	p2 := ControlTokenPath(cfg2)
+	if err := os.MkdirAll(filepath.Dir(p2), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(p2, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := EnsureControlToken(cfg2); err == nil {
+		t.Fatal("WriteFile sobre directorio debe fallar")
 	}
 }
 

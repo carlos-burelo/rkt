@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -18,7 +19,7 @@ import (
 // idleTTL echa buckets sin uso; sweep cada minuto (var para tests).
 const idleTTL = 3 * time.Minute
 
-var sweepEvery = time.Minute
+var sweepEvery = int64(time.Minute)
 
 type client struct {
 	limiter  *rate.Limiter
@@ -50,7 +51,7 @@ func New(rps float64, burst int, allow ...string) *Limiter {
 		}
 	}
 	go func() {
-		t := time.NewTicker(sweepEvery)
+		t := time.NewTicker(time.Duration(atomic.LoadInt64(&sweepEvery)))
 		defer t.Stop()
 		for {
 			select {

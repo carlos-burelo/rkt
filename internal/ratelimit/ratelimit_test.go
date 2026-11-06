@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -114,9 +115,9 @@ func TestSweepYStop(t *testing.T) {
 }
 
 func TestTickerLimpiaSolo(t *testing.T) {
-	old := sweepEvery
-	sweepEvery = 10 * time.Millisecond
-	t.Cleanup(func() { sweepEvery = old })
+	old := atomic.LoadInt64(&sweepEvery)
+	atomic.StoreInt64(&sweepEvery, int64(10*time.Millisecond))
+	t.Cleanup(func() { atomic.StoreInt64(&sweepEvery, old) })
 	l := New(100, 10)
 	defer l.Stop()
 	l.Allow("viejo.test")
