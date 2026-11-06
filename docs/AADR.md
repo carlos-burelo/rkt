@@ -446,42 +446,59 @@ release, volúmenes, alertas nativas y cadena de suministro firmada.
 
 ### P0
 
-- [ ] SEC-01 · quitar `env_snapshot` del JSON y de la DB; migración de limpieza.
-- [ ] SEC-02 · export redactado por defecto; `--include-secrets` 0600; cifrado.
-- [ ] SEC-03 · token fuera de argv y de env de máquina; credencial por env del hijo.
-- [ ] SEC-04 · state one-time firmado en setup; rate limit.
-- [ ] SEC-05 · auth o SID admin en control loopback.
-- [ ] SEC-06 · borrar `X-Forwarded-*`/`X-Real-IP` entrantes.
-- [ ] SEC-07 · límite de emisión ACME y precheck DNS.
-- [ ] REL-01 · `ReadHeaderTimeout` y deadlines por ruta; SSE/uploads probados.
-- [ ] BUG-01 · `settings set` pasa por `settings.Validate`.
-- [ ] BUG-02 · deploy usa `health_path`.
+- [x] SEC-01 · `env_snapshot` fuera del JSON y de la DB; migración v15
+  (`e62f682`).
+- [ ] **PARCIAL** SEC-02 · export redactado + `--include-secrets` 0600 hecho;
+  falta cifrado del export (`e62f682`).
+- [x] SEC-03 · token fuera de argv (`GIT_CONFIG_*`) y del env de máquina;
+  instalador usa archivo con ACL (`e62f682`).
+- [ ] **PARCIAL** SEC-04 · state one-time con hash en DB y consumo único;
+  falta rate limit del endpoint de setup (`e62f682`).
+- [x] SEC-05 · token de control en acciones loopback (`e62f682`).
+- [x] SEC-06 · `X-Forwarded-*`/`X-Real-IP` entrantes borrados (`e62f682`).
+- [x] SEC-07 · límite de emisión ACME + precheck DNS opcional (`e62f682`).
+- [x] REL-01 · `ReadHeaderTimeout`, sin WriteTimeout global (`e62f682`).
+- [x] BUG-01 · `settings set` valida clave y valor (`e62f682`).
+- [x] BUG-02 · deploy usa `health_path` (`e62f682`).
 
 ### P1
 
-- [ ] SEC-08 · tokens de API, MFA admin, idle timeout, purga, auditoría total.
-- [ ] SEC-09 · rate limit por host/app, allowlist, `Retry-After`, WAF normalizado.
-- [ ] OPS-01 · cabeceras de seguridad y compresión.
-- [ ] OPS-02 · shutdown ordenado y deploy con readiness/solape.
-- [ ] OPS-03 · aplicar o borrar `quota_*`; RAM agregada y CPU.
-- [ ] OPS-04 · `rkt backup/restore` con `VACUUM INTO` y verificación.
-- [ ] OPS-05 · rotación viva y poda programada de historial/logs.
-- [ ] OPS-06 · `/metrics`, request ID, alertas de cert/deploy/disco, Slack/email.
-- [ ] PLAT-01 · build con usuario dedicado, límites y timeout.
-- [ ] PLAT-02 · sin dial por request; pool y circuit breaker.
-- [ ] PLAT-03 · paridad CLI (`cron`, `alerts`, `domains`, `audit`, `backup`, `doctor`, `tls`).
+- [x] SEC-08 · tokens de API, idle timeout, purga, auditoría total y cookie
+  Secure. **MFA excluido por decisión del operador** (`c64426a`).
+- [x] SEC-09 · rate limit por host/app, allowlist, `Retry-After`, WAF
+  normalizado (`c64426a`).
+- [x] OPS-01 · cabeceras de seguridad, CSP y gzip (`c64426a`).
+- [ ] **PARCIAL** OPS-02 · shutdown ordenado con CTRL_BREAK/SIGTERM y timeout;
+  deploy sigue stop→swap→start sin solape azul/verde (`c64426a`).
+- [ ] **PARCIAL** OPS-03 · RAM agregada del Job Object; CPU y cuotas de
+  disco/requests siguen sin enforcement (`c64426a`).
+- [x] OPS-04 · `rkt backup/restore` con `VACUUM INTO` y verificación
+  (`c64426a`).
+- [x] OPS-05 · rotación viva y poda programada de historial/logs
+  (`c64426a`).
+- [ ] **PARCIAL** OPS-06 · `/metrics`, request ID, alertas cert/deploy y
+  Slack/Discord; falta email (`c64426a`).
+- [ ] **PARCIAL** PLAT-01 · env saneado y timeout de build/release; falta
+  usuario de build dedicado y límites CPU/red (`c64426a`).
+- [ ] **PARCIAL** PLAT-02 · sin dial por request y pool; falta circuit breaker
+  (`c64426a`).
+- [ ] **PARCIAL** PLAT-03 · `audit`, `alerts`, `cron` (list), `domains`,
+  `backup`, `doctor`; faltan `tls` y `cron run` (`c64426a`).
 - [ ] CI-01 · firma, SBOM, actions por SHA, `govulncheck`, `staticcheck`, E2E.
 
 ### P2
 
-- [ ] FEAT-01 · certificados propios y DNS-01.
+- [ ] **PARCIAL** FEAT-01 · certificados propios por host/wildcard; falta
+  DNS-01 (`c64426a`).
 - [ ] FEAT-02 · rutas por path, rewrites, redirects y cabeceras.
-- [ ] FEAT-03 · basic auth/IP allowlist por app y mantenimiento.
-- [ ] FEAT-04 · hooks de release, cola de deploys y rollback por SHA.
-- [ ] FEAT-05 · volúmenes/directorio persistente por app.
+- [x] FEAT-03 · basic auth/IP allowlist por app y mantenimiento (`c64426a`).
+- [ ] **PARCIAL** FEAT-04 · hooks `release`; faltan cola de deploys y rollback
+  por SHA (`c64426a`).
+- [x] FEAT-05 · `persist` sobrevive al swap de deploy (`c64426a`).
 - [ ] FEAT-06 · HTTP/3.
-- [ ] FEAT-07 · canales Slack/email nativos.
-- [ ] FEAT-08 · `rkt upgrade`, `doctor`, SBOM y firma.
+- [ ] **PARCIAL** FEAT-07 · Slack/Discord; falta email SMTP (`c64426a`).
+- [ ] **PARCIAL** FEAT-08 · `doctor`; faltan `upgrade`, SBOM y firma
+  (`c64426a`).
 - [ ] FEAT-09 · HA/multi-nodo (decisión estratégica).
 
 ## 9. Registro de avance
