@@ -63,6 +63,35 @@ func TestMiddleware429(t *testing.T) {
 	}
 }
 
+func TestAllowlistYRetryAfter(t *testing.T) {
+	l := New(1, 1, "10.0.0.0/8", "bad-cidr")
+	defer l.Stop()
+	if l.ipAllowed("nope") {
+		t.Fatal("IP inválida no debe permitirse")
+	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusTeapot) })
+	h := l.Middleware(next, log)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "10.1.2.3:123"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTeapot {
+		t.Fatalf("allowlist debe saltar el límite: %d", rec.Code)
+	}
+
+	req = httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "9.9.9.9:123"
+	req.Host = "a.test:443"
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") == "" {
+		t.Fatalf("429 con Retry-After: %d %v", rec.Code, rec.Header())
+	}
+}
+
 func TestSweepYStop(t *testing.T) {
 	l := New(100, 10)
 	defer l.Stop()

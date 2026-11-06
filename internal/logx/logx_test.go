@@ -8,6 +8,88 @@ import (
 	"testing"
 )
 
+func TestRotatingFile(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "a.log")
+	r, err := NewRotating(p, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Write([]byte("12345678")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Write([]byte("abcdefgh")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(p + ".1"); err != nil {
+		t.Fatalf("no rotó: %v", err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatal(err) // idempotente
+	}
+	if _, err := r.Write([]byte("x")); err == nil {
+		t.Fatal("write tras close debe fallar")
+	}
+	// Abrir sobre un archivo grande rota al arrancar.
+	if err := os.WriteFile(p, make([]byte, 20), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r2, err := NewRotating(p, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2.Close()
+	if _, err := os.Stat(p + ".1"); err != nil {
+		t.Fatalf("rotación al abrir: %v", err)
+	}
+	// max<=0 usa default y un path directorio falla.
+	r3, err := NewRotating(filepath.Join(dir, "sub", "b.log"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r3.Write([]byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	if err := r3.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewRotating(dir, 10); err == nil {
+		t.Fatal("abrir un directorio como log debe fallar")
+	}
+}
+
+func TestDirOf(t *testing.T) {
+	if dirOf(`C:\a\b.log`) != `C:\a` || dirOf("/a/b.log") != "/a" || dirOf("b.log") != "." {
+		t.Fatal("dirOf mal")
+	}
+}
+
+func TestControlTokenErrores(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "archivo")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := EnsureControlToken(filepath.Join(file, "rkt.yaml")); err == nil {
+		t.Fatal("dir de logs sobre archivo debe fallar")
+	}
+	cfg := filepath.Join(dir, "rkt.yaml")
+	path := ControlTokenPath(cfg)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("corto\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tok, err := EnsureControlToken(cfg)
+	if err != nil || len(tok) < 32 {
+		t.Fatalf("token corto debe regenerarse: %q %v", tok, err)
+	}
+}
+
 func TestControlTokenPersistente(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "rkt.yaml")
 	t1, err := EnsureControlToken(cfg)

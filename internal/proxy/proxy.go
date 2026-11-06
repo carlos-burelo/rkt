@@ -196,7 +196,7 @@ func (t *graceTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if req.Context().Err() != nil || time.Now().After(deadline) || !isDialErr(err) {
 			return nil, err
 		}
-		if req.Body != nil {
+		if req.Body != nil && req.Body != http.NoBody {
 			if req.GetBody == nil {
 				return nil, err
 			}

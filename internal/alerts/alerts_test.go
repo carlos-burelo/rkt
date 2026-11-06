@@ -52,6 +52,7 @@ func TestFiredKinds(t *testing.T) {
 		{"cpu_pct", Metrics{CPUPct: 88}, 88},
 		{"mem_pct", Metrics{MemPct: 93}, 93},
 		{"temp_c", Metrics{TempC: 82}, 82},
+		{"deploy_failed", Metrics{DeployFailed: 3}, 3},
 	}
 	for _, c := range cases {
 		r := store.AlertRule{ID: 9, Kind: c.kind, Threshold: c.want - 1, WindowMin: 60, Enabled: true}
@@ -61,6 +62,14 @@ func TestFiredKinds(t *testing.T) {
 		if c.m.Value(c.kind) != c.want {
 			t.Fatalf("%s Value = %v", c.kind, c.m.Value(c.kind))
 		}
+	}
+	rc := store.AlertRule{Kind: "cert_days", Threshold: 10, Enabled: true}
+	if !Fired(rc, Metrics{CertDays: 7}, now) || (Metrics{CertDays: 7}).Value("cert_days") != 7 {
+		t.Fatal("cert_days debe disparar con días restantes <= umbral")
+	}
+	rd := store.AlertRule{Kind: "deploy_failed", Threshold: 2, Enabled: true}
+	if !Fired(rd, Metrics{DeployFailed: 2}, now) || (Metrics{DeployFailed: 2}).Value("deploy_failed") != 2 {
+		t.Fatal("deploy_failed mal evaluado")
 	}
 	r := store.AlertRule{Kind: "otro", Threshold: 0, Enabled: true}
 	if Fired(r, Metrics{}, now) || (Metrics{}).Value("otro") != 0 {
