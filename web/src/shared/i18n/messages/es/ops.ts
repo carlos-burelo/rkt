@@ -7,6 +7,7 @@ export const ops = {
   "ops.logs.level.warning": "aviso",
   "ops.logs.level.error": "error",
   "ops.logs.meta.live": "en vivo · 2s",
+  "ops.logs.meta.retry": "reconectando…",
   "ops.logs.meta.paused": "pausado",
   "ops.logs.meta.build": "compilación",
   "ops.logs.meta.operational": " · operativo",

@@ -4,6 +4,8 @@ export const shared = {
   "shared.sidebar.toggle": "Alternar barra lateral",
   "shared.http.unauthorized": "No autorizado (inicia sesión)",
   "shared.http.status": "HTTP {status}",
+  "shared.http.timeout": "sin respuesta del servidor (reintentando…)",
+  "shared.http.offline": "sin conexión con el servidor (reintentando…)",
   "shared.action.appOk": "{action} · {app}: correcto",
   "shared.action.retryOk": "reintento correcto · {rev}",
   "shared.log.none": "sin registro",

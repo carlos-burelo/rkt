@@ -213,6 +213,7 @@ export function Logs() {
   const [tab, setTab] = useState<"runtime" | "build">("runtime");
   const [q, setQ] = useState("");
   const [live, setLive] = useState(true);
+  const [streamState, setStreamState] = useState<"live" | "retrying">("live");
   const [levels, setLevels] = useState<Record<Level, boolean>>({ info: true, warning: true, error: true });
   const [stream, setStream] = useState<"all" | Stream>("all");
   const [log, setLog] = useState("");
@@ -240,15 +241,21 @@ export function Logs() {
 
   useEffect(() => {
     setStream("all");
-  }, [appFilter]);
+    setStreamState("live");
+  }, [appFilter, online, live, tab]);
 
   useEffect(() => {
     if (!live || tab !== "runtime" || !online) return;
     const q = `n=200${appFilter !== "" ? `&app=${encodeURIComponent(appFilter)}` : ""}`;
-    return streamLog(`/api/v1/logs/stream?${q}`, (text, append) => {
-      if (append) setLog((prev) => prev + text);
-      else setLog(text);
-    });
+    return streamLog(
+      `/api/v1/logs/stream?${q}`,
+      (text, append) => {
+        if (append) setLog((prev) => prev + text);
+        else setLog(text);
+      },
+      undefined,
+      setStreamState,
+    );
   }, [live, tab, appFilter, online]);
 
   useEffect(() => {
@@ -316,10 +323,12 @@ export function Logs() {
         description={t("ops.logs.description")}
         meta={
           <span className="tnum inline-flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
-            <Dot status={tab === "runtime" && live ? "running" : "stopped"} pulse={tab === "runtime" && live} />
+            <Dot status={tab === "runtime" && live ? (streamState === "retrying" ? "degraded" : "running") : "stopped"} pulse={tab === "runtime" && live} />
             {tab === "runtime"
               ? live
-                ? t("ops.logs.meta.live")
+                ? streamState === "retrying"
+                  ? t("ops.logs.meta.retry")
+                  : t("ops.logs.meta.live")
                 : t("ops.logs.meta.paused")
               : t("ops.logs.meta.build")}
             {appFilter ? ` · ${appFilter}` : t("ops.logs.meta.operational")}

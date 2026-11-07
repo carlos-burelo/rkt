@@ -23,6 +23,7 @@ interface UI {
   setCreateOpen: (b: boolean) => void;
   setSel: (d: Deployment | null) => void;
   fail: (e: unknown) => void;
+  clearErr: () => void;
   act: (app: string, a: "restart" | "deploy" | "rollback" | "start" | "stop") => Promise<void>;
   retry: (id: number) => void;
 }
@@ -58,6 +59,7 @@ export const useUI = create<UI>()((set) => ({
     }
     set({ err: e instanceof Error ? e.message : t("common.error") });
   },
+  clearErr: () => set({ err: "" }),
   act: async (app, a) => {
     try {
       await appAction(app, a);
