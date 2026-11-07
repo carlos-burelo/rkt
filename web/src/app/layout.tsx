@@ -22,6 +22,7 @@ import { useUI } from "./ui";
 import { useFleet } from "../features/overview/hooks";
 import { CreateDialog } from "../features/apps/CreateDialog";
 import { DeployDrawer } from "../features/deployments/DeployDrawer";
+import { AppSidebar, APP_TABS } from "../features/apps/AppSidebar";
 import { useI18n } from "../shared/i18n";
 import { ThemeToggle } from "../shared/theme/ThemeToggle";
 import { GROUPS, PAGE_LABEL } from "./nav";
@@ -41,12 +42,14 @@ export function ShellLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const crumbs = location.pathname.split("/").filter(Boolean);
-  const title = t(PAGE_LABEL[crumbs[0] ?? "overview"] ?? "nav.overview");
+  const currentApp = location.pathname.startsWith("/app/") ? decodeURIComponent(crumbs[1] ?? "") : "";
+  const title = currentApp
+    ? t(APP_TABS.find((tb) => tb.id === crumbs[2])?.label ?? "nav.app")
+    : t(PAGE_LABEL[crumbs[0] ?? "overview"] ?? "nav.overview");
   const apps = status?.apps ?? [];
   const running = apps.filter((a) => a.running && !a.failed).length;
   const failed = apps.filter((a) => a.failed).length;
   const runningDeps = deps.filter((d) => d.status === "running").length;
-  const currentApp = location.pathname.startsWith("/app/") ? decodeURIComponent(crumbs[1] ?? "") : "";
 
   useEffect(() => {
     document.title = `rkt · ${title}`;
@@ -125,7 +128,7 @@ export function ShellLayout() {
             </SidebarMenuItem>
           </SidebarMenu>
 
-          {canWrite && (
+          {canWrite && !currentApp && (
             <Button className="mt-3 w-full justify-between px-2.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0" size="sm" onClick={() => setCreateOpen(true)} aria-keyshortcuts="N">
               <span className="inline-flex items-center gap-1.5">
                 <Plus className="h-3.5 w-3.5" />
@@ -150,6 +153,10 @@ export function ShellLayout() {
         </SidebarHeader>
 
         <SidebarContent className="gap-0 px-2 pb-2">
+          {currentApp ? (
+            <AppSidebar name={currentApp} />
+          ) : (
+          <>
           {GROUPS.map((g) => {
             const items = g.items.filter((n) => !("admin" in n && n.admin) || isAdmin);
             if (items.length === 0) return null;
@@ -188,7 +195,6 @@ export function ShellLayout() {
               </SidebarGroup>
             );
           })}
-
           <SidebarGroup className="mt-3 py-0 group-data-[collapsible=icon]:p-0">
             <SidebarGroupLabel className="mb-1 flex h-4 items-center gap-2 px-2 font-mono text-[9px] tracking-[0.18em] uppercase text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
               <span>{t("shell.ports")}</span>
@@ -238,6 +244,8 @@ export function ShellLayout() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+          </>
+          )}
         </SidebarContent>
 
         <SidebarFooter className="gap-2 border-t border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:px-2">

@@ -1,11 +1,10 @@
 import { useEffect } from "react";
-import { Outlet, useLocation, useNavigate, useParams } from "react-router";
+import { Outlet, useNavigate, useParams } from "react-router";
 import { ExternalLink, Play, RotateCw, Square } from "lucide-react";
 import { toast } from "sonner";
 import { Dot, StatusBadge } from "../../shared/components/ui";
 import { stateLabel } from "../../shared/lib/labels";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFleet } from "../overview/hooks";
 import { publicUrl, publicHost } from "../../shared/lib/url";
 import { useUI } from "../../app/ui";
@@ -14,16 +13,6 @@ import { fixHost } from "../routes/api";
 import { useI18n } from "../../shared/i18n";
 import { ConfirmButton } from "../../shared/components/ConfirmButton";
 import { buildApp } from "./api";
-
-const TABS = [
-  { id: "overview", label: "nav.overview" },
-  { id: "usage", label: "apps.usage.title" },
-  { id: "deploys", label: "nav.deployments" },
-  { id: "logs", label: "nav.logs" },
-  { id: "analytics", label: "nav.analytics" },
-  { id: "env", label: "nav.environment" },
-  { id: "settings", label: "nav.settings" },
-] as const;
 
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -39,13 +28,11 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
 export function AppTabs() {
   const { t, tn } = useI18n();
   const { name = "" } = useParams();
-  const location = useLocation();
   const navigate = useNavigate();
   const { status, metas } = useFleet();
   const act = useUI((u) => u.act);
   const setAppFilter = useUI((u) => u.setAppFilter);
   const { canWrite } = useAuth();
-  const active = location.pathname.split("/").pop() ?? "overview";
 
   useEffect(() => {
     if (name) setAppFilter(name);
@@ -56,7 +43,6 @@ export function AppTabs() {
   const state = meta?.disabled ? "stopped" : st?.failed ? "failed" : st?.running ? (st.http_ok === false ? "degraded" : "running") : "stopped";
   const domains = meta?.domains ?? [];
   const external = !!meta?.external;
-  const tabs = TABS.filter((tab) => !(external && tab.id === "deploys"));
   const port = meta?.port ? `:${meta.port}` : t("apps.header.portUnassigned");
   const destinations =
     domains.length > 0
@@ -183,23 +169,6 @@ export function AppTabs() {
           </Cell>
         </div>
       </header>
-      <Tabs
-        value={TABS.some((tab) => tab.id === active) ? active : "overview"}
-        onValueChange={(v) => {
-          if (v) navigate(v);
-        }}
-      >
-        {/* scroll horizontal: 6 tabs no caben a 390px sin desbordar */}
-        <div className="-mx-1 overflow-x-auto px-1">
-          <TabsList className="w-max gap-5 sm:w-full">
-            {tabs.map((tab) => (
-              <TabsTrigger key={tab.id} value={tab.id}>
-                {t(tab.label)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
-      </Tabs>
       <Outlet />
     </div>
   );

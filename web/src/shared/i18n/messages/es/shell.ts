@@ -7,6 +7,7 @@ export const shell = {
   "shell.noConnection": "sin conexión · lectura local",
   "shell.search": "Buscar o ejecutar",
   "shell.newApp": "Nueva app",
+  "shell.backToApps": "aplicaciones",
   "shell.logout": "Salir",
   "shell.offline": "sin conexión",
   "shell.loadingFleet": "cargando apps…",
