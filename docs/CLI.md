@@ -62,7 +62,7 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 | `settings list` | `node_bin, python_bin, base_domain, port_pool, site_name, quota_reqs, quota_bytes, public_ip, retention_*, dashboard_host, dashboard_listen` |
 | `settings set CLAVE=valor` | Escribe setting (valida clave y valor) |
 | `users list` | Usuarios dashboard (`name, role, created_at`) |
-| `users add <nombre> [--role admin]` | Alta con password sin eco (el primero se fuerza a admin) |
+| `users add <nombre> [--role admin] [--password-stdin]` | Alta con password sin eco (el primero se fuerza a admin) |
 | `users del <nombre>` | Baja (protege último admin, mata sesiones) |
 | `users passwd <nombre>` | Rota password e invalida sesiones |
 | `config export [file] [--include-secrets]` | JSON redactado por defecto; `--include-secrets` para respaldo restaurable |

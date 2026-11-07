@@ -54,7 +54,7 @@ var specs = []Spec{
 	{Key: KeyRetentionLogDays, Restart: false, Validate: validateNonNegative},
 	{Key: KeyRetentionBackupDays, Restart: false, Validate: validateNonNegative},
 	{Key: KeyDashboardHost, Restart: false, Validate: validateDashboardHost},
-	{Key: KeyDashboardListen, Restart: true, Validate: validateListenAddr},
+	{Key: KeyDashboardListen, Restart: true, Validate: validateListenOrOff},
 	{Key: KeyListenHTTP, Restart: true, Validate: validateListenAddr},
 	{Key: KeyListenHTTPS, Restart: true, Validate: validateListenOrOff},
 }

@@ -25,7 +25,9 @@ param(
   [switch]$SkipFirewall,
   [switch]$Force,
   [switch]$Rollback,
-  [string]$GithubToken = ""
+  [string]$GithubToken = "",
+  [switch]$NoPublicDashboard,
+  [string]$AdminUser = "admin"
 )
 $ErrorActionPreference = "Stop"
 
@@ -177,22 +179,109 @@ if ($st -ne "Running") {
 $Version | Out-File $verFile -Encoding ascii -NoNewline
 sc.exe query Rkt
 
-# 9. dashboard listo: espera healthz, imprime URL y abre browser.
-# Tras esto no hay comandos: el admin inicial se crea en el wizard.
-$dashUrl = "http://127.0.0.1:8090/"
-$ready = $false
-for ($i = 0; $i -lt 30; $i++) {
-  try {
-    $r = Invoke-WebRequest -Uri "http://127.0.0.1:8090/api/v1/auth/status" -UseBasicParsing -TimeoutSec 3
-    if ($r.StatusCode -eq 200) { $ready = $true; break }
-  } catch { Start-Sleep 2 }
+# 9. autoconfiguración: IP pública, dashboard externo, firewall y admin.
+# El instalador no deja pasos manuales para entrar desde fuera.
+function Rkt-CLI { param([string[]]$CliArgs) & $exe -config $cfg @CliArgs }
+
+function Wait-RktHealth {
+  for ($i = 0; $i -lt 40; $i++) {
+    try {
+      $r = Invoke-WebRequest -Uri "http://127.0.0.1:8090/api/v1/auth/status" -UseBasicParsing -TimeoutSec 3
+      if ($r.StatusCode -eq 200) { return $true }
+    } catch {}
+    Start-Sleep 2
+  }
+  return $false
 }
+
+$settings = @{}
+try {
+  (& $exe -config $cfg settings list) | ForEach-Object {
+    $kv = $_ -split "=", 2
+    if ($kv.Count -eq 2) { $settings[$kv[0]] = $kv[1] }
+  }
+} catch {}
+
+$publicIp = ""
+try { $publicIp = (Invoke-RestMethod -Uri "https://api.ipify.org" -TimeoutSec 6).Trim() } catch {}
+if ($publicIp -and [string]::IsNullOrWhiteSpace($settings["public_ip"])) {
+  try { Rkt-CLI @("settings", "set", "public_ip=$publicIp") | Out-Null } catch {}
+  $settings["public_ip"] = $publicIp
+}
+
+$adminCreated = $false
+$adminPass = ""
+$usersOut = ""
+try { $usersOut = ((& $exe -config $cfg users list) -join "`n") } catch {}
+if ($usersOut -match "sin usuarios") {
+  $chars = (48..57) + (65..90) + (97..122)
+  $adminPass = -join ($chars | Get-Random -Count 24 | ForEach-Object { [char]$_ })
+  $adminPass | & $exe -config $cfg users add $AdminUser --role admin --password-stdin | Out-Null
+  if ($LASTEXITCODE -eq 0) { $adminCreated = $true }
+}
+
+$dashboardExposed = $false
+$dashChanged = $false
+$dashPort = 8090
+if ($NoPublicDashboard) {
+  try {
+    Rkt-CLI @("settings", "set", "dashboard_listen=off") | Out-Null
+    Rkt-CLI @("settings", "set", "dashboard_host=off") | Out-Null
+    $dashChanged = $true
+  } catch {}
+}
+$existingListen = [string]$settings["dashboard_listen"]
+if ($existingListen -match ":(\d+)$") { $dashPort = [int]$Matches[1] }
+if (-not $NoPublicDashboard -and -not [string]::IsNullOrWhiteSpace($existingListen) -and $existingListen -ne "off") {
+  $dashboardExposed = $true
+}
+if (-not $NoPublicDashboard -and [string]::IsNullOrWhiteSpace($existingListen)) {
+  $busy = Get-NetTCPConnection -LocalPort 8090 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+  $busyByRkt = $false
+  if ($busy) {
+    try { $busyByRkt = ((Get-Process -Id $busy.OwningProcess -ErrorAction Stop).ProcessName -eq "rkt") } catch {}
+  }
+  if (-not $busy -or $busyByRkt) {
+    try {
+      Rkt-CLI @("settings", "set", "dashboard_listen=0.0.0.0:8090") | Out-Null
+      $dashboardExposed = $true
+      $dashChanged = $true
+    } catch { Write-Warning "No pude configurar dashboard_listen: $_" }
+  } else {
+    Write-Warning "Puerto 8090 ocupado por otro proceso; dashboard queda solo en loopback."
+  }
+}
+
+if (-not $SkipFirewall -and $dashboardExposed) {
+  if (-not (Get-NetFirewallRule -DisplayName "RKT Dashboard" -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -DisplayName "RKT Dashboard" -Direction Inbound `
+      -LocalPort $dashPort -Protocol TCP -Action Allow | Out-Null
+  }
+}
+
+if ($dashChanged) {
+  Restart-Service Rkt -Force
+  Start-Sleep 2
+}
+$ready = Wait-RktHealth
+$dashLocal = "http://127.0.0.1:8090/"
+$dashUrl = $dashLocal
+if ($dashboardExposed -and $publicIp) { $dashUrl = "http://${publicIp}:${dashPort}/" }
+if ($dashboardExposed) { Write-Host "Dashboard 8090 es HTTP. Para TLS: define base_domain y listen_https=:443." }
+
 Write-Host ""
 if ($ready) {
-  Write-Host "Dashboard listo: $dashUrl"
+  Write-Host "Dashboard: $dashUrl"
+  if ($dashboardExposed) { Write-Host "También local: $dashLocal" }
+  if ($adminCreated) {
+    Write-Host "Admin: $AdminUser"
+    Write-Host "Password: $adminPass"
+    Write-Host "Cambia la password tras entrar: rkt users passwd $AdminUser"
+  } else {
+    Write-Host "Usa el admin existente (o crea uno: rkt users add $AdminUser --role admin)."
+  }
   try { Start-Process $dashUrl } catch { Write-Warning "No pude abrir el browser: abre $dashUrl a mano." }
-  Write-Host "Crea tu admin en el wizard (solo pasa una vez). Sin comandos."
 } else {
-  Write-Warning "Servicio arriba pero healthz no responde. Revisa config y logs, luego abre $dashUrl"
+  Write-Warning "Servicio arriba pero healthz no responde. Revisa logs y luego abre $dashLocal"
 }
-Write-Host "Requiere: DNS A de tus dominios -> IP del VPS, puertos 80/443 públicos."
+Write-Host "DNS de apps: crea A <app>.<tu-dominio> -> $publicIp y define base_domain en Ajustes."

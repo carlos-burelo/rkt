@@ -90,6 +90,12 @@ func prompt(label, def string) string {
 // promptPassword lee sin eco (mín 12, pide dos veces). Sin consola
 // (pipe/tests), cae a lectura visible con un solo reader (dos
 // readers se roban el buffer y ciclan).
+// oneLineStdin lee una línea (para --password-stdin del instalador).
+func oneLineStdin() string {
+	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	return strings.TrimSpace(line)
+}
+
 func promptPassword() string {
 	fd := int(os.Stdin.Fd())
 	var fb *bufio.Reader
@@ -141,19 +147,22 @@ func cmdUsers(args []string, cfgPath string) {
 			fmt.Printf("%s\t%s\t%s\n", u.Name, u.Role, u.CreatedAt)
 		}
 	case "add":
-		role, rest := "viewer", []string{}
+		role, rest, stdinPass := "viewer", []string{}, false
 		for i := 1; i < len(args); i++ {
-			if args[i] == "--role" && i+1 < len(args) {
+			switch {
+			case args[i] == "--role" && i+1 < len(args):
 				role = args[i+1]
 				i++
-			} else if strings.HasPrefix(args[i], "--role=") {
+			case strings.HasPrefix(args[i], "--role="):
 				role = strings.TrimPrefix(args[i], "--role=")
-			} else {
+			case args[i] == "--password-stdin":
+				stdinPass = true
+			default:
 				rest = append(rest, args[i])
 			}
 		}
 		if len(rest) != 1 {
-			log.Fatal("uso: users add <nombre> [--role admin]")
+			log.Fatal("uso: users add <nombre> [--role admin] [--password-stdin]")
 		}
 		name := rest[0]
 		n, err := db.CountUsers()
@@ -164,7 +173,16 @@ func cmdUsers(args []string, cfgPath string) {
 			fmt.Println("primer usuario debe ser admin (forzando --role admin)")
 			role = store.RoleAdmin
 		}
-		if err := db.CreateUser(name, promptPassword(), role); err != nil {
+		pass := ""
+		if stdinPass {
+			pass = oneLineStdin()
+			if len(pass) < 12 {
+				log.Fatal("users add: password de stdin demasiado corto (mín 12)")
+			}
+		} else {
+			pass = promptPassword()
+		}
+		if err := db.CreateUser(name, pass, role); err != nil {
 			log.Fatalf("users add: %v", err)
 		}
 		fmt.Printf("usuario %s (%s) creado\n", name, role)
@@ -177,13 +195,30 @@ func cmdUsers(args []string, cfgPath string) {
 		}
 		fmt.Printf("usuario %s borrado\n", args[1])
 	case "passwd":
-		if len(args) != 2 {
-			log.Fatal("uso: users passwd <nombre>")
+		rest, stdinPass := []string{}, false
+		for _, a := range args[1:] {
+			if a == "--password-stdin" {
+				stdinPass = true
+				continue
+			}
+			rest = append(rest, a)
 		}
-		if err := db.SetPassword(args[1], promptPassword()); err != nil {
+		if len(rest) != 1 {
+			log.Fatal("uso: users passwd <nombre> [--password-stdin]")
+		}
+		pass := ""
+		if stdinPass {
+			pass = oneLineStdin()
+			if len(pass) < 12 {
+				log.Fatal("users passwd: password de stdin demasiado corto (mín 12)")
+			}
+		} else {
+			pass = promptPassword()
+		}
+		if err := db.SetPassword(rest[0], pass); err != nil {
 			log.Fatalf("users passwd: %v", err)
 		}
-		fmt.Printf("password de %s actualizado (sesiones invalidadas)\n", args[1])
+		fmt.Printf("password de %s actualizado (sesiones invalidadas)\n", rest[0])
 	default:
 		log.Fatalf("users: subcomando %q (list|add|del|passwd)", args[0])
 	}

@@ -119,8 +119,13 @@ irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1
 ```
 
 El instalador descarga el release, verifica checksum, registra el servicio
-Windows, abre firewall y deja `rkt` en el `PATH`. La configuración se administra
-desde el dashboard o el CLI; no se edita YAML.
+Windows, abre firewall y deja `rkt` en el `PATH`. También autoconfigura la
+IP pública, expone el dashboard en `http://IP:8090`, abre ese puerto y crea el
+primer admin con password aleatoria (la imprime una vez). La configuración se
+administra desde el dashboard o el CLI; no se edita YAML.
+
+Opciones: `-NoPublicDashboard` deja el dashboard solo en loopback;
+`-AdminUser nombre` cambia el usuario inicial.
 
 ## CLI
 
