@@ -52,7 +52,7 @@ func TestDetectNextArranca(t *testing.T) {
 	if p.Kind != "next" || p.IsStatic() {
 		t.Fatalf("plan = %+v, quiero next con proceso", p)
 	}
-	if strings.Join(p.Start, " ") != "pnpm run start" {
+	if strings.Join(p.Start, " ") != "pnpm exec next start -H 127.0.0.1" {
 		t.Fatalf("start = %v", p.Start)
 	}
 	if p.PM != "pnpm" || len(p.Install) != 1 || p.Install[0] != "pnpm install" {

@@ -567,6 +567,7 @@ func (nilFS) Open(name string) (fs.File, error) { return nil, fs.ErrNotExist }
 // SERVICIO (variable de máquina para SYSTEM), log a archivo.
 // actor queda en historial (usuario api, hook, discover, auto, local).
 func (p *Program) deployApp(name, actor string) (string, error) {
+	p.normalizeNextStart(name)
 	cfg := p.live.Get()
 	var app *config.App
 	for i := range cfg.Apps {
@@ -621,6 +622,43 @@ func (p *Program) retryDeployment(id int64, actor string) (string, error) {
 	return "", fmt.Errorf("app %q inexistente", appName)
 }
 
+// isStandardPnpmStart detecta el arranque por defecto de una app Node.
+func isStandardPnpmStart(a *config.App) bool {
+	base := strings.ToLower(filepath.Base(a.Command))
+	base = strings.TrimSuffix(strings.TrimSuffix(base, ".cmd"), ".exe")
+	return base == "pnpm" && len(a.Args) == 2 && a.Args[0] == "run" && a.Args[1] == "start"
+}
+
+// normalizeNextStart migra apps Next creadas antes del arranque canónico:
+// `pnpm run start` puede fijar -p 3001 y desincronizar el proxy. Deja
+// `pnpm exec next start -H 127.0.0.1` para que use PORT.
+func (p *Program) normalizeNextStart(name string) {
+	if p.db == nil || p.sup == nil {
+		return
+	}
+	cfg := p.live.Get()
+	app := cfgfile.FindApp(cfg, name)
+	if app == nil || app.External() || !isStandardPnpmStart(app) {
+		return
+	}
+	plan, err := buildpack.DetectDir(app.Dir)
+	if err != nil || plan.Kind != "next" || len(plan.Start) == 0 {
+		return
+	}
+	cmd := plan.Start[0]
+	args := append([]string(nil), plan.Start[1:]...)
+	cp, err := cfgfile.MutateFleet(p.db, func(cp *config.Config) error {
+		return cfgfile.UpdateApp(cp, name, cfgfile.AppPatch{Command: &cmd, Args: &args})
+	})
+	if err != nil {
+		p.log.Warn("normalizar start de Next", "app", name, "err", err)
+		return
+	}
+	p.live.Swap(cp)
+	p.sup.Apply(cp.Apps, cp.GlobalEnv)
+	p.log.Info("start de Next normalizado (PORT + loopback)", "app", name, "start", strings.Join(plan.Start, " "))
+}
+
 // buildLocal compila una app de directorio local con su plan (buildpack):
 // registra la salida como deployment en curso, corre install+build y
 // reinicia la unidad al terminar. Devuelve el id para seguir el log.
@@ -628,6 +666,7 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 	if err := p.beginOp(name); err != nil {
 		return 0, err
 	}
+	p.normalizeNextStart(name)
 	release := true
 	defer func() {
 		if release {
@@ -735,6 +774,7 @@ func (p *Program) cancelDeploy(id int64) bool {
 // deployAppAsync arranca el deploy en segundo plano y devuelve el id de la
 // salida para seguirlo en vivo (creación de apps estilo Vercel).
 func (p *Program) deployAppAsync(name, actor string) (int64, error) {
+	p.normalizeNextStart(name)
 	cfg := p.live.Get()
 	var app *config.App
 	for i := range cfg.Apps {

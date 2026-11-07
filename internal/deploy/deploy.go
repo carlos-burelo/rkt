@@ -190,7 +190,7 @@ func WaitAppHTTP(app config.App, timeout time.Duration) error {
 			last = err
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("app %s no responde en %s: %v", app.Name, url, last)
+			return fmt.Errorf("app %s no responde en %s: %v (el start debe escuchar en $PORT; Next: `next start -H 127.0.0.1`, sin -p)", app.Name, url, last)
 		}
 		time.Sleep(time.Second)
 	}

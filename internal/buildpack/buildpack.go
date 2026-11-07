@@ -266,11 +266,10 @@ func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
 		if has("build") {
 			plan.Build = []string{pm + " run build"}
 		}
-		if has("start") {
-			plan.Start = runCmd(pm, "start")
-		} else {
-			plan.Start = execCmd(pm, "next", "start")
-		}
+		// El puerto lo manda rkt (PORT). `pnpm run start` puede fijar
+		// `-p 3001` y desincronizar la app del proxy; Next start directo
+		// respeta PORT y escucha solo loopback.
+		plan.Start = execCmd(pm, "next", "start", "-H", "127.0.0.1")
 	case pj.dep("@sveltejs/kit"):
 		plan.Kind = "sveltekit"
 		if has("build") {
