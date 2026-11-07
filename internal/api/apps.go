@@ -52,6 +52,12 @@ func (d *Deps) handleApps(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		// Reconciliar ya: la UI suele lanzar el primer build al crear y el
+		// watcher de 10s aún no habría añadido la app al supervisor.
+		if d.Apply != nil {
+			cfg := d.Live.Get()
+			d.Apply(cfg.Apps, cfg.GlobalEnv)
+		}
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, map[string]string{"app": name})
 		return

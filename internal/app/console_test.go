@@ -53,6 +53,24 @@ func TestConsoleOnly(t *testing.T) {
 	}
 }
 
+func TestPortOfYLoopbackRemote(t *testing.T) {
+	if portOf("0.0.0.0:8090") != "8090" || portOf("sin-puerto") != "" {
+		t.Fatal("portOf mal")
+	}
+	for addr, want := range map[string]bool{
+		"127.0.0.1:123": true,
+		"[::1]:123":     true,
+		"10.0.0.2:123":  false,
+		"localhost:123": true,
+	} {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.RemoteAddr = addr
+		if got := isLoopbackRemote(r); got != want {
+			t.Fatalf("%s = %v", addr, got)
+		}
+	}
+}
+
 func TestDashboardReturnURL(t *testing.T) {
 	cfg := config.Default()
 	cfg.Dashboard.Host = "rkt.test"

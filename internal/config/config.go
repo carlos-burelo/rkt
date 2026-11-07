@@ -595,9 +595,6 @@ func (cfg *Config) Validate() error {
 		if _, _, err := net.SplitHostPort(l); err != nil {
 			return fmt.Errorf("dashboard.listen inválido %q (usa host:puerto, ej 0.0.0.0:8090)", l)
 		}
-		if l == cfg.Healthz.Listen {
-			return fmt.Errorf("dashboard.listen no puede ser igual a healthz.listen")
-		}
 	}
 	if cfg.RateLimit.Enabled && (cfg.RateLimit.RPS <= 0 || cfg.RateLimit.Burst < 1) {
 		return fmt.Errorf("rate_limit inválido: rps>0 y burst>=1")

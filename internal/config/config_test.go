@@ -454,14 +454,15 @@ func TestDashboardConfig(t *testing.T) {
 		t.Fatal("listen sin puerto debe fallar")
 	}
 	cfg = Default()
+	cfg.ApplyDefaults()
 	cfg.Dashboard.Host = "https://rkt.test"
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("host con esquema debe fallar")
 	}
 	cfg.Dashboard.Host = "rkt.test"
 	cfg.Dashboard.Listen = cfg.Healthz.Listen
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("listen igual a healthz debe fallar")
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("mismo puerto se fusiona, no falla: %v", err)
 	}
 }
 

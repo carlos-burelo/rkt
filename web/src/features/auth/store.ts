@@ -51,12 +51,15 @@ export const useAuth = create<AuthState>()((set) => ({
     set({ ready: true });
   },
   setWho: (m) =>
-    set({
+    set((s) => ({
       who: m,
       authed: m !== null,
+      // Tras setup, setupRequired seguía true y la puerta devolvía a /setup
+      // hasta recargar. Con sesión válida el setup ya no aplica.
+      setupRequired: m !== null ? false : s.setupRequired,
       isAdmin: m?.role === "admin",
       canWrite: m?.role === "admin" || m?.role === "operator",
-    }),
+    })),
   doLogout: () => {
     logout().finally(() =>
       set({ who: null, authed: false, isAdmin: false, canWrite: false }),

@@ -8,6 +8,27 @@ import (
 	"rkt-proxy/internal/config"
 )
 
+// portOf extrae el puerto de host:puerto ("" si no hay).
+func portOf(addr string) string {
+	if _, p, err := net.SplitHostPort(addr); err == nil {
+		return p
+	}
+	return ""
+}
+
+// isLoopbackRemote true si la petición viene de loopback.
+func isLoopbackRemote(r *http.Request) bool {
+	host := r.RemoteAddr
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 // hostOnly quita el puerto de un Host header.
 func hostOnly(h string) string {
 	if host, _, err := net.SplitHostPort(h); err == nil {

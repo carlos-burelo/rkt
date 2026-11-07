@@ -335,15 +335,35 @@ func (p *Program) Run() {
 			}
 		}
 	}()
+	shareDashPort := false
 	if cfg.Healthz.Enabled {
 		controlToken, err := logx.EnsureControlToken(p.cfgPath)
 		if err != nil {
 			p.log.Error("token de control no disponible; acciones bloqueadas", "err", err)
 		}
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.restartApp, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal, Token: controlToken})
+		shareDashPort = cfg.Dashboard.Listen != "" && portOf(cfg.Dashboard.Listen) == portOf(cfg.Healthz.Listen)
+		addr := cfg.Healthz.Listen
+		if shareDashPort {
+			// Windows no deja bindear 0.0.0.0:8090 y 127.0.0.1:8090 a la
+			// vez. Un solo listener sirve consola pública y control local.
+			addr = cfg.Dashboard.Listen
+		}
 		srvHealth := &http.Server{
-			Addr: cfg.Healthz.Listen,
+			Addr: addr,
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if shareDashPort && !isLoopbackRemote(r) {
+					if strings.HasPrefix(r.URL.Path, "/api/") {
+						apiH.ServeHTTP(w, r)
+						return
+					}
+					if r.URL.Path == "/metrics" || isHealthPath(r.URL.Path) {
+						http.NotFound(w, r)
+						return
+					}
+					dashH.ServeHTTP(w, r)
+					return
+				}
 				// Métricas Prometheus solo en loopback.
 				if r.URL.Path == "/metrics" {
 					w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
@@ -386,7 +406,7 @@ func (p *Program) Run() {
 			}
 		}()
 	}
-	if cfg.Dashboard.Listen != "" {
+	if cfg.Dashboard.Listen != "" && !shareDashPort {
 		console := consoleOnly(apiH, dashH)
 		if alog != nil {
 			console = alog.Middleware(console)
@@ -615,6 +635,11 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 		}
 	}()
 	cfg := p.live.Get()
+	// Reconciliación inmediata: una app recién creada puede no estar aún en
+	// el supervisor (el watcher tarda 10s) y el build fallaría "inexistente".
+	if p.sup != nil {
+		p.sup.Apply(cfg.Apps, cfg.GlobalEnv)
+	}
 	var app *config.App
 	for i := range cfg.Apps {
 		if cfg.Apps[i].Name == name {
@@ -677,6 +702,7 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 		status := "ok"
 		if err != nil {
 			status = "failed"
+			fmt.Fprintf(out, "\n✗ build: %v\n", err)
 			p.log.Error("build local fallido", "app", target.Name, "err", err)
 		}
 		if p.db != nil && depID > 0 {
@@ -730,6 +756,9 @@ func (p *Program) deployAppAsync(name, actor string) (int64, error) {
 func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, string, error) {
 	if app.External() {
 		return 0, "", fmt.Errorf("app %q es externa: no tiene pipeline; corre el dev server en %s", app.Name, app.Dir)
+	}
+	if p.sup != nil {
+		p.sup.Apply(p.live.Get().Apps, p.live.Get().GlobalEnv)
 	}
 	if err := p.beginOp(app.Name); err != nil {
 		return 0, "", err
