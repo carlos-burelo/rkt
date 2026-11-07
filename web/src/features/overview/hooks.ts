@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { AppMeta, Deployment, RktEvent, Status } from "../../shared/lib/types";
-import { subscribeFleet, useFleetBus } from "../../shared/lib/events";
+import { subscribeFleet } from "../../shared/lib/events";
+import { useFleetBus } from "./fleet.store";
 
 export interface Fleet {
   status: Status | null;
@@ -10,7 +11,7 @@ export interface Fleet {
   loading: boolean;
 }
 
-// useFleet lee el bus único (una conexión SSE para toda la UI).
+// useFleet lee el store único (una conexión SSE para toda la UI).
 // Sin polling: el servidor publica solo al cambiar + snapshot al conectar.
 export function useFleet(): Fleet {
   useEffect(() => subscribeFleet(), []);

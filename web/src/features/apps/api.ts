@@ -1,9 +1,5 @@
 import { api } from "../../shared/lib/http";
-import { AppMeta, AppUsage } from "../../shared/lib/types";
-
-export async function listApps(): Promise<AppMeta[]> {
-  return api<AppMeta[]>("/api/v1/apps");
-}
+import { AppUsage } from "../../shared/lib/types";
 
 export async function appAction(name: string, action: "restart" | "deploy" | "rollback" | "start" | "stop"): Promise<void> {
   await api(`/api/v1/apps/${name}/${action}`, { method: "POST" });

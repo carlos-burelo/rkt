@@ -1,29 +1,17 @@
-import { create } from "zustand";
 import { api, nextDelay } from "./http";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../../features/auth/store";
-import type { AppMeta, Deployment, RktEvent, Status } from "./types";
+import { applyFleetEvent, useFleetBus, type FleetConn } from "../../features/overview/fleet.store";
 
-// Estado vivo de la flota: un solo dueño (fleet bus), N lectores.
-// El poll se eliminó: el servidor publica solo cuando algo cambia y el
-// stream trae snapshot + replay por cursor. Sin solape, sin banners falsos.
-
-export type FleetConn = "live" | "retrying" | "offline";
-
-interface FleetBus {
-  status: Status | null;
-  deps: Deployment[];
-  evs: RktEvent[];
-  metas: AppMeta[];
-  seq: number;
-  conn: FleetConn;
-  loading: boolean;
-  applySnapshot: (topic: string, data: unknown) => void;
-  setConn: (c: FleetConn) => void;
-}
+// Conexión única SSE al bus de flota (transporte, sin estado).
+// El estado vive en `features/overview/fleet.store` (zustand).
+// Reconexión manual: el cursor viaja en la URL (el retry nativo
+// repetiría el cursor viejo). Backoff + watchdog half-open; probe 401
+// distingue sesión muerta de red caída.
 
 const CURSOR_KEY = "rkt.fleet.cursor";
 const WATCHDOG_MS = 45000;
+const TOPICS = "status,deployments,events,metas";
 
 function loadCursor(): number {
   try {
@@ -41,50 +29,6 @@ function saveCursor(seq: number) {
   }
 }
 
-function asStatus(data: unknown): Status | null {
-  if (!data || typeof data !== "object" || !Array.isArray((data as Status).apps)) return null;
-  return data as Status;
-}
-
-function asArray<T>(data: unknown): T[] {
-  return Array.isArray(data) ? (data as T[]) : [];
-}
-
-export const useFleetBus = create<FleetBus>()((set) => ({
-  status: null,
-  deps: [],
-  evs: [],
-  metas: [],
-  seq: 0,
-  conn: "retrying",
-  loading: true,
-  applySnapshot: (topic, data) =>
-    set(() => {
-      if (topic === "status") {
-        const st = asStatus(data);
-        return st ? { status: st, loading: false } : {};
-      }
-      if (topic === "deployments") return { deps: asArray<Deployment>(data), loading: false };
-      if (topic === "events") return { evs: asArray<RktEvent>(data), loading: false };
-      if (topic === "metas") return { metas: asArray<AppMeta>(data) };
-      return {};
-    }),
-  setConn: (conn) => set({ conn }),
-}));
-
-// Aplica un publish (estado completo por tópico) y avanza el cursor.
-function applyEvent(seq: number, topic: string, data: unknown) {
-  saveCursor(seq);
-  const st = useFleetBus.getState();
-  if (seq <= st.seq) return; // duplicado o viejo
-  useFleetBus.setState({ seq });
-  st.applySnapshot(topic, data);
-}
-
-// Manager: una sola conexión SSE para toda la UI. Reconexión manual
-// (el cursor viaja en la URL: el retry nativo repetiría el cursor viejo)
-// con backoff; watchdog caza half-open; probe 401 distingue sesión
-// muerta de red caída.
 let es: EventSource | null = null;
 let subs = 0;
 let fails = 0;
@@ -92,8 +36,6 @@ let lastEvent = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = false;
-
-const TOPICS = "status,deployments,events,metas";
 
 function setConn(c: FleetConn) {
   useFleetBus.getState().setConn(c);
@@ -167,7 +109,8 @@ function connect() {
     try {
       const m = JSON.parse((e as MessageEvent).data) as { seq?: number; topic?: string; data?: unknown };
       if (typeof m.seq === "number" && typeof m.topic === "string") {
-        applyEvent(m.seq, m.topic, m.data);
+        saveCursor(m.seq);
+        applyFleetEvent(m.seq, m.topic, m.data);
       }
     } catch {
       /* frame corrupto: ignorar */
