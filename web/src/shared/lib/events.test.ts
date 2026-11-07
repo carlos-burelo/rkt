@@ -128,4 +128,24 @@ describe("fleet bus", () => {
       unsub();
     }
   });
+
+  it("cursor de otra época rebobina y reconecta desde 0", async () => {
+    const mem = new Map<string, string>([["rkt.fleet.cursor", "500"]]);
+    vi.stubGlobal("sessionStorage", {
+      getItem: (k: string) => mem.get(k) ?? null,
+      setItem: (k: string, v: string) => void mem.set(k, v),
+    });
+    const unsub = subscribeFleet();
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(FakeES.instances).toHaveLength(1);
+      FakeES.instances[0].emit("hello", { seq: 3, resync: false });
+      await vi.advanceTimersByTimeAsync(0);
+      // Reconectó con cursor 0 para traer snapshots.
+      expect(FakeES.instances).toHaveLength(2);
+      expect(FakeES.instances[1].url).toContain("cursor=0");
+    } finally {
+      unsub();
+    }
+  });
 });

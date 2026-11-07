@@ -98,6 +98,13 @@ function connect() {
     try {
       const m = JSON.parse((e as MessageEvent).data) as { seq: number };
       if (typeof m.seq === "number" && m.seq >= 0) {
+        if (m.seq < loadCursor()) {
+          // El servidor reinició bajo nuestro cursor: rebobinar a 0 y
+          // reconectar para recibir snapshots (si no, vacío eterno).
+          saveCursor(0);
+          connect();
+          return;
+        }
         saveCursor(m.seq);
       }
     } catch {

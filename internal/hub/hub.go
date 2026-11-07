@@ -65,11 +65,15 @@ func (b *Bus) Seq() int64 {
 }
 
 // Since devuelve eventos con seq>cursor filtrados por tópico, el seq
-// actual y si hubo hueco (cursor anterior al buffer: el cliente debe
-// pedir snapshots). topics vacío = todos.
+// actual y si hubo hueco (cursor evictado o de otra época: el servidor
+// reinició y su seq volvió a 0; el cliente debe pedir snapshots).
+// topics vacío = todos.
 func (b *Bus) Since(cursor int64, topics map[string]bool) (out []Event, seq int64, gap bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if cursor > b.seq {
+		return nil, b.seq, true
+	}
 	if len(b.ring) > 0 && cursor < b.ring[0].Seq-1 {
 		return nil, b.seq, true
 	}

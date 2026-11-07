@@ -28,6 +28,15 @@ func TestSinceFiltraTopicoYCursor(t *testing.T) {
 	}
 }
 
+func TestSinceHuecoTrasRestart(t *testing.T) {
+	b := New()
+	b.Publish(TopicStatus, "status", "a")
+	_, _, gap := b.Since(500, nil) // cursor de otra época (servidor reiniciado)
+	if !gap {
+		t.Fatal("cursor mayor que seq debe marcar hueco")
+	}
+}
+
 func TestSinceHuecoTrasEviccion(t *testing.T) {
 	b := New()
 	for i := 0; i < Cap+10; i++ {
