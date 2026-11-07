@@ -109,10 +109,12 @@ viewer lee, operator muta, admin gestiona usuarios.
 Dos caminos, ambos con login:
 
 - **Recomendado:** `settings set dashboard_host=rkt.tudominio.com` y DNS A
-  al servidor. Si aún no hay TLS: `settings set listen_https=:443` (y
-  `settings set listen_http=:80` si hace falta). Reinicia el servicio. Si
-  hay `base_domain` y no defines `dashboard_host`, el default es
-  `rkt.<base_domain>`; usa `dashboard_host=off` para desactivarlo.
+  al servidor. Con IP pública (`public_ip`), `listen_https` defaultea a
+  `:443` solo (desactívalo con `settings set listen_https=off`). Sin IP
+  pública, TLS sigue desactivado. Reinicia el servicio tras cambiar
+  listeners. Si hay `base_domain` y no defines `dashboard_host`, el
+  default es `rkt.<base_domain>`; usa `dashboard_host=off` para
+  desactivarlo.
 - **Puerto directo:** `settings set dashboard_listen=0.0.0.0:8090` y
   reinicia el servicio (`sc.exe restart Rkt`). Abre el puerto 8090 en el
   firewall. Este listener es HTTP sin TLS: úsalo solo en red de confianza.

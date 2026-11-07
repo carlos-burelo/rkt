@@ -54,6 +54,42 @@ func TestSnapshotDashboardSettings(t *testing.T) {
 	}
 }
 
+func TestPublicIPDefaultHTTPS(t *testing.T) {
+	// Sin IP pública: TLS off (modo local).
+	db := openDB(t, filepath.Join(t.TempDir(), "rkt.db"))
+	base, err := LoadBase(db, filepath.Join(t.TempDir(), "rkt.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base.ListenHTTPS != "" {
+		t.Fatalf("local = %q, quiere vacío", base.ListenHTTPS)
+	}
+	// Con IP pública: :443 automático.
+	if err := db.SetSetting(store.KeyPublicIP, "203.0.113.7"); err != nil {
+		t.Fatal(err)
+	}
+	base, _ = LoadBase(db, filepath.Join(t.TempDir(), "rkt.yaml"))
+	if base.ListenHTTPS != ":443" {
+		t.Fatalf("público = %q, quiere :443", base.ListenHTTPS)
+	}
+	// "off" explícito manda sobre el auto.
+	if err := db.SetSetting(store.KeyListenHTTPS, "off"); err != nil {
+		t.Fatal(err)
+	}
+	base, _ = LoadBase(db, filepath.Join(t.TempDir(), "rkt.yaml"))
+	if base.ListenHTTPS != "" {
+		t.Fatalf("off = %q, quiere vacío", base.ListenHTTPS)
+	}
+	// Explícito distinto se respeta.
+	if err := db.SetSetting(store.KeyListenHTTPS, ":8443"); err != nil {
+		t.Fatal(err)
+	}
+	base, _ = LoadBase(db, filepath.Join(t.TempDir(), "rkt.yaml"))
+	if base.ListenHTTPS != ":8443" {
+		t.Fatalf("explícito = %q, quiere :8443", base.ListenHTTPS)
+	}
+}
+
 func openDB(t *testing.T, cfgPath string) *store.DB {
 	t.Helper()
 	db, err := store.Open(logx.DBPath(cfgPath))

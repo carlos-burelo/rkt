@@ -58,6 +58,7 @@ func LoadBase(db *store.DB, cfgPath string) (*config.Config, error) {
 			return nil, fmt.Errorf("infra corrupta en DB: %w", err)
 		}
 		applyListenerSettings(base, db)
+		applyPublicHTTPSDefault(base, db)
 		if err := base.Finalize(); err != nil {
 			return nil, err
 		}
@@ -66,6 +67,7 @@ func LoadBase(db *store.DB, cfgPath string) (*config.Config, error) {
 
 	base := config.Default()
 	applyListenerSettings(base, db)
+	applyPublicHTTPSDefault(base, db)
 	if err := base.Finalize(); err != nil {
 		return nil, err
 	}
@@ -90,6 +92,23 @@ func applyListenerSettings(cfg *config.Config, db *store.DB) {
 		}
 		cfg.ListenHTTPS = v
 	}
+}
+
+// applyPublicHTTPSDefault activa :443 cuando el servidor tiene IP pública y
+// el usuario no fijó listen_https. "off" lo desactiva explícito y manda.
+// No se persiste: se calcula en cada arranque, así la misma DB sirve en
+// local (HTTP) y en servidor (HTTPS). Requiere reinicio para aplicar.
+func applyPublicHTTPSDefault(cfg *config.Config, db *store.DB) {
+	if strings.TrimSpace(db.GetSetting(store.KeyListenHTTPS)) != "" {
+		return
+	}
+	if strings.TrimSpace(cfg.ListenHTTPS) != "" {
+		return
+	}
+	if strings.TrimSpace(db.GetSetting(store.KeyPublicIP)) == "" {
+		return
+	}
+	cfg.ListenHTTPS = ":443"
 }
 
 // SaveInfra persiste la parte de infraestructura (apps/rutas no van aquí).
