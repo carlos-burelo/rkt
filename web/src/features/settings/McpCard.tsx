@@ -5,13 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Section } from "../../shared/components/patterns";
 import { useAuth } from "../auth/store";
 import { useI18n } from "../../shared/i18n";
-import { createToken, listTokens, revokeToken, ApiToken } from "./api";
+import { useSettings } from "./settings.store";
 
 // McpCard genera API keys para conectar agentes al MCP remoto.
+// Lista en el store; formulario y secreto de un solo uso, locales.
 export function McpCard() {
   const { t } = useI18n();
   const isAdmin = useAuth((a) => a.isAdmin);
-  const [tokens, setTokens] = useState<ApiToken[]>([]);
+  const tokens = useSettings((s) => s.tokens);
   const [name, setName] = useState("mcp-agent");
   const [created, setCreated] = useState("");
   const [err, setErr] = useState("");
@@ -19,15 +20,8 @@ export function McpCard() {
   const [copied, setCopied] = useState(false);
   const endpoint = `${window.location.origin}/mcp`;
 
-  async function load() {
-    try {
-      setTokens(await listTokens());
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : t("common.error"));
-    }
-  }
   useEffect(() => {
-    if (isAdmin) load();
+    if (isAdmin) useSettings.getState().loadTokens().catch((e) => setErr(e instanceof Error ? e.message : String(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
@@ -51,9 +45,7 @@ export function McpCard() {
     setErr("");
     setCreated("");
     try {
-      const tok = await createToken(name.trim() || "mcp-agent", "admin", 24 * 90);
-      setCreated(tok);
-      await load();
+      setCreated(await useSettings.getState().mintToken(name));
     } catch (e) {
       setErr(e instanceof Error ? e.message : t("common.error"));
     } finally {
@@ -110,7 +102,7 @@ export function McpCard() {
                   {tok.role} · {tok.last_used || t("system.mcp.never")} · #{tok.id}
                 </p>
               </div>
-              <Button size="xs" variant="outline" onClick={() => revokeToken(tok.id).then(load).catch((e) => setErr(String(e)))}>
+              <Button size="xs" variant="outline" onClick={() => useSettings.getState().revoke(tok.id).catch((e) => setErr(String(e)))}>
                 <Trash2 className="h-3 w-3" /> {t("system.mcp.revoke")}
               </Button>
             </div>
