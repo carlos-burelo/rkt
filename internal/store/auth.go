@@ -122,6 +122,52 @@ func (d *DB) ListUsers() ([]User, error) {
 	return out, rows.Err()
 }
 
+// UserDump fila completa con hash, solo para backup/restore interno
+// (reset). Nunca sale por API: ListUsers sigue sin hashes.
+type UserDump struct {
+	Name      string
+	PassHash  string
+	Role      string
+	CreatedAt string
+	UpdatedAt string
+	LastLogin string
+	Disabled  bool
+}
+
+// DumpUsers vuelca users con hashes para reimportar tras un reset.
+func (d *DB) DumpUsers() ([]UserDump, error) {
+	rows, err := d.sql.Query(`SELECT name, pass_hash, role, created_at, updated_at, last_login, disabled FROM users ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []UserDump{}
+	for rows.Next() {
+		var u UserDump
+		if err := rows.Scan(&u.Name, &u.PassHash, &u.Role, &u.CreatedAt, &u.UpdatedAt, &u.LastLogin, &u.Disabled); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// ImportUsers reinserta un volcado (DB fresca tras reset). Falla si hay
+// duplicados: úsalo solo sobre DB recién creada.
+func (d *DB) ImportUsers(rows []UserDump) error {
+	for _, u := range rows {
+		if !ValidUserName(u.Name) || !validRole(u.Role) || u.PassHash == "" {
+			return fmt.Errorf("usuario inválido %q", u.Name)
+		}
+		if _, err := d.sql.Exec(
+			`INSERT INTO users(name, pass_hash, role, created_at, updated_at, last_login, disabled) VALUES(?,?,?,?,?,?,?)`,
+			u.Name, u.PassHash, u.Role, u.CreatedAt, u.UpdatedAt, u.LastLogin, u.Disabled); err != nil {
+			return fmt.Errorf("importar %q: %w", u.Name, err)
+		}
+	}
+	return d.bumpVersion()
+}
+
 // DeleteUser borra; rechaza si es el último admin.
 func (d *DB) DeleteUser(name string) error {
 	var role string

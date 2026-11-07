@@ -94,3 +94,41 @@ func TestUsersSessions(t *testing.T) {
 		t.Fatal("inexistente debe fallar")
 	}
 }
+
+func TestDumpImportUsers(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateUser("admin", "password-larga-1", RoleAdmin); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateUser("op", "password-larga-2", RoleOperator); err != nil {
+		t.Fatal(err)
+	}
+	dump, err := db.DumpUsers()
+	if err != nil || len(dump) != 2 {
+		t.Fatalf("dump: %+v %v", dump, err)
+	}
+	for _, u := range dump {
+		if u.PassHash == "" {
+			t.Fatalf("dump sin hash: %q", u.Name)
+		}
+	}
+	db.Close()
+	// DB fresca: reimporta y el login original sigue válido.
+	fresh, err := Open(filepath.Join(t.TempDir(), "n.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fresh.Close()
+	if err := fresh.ImportUsers(dump); err != nil {
+		t.Fatal(err)
+	}
+	if role, err := fresh.CheckPassword("admin", "password-larga-1"); err != nil || role != RoleAdmin {
+		t.Fatalf("login tras import: %v %q", err, role)
+	}
+	if err := fresh.ImportUsers(dump); err == nil {
+		t.Fatal("doble import debe fallar")
+	}
+}

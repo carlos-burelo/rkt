@@ -148,6 +148,9 @@ func Run(cfgPath string) {
 		case "restore":
 			cmdRestore(flag.Args()[1:], cfgPath)
 			return
+		case "reset":
+			cmdReset(flag.Args()[1:], cfgPath)
+			return
 		case "doctor":
 			cmdDoctor(flag.Args()[1:], cfgPath)
 			return
@@ -250,6 +253,8 @@ Gestión (flota en SQLite, con backup implícito):
   settings list|set                      settings set CLAVE=valor
   users list|add|del|passwd              usuarios dashboard (primer add = admin)
   config export [file]|import <file>     respaldo/restaura en git
+  backup [destino]|restore <archivo.db>  respaldo/restaura binario
+  reset                                borra todo, preserva solo users
   github login|init                      vincular GitHub App en browser
 
 Ayuda:

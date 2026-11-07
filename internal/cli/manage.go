@@ -1004,6 +1004,56 @@ func cmdRestore(args []string, cfgPath string) {
 	fmt.Printf("restore ok: %s (arranca el servicio)\n", dst)
 }
 
+// cmdReset borra la DB y la recrea de cero preservando solo users.
+// Sesiones y API tokens se revocan: re-login y genera nueva key MCP.
+// Exige servicio detenido y deja backup completo antes de borrar.
+func cmdReset(args []string, cfgPath string) {
+	if len(args) != 0 {
+		log.Fatal("uso: reset  (sin argumentos; preserva solo users)")
+	}
+	if cfg, err := cfgfile.Load(cfgPath); err == nil && cfg.Healthz.Enabled {
+		client := &http.Client{Timeout: 2 * time.Second}
+		if resp, err := client.Get("http://" + cfg.Healthz.Listen + "/healthz"); err == nil {
+			resp.Body.Close()
+			log.Fatal("reset: detén el servicio antes (sc.exe stop Rkt)")
+		}
+	}
+	db, err := store.Open(logx.DBPath(cfgPath))
+	if err != nil {
+		log.Fatalf("reset: %v", err)
+	}
+	users, err := db.DumpUsers()
+	if err != nil {
+		db.Close()
+		log.Fatalf("reset: %v", err)
+	}
+	if len(users) == 0 {
+		db.Close()
+		log.Fatal("reset: sin users, nada que preservar; abortado")
+	}
+	dest := filepath.Join(logx.DirFor(cfgPath), "backups", "rkt-pre-reset-"+time.Now().UTC().Format("20060102-150405")+".db")
+	if err := db.Backup(dest); err != nil {
+		db.Close()
+		log.Fatalf("reset: %v", err)
+	}
+	db.Close()
+	dst := logx.DBPath(cfgPath)
+	_ = os.Remove(dst + "-wal")
+	_ = os.Remove(dst + "-shm")
+	if err := os.Remove(dst); err != nil {
+		log.Fatalf("reset: %v", err)
+	}
+	fresh, err := store.Open(dst)
+	if err != nil {
+		log.Fatalf("reset: %v", err)
+	}
+	defer fresh.Close()
+	if err := fresh.ImportUsers(users); err != nil {
+		log.Fatalf("reset: %v (restaura %s con restore)", err, dest)
+	}
+	fmt.Printf("reset ok: %d users preservados, backup en %s (sesiones y API tokens revocados)\n", len(users), dest)
+}
+
 // cmdDoctor diagnostica sin mutar: config, DB, servicio, git y puertos.
 func cmdDoctor(_ []string, cfgPath string) {
 	fail := 0
