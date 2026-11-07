@@ -7,27 +7,26 @@ import { FormDialog, Field } from "../../shared/components/FormDialog";
 import { Dot } from "../../shared/components/ui";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
-import { addRoute, delRoute, listZones, ZoneGroup, Zones } from "./api";
+import type { ZoneGroup } from "./api";
+import { useZones } from "./zones.store";
 import { useI18n } from "../../shared/i18n";
 
 const SLUG = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 
 // Zonas locales: dominio base + subdominios, como un panel DNS.
-// Todo va a /api/v1/routes (una ruta por host); aquí solo se agrupa.
+// Inputs del formulario locales; la lista y mutaciones en el store.
 export function LocalZones({ onChanged }: { onChanged: () => void }) {
   const { t, tn } = useI18n();
   const fail = useUI((u) => u.fail);
   const { metas } = useFleet();
-  const [zones, setZones] = useState<Zones | null>(null);
+  const zones = useZones((s) => s.zones);
   const [prefix, setPrefix] = useState("");
   const [suffix, setSuffix] = useState("localhost");
   const [target, setTarget] = useState("http://127.0.0.1:3000");
   const [subs, setSubs] = useState<Record<string, string>>({});
 
-  const load = () => listZones().then(setZones).catch(fail);
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useZones.getState().load();
   }, []);
 
   // target por defecto desde la primera app, si existe
@@ -42,9 +41,8 @@ export function LocalZones({ onChanged }: { onChanged: () => void }) {
     if (!SLUG.test(p)) {
       throw new Error(t("serve.zones.invalidSub"));
     }
-    await addRoute([`${p}.${suffix}`], target.trim());
+    await useZones.getState().createZone(`${p}.${suffix}`, target.trim());
     setPrefix("");
-    await load();
     onChanged();
   }
 
@@ -53,16 +51,13 @@ export function LocalZones({ onChanged }: { onChanged: () => void }) {
     if (!SLUG.test(s)) {
       throw new Error(t("serve.zones.invalidSub"));
     }
-    await addRoute([`${s}.${g.base}`], g.target || target.trim());
+    await useZones.getState().addSub(`${s}.${g.base}`, g.target || target.trim());
     setSubs({ ...subs, [g.base]: "" });
-    await load();
     onChanged();
   }
 
   function remove(host: string) {
-    delRoute(host)
-      .then(() => Promise.all([load(), Promise.resolve(onChanged())]))
-      .catch(fail);
+    useZones.getState().remove(host).then(onChanged).catch(fail);
   }
 
   const suffixes = zones?.suffixes ?? ["localhost", "test"];
