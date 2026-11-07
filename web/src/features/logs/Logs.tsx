@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Pause, Play, Search } from "lucide-react";import { AppStatus, Deployment } from "../../shared/lib/types";
+import { Clock, Download, Globe, Lock, LockOpen, Pause, Play, Search } from "lucide-react";import { AppStatus, Deployment } from "../../shared/lib/types";
 import { deploymentLog } from "../deployments/api";
 import { streamLog } from "../../shared/lib/http";
 import { fetchLog } from "./api";
@@ -48,60 +48,69 @@ const STREAM_KEY: Record<Stream, string> = {
 
 const STREAM_SHORT: Record<Stream, string> = { access: "ACC", rejected: "REJ", system: "SYS", app: "APP" };
 
-const LEVEL_BADGE: Record<Level, string> = {
-  info: "border-console-info/45 bg-console-info/10 text-console-info",
-  warning: "border-console-warn/45 bg-console-warn/10 text-console-warn",
-  error: "border-console-bad/45 bg-console-bad/10 text-console-bad",
+const ROW_TONE: Record<Level, string> = {
+  info: "text-console-foreground/85",
+  warning: "text-console-warn",
+  error: "text-console-bad",
 };
 
-const FIELD_SHORT: Record<string, string> = {
-  timestamp: "ts",
-  time: "t",
-  duration: "dur",
-  duration_ms: "dur",
-  latency: "lat",
-  latency_ms: "lat",
-  status: "st",
-  status_code: "st",
-  method: "m",
-  request_id: "req",
-  trace_id: "trace",
-  user_agent: "ua",
-  remote_addr: "ip",
-  service: "svc",
-  proto: "pr",
-  bytes: "b",
-  error: "err",
-  query: "q",
-};
-
-function shortField(key: string): string {
-  return FIELD_SHORT[key] ?? key;
+function shortVal(value: string): string {
+  return value.length > 40 ? `${value.slice(0, 40)}…` : value;
 }
 
-function fieldTone(key: string, value: string): string {
-  const short = shortField(key);
-  if (short === "st") {
-    const n = Number(value);
-    if (n >= 500) return "text-console-bad";
-    if (n >= 400) return "text-console-warn";
-    if (n >= 200) return "text-console-ok";
+// Bit compacto con iconografía: candado abierto/cerrado para http/https,
+// mundo para host, reloj para duración. Valores vacíos se ocultan
+// (ej `https=` sin TLS solo mete ruido). title conserva clave=valor.
+function FieldBit({ fkey, value }: { fkey: string; value: string }) {
+  if (value === "") return null;
+  if (fkey === "https") {
+    return (
+      <span title={`https=${value}`} className="inline-flex items-center gap-1 whitespace-nowrap">
+        <Lock className="h-3 w-3 shrink-0 opacity-70" aria-label="https" /> {shortVal(value)}
+      </span>
+    );
   }
-  if (short === "m") {
-    const v = value.toUpperCase();
-    if (v === "DELETE") return "text-console-bad";
-    if (v === "POST" || v === "PUT" || v === "PATCH") return "text-console-signal";
-    return "text-console-info";
+  if (fkey === "http") {
+    return (
+      <span title={`http=${value}`} className="inline-flex items-center gap-1 whitespace-nowrap">
+        <LockOpen className="h-3 w-3 shrink-0 opacity-70" aria-label="http" /> {shortVal(value)}
+      </span>
+    );
   }
-  if (short === "dur" || short === "lat") return "text-console-info";
-  if (short === "err") return "text-console-bad";
-  if (short === "level" || short === "lvl") return "text-console-muted";
-  return "text-console-foreground/85";
-}
-
-function splitScope(msg: string): { scope: string; text: string } {
-  const m = /^([A-Za-z0-9_.-]+):\s*(.*)$/.exec(msg);
-  return m ? { scope: m[1], text: m[2] } : { scope: "", text: msg };
+  if (fkey === "host") {
+    return (
+      <span title={`host=${value}`} className="inline-flex items-center gap-1 whitespace-nowrap opacity-80">
+        <Globe className="h-3 w-3 shrink-0 opacity-70" aria-hidden /> {shortVal(value)}
+      </span>
+    );
+  }
+  if (fkey === "dur" || fkey === "duration" || fkey === "duration_ms" || fkey === "latency" || fkey === "latency_ms") {
+    return (
+      <span title={`${fkey}=${value}`} className="inline-flex items-center gap-1 whitespace-nowrap opacity-70">
+        <Clock className="h-3 w-3 shrink-0 opacity-70" aria-hidden /> {shortVal(value)}
+      </span>
+    );
+  }
+  if (fkey === "target") {
+    return <span title={`target=${value}`} className="whitespace-nowrap opacity-80">→ {shortVal(value)}</span>;
+  }
+  if (fkey === "remote" || fkey === "remote_addr" || fkey === "ip") {
+    return <span title={`${fkey}=${value}`} className="whitespace-nowrap opacity-70">← {shortVal(value)}</span>;
+  }
+  if (fkey === "method" || fkey === "m") {
+    return <span className="whitespace-nowrap font-semibold">{value.toUpperCase()}</span>;
+  }
+  if (fkey === "status" || fkey === "status_code" || fkey === "st") {
+    return <span className="whitespace-nowrap font-semibold">{value}</span>;
+  }
+  if (fkey === "path" || fkey === "p" || fkey === "query" || fkey === "q") {
+    return <span className="whitespace-nowrap">{shortVal(value)}</span>;
+  }
+  return (
+    <span title={`${fkey}=${value}`} className="whitespace-nowrap opacity-60">
+      {fkey}={shortVal(value)}
+    </span>
+  );
 }
 
 function Highlight({ text, q }: { text: string; q: string }) {
@@ -462,77 +471,64 @@ export function Logs() {
               >
                 {rendered.map(({ line: p, count }, i) => {
                   const lv = p.level;
-                  const { scope, text } = splitScope(p.msg || p.raw);
                   const st = streamOf(p, appFilter);
-                  const summary =
-                    st === "access" ? accessSummary(p) : st === "rejected" ? rejectedSummary(p) : null;
-                  const chips = compact && p.structured && p.fields.length > 0 && !summary;
+                  // Accesos/rechazados traen resumen propio; sistema/app
+                  // muestran msg + bits. Sin índice y sin tag: el nivel
+                  // colorea toda la línea.
+                  const inline = compact && p.structured;
+                  const hostBit = st === "access" ? p.fields.find((f) => f.key === "host") : undefined;
+                  const rest = inline
+                    ? p.fields.filter((f) =>
+                        st === "access"
+                          ? !["host", "method", "m", "path", "p", "target", "dur", "duration", "duration_ms", "latency", "latency_ms"].includes(f.key)
+                          : st === "rejected"
+                            ? false
+                            : true,
+                      )
+                    : [];
+                  const main =
+                    !inline
+                      ? p.raw
+                      : st === "access"
+                        ? (accessSummary(p) ?? p.msg ?? p.raw)
+                        : st === "rejected"
+                          ? (rejectedSummary(p) ?? p.msg ?? p.raw)
+                          : p.msg || p.raw;
                   return (
                     <div
                       key={i}
                       title={p.raw}
-                      className="flex items-center gap-2 px-3 py-0.5 hover:bg-console-accent"
+                      aria-label={t("ops.logs.lineLevel", { level: t(LEVEL_KEY[lv]) })}
+                      className={`flex items-center gap-2 px-3 py-0.5 hover:bg-console-accent ${ROW_TONE[lv]}`}
                     >
-                      <span className="tnum w-8 shrink-0 self-start text-right text-[9px] text-console-muted/60 select-none">
-                        {String(i + 1).padStart(3, "0")}
-                      </span>
                       <span className="tnum w-14 shrink-0 self-start text-[9px] text-console-muted">{absolute ? p.time : ago(p.timestamp)}</span>
-                      <span
-                        aria-label={t("ops.logs.lineLevel", { level: t(LEVEL_KEY[lv]) })}
-                        title={t(LEVEL_KEY[lv])}
-                        className={`w-8 shrink-0 self-start border px-1 text-center font-mono text-[9px] font-semibold tracking-[0.04em] ${LEVEL_BADGE[lv]}`}
-                      >
-                        {LEVEL_SHORT[lv]}
-                      </span>
-                      {compact && p.structured && scope && !summary && (
-                        <span
-                          title={scope}
-                          className="hidden shrink-0 self-start border border-console-border bg-console-raised px-1 font-mono text-[9px] tracking-[0.04em] text-console-muted uppercase sm:inline"
-                        >
-                          {scope}
-                        </span>
-                      )}
                       <span
                         className={`min-w-0 flex-1 font-mono text-[11px] ${
                           wrap ? "break-words whitespace-pre-wrap" : "truncate"
-                        } ${
-                          lv === "error" ? "text-console-bad" : lv === "warning" ? "text-console-warn" : "text-console-foreground/85"
                         }`}
                       >
-                        {compact ? (
-                          p.structured ? (
-                            <Highlight text={summary ?? text} q={q} />
-                          ) : (
-                            <Highlight text={p.raw} q={q} />
-                          )
-                        ) : (
-                          <Highlight text={p.raw} q={q} />
+                        <Highlight text={main} q={q} />
+                        {inline && hostBit && hostBit.value !== "" && (
+                          <>
+                            {" "}
+                            <FieldBit fkey="host" value={hostBit.value} />
+                          </>
+                        )}
+                        {rest.slice(0, 6).map((f, idx) => (
+                          <span key={`${f.key}-${idx}`}>
+                            {" "}
+                            <FieldBit fkey={f.key} value={f.value} />
+                          </span>
+                        ))}
+                        {rest.length > 6 && (
+                          <span
+                            title={rest.slice(6).map((f) => `${f.key}=${f.value}`).join(" ")}
+                            className="whitespace-nowrap opacity-50"
+                          >
+                            {" "}+{rest.length - 6}
+                          </span>
                         )}
                       </span>
-                      {chips && (
-                        <span className="hidden max-w-[52%] shrink-0 items-center gap-1 overflow-hidden sm:flex">
-                          {p.fields.slice(0, 4).map((f, idx) => (
-                            <span
-                              key={`${f.key}-${idx}`}
-                              className="whitespace-nowrap border border-console-border bg-console-raised/65 px-1 font-mono text-[9px]"
-                              title={`${f.key}=${f.value}`}
-                            >
-                              <span className="text-console-muted">{shortField(f.key)}=</span>
-                              <span className={fieldTone(f.key, f.value)}>
-                                {f.value.length > 32 ? `${f.value.slice(0, 32)}…` : f.value}
-                              </span>
-                            </span>
-                          ))}
-                          {p.fields.length > 4 && (
-                            <span
-                              title={p.fields.slice(4).map((f) => `${f.key}=${f.value}`).join(" ")}
-                              className="border border-console-border/60 px-1 font-mono text-[9px] text-console-muted"
-                            >
-                              +{p.fields.length - 4}
-                            </span>
-                          )}
-                        </span>
-                      )}
                       {count > 1 && (
                         <span className="tnum shrink-0 font-mono text-[9px] text-console-muted/80">×{count}</span>
                       )}
