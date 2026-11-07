@@ -6,6 +6,8 @@ export const shell = {
   "shell.runningFailedPlural": "{running}/{total} en marcha · {failed} caídas",
   "shell.noConnection": "sin conexión · lectura local",
   "shell.search": "Buscar o ejecutar",
+  "shell.account": "cuenta",
+  "shell.appSection": "Aplicación",
   "shell.newApp": "Nueva app",
   "shell.backToApps": "aplicaciones",
   "shell.logout": "Salir",

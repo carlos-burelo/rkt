@@ -2,19 +2,15 @@ import { useEffect } from "react";
 import { NavLink, Link, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { LayoutGrid, Plus, Search, ChevronRight, Command } from "lucide-react";
+import { LayoutGrid, Plus, Search, Command } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu,
   SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Avatar, BrandMark, Dot, Err, Kbd, stateOf } from "../shared/components/ui";
-import { roleLabel } from "../shared/lib/labels";
+import { BrandMark, Dot, Err, Kbd, stateOf } from "../shared/components/ui";
 import { InstallButton } from "../shared/components/InstallButton";
 import { CommandPalette } from "../shared/components/CommandPalette";
 import { useAuth } from "../features/auth/store";
@@ -23,13 +19,13 @@ import { useFleet } from "../features/overview/hooks";
 import { CreateDialog } from "../features/apps/CreateDialog";
 import { DeployDrawer } from "../features/deployments/DeployDrawer";
 import { AppSidebar, APP_TABS } from "../features/apps/AppSidebar";
+import { UserMenu } from "../shared/components/UserMenu";
 import { useI18n } from "../shared/i18n";
-import { ThemeToggle } from "../shared/theme/ThemeToggle";
 import { GROUPS, PAGE_LABEL } from "./nav";
 
 export function ShellLayout() {
   const { t } = useI18n();
-  const { who, isAdmin, canWrite, brand, doLogout } = useAuth();
+  const { isAdmin, canWrite, brand } = useAuth();
   const online = useUI((u) => u.online);
   const setOnline = useUI((u) => u.setOnline);
   const palette = useUI((u) => u.palette);
@@ -250,35 +246,13 @@ export function ShellLayout() {
 
         <SidebarFooter className="gap-2 border-t border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:px-2">
           {!online && (
-            <p className="border border-warn/30 bg-warn/8 px-2 py-1.5 font-mono text-[10px] text-warn group-data-[collapsible=icon]:hidden">
+            <p className="border border-warn/30 bg-warn/8 px-2 py-1 text-center font-mono text-[10px] text-warn group-data-[collapsible=icon]:hidden">
               {t("shell.noConnection")}
             </p>
           )}
-          <ThemeToggle />
           <div className="group-data-[collapsible=icon]:hidden">
             <InstallButton />
           </div>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <DropdownMenu>
-                <DropdownMenuTrigger className="flex w-full items-center gap-2 rounded-[1px] px-1 py-1 text-left outline-none hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-                  <Avatar name={who?.user ?? "?"} />
-                  <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-                    <span className="truncate text-[11px] font-medium">{who?.user}</span>
-                    <span className="tnum truncate font-mono text-[9px] text-muted-foreground">
-                      {roleLabel(who?.role ?? "")} · v{status?.version ?? "…"}
-                    </span>
-                  </div>
-                  <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/50 group-data-[collapsible=icon]:hidden" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-40">
-                  <DropdownMenuItem onClick={() => doLogout()}>
-                    {t("shell.logout")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </SidebarMenuItem>
-          </SidebarMenu>
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
@@ -329,7 +303,7 @@ export function ShellLayout() {
               <Plus className="h-3.5 w-3.5" /> {t("shell.newApp")}
             </Button>
           )}
-          <Avatar name={who?.user ?? "?"} className="h-6 w-6" />
+          <UserMenu />
         </header>
         <main className="min-w-0 flex-1 px-3 py-5 md:px-5 md:py-6">
           <div className="mx-auto max-w-[1480px]">

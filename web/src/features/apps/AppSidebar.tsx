@@ -1,7 +1,9 @@
 import { NavLink, useNavigate } from "react-router";
 import { ArrowLeft } from "lucide-react";
 import { Avatar, Dot } from "../../shared/components/ui";
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import {
+  SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
+} from "@/components/ui/sidebar";
 import { useFleet } from "../overview/hooks";
 import { useUI } from "../../app/ui";
 import { useI18n } from "../../shared/i18n";
@@ -55,23 +57,31 @@ export function AppSidebar({ name }: { name: string }) {
         </div>
       </div>
       <nav aria-label={name} className="mt-1">
-        <SidebarMenu className="gap-0.5">
-          {tabs.map((tab) => (
-            <SidebarMenuItem key={tab.id}>
-              <NavLink to={`/app/${encodeURIComponent(name)}/${tab.id}`} className="w-full">
-                {({ isActive }) => (
-                  <SidebarMenuButton
-                    isActive={isActive}
-                    tooltip={t(tab.label)}
-                    className="h-8 rounded-[1px] px-2 text-[12px] font-normal text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 [&>svg]:size-3.5"
-                  >
-                    <span className="flex-1 truncate text-left group-data-[collapsible=icon]:hidden">{t(tab.label)}</span>
-                  </SidebarMenuButton>
-                )}
-              </NavLink>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
+        <SidebarGroup className="py-0 group-data-[collapsible=icon]:p-0">
+          <SidebarGroupLabel className="mt-3 mb-1 flex h-4 items-center gap-2 px-2 font-mono text-[9px] tracking-[0.18em] uppercase text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
+            <span>{t("shell.appSection")}</span>
+            <span aria-hidden className="h-px flex-1 bg-sidebar-border" />
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu className="gap-0.5">
+              {tabs.map((tab) => (
+                <SidebarMenuItem key={tab.id}>
+                  <NavLink to={`/app/${encodeURIComponent(name)}/${tab.id}`} className="w-full">
+                    {({ isActive }) => (
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        tooltip={t(tab.label)}
+                        className="relative h-8 rounded-[1px] px-2 text-[12px] font-normal text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-px before:bg-signal before:opacity-0 data-active:before:opacity-100 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+                      >
+                        <span className="flex-1 truncate text-left group-data-[collapsible=icon]:hidden">{t(tab.label)}</span>
+                      </SidebarMenuButton>
+                    )}
+                  </NavLink>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </nav>
     </>
   );
