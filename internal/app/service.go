@@ -624,10 +624,20 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 		defer out.Close()
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 		defer cancel()
-		err := deploy.RunStepsContext(ctx, steps, target.Dir, target.Env, out)
+		// La app local se compila en su propio directorio: hay que pararla
+		// antes. Si no, pnpm no puede reemplazar node_modules/.pnpm porque
+		// el proceso vivo tiene handles abiertos (Windows: acceso denegado).
+		build := func() error {
+			return deploy.RunStepsContext(ctx, steps, target.Dir, target.Env, out)
+		}
+		var err error
+		if p.sup != nil {
+			err = p.sup.SwapAndRestart(target.Name, build)
+		} else {
+			err = build()
+		}
 		if err == nil && p.sup != nil {
 			// el build no basta: la unidad debe responder HTTP tras reiniciar
-			p.sup.Restart(target.Name)
 			if perr := deploy.WaitAppHTTP(target, 10*time.Second); perr != nil {
 				err = fmt.Errorf("build ok pero la app no responde: %w", perr)
 			}

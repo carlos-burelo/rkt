@@ -60,6 +60,19 @@ func TestDetectNextArranca(t *testing.T) {
 	}
 }
 
+func TestDetectPnpmFrozenConLock(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "package.json", `{"scripts":{"build":"next build","start":"next start"},"dependencies":{"next":"^15"}}`)
+	write(t, dir, "pnpm-lock.yaml", "")
+	p, err := DetectDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Install) != 1 || p.Install[0] != "pnpm install --frozen-lockfile" {
+		t.Fatalf("install = %v", p.Install)
+	}
+}
+
 func TestDetectYarnGanaYnpmNunca(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "package.json", `{"dependencies":{}}`)

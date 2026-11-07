@@ -105,6 +105,9 @@ func TestEnvironListYExpandBordes(t *testing.T) {
 		if !strings.Contains(joined, "APP_VAR=1") {
 			t.Fatalf("falta env propio: %v", list)
 		}
+		if !strings.Contains(joined, "npm_config_verify_deps_before_run=false") {
+			t.Fatalf("falta guard de pnpm: %v", list)
+		}
 	}
 
 	list := EnvironList(map[string]string{"RKT_DOTENV_TEST": "override", "OTRA": "x"})

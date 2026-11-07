@@ -238,6 +238,9 @@ func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
 	install := []string{pm + " install"}
 	has := func(script string) bool { _, ok := pj.Scripts[script]; return ok }
 
+	if pm == "pnpm" && file("pnpm-lock.yaml") {
+		install = []string{pm + " install --frozen-lockfile"}
+	}
 	plan := Plan{Kind: "node", PM: pm, Install: install, Evidence: []string{"package.json"}}
 	switch {
 	case file("pnpm-lock.yaml"):

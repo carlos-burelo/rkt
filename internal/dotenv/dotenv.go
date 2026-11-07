@@ -123,6 +123,16 @@ func EnvironListApp(over map[string]string) []string {
 	for k, v := range over {
 		m[k] = v
 	}
+	// pnpm 12 re-instala antes de `run` si cree que node_modules está
+	// desincronizado. En un PaaS eso ejecuta un install mientras la app
+	// está viva y rompe node_modules en Windows. El build es el único
+	// camino de instalación.
+	if _, ok := m["npm_config_verify_deps_before_run"]; !ok {
+		m["npm_config_verify_deps_before_run"] = "false"
+	}
+	if _, ok := m["COREPACK_ENABLE_DOWNLOAD_PROMPT"]; !ok {
+		m["COREPACK_ENABLE_DOWNLOAD_PROMPT"] = "0"
+	}
 	out := make([]string, 0, len(m))
 	for k, v := range m {
 		out = append(out, k+"="+v)
