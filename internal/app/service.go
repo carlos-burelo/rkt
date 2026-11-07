@@ -38,6 +38,7 @@ import (
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/hook"
+	"rkt-proxy/internal/hub"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/mcpserver"
 	"rkt-proxy/internal/proxy"
@@ -88,6 +89,8 @@ type Program struct {
 	srvMetrics *servermetrics.Monitor
 	// cron ejecutor de tareas programadas.
 	cron *cronjobs.Runner
+	// hub bus de eventos para el stream vivo de la flota.
+	hub *hub.Bus
 	// stateMu sincroniza los recursos que Stop lee mientras Run los crea.
 	stateMu sync.Mutex
 }
@@ -214,6 +217,7 @@ func (p *Program) Run() {
 	p.live = live
 	p.sup = sup
 	p.cron = cronRunner
+	p.hub = hub.New()
 	p.stateMu.Unlock()
 
 	if db != nil {
@@ -234,7 +238,7 @@ func (p *Program) Run() {
 		if p.cron != nil {
 			p.cron.Apply()
 		}
-	}, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, Server: p.srvMetrics, Cron: p.cron, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh})
+	}, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, Server: p.srvMetrics, Cron: p.cron, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh, Hub: p.hub})
 	sub, err := fs.Sub(web.Dist, "dist")
 	if err != nil {
 		p.log.Error("dashboard sin dist", "err", err)
@@ -450,6 +454,7 @@ func (p *Program) Run() {
 	}
 	p.log.Info("hot-reload activo", "poll", pollInterval.String())
 	go p.watchMerged(live, db)
+	go p.fleetLoop(live, db)
 	go p.alertLoop(live, db)
 	go p.maintenanceLoop(live, db)
 	if cfg.Github != nil {

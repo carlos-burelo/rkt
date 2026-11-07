@@ -14,12 +14,16 @@ import (
 	"rkt-proxy/internal/alerts"
 	"rkt-proxy/internal/appusage"
 	"rkt-proxy/internal/appview"
+	"rkt-proxy/internal/build"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/deploy"
 	"rkt-proxy/internal/discover"
 	"rkt-proxy/internal/github"
+	"rkt-proxy/internal/health"
+	"rkt-proxy/internal/hub"
 	"rkt-proxy/internal/logx"
+	"rkt-proxy/internal/netutil"
 	"rkt-proxy/internal/procstat"
 	"rkt-proxy/internal/servermetrics"
 	"rkt-proxy/internal/store"
@@ -492,8 +496,88 @@ func (p *Program) watchMerged(live *config.Live, db *store.DB) {
 			"apps", len(next.Apps),
 			"redirect", next.RedirectHTTPToHTTPS,
 		)
+		if p.hub != nil {
+			metas := []map[string]any{}
+			for _, x := range next.Apps {
+				metas = append(metas, appview.App(next, x))
+			}
+			p.hub.Publish(hub.TopicMetas, "metas", metas)
+		}
 		if need := config.NeedRestart(old, next); len(need) > 0 {
 			p.log.Warn("cambios requieren restart", "campos", need)
 		}
 	}
+}
+
+// fleetTick publica al hub lo que cambió (status/deployments/events).
+// Un solo poll server-side reemplaza N polls de dashboard: el stream
+// solo emite cuando hay novedad. Formas iguales a los GET sueltos.
+func (p *Program) fleetLoop(live *config.Live, db *store.DB) {
+	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
+	var lastStatus, lastDep, lastEv string
+	for range t.C {
+		if p.hub == nil {
+			continue
+		}
+		if st := fleetStatusPayload(live, p.appStatuses()); st != "" && st != lastStatus {
+			lastStatus = st
+			var v any
+			_ = json.Unmarshal([]byte(st), &v)
+			p.hub.Publish(hub.TopicStatus, "status", v)
+		}
+		if deps, err := db.ListDeployments("", 1); err == nil {
+			key := depHeadKey(deps)
+			if key != "" && key != lastDep {
+				lastDep = key
+				if full, err := db.ListDeployments("", 50); err == nil {
+					p.hub.Publish(hub.TopicDeployments, "deployments", full)
+				}
+			}
+		}
+		if evs, err := db.ListEvents(1, "", ""); err == nil {
+			key := evHeadKey(evs)
+			if key != "" && key != lastEv {
+				lastEv = key
+				if full, err := db.ListEvents(30, "", ""); err == nil {
+					p.hub.Publish(hub.TopicEvents, "events", full)
+				}
+			}
+		}
+	}
+}
+
+// fleetStatusPayload misma forma que GET /api/v1/status (string para
+// comparar barato por hash textual).
+func fleetStatusPayload(live *config.Live, apps []health.AppStatus) string {
+	cfg := live.Get()
+	httpsPort := ""
+	if cfg.ListenHTTPS != "" {
+		httpsPort = netutil.Port(cfg.ListenHTTPS, "443")
+	}
+	b, _ := json.Marshal(map[string]any{
+		"version":    build.Version,
+		"routes":     len(cfg.Routes),
+		"apps":       apps,
+		"http_port":  netutil.Port(cfg.ListenHTTP, "80"),
+		"https_port": httpsPort,
+	})
+	return string(b)
+}
+
+func depHeadKey(deps []store.Deployment) string {
+	if len(deps) == 0 {
+		return ""
+	}
+	d := deps[0]
+	return strings.Join([]string{strconv.FormatInt(d.ID, 10), d.Status, d.Rev}, ":")
+}
+
+func evHeadKey(evs []store.Event) string {
+	if len(evs) == 0 {
+		return ""
+	}
+	return strings.Join([]string{
+		strconv.FormatInt(evs[0].ID, 10), evs[0].Kind, evs[0].App, evs[0].Msg,
+	}, "|")
 }
