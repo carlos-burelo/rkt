@@ -2,34 +2,11 @@ import { Clock, Globe, Lock, LockOpen } from "lucide-react";
 import { useI18n } from "../../shared/i18n";
 import type { Level, Stream } from "./format";
 
-export const LEVEL_TONE: Record<Level, string> = {
-  info: "bg-info",
-  warning: "bg-warn",
-  error: "bg-bad",
-};
-
-export const LEVEL_TEXT: Record<Level, string> = {
-  info: "text-info",
-  warning: "text-warn",
-  error: "text-bad",
-};
-
 export const LEVEL_KEY: Record<Level, string> = {
   info: "ops.logs.level.info",
   warning: "ops.logs.level.warning",
   error: "ops.logs.level.error",
 };
-
-export const LEVEL_SHORT: Record<Level, string> = { info: "INF", warning: "WRN", error: "ERR" };
-
-export const STREAM_KEY: Record<Stream, string> = {
-  access: "ops.logs.stream.access",
-  rejected: "ops.logs.stream.rejected",
-  system: "ops.logs.stream.system",
-  app: "ops.logs.stream.app",
-};
-
-export const STREAM_SHORT: Record<Stream, string> = { access: "ACC", rejected: "REJ", system: "SYS", app: "APP" };
 
 export const ROW_TONE: Record<Level, string> = {
   info: "text-console-foreground/85",
@@ -122,76 +99,4 @@ export function ago(ts?: number): string {
   if (s < 60) return `${s}s`;
   if (s < 3600) return `${Math.round(s / 60)}m`;
   return `${Math.round(s / 3600)}h`;
-}
-
-function ChipToggle({
-  label,
-  title,
-  on,
-  count,
-  onClick,
-  mark,
-}: {
-  label: React.ReactNode;
-  title: string;
-  on: boolean;
-  count: number;
-  onClick: () => void;
-  mark?: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={on}
-      aria-label={title}
-      title={title}
-      className={`inline-flex h-7 items-center gap-1.5 border px-2 font-mono text-[9px] tracking-[0.08em] uppercase transition-colors ${
-        on ? "border-input bg-accent/60 text-foreground" : "border-border bg-transparent text-muted-foreground/60 hover:text-foreground"
-      }`}
-    >
-      {mark}
-      <span className={on ? undefined : "text-muted-foreground/50"}>{label}</span>
-      <span className={`tnum ${on ? undefined : "text-muted-foreground/50"}`}>{count}</span>
-    </button>
-  );
-}
-
-export function LevelToggle({
-  level,
-  on,
-  count,
-  onClick,
-}: {
-  level: Level;
-  on: boolean;
-  count: number;
-  onClick: () => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <ChipToggle
-      label={<span className={on ? LEVEL_TEXT[level] : undefined}>{LEVEL_SHORT[level]}</span>}
-      title={t(LEVEL_KEY[level])}
-      on={on}
-      count={count}
-      onClick={onClick}
-      mark={<span aria-hidden className={`h-1.5 w-1.5 ${on ? LEVEL_TONE[level] : "bg-muted-foreground/25"}`} />}
-    />
-  );
-}
-
-export function StreamToggle({
-  stream,
-  on,
-  count,
-  onClick,
-}: {
-  stream: Stream;
-  on: boolean;
-  count: number;
-  onClick: () => void;
-}) {
-  const { t } = useI18n();
-  return <ChipToggle label={STREAM_SHORT[stream]} title={t(STREAM_KEY[stream])} on={on} count={count} onClick={onClick} />;
 }

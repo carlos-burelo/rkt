@@ -5,12 +5,12 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select, SelectTrigger, SelectContent, SelectItem,
 } from "@/components/ui/select";
+import { MultiFilter, SingleFilter } from "../../shared/components/filters";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
 import { useI18n } from "../../shared/i18n";
 import { useLogs } from "./logs.store";
 import type { LineBuckets } from "./useLogLines";
-import { LevelToggle, StreamToggle } from "./logparts";
 
 // Barra de la consola: tabs + app + buscar + niveles + corrientes +
 // vivo/pausar/recargar/descargar. Lee y escribe el store.
@@ -59,43 +59,30 @@ export function LogToolbar({ lines }: { lines: LineBuckets }) {
               className="h-7 pl-7 font-mono text-[10px]"
             />
           </div>
-          <div className="flex items-center gap-px" role="group" aria-label={t("ops.logs.levelsAria")}>
-            {(["info", "warning", "error"] as const).map((l) => (
-              <LevelToggle
-                key={l}
-                level={l}
-                on={levels[l]}
-                count={lines.counts[l]}
-                onClick={() => st.toggleLevel(l)}
-              />
-            ))}
-          </div>
+          <MultiFilter
+            label={t("ops.logs.levelsLabel")}
+            items={(["info", "warning", "error"] as const).map((l) => ({
+              key: l,
+              label: t(`ops.logs.level.${l}`),
+              checked: levels[l],
+              count: lines.counts[l],
+            }))}
+            onToggle={(k) => st.toggleLevel(k as keyof typeof levels)}
+          />
           {appFilter === "" && (
-            <div className="flex items-center gap-px" role="group" aria-label={t("ops.logs.streamsAria")}>
-              <button
-                type="button"
-                onClick={() => st.setStream("all")}
-                aria-pressed={stream === "all"}
-                aria-label={t("ops.logs.stream.all")}
-                title={t("ops.logs.stream.all")}
-                className={`inline-flex h-7 items-center gap-1.5 border px-2 font-mono text-[9px] tracking-[0.08em] uppercase transition-colors ${
-                  stream === "all" ? "border-input bg-accent/60 text-foreground" : "border-border bg-transparent text-muted-foreground/60 hover:text-foreground"
-                }`}
-              >
-                <span className={`tnum ${stream === "all" ? undefined : "text-muted-foreground/50"}`}>
-                  {lines.vis.length}
-                </span>
-              </button>
-              {(["access", "rejected", "system"] as const).map((s) => (
-                <StreamToggle
-                  key={s}
-                  stream={s}
-                  on={stream === s}
-                  count={lines.streams[s]}
-                  onClick={() => st.setStream(stream === s ? "all" : s)}
-                />
-              ))}
-            </div>
+            <SingleFilter
+              value={stream}
+              onChange={(v) => st.setStream(v)}
+              label={t("ops.logs.streamsLabel")}
+              items={[
+                { value: "all" as const, label: t("ops.logs.stream.all"), count: lines.counts.info + lines.counts.warning + lines.counts.error },
+                ...(["access", "rejected", "system"] as const).map((s) => ({
+                  value: s as "access" | "rejected" | "system",
+                  label: t(`ops.logs.stream.${s}`),
+                  count: lines.streams[s],
+                })),
+              ]}
+            />
           )}
           <span className="flex-1" />
           <Button variant="outline" size="sm" onClick={() => st.setLive(!live)}>

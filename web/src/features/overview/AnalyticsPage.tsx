@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Bars } from "../../shared/components/feedback";
-import { PageHeader, Stat, StatGrid, Section, Segmented } from "../../shared/components/patterns";
+import { PageHeader, Stat, StatGrid, Section } from "../../shared/components/patterns";
+import { SingleFilter } from "../../shared/components/filters";
 import { Err } from "../../shared/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { useI18n } from "../../shared/i18n";
@@ -47,7 +48,7 @@ export function AnalyticsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Segmented
+        <SingleFilter
           value={String(days)}
           onChange={(v) => useAnalyticsPage.getState().setDays(Number(v))}
           label={t("overview.analytics.rangeAria")}

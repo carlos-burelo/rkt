@@ -7,10 +7,11 @@ import { CopyButton } from "../../shared/components/feedback";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { SingleFilter } from "../../shared/components/filters";
 import { deployStateLabel } from "../../shared/lib/labels";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
-import { PageHeader, Segmented, Stat, StatGrid } from "../../shared/components/patterns";
+import { PageHeader, Stat, StatGrid } from "../../shared/components/patterns";
 import { useI18n } from "../../shared/i18n";
 
 export type DepStatus = "all" | "ok" | "running" | "failed";
@@ -89,15 +90,15 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
               aria-label={t("deployments.filter.aria")}
             />
           </div>
-          <Segmented
+          <SingleFilter
             value={st}
             onChange={setSt}
             label={t("deployments.filter.statusLabel")}
             items={[
-              { value: "all", label: t("deployments.filter.all"), count: counts.all },
-              { value: "ok", label: t("deployments.state.ok"), count: counts.ok },
-              { value: "running", label: t("deploy.running"), count: counts.running },
-              { value: "failed", label: t("deployments.filter.failed"), count: counts.failed },
+              { value: "all" as const, label: t("deployments.filter.all"), count: counts.all },
+              { value: "ok" as const, label: t("deployments.state.ok"), count: counts.ok },
+              { value: "running" as const, label: t("deploy.running"), count: counts.running },
+              { value: "failed" as const, label: t("deployments.filter.failed"), count: counts.failed },
             ]}
           />
           {(q !== "" || st !== "all") && (

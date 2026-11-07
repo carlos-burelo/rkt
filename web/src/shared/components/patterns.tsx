@@ -114,43 +114,6 @@ export function StatGrid({ children, className }: { children: React.ReactNode; c
   );
 }
 
-export function Segmented<T extends string>({
-  value,
-  onChange,
-  items,
-  label,
-}: {
-  value: T;
-  onChange: (v: T) => void;
-  items: { value: T; label: string; count?: number }[];
-  label: string;
-}) {
-  return (
-    <div className="inline-flex items-center border border-border" role="group" aria-label={label}>
-      {items.map((it) => {
-        const active = it.value === value;
-        return (
-          <button
-            key={it.value}
-            type="button"
-            onClick={() => onChange(it.value)}
-            aria-pressed={active}
-            className={cn(
-              "inline-flex h-7 items-center gap-1.5 border-r border-border px-2.5 font-mono text-[10px] tracking-[0.08em] uppercase transition-colors last:border-r-0",
-              active
-                ? "bg-secondary font-medium text-foreground shadow-[inset_0_-1px_0_0_var(--signal)]"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground",
-            )}
-          >
-            {it.label}
-            {it.count !== undefined && <span className="tnum opacity-70">{it.count}</span>}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 export function Meter({
   label,
   value,
