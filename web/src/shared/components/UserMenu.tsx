@@ -1,7 +1,7 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
-  DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuItem,
+  DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { Avatar } from "./ui";
 import { roleLabel } from "../lib/labels";
@@ -20,12 +20,13 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="flex h-7 w-7 items-center justify-center rounded-full outline-none hover:ring-2 hover:ring-signal/50"
+        className="flex h-7 w-7 items-center justify-center rounded-[1px] outline-none hover:ring-2 hover:ring-signal/50"
         aria-label={who?.user ?? t("shell.account")}
       >
         <Avatar name={who?.user ?? "?"} className="h-6 w-6" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuGroup>
         <div className="flex items-center gap-2 px-2 py-2">
           <Avatar name={who?.user ?? "?"} />
           <div className="min-w-0 flex-1 leading-tight">
@@ -50,6 +51,7 @@ export function UserMenu() {
         <DropdownMenuItem onClick={() => doLogout()} className="font-mono text-[11px]">
           {t("shell.logout")}
         </DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -122,18 +122,6 @@ export function ShellLayout() {
             </SidebarMenuItem>
           </SidebarMenu>
 
-          {canWrite && !currentApp && (
-            <Button className="mt-3 w-full justify-between px-2.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0" size="sm" onClick={() => navigate("/apps/new")} aria-keyshortcuts="N">
-              <span className="inline-flex items-center gap-1.5">
-                <Plus className="h-3.5 w-3.5" />
-                <span className="group-data-[collapsible=icon]:hidden">{t("shell.newApp")}</span>
-              </span>
-              <span className="group-data-[collapsible=icon]:hidden">
-                <Kbd>N</Kbd>
-              </span>
-            </Button>
-          )}
-
           <button
             onClick={() => setPalette(true)}
             className="mt-2 flex h-8 w-full items-center gap-2 border border-border bg-field/25 px-2 text-left font-mono text-[10px] text-muted-foreground transition-colors hover:border-input hover:text-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
@@ -297,8 +285,8 @@ export function ShellLayout() {
             </span>
           </Link>
           {canWrite && (
-            <Button size="sm" onClick={() => navigate("/apps/new")} className="h-7 md:hidden">
-              <Plus className="h-3.5 w-3.5" /> {t("shell.newApp")}
+            <Button size="sm" onClick={() => navigate("/apps/new")} className="h-7" aria-keyshortcuts="N">
+              <Plus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">{t("shell.newApp")}</span>
             </Button>
           )}
           <UserMenu />
