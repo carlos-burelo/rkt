@@ -1,5 +1,6 @@
 import { Activity, ShieldCheck, Thermometer } from "lucide-react";
 import { Section } from "../../shared/components/patterns";
+import { StatusText } from "../../shared/components/ui";
 import { useI18n } from "../../shared/i18n";
 import type { ServerProcess, ServerSnapshot } from "./api";
 
@@ -26,9 +27,9 @@ export function ServerSystem({ snap, procs }: { snap: ServerSnapshot; procs: Ser
             <div className="border border-border">
               <div className="flex items-center gap-2 border-b border-border/60 px-3 py-1.5">
                 <span className="micro">{t("server.state")}</span>
-                <span className={`ml-auto font-mono text-[10px] uppercase ${snap.firewall.enabled ? "text-ok" : "text-warn"}`}>
+                <StatusText tone={snap.firewall.enabled ? "ok" : "warn"} className="ml-auto">
                   {snap.firewall.enabled ? t("server.enabled") : t("server.disabled")}
-                </span>
+                </StatusText>
               </div>
               {(snap.firewall.profiles ?? []).map((p) => (
                 <p key={p} className="border-b border-border/60 px-3 py-1.5 font-mono text-[10px] text-muted-foreground last:border-0">{p}</p>

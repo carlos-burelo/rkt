@@ -124,6 +124,39 @@ export function ago(ts?: number): string {
   return `${Math.round(s / 3600)}h`;
 }
 
+function ChipToggle({
+  label,
+  title,
+  on,
+  count,
+  onClick,
+  mark,
+}: {
+  label: React.ReactNode;
+  title: string;
+  on: boolean;
+  count: number;
+  onClick: () => void;
+  mark?: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      aria-label={title}
+      title={title}
+      className={`inline-flex h-7 items-center gap-1.5 border px-2 font-mono text-[9px] tracking-[0.08em] uppercase transition-colors ${
+        on ? "border-input bg-accent/60 text-foreground" : "border-border bg-transparent text-muted-foreground/60 hover:text-foreground"
+      }`}
+    >
+      {mark}
+      <span className={on ? undefined : "text-muted-foreground/50"}>{label}</span>
+      <span className={`tnum ${on ? undefined : "text-muted-foreground/50"}`}>{count}</span>
+    </button>
+  );
+}
+
 export function LevelToggle({
   level,
   on,
@@ -136,22 +169,15 @@ export function LevelToggle({
   onClick: () => void;
 }) {
   const { t } = useI18n();
-  const label = t(LEVEL_KEY[level]);
   return (
-    <button
-      type="button"
+    <ChipToggle
+      label={<span className={on ? LEVEL_TEXT[level] : undefined}>{LEVEL_SHORT[level]}</span>}
+      title={t(LEVEL_KEY[level])}
+      on={on}
+      count={count}
       onClick={onClick}
-      aria-pressed={on}
-      aria-label={label}
-      title={label}
-      className={`inline-flex h-7 items-center gap-1.5 border px-2 font-mono text-[9px] tracking-[0.08em] uppercase transition-colors ${
-        on ? "border-input bg-accent/60 text-foreground" : "border-border bg-transparent text-muted-foreground/60 hover:text-foreground"
-      }`}
-    >
-      <span aria-hidden className={`h-1.5 w-1.5 ${on ? LEVEL_TONE[level] : "bg-muted-foreground/25"}`} />
-      <span className={on ? LEVEL_TEXT[level] : undefined}>{LEVEL_SHORT[level]}</span>
-      <span className={`tnum ${on ? LEVEL_TEXT[level] : "text-muted-foreground/50"}`}>{count}</span>
-    </button>
+      mark={<span aria-hidden className={`h-1.5 w-1.5 ${on ? LEVEL_TONE[level] : "bg-muted-foreground/25"}`} />}
+    />
   );
 }
 
@@ -167,20 +193,5 @@ export function StreamToggle({
   onClick: () => void;
 }) {
   const { t } = useI18n();
-  const label = t(STREAM_KEY[stream]);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={on}
-      aria-label={label}
-      title={label}
-      className={`inline-flex h-7 items-center gap-1.5 border px-2 font-mono text-[9px] tracking-[0.08em] uppercase transition-colors ${
-        on ? "border-input bg-accent/60 text-foreground" : "border-border bg-transparent text-muted-foreground/60 hover:text-foreground"
-      }`}
-    >
-      <span className={on ? undefined : "text-muted-foreground/50"}>{STREAM_SHORT[stream]}</span>
-      <span className={`tnum ${on ? undefined : "text-muted-foreground/50"}`}>{count}</span>
-    </button>
-  );
+  return <ChipToggle label={STREAM_SHORT[stream]} title={t(STREAM_KEY[stream])} on={on} count={count} onClick={onClick} />;
 }
