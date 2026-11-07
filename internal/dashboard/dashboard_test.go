@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -81,5 +82,25 @@ func Test503SinDist(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("quiere 503, got %d", rec.Code)
+	}
+}
+
+// El CSP nunca afloja scripts: nada de 'unsafe-inline' ni hashes que
+// mantener (el tema pre-paint vive en theme-init.js externo).
+// Si este test falla, alguien metió inline JS: muévelo a un .js.
+func TestCSPScrictSinInline(t *testing.T) {
+	h := NewHandler(os.DirFS(testDist(t)))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	csp := rec.Header().Get("Content-Security-Policy")
+	m := map[string]string{}
+	for _, dir := range strings.Split(csp, ";") {
+		kv := strings.SplitN(strings.TrimSpace(dir), " ", 2)
+		if len(kv) == 2 {
+			m[kv[0]] = kv[1]
+		}
+	}
+	if m["script-src"] != "'self'" {
+		t.Fatalf("script-src debe ser 'self' exacto: %q", csp)
 	}
 }
