@@ -1,8 +1,9 @@
 import { Power } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Avatar } from "../../shared/components/ui";
 import { ConfirmButton } from "../../shared/components/ConfirmButton";
 import { Time } from "../../shared/components/patterns";
+import { RowMenu } from "../../shared/components/menus";
 import { roleLabel } from "../../shared/lib/labels";
 import { useAuth } from "../auth/store";
 import { useI18n } from "../../shared/i18n";
@@ -10,13 +11,7 @@ import type { User } from "../../shared/lib/types";
 import { useUsers } from "./users.store";
 import { PasswordDialog, SessionsDialog } from "./dialogs";
 
-const ROLE_CLASS: Record<string, string> = {
-  admin: "border-signal/35 bg-signal/10 text-signal",
-  operator: "border-info/30 bg-info/10 text-info",
-  viewer: "border-border text-muted-foreground",
-};
-
-// Fila de usuario: lee su fila + acciones finas del store (no todo).
+// Fila de usuario: una sola zona ruidosa (⋯); el resto vive en el menú.
 export function UserRow({ u }: { u: User }) {
   const { t } = useI18n();
   const me = useAuth((a) => a.who);
@@ -34,7 +29,7 @@ export function UserRow({ u }: { u: User }) {
         )}
         {u.disabled && <span className="font-mono text-[9px] text-warn uppercase">{t("system.users.disabled")}</span>}
       </span>
-      <span className={`tnum inline-flex h-5 w-fit items-center border px-1.5 font-mono text-[10px] tracking-[0.08em] uppercase ${ROLE_CLASS[u.role] ?? ROLE_CLASS.viewer}`}>
+      <span className="tnum inline-flex h-5 w-fit items-center border px-1.5 font-mono text-[10px] tracking-[0.08em] uppercase">
         {roleLabel(u.role)}
       </span>
       <span className="tnum hidden text-right font-mono text-[11px] text-muted-foreground sm:block">
@@ -44,23 +39,28 @@ export function UserRow({ u }: { u: User }) {
         {u.last_login ? <Time iso={u.last_login} /> : "—"}
       </span>
       <div className="flex justify-end gap-0.5">
-        <PasswordDialog name={u.name} self={false} onSaved={refresh} />
-        <SessionsDialog name={u.name} onChanged={refresh} />
-        <Button
-          variant="ghost"
-          size="xs"
-          disabled={self}
-          title={u.disabled ? t("system.users.enable") : t("system.users.disable")}
-          onClick={() => toggle(u.name, !u.disabled)}
-        >
-          <Power className={`h-3 w-3 ${u.disabled ? "text-muted-foreground" : "text-ok"}`} />
-        </Button>
-        <ConfirmButton
-          disabled={self}
-          title={self ? t("system.users.cannotDeleteSelf") : t("system.users.deleteTitle")}
-          confirmLabel={t("common.confirm")}
-          onConfirm={() => remove(u.name)}
-        />
+        <RowMenu label={t("system.users.rowActions", { name: u.name })}>
+          <PasswordDialog
+            name={u.name}
+            self={false}
+            onSaved={refresh}
+            trigger={<DropdownMenuItem>{t("system.users.passwordTitle")}</DropdownMenuItem>}
+          />
+          <SessionsDialog
+            name={u.name}
+            onChanged={refresh}
+            trigger={<DropdownMenuItem>{t("system.users.sessions")}</DropdownMenuItem>}
+          />
+          <DropdownMenuItem disabled={self} onSelect={() => toggle(u.name, !u.disabled)}>
+            <Power className="h-3 w-3" /> {u.disabled ? t("system.users.enable") : t("system.users.disable")}
+          </DropdownMenuItem>
+          <ConfirmButton
+            disabled={self}
+            title={self ? t("system.users.cannotDeleteSelf") : t("system.users.deleteTitle", { name: u.name })}
+            confirmLabel={t("common.confirm")}
+            onConfirm={() => remove(u.name)}
+          />
+        </RowMenu>
       </div>
     </div>
   );

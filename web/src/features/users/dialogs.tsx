@@ -20,7 +20,7 @@ import { useUsers } from "./users.store";
 // Diálogos con estado de formulario local: cada instancia es
 // independiente (no va al store global para no fugar entre filas).
 
-export function PasswordDialog({ name, self, onSaved }: { name: string; self: boolean; onSaved: () => void }) {
+export function PasswordDialog({ name, self, onSaved, trigger }: { name: string; self: boolean; onSaved: () => void; trigger?: React.ReactElement }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [cur, setCur] = useState("");
@@ -31,9 +31,11 @@ export function PasswordDialog({ name, self, onSaved }: { name: string; self: bo
       open={open}
       onOpenChange={setOpen}
       trigger={
-        <Button variant={self ? "outline" : "ghost"} size="xs" title={t("system.users.passwordTitle")}>
-          <KeyRound className="h-3 w-3" /> {self ? t("system.users.passwordSelf") : ""}
-        </Button>
+        trigger ?? (
+          <Button variant={self ? "outline" : "ghost"} size="xs" title={t("system.users.passwordTitle")}>
+            <KeyRound className="h-3 w-3" /> {self ? t("system.users.passwordSelf") : ""}
+          </Button>
+        )
       }
       title={t("system.users.passwordTitleFor", { name })}
       description={t("system.users.passwordDesc")}
@@ -65,7 +67,7 @@ export function PasswordDialog({ name, self, onSaved }: { name: string; self: bo
   );
 }
 
-export function SessionsDialog({ name, onChanged }: { name: string; onChanged: () => void }) {
+export function SessionsDialog({ name, onChanged, trigger }: { name: string; onChanged: () => void; trigger?: React.ReactElement }) {
   const { t } = useI18n();
   const fail = useUI((u) => u.fail);
   const [open, setOpen] = useState(false);
@@ -87,9 +89,11 @@ export function SessionsDialog({ name, onChanged }: { name: string; onChanged: (
         if (o) load();
       }}
       trigger={
-        <Button variant="ghost" size="xs" title={t("system.users.sessions")}>
-          <History className="h-3 w-3" />
-        </Button>
+        trigger ?? (
+          <Button variant="ghost" size="xs" title={t("system.users.sessions")}>
+            <History className="h-3 w-3" />
+          </Button>
+        )
       }
       title={t("system.users.sessionsTitle", { name })}
       description={t("system.users.sessionsDesc")}

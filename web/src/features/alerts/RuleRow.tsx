@@ -1,8 +1,9 @@
 import { Power, Send } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { ConfirmButton } from "../../shared/components/ConfirmButton";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Dot, StateRail } from "../../shared/components/ui";
+import { RowMenu } from "../../shared/components/menus";
+import { ConfirmButton } from "../../shared/components/ConfirmButton";
 import { useAuth } from "../auth/store";
 import { useI18n } from "../../shared/i18n";
 import type { AlertRule } from "./api";
@@ -42,30 +43,20 @@ export function RuleRow({ id }: { id: number }) {
       )}
       <div className="flex justify-end gap-0.5">
         {canWrite && (
-          <>
-            <Button
-              variant="ghost"
-              size="xs"
-              title={r.enabled ? t("ops.alerts.disable") : t("ops.alerts.enable")}
-              onClick={() => toggle(r)}
-            >
-              <Power className={`h-3 w-3 ${r.enabled ? "text-ok" : "text-muted-foreground"}`} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              title={t("ops.alerts.test")}
-              onClick={() => test(r.id).then((m) => { if (m) toast.success(m); })}
-            >
-              <Send className="h-3 w-3" />
-            </Button>
-            <RuleEdit rule={r} channels={channels} />
-            <FireHistory rule={r} />
+          <RowMenu label={t("ops.alerts.rowActions", { id: r.id })}>
+            <DropdownMenuItem onClick={() => toggle(r)}>
+              <Power className="h-3 w-3" /> {r.enabled ? t("ops.alerts.disable") : t("ops.alerts.enable")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => test(r.id).then((m) => { if (m) toast.success(m); })}>
+              <Send className="h-3 w-3" /> {t("ops.alerts.test")}
+            </DropdownMenuItem>
+            <RuleEdit rule={r} channels={channels} trigger={<DropdownMenuItem>{t("common.edit")}</DropdownMenuItem>} />
+            <FireHistory rule={r} trigger={<DropdownMenuItem>{t("ops.alerts.history")}</DropdownMenuItem>} />
             <ConfirmButton
               title={t("ops.alerts.deleteTitle", { id: r.id })}
               onConfirm={() => remove(r.id)}
             />
-          </>
+          </RowMenu>
         )}
       </div>
     </div>

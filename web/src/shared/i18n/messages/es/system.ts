@@ -102,6 +102,7 @@ export const system = {
   "system.users.newDesc":
     "lectura: solo lectura; operador: modifica apps; administrador: usuarios y configuración. Contraseña mínima de 12 caracteres.",
   "system.users.user": "usuario",
+  "system.users.rowActions": "acciones de {name}",
   "system.users.password": "contraseña",
   "system.users.passwordHint": "mín. 12",
   "system.users.passwordPlaceholder": "mínimo 12 caracteres",

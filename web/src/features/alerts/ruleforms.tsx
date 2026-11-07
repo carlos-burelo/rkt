@@ -67,7 +67,7 @@ export function RuleFields({
   );
 }
 
-export function RuleEdit({ rule, channels }: { rule: AlertRule; channels: AlertChannel[] }) {
+export function RuleEdit({ rule, channels, trigger }: { rule: AlertRule; channels: AlertChannel[]; trigger?: React.ReactElement }) {
   const { t } = useI18n();
   const save = useAlerts((s) => s.save);
   const [open, setOpen] = useState(false);
@@ -82,9 +82,11 @@ export function RuleEdit({ rule, channels }: { rule: AlertRule; channels: AlertC
       open={open}
       onOpenChange={setOpen}
       trigger={
-        <Button variant="ghost" size="xs" aria-label={t("ops.alerts.edit")}>
-          <Pencil className="h-3 w-3" />
-        </Button>
+        trigger ?? (
+          <Button variant="ghost" size="xs" aria-label={t("ops.alerts.edit")}>
+            <Pencil className="h-3 w-3" />
+          </Button>
+        )
       }
       title={t("ops.alerts.editTitle", { id: rule.id })}
       description={t("ops.alerts.editDesc")}
@@ -114,7 +116,7 @@ export function RuleEdit({ rule, channels }: { rule: AlertRule; channels: AlertC
   );
 }
 
-export function FireHistory({ rule }: { rule: AlertRule }) {
+export function FireHistory({ rule, trigger }: { rule: AlertRule; trigger?: React.ReactElement }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [fires, setFires] = useState<AlertFire[]>([]);
@@ -127,9 +129,11 @@ export function FireHistory({ rule }: { rule: AlertRule }) {
       open={open}
       onOpenChange={setOpen}
       trigger={
-        <Button variant="ghost" size="xs" aria-label={t("ops.alerts.history")}>
-          <History className="h-3 w-3" />
-        </Button>
+        trigger ?? (
+          <Button variant="ghost" size="xs" aria-label={t("ops.alerts.history")}>
+            <History className="h-3 w-3" />
+          </Button>
+        )
       }
       title={t("ops.alerts.historyTitle", { id: rule.id })}
       description={t("ops.alerts.historyDesc")}

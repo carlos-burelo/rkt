@@ -46,6 +46,7 @@ export const cron = {
   "cron.runNow": "ejecutar ahora",
   "cron.started": "{job} iniciada",
   "cron.deleteTitle": "borrar tarea {job}",
+  "cron.rowActions": "acciones de {job}",
   "cron.emptyTitle": "Sin tareas programadas",
   "cron.emptyHint": "Crea una tarea con «nueva tarea».",
   "cron.history": "historial",

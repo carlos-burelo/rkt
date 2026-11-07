@@ -9,7 +9,7 @@ import { cronRunLog, listCronRuns, type CronJob, type CronRun } from "./api";
 import { cronTone as statusTone } from "./status";
 
 // Historial de ejecuciones de un job: instancia local por fila.
-export function RunsDialog({ job }: { job: CronJob }) {
+export function RunsDialog({ job, trigger }: { job: CronJob; trigger?: React.ReactElement }) {
   const { t } = useI18n();
   const fail = useUI((u) => u.fail);
   const [open, setOpen] = useState(false);
@@ -30,9 +30,11 @@ export function RunsDialog({ job }: { job: CronJob }) {
       open={open}
       onOpenChange={setOpen}
       trigger={
-        <Button variant="ghost" size="xs" title={t("cron.history")}>
-          <ScrollText className="h-3 w-3" />
-        </Button>
+        trigger ?? (
+          <Button variant="ghost" size="xs" title={t("cron.history")}>
+            <ScrollText className="h-3 w-3" />
+          </Button>
+        )
       }
       title={t("cron.historyTitle", { app: job.app, job: job.job })}
       description={t("cron.historyDesc")}

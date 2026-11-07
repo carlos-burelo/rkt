@@ -154,6 +154,7 @@ export const ops = {
   "ops.alerts.channelDelete": "borrar canal #{id}",
   "ops.alerts.noChannels": "sin canales · crea uno para notificar",
   "ops.alerts.deleteTitle": "borrar regla #{id}",
+  "ops.alerts.rowActions": "acciones de la regla #{id}",
   "ops.alerts.emptyTitle": "Sin reglas",
   "ops.alerts.emptyHint":
     "failed = caídas por app · error_rate = 5xx global (0.1 = 10%).",

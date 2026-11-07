@@ -1,8 +1,10 @@
 import { CalendarClock, Play } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ConfirmButton } from "../../shared/components/ConfirmButton";
 import { Dot } from "../../shared/components/ui";
+import { RowMenu } from "../../shared/components/menus";
 import { rel } from "../../shared/lib/time";
 import { useAuth } from "../auth/store";
 import { useUI } from "../../app/ui";
@@ -54,17 +56,19 @@ export function CronRow({ job }: { job: CronJob }) {
             <Play className="h-3 w-3" />
           </Button>
         )}
-        <RunsDialog job={job} />
-        {canWrite && (
-          <>
-            <Button variant="ghost" size="xs" title={t("common.edit")} onClick={() => openEdit(job)}>
-              <CalendarClock className="h-3 w-3" />
-            </Button>
+        {canWrite ? (
+          <RowMenu label={t("cron.rowActions", { job: job.job })}>
+            <RunsDialog job={job} trigger={<DropdownMenuItem>{t("cron.history")}</DropdownMenuItem>} />
+            <DropdownMenuItem onClick={() => openEdit(job)}>
+              <CalendarClock className="h-3 w-3" /> {t("common.edit")}
+            </DropdownMenuItem>
             <ConfirmButton
               title={t("cron.deleteTitle", { job: job.job })}
               onConfirm={() => remove(job.app, job.job)}
             />
-          </>
+          </RowMenu>
+        ) : (
+          <RunsDialog job={job} />
         )}
       </div>
     </div>
