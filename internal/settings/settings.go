@@ -25,6 +25,9 @@ const (
 	KeyRetentionEventDays  = "retention_event_days"
 	KeyRetentionLogDays    = "retention_log_days"
 	KeyRetentionBackupDays = "retention_backup_days"
+	// Consola pública: host en 80/443 y/o listener extra.
+	KeyDashboardHost   = "dashboard_host"
+	KeyDashboardListen = "dashboard_listen"
 )
 
 // Spec describe un ajuste y si exige reiniciar el servicio.
@@ -47,6 +50,8 @@ var specs = []Spec{
 	{Key: KeyRetentionEventDays, Restart: false, Validate: validateNonNegative},
 	{Key: KeyRetentionLogDays, Restart: false, Validate: validateNonNegative},
 	{Key: KeyRetentionBackupDays, Restart: false, Validate: validateNonNegative},
+	{Key: KeyDashboardHost, Restart: false, Validate: validateDashboardHost},
+	{Key: KeyDashboardListen, Restart: true, Validate: validateListenAddr},
 }
 
 // Keys lista canónica ordenada.
@@ -140,6 +145,25 @@ func validateNonNegative(v string) error {
 	n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
 	if err != nil || n < 0 {
 		return fmt.Errorf("entero ≥ 0")
+	}
+	return nil
+}
+
+// validateDashboardHost acepta "off", "auto" o un host sin esquema/ruta.
+func validateDashboardHost(v string) error {
+	if v == "off" || v == "auto" {
+		return nil
+	}
+	if strings.Contains(v, "://") || strings.ContainsAny(v, " /\\\t\r\n") {
+		return fmt.Errorf("host inválido (sin esquema ni ruta)")
+	}
+	return validateHost(v)
+}
+
+// validateListenAddr exige host:puerto para listeners explícitos.
+func validateListenAddr(v string) error {
+	if _, _, err := net.SplitHostPort(v); err != nil {
+		return fmt.Errorf("usa host:puerto (ej 0.0.0.0:8090)")
 	}
 	return nil
 }

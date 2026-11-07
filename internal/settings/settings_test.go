@@ -8,7 +8,7 @@ import (
 
 func TestKeysYGet(t *testing.T) {
 	keys := Keys()
-	if len(keys) != 12 || keys[0] != KeyNodeBin {
+	if len(keys) != 14 || keys[0] != KeyNodeBin {
 		t.Fatalf("keys = %v", keys)
 	}
 	if s, ok := Get(KeyBaseDomain); !ok || s.Key != KeyBaseDomain {
@@ -30,6 +30,7 @@ func TestValidateSettings(t *testing.T) {
 		KeyQuotaBytes: "0", KeyPublicIP: "203.0.113.7",
 		KeyRetentionDeployDays: "30", KeyRetentionEventDays: "30",
 		KeyRetentionLogDays: "30", KeyRetentionBackupDays: "7",
+		KeyDashboardHost: "rkt.ejemplo.com", KeyDashboardListen: "0.0.0.0:8090",
 	}
 	for k, v := range ok {
 		if err := Validate(k, v); err != nil {
@@ -70,8 +71,9 @@ func TestValidateSettings(t *testing.T) {
 
 func TestRequiresRestart(t *testing.T) {
 	for _, k := range Keys() {
-		if RequiresRestart(k) {
-			t.Fatalf("%s no debería exigir reinicio", k)
+		want := k == KeyDashboardListen
+		if RequiresRestart(k) != want {
+			t.Fatalf("%s RequiresRestart = %v, quiere %v", k, RequiresRestart(k), want)
 		}
 	}
 	if RequiresRestart("nope") {

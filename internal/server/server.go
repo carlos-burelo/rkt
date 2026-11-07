@@ -39,7 +39,8 @@ func NewHTTP(cfg *config.Config, live *config.Live, challenge http.Handler, back
 			challenge.ServeHTTP(w, r)
 			return
 		}
-		if live.Get().RedirectHTTPToHTTPS {
+		cfg := live.Get()
+		if cfg.RedirectHTTPToHTTPS && (cfg.ListenHTTPS != "" || cfg.LocalCA) {
 			http.Redirect(w, r, "https://"+r.Host+r.URL.RequestURI(), http.StatusMovedPermanently)
 			return
 		}

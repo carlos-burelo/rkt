@@ -30,6 +30,9 @@ func HostPolicy(live *config.Live) autocert.HostPolicy {
 	return func(_ context.Context, host string) error {
 		host = strings.ToLower(strings.TrimSpace(host))
 		cfg := live.Get()
+		if d := strings.ToLower(strings.TrimSpace(cfg.Dashboard.Host)); d != "" && d == host {
+			return nil
+		}
 		for i := range cfg.Routes {
 			for _, h := range cfg.Routes[i].Hosts {
 				h = strings.ToLower(strings.TrimSpace(h))

@@ -5,6 +5,7 @@ package cfgfile
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/logx"
@@ -144,8 +145,29 @@ func Snapshot(db *store.DB, base *config.Config) (*config.Config, error) {
 	out.Apps = fleet.Apps
 	out.Routes = fleet.Routes
 	out.ApplyDefaults()
+	applyDashboard(&out, db)
 	if err := config.ValidateRoutes(out.Routes); err != nil {
 		return nil, fmt.Errorf("db %w", err)
 	}
 	return &out, nil
+}
+
+// applyDashboard resuelve la exposición de la consola desde settings.
+// vacío/auto = rkt.<base_domain> si hay base; off = solo loopback.
+func applyDashboard(cfg *config.Config, db *store.DB) {
+	h := strings.ToLower(strings.TrimSpace(db.GetSetting(store.KeyDashboardHost)))
+	switch h {
+	case "off":
+		cfg.Dashboard.Host = ""
+	case "", "auto":
+		base := strings.Trim(strings.TrimSpace(db.GetSetting(store.KeyBaseDomain)), ".")
+		if base != "" {
+			cfg.Dashboard.Host = "rkt." + base
+		} else {
+			cfg.Dashboard.Host = ""
+		}
+	default:
+		cfg.Dashboard.Host = strings.Trim(h, ".")
+	}
+	cfg.Dashboard.Listen = strings.TrimSpace(db.GetSetting(store.KeyDashboardListen))
 }

@@ -59,14 +59,17 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 | `env global` | Lista las variables de toda la flota |
 | `env global set CLAVE=valor` | Escribe una global (las apps la heredan) |
 | `env global unset CLAVE` | Borra una global |
-| `settings list` | `node_bin, python_bin, base_domain, port_pool, site_name, quota_reqs, quota_bytes, public_ip` |
-| `settings set CLAVE=valor` | Escribe setting (solo conocidas) |
+| `settings list` | `node_bin, python_bin, base_domain, port_pool, site_name, quota_reqs, quota_bytes, public_ip, retention_*, dashboard_host, dashboard_listen` |
+| `settings set CLAVE=valor` | Escribe setting (valida clave y valor) |
 | `users list` | Usuarios dashboard (`name, role, created_at`) |
 | `users add <nombre> [--role admin]` | Alta con password sin eco (el primero se fuerza a admin) |
 | `users del <nombre>` | Baja (protege último admin, mata sesiones) |
 | `users passwd <nombre>` | Rota password e invalida sesiones |
-| `config export [file]` | Vuelca config+flota+settings en JSON para git |
+| `config export [file] [--include-secrets]` | JSON redactado por defecto; `--include-secrets` para respaldo restaurable |
 | `config import <file>` | Restaura flota + settings (valida antes) |
+| `backup [file]` | Copia consistente de SQLite con `VACUUM INTO` |
+| `restore <file>` | Restaura SQLite (servicio detenido) |
+| `doctor` | Diagnóstico de config, DB, servicio, puertos y git |
 | `github login` | URL para instalar la App en browser |
 | `github init --name --domain [--org]` | URL del form manifest para crear la App |
 | `help` | Esta referencia resumida |
@@ -100,6 +103,21 @@ SPA embebida servida en la raíz del listener healthz (loopback). Auth por
 credenciales: crea el primer admin con `users add`, entra en
 `/`, sesión por cookie httpOnly (30d). Roles:
 viewer lee, operator muta, admin gestiona usuarios.
+
+### Acceso externo
+
+Dos caminos, ambos con login:
+
+- **Recomendado:** `settings set dashboard_host=rkt.tudominio.com` y DNS A
+  al servidor. Se sirve en 80/443 con TLS automático. Si hay `base_domain`
+  y no defines `dashboard_host`, el default es `rkt.<base_domain>`; usa
+  `dashboard_host=off` para desactivarlo.
+- **Puerto directo:** `settings set dashboard_listen=0.0.0.0:8090` y
+  reinicia el servicio (`sc.exe restart Rkt`). Abre el puerto 8090 en el
+  firewall. Este listener es HTTP sin TLS: úsalo solo en red de confianza.
+
+El listener de healthz/métricas/acciones sigue siendo loopback. La consola
+externa solo sirve SPA + `/api/v1`.
 
 Endpoints principales (todos salvo login exigen sesión):
 `GET status|deployments|events|logs|apps|routes|settings|users|alerts|env|audit|cron`,

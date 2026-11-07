@@ -42,6 +42,7 @@ func TestLimitPolicy(t *testing.T) {
 
 func TestHostPolicy(t *testing.T) {
 	cfg := config.Default()
+	cfg.Dashboard.Host = "rkt.ejemplo.com"
 	cfg.Routes = []config.Route{
 		{Hosts: []string{"app.ejemplo.com"}, Target: "http://127.0.0.1:3000"},
 		{Hosts: []string{"*.ejemplo.com"}, Target: "http://127.0.0.1:4000"},
@@ -52,7 +53,7 @@ func TestHostPolicy(t *testing.T) {
 	policy := HostPolicy(config.NewLive(cfg))
 	ctx := context.Background()
 
-	for _, h := range []string{"app.ejemplo.com", "otro.ejemplo.com", "APP.EJEMPLO.COM"} {
+	for _, h := range []string{"app.ejemplo.com", "otro.ejemplo.com", "APP.EJEMPLO.COM", "rkt.ejemplo.com"} {
 		if err := policy(ctx, h); err != nil {
 			t.Fatalf("host %q debe pasar: %v", h, err)
 		}

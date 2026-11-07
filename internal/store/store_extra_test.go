@@ -32,7 +32,7 @@ func TestSettingsYVersion(t *testing.T) {
 	if db.GetSetting(KeySiteName) != "rkt" || db.ConfigVersion() <= v1 {
 		t.Fatalf("setting/version mal: %q v=%d", db.GetSetting(KeySiteName), db.ConfigVersion())
 	}
-	if len(KnownSettings()) != 12 {
+	if len(KnownSettings()) != 14 {
 		t.Fatalf("KnownSettings = %v", KnownSettings())
 	}
 }

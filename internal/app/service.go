@@ -66,6 +66,7 @@ type Program struct {
 	srvHTTP      *http.Server
 	srvTLS       *http.Server
 	srvHealth    *http.Server
+	srvDashboard *http.Server
 	alog         *accesslog.Logger
 	sup          *supervisor.Manager
 	mgr          *autocert.Manager
@@ -149,7 +150,7 @@ func (p *Program) Stop(_ service.Service) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	p.stateMu.Lock()
-	srvTLS, srvHTTP, srvHealth := p.srvTLS, p.srvHTTP, p.srvHealth
+	srvTLS, srvHTTP, srvHealth, srvDashboard := p.srvTLS, p.srvHTTP, p.srvHealth, p.srvDashboard
 	sup, alog, db, cron := p.sup, p.alog, p.db, p.cron
 	p.stateMu.Unlock()
 	if srvTLS != nil {
@@ -160,6 +161,9 @@ func (p *Program) Stop(_ service.Service) error {
 	}
 	if srvHealth != nil {
 		_ = srvHealth.Shutdown(ctx)
+	}
+	if srvDashboard != nil {
+		_ = srvDashboard.Shutdown(ctx)
 	}
 	if sup != nil {
 		sup.Stop()
@@ -212,15 +216,30 @@ func (p *Program) Run() {
 	}
 	sup.Start()
 	cronRunner.Start()
-	backend := proxy.NewHandler(live, p.log)
-	handler := http.Handler(backend)
-	if alog, err := accesslog.New(logx.AccessPath(p.cfgPath)); err != nil {
+
+	apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
+		p.sup.Apply(apps, global)
+		if p.cron != nil {
+			p.cron.Apply()
+		}
+	}, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, Server: p.srvMetrics, Cron: p.cron, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh})
+	sub, err := fs.Sub(web.Dist, "dist")
+	if err != nil {
+		p.log.Error("dashboard sin dist", "err", err)
+		sub = nilFS{}
+	}
+	dashH := dashboard.NewHandler(sub)
+	gate := dashboardGate(live, apiH, dashH, proxy.NewHandler(live, p.log))
+	handler := http.Handler(gate)
+	var alog *accesslog.Logger
+	if l, err := accesslog.New(logx.AccessPath(p.cfgPath)); err != nil {
 		p.log.Warn("access log desactivado", "err", err)
 	} else {
+		alog = l
 		p.stateMu.Lock()
 		p.alog = alog
 		p.stateMu.Unlock()
-		handler = alog.Middleware(backend)
+		handler = alog.Middleware(gate)
 	}
 	var challenge http.Handler
 	var mgr *autocert.Manager
@@ -276,7 +295,7 @@ func (p *Program) Run() {
 			Log:          p.log,
 			Verify:       p.verifyInstallation,
 			OnSetup:      p.onSetup,
-			DashboardURL: dashboardURL(cfg.Healthz.Listen),
+			DashboardURL: dashboardReturnURL(cfg),
 			Exchange: func(code string) (*github.ManifestCredentials, error) {
 				return github.ExchangeManifestCode("", code)
 			},
@@ -322,18 +341,6 @@ func (p *Program) Run() {
 			p.log.Error("token de control no disponible; acciones bloqueadas", "err", err)
 		}
 		healthH := health.NewHandler(health.Deps{Live: live, Version: build.Version, Apps: p.appStatuses, Restart: p.restartApp, Deploy: p.deployApp, Rollback: p.rollbackApp, Retry: p.retryDeployment, Build: p.buildLocal, Token: controlToken})
-		apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
-			p.sup.Apply(apps, global)
-			if p.cron != nil {
-				p.cron.Apply()
-			}
-		}, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, Server: p.srvMetrics, Cron: p.cron, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh})
-		sub, err := fs.Sub(web.Dist, "dist")
-		if err != nil {
-			p.log.Error("dashboard sin dist", "err", err)
-			sub = nilFS{}
-		}
-		dashH := dashboard.NewHandler(sub)
 		srvHealth := &http.Server{
 			Addr: cfg.Healthz.Listen,
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -378,6 +385,31 @@ func (p *Program) Run() {
 				p.log.Error("healthz muerto", "err", err)
 			}
 		}()
+	}
+	if cfg.Dashboard.Listen != "" {
+		console := consoleOnly(apiH, dashH)
+		if alog != nil {
+			console = alog.Middleware(console)
+		}
+		srvDashboard := &http.Server{
+			Addr:              cfg.Dashboard.Listen,
+			Handler:           console,
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       120 * time.Second,
+		}
+		p.stateMu.Lock()
+		p.srvDashboard = srvDashboard
+		p.stateMu.Unlock()
+		p.log.Warn("dashboard expuesto sin TLS en listener propio; usa dashboard_host en 443 para producción",
+			"listen", cfg.Dashboard.Listen)
+		go func() {
+			if err := srvDashboard.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				p.log.Error("dashboard muerto", "err", err)
+			}
+		}()
+	}
+	if cfg.Dashboard.Host != "" {
+		p.log.Info("dashboard público", "host", cfg.Dashboard.Host)
 	}
 	p.log.Info("hot-reload activo", "poll", pollInterval.String())
 	go p.watchMerged(live, db)

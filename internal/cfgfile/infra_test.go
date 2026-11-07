@@ -5,9 +5,41 @@ import (
 	"path/filepath"
 	"testing"
 
+	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/store"
 )
+
+func TestSnapshotDashboardSettings(t *testing.T) {
+	db := openDB(t, filepath.Join(t.TempDir(), "rkt.db"))
+	if err := db.SetSetting(store.KeyBaseDomain, "ejemplo.com"); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := Snapshot(db, config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Dashboard.Host != "rkt.ejemplo.com" {
+		t.Fatalf("auto host = %q", snap.Dashboard.Host)
+	}
+	if err := db.SetSetting(store.KeyDashboardHost, "off"); err != nil {
+		t.Fatal(err)
+	}
+	snap, _ = Snapshot(db, config.Default())
+	if snap.Dashboard.Host != "" {
+		t.Fatalf("off = %q", snap.Dashboard.Host)
+	}
+	if err := db.SetSetting(store.KeyDashboardHost, "panel.ejemplo.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetSetting(store.KeyDashboardListen, "0.0.0.0:8090"); err != nil {
+		t.Fatal(err)
+	}
+	snap, _ = Snapshot(db, config.Default())
+	if snap.Dashboard.Host != "panel.ejemplo.com" || snap.Dashboard.Listen != "0.0.0.0:8090" {
+		t.Fatalf("dashboard = %+v", snap.Dashboard)
+	}
+}
 
 func openDB(t *testing.T, cfgPath string) *store.DB {
 	t.Helper()

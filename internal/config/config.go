@@ -224,6 +224,14 @@ type HealthzConfig struct {
 	Listen  string `yaml:"listen" json:"listen"`
 }
 
+// DashboardConfig expone la consola (SPA + API) fuera del loopback.
+// Host se sirve en los listeners públicos; Listen crea un listener extra
+// solo-consola (sin healthz ni acciones de control).
+type DashboardConfig struct {
+	Host   string `yaml:"host" json:"host"`
+	Listen string `yaml:"listen" json:"listen"`
+}
+
 // RateLimitConfig frena abuso por IP (bots) antes del backend.
 type RateLimitConfig struct {
 	Enabled bool     `yaml:"enabled" json:"enabled"`
@@ -266,6 +274,7 @@ type Config struct {
 	ACMEDNSPrecheck     bool            `yaml:"acme_dns_precheck" json:"acme_dns_precheck"`
 	RedirectHTTPToHTTPS bool            `yaml:"redirect_http_to_https" json:"redirect_http_to_https"`
 	Healthz             HealthzConfig   `yaml:"healthz" json:"healthz"`
+	Dashboard           DashboardConfig `yaml:"dashboard" json:"dashboard"`
 	RateLimit           RateLimitConfig `yaml:"rate_limit" json:"rate_limit"`
 	RestartGrace        string          `yaml:"restart_grace" json:"restart_grace"`
 	MaxBodyMB           int64           `yaml:"max_body_mb" json:"max_body_mb"`
@@ -576,6 +585,20 @@ func (cfg *Config) Validate() error {
 	if cfg.Healthz.Enabled && !isLoopbackAddr(cfg.Healthz.Listen) {
 		return fmt.Errorf("healthz.listen debe ser loopback (127.0.0.1:8090 o [::1]:8090), no %q", cfg.Healthz.Listen)
 	}
+	if h := strings.TrimSpace(cfg.Dashboard.Host); h != "" && h != "off" {
+		h = strings.ToLower(h)
+		if strings.Contains(h, "://") || strings.ContainsAny(h, " /\\\t\r\n") {
+			return fmt.Errorf("dashboard.host inválido %q (usa un host, sin esquema ni ruta)", cfg.Dashboard.Host)
+		}
+	}
+	if l := strings.TrimSpace(cfg.Dashboard.Listen); l != "" {
+		if _, _, err := net.SplitHostPort(l); err != nil {
+			return fmt.Errorf("dashboard.listen inválido %q (usa host:puerto, ej 0.0.0.0:8090)", l)
+		}
+		if l == cfg.Healthz.Listen {
+			return fmt.Errorf("dashboard.listen no puede ser igual a healthz.listen")
+		}
+	}
 	if cfg.RateLimit.Enabled && (cfg.RateLimit.RPS <= 0 || cfg.RateLimit.Burst < 1) {
 		return fmt.Errorf("rate_limit inválido: rps>0 y burst>=1")
 	}
@@ -785,6 +808,9 @@ func NeedRestart(old, new *Config) []string {
 	}
 	if old.Healthz != new.Healthz {
 		out = append(out, "healthz")
+	}
+	if old.Dashboard.Listen != new.Dashboard.Listen {
+		out = append(out, "dashboard.listen")
 	}
 	if !rateLimitEqual(old.RateLimit, new.RateLimit) {
 		out = append(out, "rate_limit")
