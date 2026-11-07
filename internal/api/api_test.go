@@ -65,6 +65,12 @@ func testDeps(t *testing.T) (Deps, *store.DB, func()) {
 			}
 			return "rev1", nil
 		},
+		Build: func(name, actor string) (int64, error) {
+			if name != "w" || actor == "" {
+				return 0, fmt.Errorf("no")
+			}
+			return 1, nil
+		},
 		Rollback: func(name, actor string) error {
 			if name != "w" {
 				return fmt.Errorf("no")
@@ -354,7 +360,7 @@ func TestAppsSinEnvYAcciones(t *testing.T) {
 	// operator sí
 	for path, want := range map[string]int{
 		"/api/v1/apps/w/restart":     http.StatusOK,
-		"/api/v1/apps/w/deploy":      http.StatusOK,
+		"/api/v1/apps/w/deploy":      http.StatusAccepted,
 		"/api/v1/apps/w/rollback":    http.StatusOK,
 		"/api/v1/apps/nadie/restart": http.StatusNotFound,
 	} {

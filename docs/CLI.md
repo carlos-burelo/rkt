@@ -118,7 +118,18 @@ Dos caminos, ambos con login:
   firewall. Este listener es HTTP sin TLS: úsalo solo en red de confianza.
 
 El listener de healthz/métricas/acciones sigue siendo loopback. La consola
-externa solo sirve SPA + `/api/v1`.
+externa solo sirve SPA + `/api/v1` + `/mcp`.
+
+### MCP remoto
+
+`POST /mcp` habla MCP Streamable HTTP. Requiere una API key de rol `admin`:
+
+```text
+Authorization: Bearer rkt_...
+```
+
+Se generan en Ajustes → MCP remoto. La key se muestra una sola vez; se puede
+revocar desde la misma tarjeta. Las sesiones de navegador no valen para MCP.
 
 Endpoints principales (todos salvo login exigen sesión):
 `GET status|deployments|events|logs|apps|routes|settings|users|alerts|env|audit|cron`,

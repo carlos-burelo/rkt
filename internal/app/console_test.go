@@ -3,9 +3,12 @@ package app
 import (
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/store"
 )
 
 func TestDashboardGate(t *testing.T) {
@@ -17,11 +20,13 @@ func TestDashboardGate(t *testing.T) {
 	live := config.NewLive(cfg)
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("api")) })
 	dash := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("dash")) })
+	mcp := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("mcp")) })
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("app")) })
-	h := dashboardGate(live, api, dash, next)
+	h := dashboardGate(live, api, dash, mcp, next)
 
 	cases := []struct{ host, path, want string }{
 		{"rkt.test", "/api/v1/status", "api"},
+		{"rkt.test", "/mcp", "mcp"},
 		{"RKT.TEST:443", "/", "dash"},
 		{"app.test", "/", "app"},
 	}
@@ -39,9 +44,11 @@ func TestDashboardGate(t *testing.T) {
 func TestConsoleOnly(t *testing.T) {
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("api")) })
 	dash := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("dash")) })
-	h := consoleOnly(api, dash)
+	mcp := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("mcp")) })
+	h := consoleOnly(api, dash, mcp)
 	for path, want := range map[string]string{
 		"/api/v1/apps": "api",
+		"/mcp":         "mcp",
 		"/":            "dash",
 		"/healthz":     "dash", // nunca control en el listener público
 	} {
@@ -49,6 +56,40 @@ func TestConsoleOnly(t *testing.T) {
 		h.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
 		if rec.Body.String() != want {
 			t.Fatalf("%s = %q", path, rec.Body.String())
+		}
+	}
+}
+
+func TestMCPAuth(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "rkt.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	admin, err := db.CreateToken("agent", store.RoleAdmin, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	op, _ := db.CreateToken("op", store.RoleOperator, time.Hour)
+	viewer, _ := db.CreateToken("read", store.RoleViewer, time.Hour)
+	h := mcpAuth(db, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	}))
+	for tok, want := range map[string]int{
+		"":       http.StatusUnauthorized,
+		"basura": http.StatusUnauthorized,
+		viewer:   http.StatusForbidden,
+		op:       http.StatusForbidden,
+		admin:    http.StatusOK,
+	} {
+		req := httptest.NewRequest("POST", "/mcp", nil)
+		if tok != "" {
+			req.Header.Set("Authorization", "Bearer "+tok)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Fatalf("token %q = %d, quiere %d", tok, rec.Code, want)
 		}
 	}
 }

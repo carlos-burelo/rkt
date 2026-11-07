@@ -12,6 +12,8 @@ export const apps = {
   "apps.actions.start": "Iniciar",
   "apps.actions.stop": "Detener",
   "apps.actions.redeploy": "Redesplegar",
+  "apps.actions.build": "Compilar",
+  "apps.toast.buildStarted": "compilación iniciada; sigue el progreso en Despliegues",
   "apps.actions.rollback": "Revertir",
   "apps.actions.rollbackConfirm": "Confirmar reversión",
   "apps.tabs.dnsTitle": "el dominio no resuelve a 127.0.0.1 en esta máquina",

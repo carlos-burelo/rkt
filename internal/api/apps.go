@@ -193,6 +193,21 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 		if !requireOperator(w, r) {
 			return
 		}
+		// App local (sin repo): "redesplegar" significa rebuild.
+		if a.Deploy == nil {
+			if d.Build == nil {
+				writeErr(w, http.StatusServiceUnavailable, "build deshabilitado")
+				return
+			}
+			id, err := d.Build(name, mustUser(r))
+			if err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			w.WriteHeader(http.StatusAccepted)
+			writeJSON(w, map[string]any{"deployment": id})
+			return
+		}
 		if r.URL.Query().Get("async") == "1" && d.DeployAsync != nil {
 			id, err := d.DeployAsync(name, mustUser(r))
 			if err != nil {

@@ -13,6 +13,7 @@ import { useAuth } from "../auth/store";
 import { fixHost } from "../routes/api";
 import { useI18n } from "../../shared/i18n";
 import { ConfirmButton } from "../../shared/components/ConfirmButton";
+import { buildApp } from "./api";
 
 const TABS = [
   { id: "overview", label: "nav.overview" },
@@ -107,7 +108,23 @@ export function AppTabs() {
                 <Button variant="outline" size="sm" onClick={() => act(name, "restart")}>
                   <RotateCw className="h-3 w-3" /> {t("apps.actions.restart")}
                 </Button>
-                <Button size="sm" onClick={() => act(name, "deploy")}>{t("apps.actions.redeploy")}</Button>
+                {meta?.deploy?.repo ? (
+                  <Button size="sm" onClick={() => act(name, "deploy")}>{t("apps.actions.redeploy")}</Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      buildApp(name)
+                        .then(() => {
+                          toast.success(t("apps.toast.buildStarted"));
+                          navigate(`/app/${name}/deploys`);
+                        })
+                        .catch((e) => toast.error(e instanceof Error ? e.message : t("common.error")))
+                    }
+                  >
+                    {t("apps.actions.build")}
+                  </Button>
+                )}
                 <ConfirmButton
                   label={t("apps.actions.rollback")}
                   confirmLabel={t("apps.actions.rollbackConfirm")}

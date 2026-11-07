@@ -44,7 +44,9 @@ Internet ──:80/:443──▶ rkt ──HTTP──▶ 127.0.0.1:3001  app ges
 - **Dashboard SPA** embebida, PWA, autenticación por cookie httpOnly y roles
   `viewer < operator < admin`.
 - **CLI y MCP** sobre la misma API y el mismo modelo de datos. Las tareas cron
-  se operan desde el dashboard o la API.
+  se operan desde el dashboard o la API. El MCP también se expone por
+  **Streamable HTTP** en `/mcp` con API keys `rkt_` (admin), generadas desde
+  Ajustes → MCP remoto.
 
 ## Dashboard
 

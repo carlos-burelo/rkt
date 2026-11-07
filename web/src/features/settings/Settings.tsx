@@ -10,6 +10,7 @@ import { PathInput } from "../../shared/components/PathPicker";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
 import { useI18n } from "../../shared/i18n";
+import { McpCard } from "./McpCard";
 
 const DESCRIPTION_KEYS: Record<string, string> = {
   node_bin: "system.settings.desc.node_bin",
@@ -200,6 +201,7 @@ export function Settings() {
           </div>
         )}
       </Section>
+      <McpCard />
       {GROUPS.map((group) => (
         <Section key={group.title} title={t(group.title)} description={t(group.desc)}>
           <div className="border border-border">

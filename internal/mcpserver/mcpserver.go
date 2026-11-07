@@ -103,7 +103,15 @@ func (s *Server) post(path string, timeout time.Duration) (int, []byte, error) {
 		return 0, nil, err
 	}
 	client := &http.Client{Timeout: timeout}
-	resp, err := client.Post(base+path, "application/json", nil)
+	req, err := http.NewRequest(http.MethodPost, base+path, nil)
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if tok, err := logx.EnsureControlToken(s.cfgPath); err == nil {
+		req.Header.Set("X-Rkt-Control", tok)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -678,8 +686,8 @@ func (s *Server) doWaitHealthy(app string, timeoutS int) (string, error) {
 	}
 }
 
-// Run registra tools y sirve por stdio (bloquea).
-func (s *Server) Run(ctx context.Context) error {
+// newMCP registra todas las tools y devuelve el servidor MCP.
+func (s *Server) newMCP() *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{Name: "rkt", Title: "rkt PaaS"}, nil)
 	mcp.AddTool(srv, &mcp.Tool{Name: "status", Description: "Salud: versión, backends y apps (JSON). Requiere servicio en marcha."},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
@@ -782,5 +790,20 @@ func (s *Server) Run(ctx context.Context) error {
 			return text(s.doAppsRemove(a))
 		})
 	s.registerMore(srv)
-	return srv.Run(ctx, &mcp.StdioTransport{})
+	return srv
+}
+
+// Run sirve el MCP por stdio (bloquea).
+func (s *Server) Run(ctx context.Context) error {
+	return s.newMCP().Run(ctx, &mcp.StdioTransport{})
+}
+
+// HTTPHandler sirve el MCP por Streamable HTTP (stateless). La auth por
+// API key vive fuera, en el listener de la consola.
+func (s *Server) HTTPHandler() http.Handler {
+	srv := s.newMCP()
+	return mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return srv },
+		&mcp.StreamableHTTPOptions{Stateless: true, DisableLocalhostProtection: true},
+	)
 }

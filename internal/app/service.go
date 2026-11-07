@@ -39,6 +39,7 @@ import (
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/hook"
 	"rkt-proxy/internal/logx"
+	"rkt-proxy/internal/mcpserver"
 	"rkt-proxy/internal/proxy"
 	"rkt-proxy/internal/server"
 	"rkt-proxy/internal/servermetrics"
@@ -229,7 +230,8 @@ func (p *Program) Run() {
 		sub = nilFS{}
 	}
 	dashH := dashboard.NewHandler(sub)
-	gate := dashboardGate(live, apiH, dashH, proxy.NewHandler(live, p.log))
+	mcpH := mcpAuth(db, mcpserver.New(p.cfgPath).HTTPHandler())
+	gate := dashboardGate(live, apiH, dashH, mcpH, proxy.NewHandler(live, p.log))
 	handler := http.Handler(gate)
 	var alog *accesslog.Logger
 	if l, err := accesslog.New(logx.AccessPath(p.cfgPath)); err != nil {
@@ -352,6 +354,10 @@ func (p *Program) Run() {
 		srvHealth := &http.Server{
 			Addr: addr,
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/mcp" {
+					mcpH.ServeHTTP(w, r)
+					return
+				}
 				if shareDashPort && !isLoopbackRemote(r) {
 					if strings.HasPrefix(r.URL.Path, "/api/") {
 						apiH.ServeHTTP(w, r)
@@ -407,7 +413,7 @@ func (p *Program) Run() {
 		}()
 	}
 	if cfg.Dashboard.Listen != "" && !shareDashPort {
-		console := consoleOnly(apiH, dashH)
+		console := consoleOnly(apiH, dashH, mcpH)
 		if alog != nil {
 			console = alog.Middleware(console)
 		}
