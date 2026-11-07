@@ -18,6 +18,7 @@ import (
 	"rkt-proxy/internal/dnscheck"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
+	"rkt-proxy/internal/hub"
 	"rkt-proxy/internal/netutil"
 	"rkt-proxy/internal/servermetrics"
 	"rkt-proxy/internal/store"
@@ -59,6 +60,8 @@ type Deps struct {
 	GithubRepos func() ([]github.Repo, error)
 	// GithubManager manager vivo para inferir plan de repos privados.
 	GithubManager func() *github.Manager
+	// Hub bus de eventos para /fleet/stream (nil = stream deshabilitado).
+	Hub *hub.Bus
 
 	// cache agregados costosos (access.log). Lo inicializa NewHandler.
 	cache *memo
@@ -171,6 +174,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("/api/v1/audit", d.handleAudit)
 
 	mux.HandleFunc("/api/v1/status", d.handleStatus)
+	mux.HandleFunc("/api/v1/fleet/stream", d.handleFleetStream)
 	mux.HandleFunc("/api/v1/deployments", d.handleDeployments)
 	mux.HandleFunc("/api/v1/events", d.handleEvents)
 	// Apps: lista/detalle sin env (los secretos solo vía /env, operator).
