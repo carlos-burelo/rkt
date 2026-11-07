@@ -10,22 +10,9 @@ import { useI18n } from "../../shared/i18n";
 import type { CronJob } from "./api";
 import { useCron } from "./cron.store";
 import { RunsDialog } from "./RunsDialog";
+import { cronStatusOf, cronTone } from "./status";
 
-function statusOf(job: CronJob): string {
-  if (job.running) return "running";
-  if (!job.last) return "idle";
-  return job.last.status;
-}
-
-function statusTone(status: string): "ok" | "warn" | "bad" | "running" | "stopped" {
-  switch (status) {
-    case "ok": return "ok";
-    case "running": return "running";
-    case "failed": return "bad";
-    case "timeout": return "warn";
-    default: return "stopped";
-  }
-}
+import { cronStatusOf as statusOf, cronTone as statusTone } from "./status";
 
 // Fila de tarea: acciones finas contra el store.
 export function CronRow({ job }: { job: CronJob }) {

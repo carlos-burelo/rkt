@@ -1,10 +1,11 @@
 // Formato del monitor del host (puro, testeable).
+// bytes vive en el hogar canónico (shared/lib/format); aquí solo el
+// resguardo NaN/Infinity propio del monitor.
+import { bytes as baseBytes } from "../../shared/lib/format";
+
 export function bytes(n: number): string {
   if (!Number.isFinite(n)) return "—";
-  if (n >= 1 << 30) return `${(n / (1 << 30)).toFixed(1)} GB`;
-  if (n >= 1 << 20) return `${(n / (1 << 20)).toFixed(1)} MB`;
-  if (n >= 1 << 10) return `${(n / (1 << 10)).toFixed(0)} KB`;
-  return `${Math.round(n)} B`;
+  return baseBytes(n);
 }
 
 export function rate(n: number): string {

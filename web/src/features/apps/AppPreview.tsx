@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ExternalLink, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dot } from "../../shared/components/ui";
+import { Dot, MicroLink } from "../../shared/components/ui";
 import { useFleet } from "../overview/hooks";
 import { publicUrl, publicHost } from "../../shared/lib/url";
 import { useI18n } from "../../shared/i18n";
@@ -127,14 +127,9 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
         >
           <RotateCw className="h-3 w-3" /> {t("apps.preview.reloadAction")}
         </Button>
-        <a
-          href={src}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground"
-        >
+        <MicroLink href={src} arrow={false}>
           {t("common.open")} <ExternalLink className="h-3 w-3" />
-        </a>
+        </MicroLink>
       </header>
 
       {!running && (

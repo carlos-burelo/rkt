@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Section } from "../../shared/components/patterns";
+import { MicroLink } from "../../shared/components/ui";
 import { useI18n } from "../../shared/i18n";
 import { useSettings } from "./settings.store";
 
@@ -14,14 +15,7 @@ export function GithubCard() {
       description={t("system.settings.githubDesc")}
       actions={
         gh?.configured && gh.install_url ? (
-          <a
-            href={gh.install_url}
-            target="_blank"
-            rel="noreferrer"
-            className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground"
-          >
-            {t("system.settings.manage")}
-          </a>
+          <MicroLink href={gh.install_url}>{t("system.settings.manage")}</MicroLink>
         ) : undefined
       }
     >

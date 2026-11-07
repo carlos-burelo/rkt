@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { X } from "lucide-react";
 import { CopyButton } from "../../shared/components/feedback";
+import { StatusText } from "../../shared/components/ui";
 import { useI18n } from "../../shared/i18n";
 import { useRoutes } from "./routes.store";
 
@@ -80,9 +81,9 @@ export function DomainDrawer({ host, onClose }: { host: string | null; onClose: 
                   <div className="flex items-center gap-2 border-b border-border bg-secondary/25 px-3 py-1.5">
                     <span className="micro">{t("serve.domain.dns")}</span>
                     <span className="flex-1" />
-                    <span className={`font-mono text-[9px] uppercase ${data.dns_ok ? "text-ok" : "text-warn"}`}>
+                    <StatusText tone={data.dns_ok ? "ok" : "warn"} className="ml-auto">
                       {data.dns_ok ? t("serve.domain.resolves") : t("serve.domain.noResolve")}
-                    </span>
+                    </StatusText>
                   </div>
                   <Row label="A" value={data.dns.a.length ? data.dns.a.join(", ") : "-"} />
                   <Row label="AAAA" value={data.dns.aaaa.length ? data.dns.aaaa.join(", ") : "-"} />

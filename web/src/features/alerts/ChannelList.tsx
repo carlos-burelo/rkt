@@ -3,6 +3,7 @@ import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Section } from "../../shared/components/patterns";
+import { StatusText } from "../../shared/components/ui";
 import { FormDialog, Field } from "../../shared/components/FormDialog";
 import { ConfirmButton } from "../../shared/components/ConfirmButton";
 import { useAuth } from "../auth/store";
@@ -55,9 +56,9 @@ export function ChannelList() {
           <div key={c.id} className="flex items-center gap-2 border-b border-border/60 bg-card/35 px-3 py-2 last:border-0">
             <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{c.name || c.url}</span>
             <span className="hidden max-w-[40%] truncate font-mono text-[10px] text-muted-foreground sm:block">{c.url}</span>
-            <span className={`font-mono text-[9px] uppercase ${c.enabled ? "text-ok" : "text-muted-foreground"}`}>
+            <StatusText tone={c.enabled ? "ok" : "muted"}>
               {c.enabled ? t("ops.alerts.channelOn") : t("ops.alerts.channelOff")}
-            </span>
+            </StatusText>
             {canWrite && (
               <ConfirmButton
                 title={t("ops.alerts.channelDelete", { id: c.id })}

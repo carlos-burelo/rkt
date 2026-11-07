@@ -1,9 +1,9 @@
 import { useEffect, useMemo } from "react";
-import { Link } from "react-router";
-import { ArrowRight, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useProxy } from "./proxy.store";
 import { ProxyFilters } from "./ProxyFilters";
 import { ProxyTable } from "./ProxyTable";
+import { MicroLink } from "../../shared/components/ui";
 import { buildLinks } from "./graph";
 import { RadialMap } from "./ProxyMap";
 import { PageHeader } from "../../shared/components/patterns";
@@ -53,12 +53,7 @@ export function Proxy({ embedded = false }: { embedded?: boolean }) {
           actions={
             <div className="flex flex-wrap items-center gap-2">
               <ProxyFilters ok={links.filter((l) => l.ok).length} total={links.length} />
-              <Link
-                to="/routes"
-                className="inline-flex items-center gap-1 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground"
-              >
-                {t("serve.proxy.manage")} <ArrowRight className="h-3 w-3" />
-              </Link>
+              <MicroLink to="/routes">{t("serve.proxy.manage")}</MicroLink>
             </div>
           }
         />

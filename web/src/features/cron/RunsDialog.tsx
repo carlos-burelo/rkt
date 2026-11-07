@@ -2,20 +2,11 @@ import { useEffect, useState } from "react";
 import { ScrollText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "../../shared/components/FormDialog";
-import { Dot } from "../../shared/components/ui";
+import { Dot, StatusText } from "../../shared/components/ui";
 import { useUI } from "../../app/ui";
 import { useI18n } from "../../shared/i18n";
 import { cronRunLog, listCronRuns, type CronJob, type CronRun } from "./api";
-
-function statusTone(status: string): "ok" | "warn" | "bad" | "running" | "stopped" {
-  switch (status) {
-    case "ok": return "ok";
-    case "running": return "running";
-    case "failed": return "bad";
-    case "timeout": return "warn";
-    default: return "stopped";
-  }
-}
+import { cronTone as statusTone } from "./status";
 
 // Historial de ejecuciones de un job: instancia local por fila.
 export function RunsDialog({ job }: { job: CronJob }) {
@@ -62,7 +53,7 @@ export function RunsDialog({ job }: { job: CronJob }) {
             >
               <Dot status={statusTone(r.status)} />
               <span className="tnum font-mono text-[9px] text-muted-foreground">{r.started_at.slice(5, 16).replace("T", " ")}</span>
-              <span className={`ml-auto font-mono text-[9px] uppercase ${r.status === "ok" ? "text-ok" : r.status === "failed" ? "text-bad" : "text-warn"}`}>{r.status}</span>
+              <StatusText tone={r.status === "ok" ? "ok" : r.status === "failed" ? "bad" : "warn"} className="ml-auto">{r.status}</StatusText>
             </button>
           ))}
           {runs.length === 0 && <p className="px-2 py-4 font-mono text-[10px] text-muted-foreground">{t("cron.noRuns")}</p>}

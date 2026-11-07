@@ -1,3 +1,5 @@
+import { Link } from "react-router";
+import { ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { stateLabel } from "../lib/labels";
@@ -124,4 +126,66 @@ export function Kbd({ children }: { children: React.ReactNode }) {
       {children}
     </kbd>
   );
+}
+
+const TEXT_TONE = {
+  ok: "text-ok",
+  warn: "text-warn",
+  bad: "text-bad",
+  muted: "text-muted-foreground",
+  info: "text-info",
+  signal: "text-signal",
+} as const;
+
+// MicroLink: enlace micro tipográfico, interno (to) o externo (href).
+// Unifica los "ver más →" sueltos de cada vista.
+export function MicroLink({
+  to,
+  href,
+  children,
+  arrow = true,
+  className,
+}: {
+  to?: string;
+  href?: string;
+  children: React.ReactNode;
+  arrow?: boolean;
+  className?: string;
+}) {
+  const cls = cn(
+    "inline-flex items-center gap-1 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground",
+    className,
+  );
+  const inner = (
+    <>
+      {children}
+      {arrow && <ArrowRight className="h-3 w-3" aria-hidden />}
+    </>
+  );
+  if (to) {
+    return (
+      <Link to={to} className={cls}>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className={cls}>
+      {inner}
+    </a>
+  );
+}
+
+// StatusText: etiqueta diminuta coloreada por tono (canónico; antes cada
+// vista repetía el ternario text-ok/text-warn/text-bad).
+export function StatusText({
+  tone = "muted",
+  children,
+  className,
+}: {
+  tone?: keyof typeof TEXT_TONE;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <span className={cn("font-mono text-[9px] uppercase", TEXT_TONE[tone], className)}>{children}</span>;
 }
