@@ -30,6 +30,7 @@ export function CommandPalette({
   openApp,
   openDeploy,
   onAction,
+  onNewApp,
 }: {
   open: boolean;
   setOpen: (b: boolean) => void;
@@ -40,6 +41,7 @@ export function CommandPalette({
   openApp: (name: string) => void;
   openDeploy: (d: Deployment) => void;
   onAction: (app: string, a: "restart" | "deploy" | "rollback") => void;
+  onNewApp?: () => void;
 }) {
   const { t, tn } = useI18n();
   const [q, setQ] = useState("");
@@ -56,6 +58,9 @@ export function CommandPalette({
 
   const targets: PaletteTarget[] = useMemo(() => {
     const out: PaletteTarget[] = [];
+    if (onNewApp) {
+      out.push({ kind: "action", label: t("shell.newApp"), hint: t("shared.palette.kind.action"), run: onNewApp });
+    }
     const pages: [string, "overview" | "proxy" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability" | "environment" | "ci" | "alerts" | "server" | "cron"][] = [
       [t("nav.overview"), "overview"],
       [t("nav.deployments"), "deployments"],
@@ -97,7 +102,7 @@ export function CommandPalette({
     }
     const f = q.trim().toLowerCase();
     return f === "" ? out.slice(0, 9) : out.filter((x) => x.label.toLowerCase().includes(f)).slice(0, 12);
-  }, [q, apps, metas, deps, goPage, openApp, openDeploy, onAction, t]);
+  }, [q, apps, metas, deps, goPage, openApp, openDeploy, onAction, onNewApp, t]);
 
   useEffect(() => setIdx(0), [q]);
 

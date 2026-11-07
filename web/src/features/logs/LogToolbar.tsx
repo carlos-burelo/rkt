@@ -1,11 +1,13 @@
 import { Download, Pause, Play, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select, SelectTrigger, SelectContent, SelectItem,
 } from "@/components/ui/select";
 import { MultiFilter, SingleFilter } from "../../shared/components/filters";
+import { RowMenu } from "../../shared/components/menus";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
 import { useI18n } from "../../shared/i18n";
@@ -89,10 +91,14 @@ export function LogToolbar({ lines }: { lines: LineBuckets }) {
             {live ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
             {live ? t("ops.logs.pause") : t("ops.logs.live")}
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => st.load()}>{t("ops.logs.reload")}</Button>
-          <Button variant="ghost" size="sm" onClick={() => st.download()}>
-            <Download className="h-3 w-3" /> {t("ops.logs.download")}
-          </Button>
+          <RowMenu label={t("ops.logs.moreActions")}>
+            <DropdownMenuItem onClick={() => st.load()}>{t("ops.logs.reload")}</DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => st.download()}
+            >
+              <Download className="h-3 w-3" /> {t("ops.logs.download")}
+            </DropdownMenuItem>
+          </RowMenu>
         </>
       )}
     </div>

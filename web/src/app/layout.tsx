@@ -384,6 +384,7 @@ function CommandPaletteShell({ navigate, openApp }: { navigate: (p: string) => v
   const palette = useUI((u) => u.palette);
   const setPalette = useUI((u) => u.setPalette);
   const setSel = useUI((u) => u.setSel);
+  const setCreateOpen = useUI((u) => u.setCreateOpen);
   const act = useUI((u) => u.act);
   const { status, deps, metas } = useFleet();
   return (
@@ -397,6 +398,7 @@ function CommandPaletteShell({ navigate, openApp }: { navigate: (p: string) => v
       openApp={openApp}
       openDeploy={setSel}
       onAction={act}
+      onNewApp={() => setCreateOpen(true)}
     />
   );
 }

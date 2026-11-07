@@ -26,6 +26,7 @@ export const serve = {
   "serve.routes.editDesc": "el proxy recarga sin reinicio · solo loopback",
   "serve.routes.targetAria": "destino de {host}",
   "serve.routes.deleteTitle": "borrar ruta {host}",
+  "serve.routes.rowActions": "acciones de {host}",
   "serve.routes.new": "nueva ruta",
   "serve.routes.newTitle": "Nueva ruta",
   "serve.routes.newDesc": "La ruta se aplica al guardar. TLS se emite en el primer request.",

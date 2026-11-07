@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { FormDialog, Field } from "../../shared/components/FormDialog";
 import { ConfirmButton } from "../../shared/components/ConfirmButton";
 import { CopyButton } from "../../shared/components/feedback";
+import { RowMenu } from "../../shared/components/menus";
 import { Avatar } from "../../shared/components/ui";
 import { ArrowRight, ExternalLink, Plus } from "lucide-react";
 import { useAuth } from "../auth/store";
@@ -68,10 +70,6 @@ export function RouteRow({ r, status, onOpen }: { r: Route; status: Status | nul
   const retarget = useRoutes((s) => s.retarget);
   const remove = useRoutes((s) => s.remove);
   const [target, setTarget] = useState(r.target);
-  const [edit, setEdit] = useState(false);
-  useEffect(() => {
-    setTarget(r.target);
-  }, [r.target]);
   return (
     <div className="group relative grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-2 border-b border-border/70 bg-card/35 px-3 py-2.5 last:border-0 hover:bg-accent/30 md:grid-cols-[1.5rem_minmax(0,1.4fr)_auto_1.5rem_minmax(0,1.4fr)_auto]">
       <Avatar name={r.hosts[0]} />
@@ -98,34 +96,30 @@ export function RouteRow({ r, status, onOpen }: { r: Route; status: Status | nul
       </span>
       {canWrite && (
         <div className="col-span-3 flex justify-end gap-1 md:col-span-1">
-          <FormDialog
-            open={edit}
-            onOpenChange={setEdit}
-            trigger={
-              <Button variant="ghost" size="xs">
-                {t("common.edit")}
-              </Button>
-            }
-            title={t("serve.routes.editTitle", { host: r.hosts[0] })}
-            description={t("serve.routes.editDesc")}
-            submitLabel={t("common.save")}
-            canSubmit={target.trim() !== "" && target.trim() !== r.target}
-            onSubmit={() => retarget(r.hosts[0], target.trim())}
-          >
-            <Field label={t("serve.field.target")} hint={t("serve.field.targetHint")}>
-              <Input
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-                aria-label={t("serve.routes.targetAria", { host: r.hosts[0] })}
-                className="tnum h-8 font-mono text-[12px]"
-                autoFocus
-              />
-            </Field>
-          </FormDialog>
-          <ConfirmButton
-            title={t("serve.routes.deleteTitle", { host: r.hosts[0] })}
-            onConfirm={() => remove(r.hosts[0])}
-          />
+          <RowMenu label={t("serve.routes.rowActions", { host: r.hosts[0] })}>
+            <FormDialog
+              trigger={<DropdownMenuItem>{t("common.edit")}</DropdownMenuItem>}
+              title={t("serve.routes.editTitle", { host: r.hosts[0] })}
+              description={t("serve.routes.editDesc")}
+              submitLabel={t("common.save")}
+              canSubmit={target.trim() !== "" && target.trim() !== r.target}
+              onSubmit={() => retarget(r.hosts[0], target.trim())}
+            >
+              <Field label={t("serve.field.target")} hint={t("serve.field.targetHint")}>
+                <Input
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  aria-label={t("serve.routes.targetAria", { host: r.hosts[0] })}
+                  className="tnum h-8 font-mono text-[12px]"
+                  autoFocus
+                />
+              </Field>
+            </FormDialog>
+            <ConfirmButton
+              title={t("serve.routes.deleteTitle", { host: r.hosts[0] })}
+              onConfirm={() => remove(r.hosts[0])}
+            />
+          </RowMenu>
         </div>
       )}
     </div>

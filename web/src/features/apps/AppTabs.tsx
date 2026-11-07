@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { Dot, StatusBadge } from "../../shared/components/ui";
 import { stateLabel } from "../../shared/lib/labels";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { RowMenu } from "../../shared/components/menus";
 import { useFleet } from "../overview/hooks";
 import { publicUrl, publicHost } from "../../shared/lib/url";
 import { useUI } from "../../app/ui";
@@ -82,18 +84,6 @@ export function AppTabs() {
             )}
             {canWrite && name && !external && (
               <>
-                {meta?.disabled ? (
-                  <Button variant="outline" size="sm" onClick={() => act(name, "start")}>
-                    <Play className="h-3 w-3" /> {t("apps.actions.start")}
-                  </Button>
-                ) : (
-                  <Button variant="outline" size="sm" onClick={() => act(name, "stop")}>
-                    <Square className="h-3 w-3" /> {t("apps.actions.stop")}
-                  </Button>
-                )}
-                <Button variant="outline" size="sm" onClick={() => act(name, "restart")}>
-                  <RotateCw className="h-3 w-3" /> {t("apps.actions.restart")}
-                </Button>
                 {meta?.deploy?.repo ? (
                   <Button size="sm" onClick={() => act(name, "deploy")}>{t("apps.actions.redeploy")}</Button>
                 ) : (
@@ -111,12 +101,26 @@ export function AppTabs() {
                     {t("apps.actions.build")}
                   </Button>
                 )}
-                <ConfirmButton
-                  label={t("apps.actions.rollback")}
-                  confirmLabel={t("apps.actions.rollbackConfirm")}
-                  onConfirm={() => act(name, "rollback")}
-                  size="sm"
-                />
+                <RowMenu label={t("apps.actions.menu", { app: name })}>
+                  {meta?.disabled ? (
+                    <DropdownMenuItem onClick={() => act(name, "start")}>
+                      <Play className="h-3 w-3" /> {t("apps.actions.start")}
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={() => act(name, "stop")}>
+                      <Square className="h-3 w-3" /> {t("apps.actions.stop")}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => act(name, "restart")}>
+                    <RotateCw className="h-3 w-3" /> {t("apps.actions.restart")}
+                  </DropdownMenuItem>
+                  <ConfirmButton
+                    label={t("apps.actions.rollback")}
+                    confirmLabel={t("apps.actions.rollbackConfirm")}
+                    onConfirm={() => act(name, "rollback")}
+                    size="sm"
+                  />
+                </RowMenu>
               </>
             )}
           </div>

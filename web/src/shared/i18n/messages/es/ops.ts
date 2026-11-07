@@ -15,6 +15,7 @@ export const ops = {
   "ops.logs.tab.build": "Compilación",
   "ops.logs.operational": "operativo (rkt.log)",
   "ops.logs.searchPlaceholder": "buscar en consola…",
+  "ops.logs.moreActions": "más acciones",
   "ops.logs.viewLabel": "vista",
   "ops.logs.levelsLabel": "niveles",
   "ops.logs.streamsLabel": "corriente",
