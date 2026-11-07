@@ -30,10 +30,13 @@ func okHandler(mark string) http.Handler {
 	})
 }
 
+func tlsOff() func() bool { return func() bool { return false } }
+func tlsOn() func() bool  { return func() bool { return true } }
+
 // TestNewHTTPEnrutaControlChallengeYBackend: orden de precedencia del listener 80.
 func TestNewHTTPEnrutaControlChallengeYBackend(t *testing.T) {
 	live := testLive(t, false)
-	srv := NewHTTP(live.Get(), live, okHandler("challenge"), okHandler("backend"), okHandler("control"), nil)
+	srv := NewHTTP(live.Get(), live, tlsOff(), okHandler("challenge"), okHandler("backend"), okHandler("control"), nil)
 	h := srv.Handler
 
 	cases := []struct{ path, mark string }{
@@ -50,10 +53,12 @@ func TestNewHTTPEnrutaControlChallengeYBackend(t *testing.T) {
 	}
 }
 
-// TestNewHTTPRedirige: con redirect on, todo va a https conservando path+query.
+// TestNewHTTPRedirige: con redirect on y TLS bindeado, todo va a https
+// conservando path+query. Sin TLS bindeado (ej listen_https recién fijado
+// sin reinicio), sirve backend: no manda a un https que no existe.
 func TestNewHTTPRedirige(t *testing.T) {
 	live := testLive(t, true)
-	srv := NewHTTP(live.Get(), live, okHandler("challenge"), okHandler("backend"), nil, nil)
+	srv := NewHTTP(live.Get(), live, tlsOn(), okHandler("challenge"), okHandler("backend"), nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "http://app.test/x?y=1", nil)
 	rec := httptest.NewRecorder()
 	srv.Handler.ServeHTTP(rec, req)
@@ -63,12 +68,18 @@ func TestNewHTTPRedirige(t *testing.T) {
 	if loc := rec.Header().Get("Location"); loc != "https://app.test/x?y=1" {
 		t.Fatalf("Location = %q", loc)
 	}
+	srv = NewHTTP(live.Get(), live, tlsOff(), okHandler("challenge"), okHandler("backend"), nil, nil)
+	rec = httptest.NewRecorder()
+	srv.Handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://app.test/x?y=1", nil))
+	if rec.Header().Get("X-Mark") != "backend" {
+		t.Fatalf("sin TLS = %q, quiere backend", rec.Header().Get("X-Mark"))
+	}
 }
 
 // TestNewHTTPControlNilYChallengeNil: sin control ni challenge no panic.
 func TestNewHTTPControlNilYChallengeNil(t *testing.T) {
 	live := testLive(t, false)
-	srv := NewHTTP(live.Get(), live, nil, okHandler("backend"), nil, nil)
+	srv := NewHTTP(live.Get(), live, tlsOff(), nil, okHandler("backend"), nil, nil)
 	for _, p := range []string{"/_rkt/x", "/.well-known/acme-challenge/x"} {
 		rec := httptest.NewRecorder()
 		srv.Handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
@@ -128,7 +139,7 @@ func TestNewHTTPSControl(t *testing.T) {
 // listener 80 no existe; solo verificamos que el backend responde JSON propio.
 func TestControlRespetaMetodo(t *testing.T) {
 	live := testLive(t, false)
-	srv := NewHTTP(live.Get(), live, nil, okHandler("backend"), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := NewHTTP(live.Get(), live, tlsOff(), nil, okHandler("backend"), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
 	}), nil)
 	req := httptest.NewRequest(http.MethodPost, "/_rkt/hook/github", nil)

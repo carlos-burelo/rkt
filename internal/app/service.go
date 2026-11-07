@@ -146,6 +146,17 @@ func (p *Program) Start(_ service.Service) error {
 	return nil
 }
 
+// hasTLS refleja el listener 443 real (bindeado), no la config: con
+// hot-reload la config adelanta al listener y redirigir entonces
+// mandaría a un https que aún no existe.
+func (p *Program) hasTLS() func() bool {
+	return func() bool {
+		p.stateMu.Lock()
+		defer p.stateMu.Unlock()
+		return p.srvTLS != nil
+	}
+}
+
 // Stop apaga todos los servidores con timeout.
 func (p *Program) Stop(_ service.Service) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -306,7 +317,7 @@ func (p *Program) Run() {
 		}))
 		control = mux
 	}
-	srvHTTP := server.NewHTTP(cfg, live, challenge, handler, control, errLog)
+	srvHTTP := server.NewHTTP(cfg, live, p.hasTLS(), challenge, handler, control, errLog)
 	var srvTLS *http.Server
 	switch {
 	case cfg.LocalCA:

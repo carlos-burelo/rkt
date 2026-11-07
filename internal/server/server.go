@@ -19,8 +19,11 @@ import (
 // challenge debe construirse una vez con mgr.HTTPHandler(nil): eso
 // además activa http-01 como fallback en el Manager.
 // control (puede ser nil) atiende /_rkt/* antes que todo (plano control).
-// El flag redirect se lee de la config viva (hot-reload).
-func NewHTTP(cfg *config.Config, live *config.Live, challenge http.Handler, backend http.Handler, control http.Handler, errLog *log.Logger) *http.Server {
+// El flag redirect se lee de la config viva (hot-reload), pero solo
+// redirige si hasTLS() es true: listen_https se hot-recarga y el
+// listener 443 solo nace al arrancar. Sin esto, fijar listen_https
+// rompería el HTTP antes del reinicio.
+func NewHTTP(cfg *config.Config, live *config.Live, hasTLS func() bool, challenge http.Handler, backend http.Handler, control http.Handler, errLog *log.Logger) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/_rkt/") {
@@ -40,7 +43,7 @@ func NewHTTP(cfg *config.Config, live *config.Live, challenge http.Handler, back
 			return
 		}
 		cfg := live.Get()
-		if cfg.RedirectHTTPToHTTPS && (cfg.ListenHTTPS != "" || cfg.LocalCA) {
+		if cfg.RedirectHTTPToHTTPS && hasTLS() {
 			http.Redirect(w, r, "https://"+r.Host+r.URL.RequestURI(), http.StatusMovedPermanently)
 			return
 		}
