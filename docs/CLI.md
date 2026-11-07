@@ -109,9 +109,10 @@ viewer lee, operator muta, admin gestiona usuarios.
 Dos caminos, ambos con login:
 
 - **Recomendado:** `settings set dashboard_host=rkt.tudominio.com` y DNS A
-  al servidor. Se sirve en 80/443 con TLS automático. Si hay `base_domain`
-  y no defines `dashboard_host`, el default es `rkt.<base_domain>`; usa
-  `dashboard_host=off` para desactivarlo.
+  al servidor. Si aún no hay TLS: `settings set listen_https=:443` (y
+  `settings set listen_http=:80` si hace falta). Reinicia el servicio. Si
+  hay `base_domain` y no defines `dashboard_host`, el default es
+  `rkt.<base_domain>`; usa `dashboard_host=off` para desactivarlo.
 - **Puerto directo:** `settings set dashboard_listen=0.0.0.0:8090` y
   reinicia el servicio (`sc.exe restart Rkt`). Abre el puerto 8090 en el
   firewall. Este listener es HTTP sin TLS: úsalo solo en red de confianza.

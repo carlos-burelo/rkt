@@ -57,6 +57,7 @@ func LoadBase(db *store.DB, cfgPath string) (*config.Config, error) {
 		if err := json.Unmarshal(raw, base); err != nil {
 			return nil, fmt.Errorf("infra corrupta en DB: %w", err)
 		}
+		applyListenerSettings(base, db)
 		if err := base.Finalize(); err != nil {
 			return nil, err
 		}
@@ -64,6 +65,7 @@ func LoadBase(db *store.DB, cfgPath string) (*config.Config, error) {
 	}
 
 	base := config.Default()
+	applyListenerSettings(base, db)
 	if err := base.Finalize(); err != nil {
 		return nil, err
 	}
@@ -71,6 +73,23 @@ func LoadBase(db *store.DB, cfgPath string) (*config.Config, error) {
 		return nil, err
 	}
 	return base, nil
+}
+
+// applyListenerSettings permite cambiar listeners desde el CLI/API sin
+// editar JSON. "off" desactiva el listener (útil para listen_https).
+func applyListenerSettings(cfg *config.Config, db *store.DB) {
+	if v := strings.TrimSpace(db.GetSetting(store.KeyListenHTTP)); v != "" {
+		if v == "off" {
+			v = ""
+		}
+		cfg.ListenHTTP = v
+	}
+	if v := strings.TrimSpace(db.GetSetting(store.KeyListenHTTPS)); v != "" {
+		if v == "off" {
+			v = ""
+		}
+		cfg.ListenHTTPS = v
+	}
 }
 
 // SaveInfra persiste la parte de infraestructura (apps/rutas no van aquí).

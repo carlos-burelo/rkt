@@ -39,6 +39,19 @@ func TestSnapshotDashboardSettings(t *testing.T) {
 	if snap.Dashboard.Host != "panel.ejemplo.com" || snap.Dashboard.Listen != "0.0.0.0:8090" {
 		t.Fatalf("dashboard = %+v", snap.Dashboard)
 	}
+	if err := db.SetSetting(store.KeyListenHTTP, ":8080"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetSetting(store.KeyListenHTTPS, ":8443"); err != nil {
+		t.Fatal(err)
+	}
+	base, err := LoadBase(db, filepath.Join(t.TempDir(), "rkt.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base.ListenHTTP != ":8080" || base.ListenHTTPS != ":8443" {
+		t.Fatalf("listeners = %q %q", base.ListenHTTP, base.ListenHTTPS)
+	}
 }
 
 func openDB(t *testing.T, cfgPath string) *store.DB {

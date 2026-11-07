@@ -28,6 +28,9 @@ const (
 	// Consola pública: host en 80/443 y/o listener extra.
 	KeyDashboardHost   = "dashboard_host"
 	KeyDashboardListen = "dashboard_listen"
+	// Listeners públicos (requieren reinicio del servicio).
+	KeyListenHTTP  = "listen_http"
+	KeyListenHTTPS = "listen_https"
 )
 
 // Spec describe un ajuste y si exige reiniciar el servicio.
@@ -52,6 +55,8 @@ var specs = []Spec{
 	{Key: KeyRetentionBackupDays, Restart: false, Validate: validateNonNegative},
 	{Key: KeyDashboardHost, Restart: false, Validate: validateDashboardHost},
 	{Key: KeyDashboardListen, Restart: true, Validate: validateListenAddr},
+	{Key: KeyListenHTTP, Restart: true, Validate: validateListenAddr},
+	{Key: KeyListenHTTPS, Restart: true, Validate: validateListenOrOff},
 }
 
 // Keys lista canónica ordenada.
@@ -166,6 +171,14 @@ func validateListenAddr(v string) error {
 		return fmt.Errorf("usa host:puerto (ej 0.0.0.0:8090)")
 	}
 	return nil
+}
+
+// validateListenOrOff permite "off" para desactivar un listener (TLS).
+func validateListenOrOff(v string) error {
+	if v == "off" {
+		return nil
+	}
+	return validateListenAddr(v)
 }
 
 func validateIP(v string) error {

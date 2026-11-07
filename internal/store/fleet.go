@@ -42,6 +42,8 @@ const (
 	KeyRetentionBackupDays = settings.KeyRetentionBackupDays
 	KeyDashboardHost       = settings.KeyDashboardHost
 	KeyDashboardListen     = settings.KeyDashboardListen
+	KeyListenHTTP          = settings.KeyListenHTTP
+	KeyListenHTTPS         = settings.KeyListenHTTPS
 )
 
 // KnownSettings lista para `settings list` y export.
