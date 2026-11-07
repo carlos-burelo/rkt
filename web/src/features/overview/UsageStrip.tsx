@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
-import { fetchUsage, Usage } from "./api";
-import { getSettings } from "../settings/api";
+import { useEffect } from "react";
 import { Meter } from "../../shared/components/patterns";
 import { useI18n } from "../../shared/i18n";
+import { useUsageStrip } from "./usage.store";
 
 type Tone = "ok" | "warn" | "bad" | "signal";
 
@@ -17,12 +16,11 @@ function toneOf(frac: number | undefined): Tone {
 // existe cuando hay tope declarado; sin tope se muestra la cifra honesta.
 export function UsageStrip() {
   const { t } = useI18n();
-  const [u, setU] = useState<Usage | null>(null);
-  const [q, setQ] = useState<Record<string, string>>({});
+  const u = useUsageStrip((s) => s.u);
+  const q = useUsageStrip((s) => s.quotas);
 
   useEffect(() => {
-    fetchUsage(30).then(setU).catch(() => {});
-    getSettings().then(setQ).catch(() => {});
+    useUsageStrip.getState().load();
   }, []);
 
   if (!u) return <p className="font-mono text-[10px] text-muted-foreground">{t("overview.usage.empty")}</p>;

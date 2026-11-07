@@ -1,48 +1,34 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams } from "react-router";
 import { Activity, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getUsage } from "./api";
 import { useFleet } from "../overview/hooks";
 import { useUI } from "../../app/ui";
 import { Section, Stat, StatGrid } from "../../shared/components/patterns";
 import { bytes, uptime } from "../../shared/lib/format";
-import { AppUsage as Usage } from "../../shared/lib/types";
 import { useI18n } from "../../shared/i18n";
+import { useAppUsage } from "./appusage.store";
 
 // AppUsage: consumo medido del proceso + disco real + tráfico del access log.
-// Sondea cada 5s mientras la pestaña está montada.
+// Poll en el store mientras la pestaña está montada.
 export function AppUsage() {
   const { t, tn } = useI18n();
   const { name = "" } = useParams();
-  const fail = useUI((u) => u.fail);
   const online = useUI((u) => u.online);
   const { metas } = useFleet();
-  const [u, setU] = useState<Usage | null>(null);
-  const [at, setAt] = useState<Date | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [auto, setAuto] = useState(true);
-
-  const load = useCallback(() => {
-    if (!name) return;
-    setBusy(true);
-    getUsage(name)
-      .then((r) => {
-        setU(r);
-        setAt(new Date());
-      })
-      .catch(fail)
-      .finally(() => setBusy(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name]);
+  const u = useAppUsage((s) => s.u);
+  const at = useAppUsage((s) => s.at);
+  const busy = useAppUsage((s) => s.busy);
+  const auto = useAppUsage((s) => s.auto);
 
   useEffect(() => {
     if (!online) return;
-    load();
-    if (!auto) return;
-    const id = window.setInterval(load, 5000);
-    return () => window.clearInterval(id);
-  }, [online, auto, load]);
+    const st = useAppUsage.getState();
+    st.start(name);
+    return () => st.stop();
+  }, [online, name]);
+
+  const load = () => useAppUsage.getState().load(name);
 
   const meta = metas.find((m) => m.name === name);
   const limit = meta?.memory_mb ?? 0;
@@ -64,7 +50,7 @@ export function AppUsage() {
             <Button
               variant={auto ? "outline" : "ghost"}
               size="xs"
-              onClick={() => setAuto((a) => !a)}
+              onClick={() => useAppUsage.getState().setAuto(!auto)}
               title={auto ? t("apps.usage.stopPolling") : t("apps.usage.resumePolling")}
             >
               <Activity className="h-3 w-3" /> {auto ? t("apps.usage.live") : t("apps.usage.paused")}

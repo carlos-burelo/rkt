@@ -1,22 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Link } from "react-router";
-import { fetchObs, Obs } from "./api";
 import { Bars } from "../../shared/components/feedback";
 import { PageHeader, Stat, StatGrid, Section, Segmented, EmptyState } from "../../shared/components/patterns";
 import { eventKindLabel } from "../../shared/lib/labels";
 import { useI18n } from "../../shared/i18n";
+import { useObservability } from "./observability.store";
 
 export function Observability() {
   const { t, tn } = useI18n();
-  const [hours, setHours] = useState(6);
-  const [data, setData] = useState<Obs | null>(null);
+  const hours = useObservability((s) => s.hours);
+  const data = useObservability((s) => s.data);
 
   useEffect(() => {
-    setData(null);
-    fetchObs(hours)
-      .then(setData)
-      .catch(() => setData(null));
-  }, [hours]);
+    useObservability.getState().load();
+  }, []);
 
   const label = hours === 168 ? "7d" : `${hours}h`;
   const reqTotal = data ? data.buckets.reduce((a, b) => a + b.req, 0) : 0;
@@ -31,7 +28,7 @@ export function Observability() {
         actions={
           <Segmented
             value={String(hours)}
-            onChange={(v) => setHours(Number(v))}
+            onChange={(v) => useObservability.getState().setHours(Number(v))}
             label={t("overview.observability.windowAria")}
             items={[6, 24, 168].map((h) => ({ value: String(h), label: h === 168 ? "7d" : `${h}h` }))}
           />

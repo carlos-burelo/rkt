@@ -1,34 +1,24 @@
-import { useEffect, useState } from "react";
-import { Analytics, fetchAnalytics } from "./api";
+import { useEffect } from "react";
 import { Bars } from "../../shared/components/feedback";
 import { PageHeader, Stat, StatGrid, Section, Segmented } from "../../shared/components/patterns";
 import { Err } from "../../shared/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { useI18n } from "../../shared/i18n";
+import { useAnalyticsPage } from "./analytics.store";
 
 const RANGES = [1, 7, 30] as const;
 
 export function AnalyticsPage() {
   const { t, tn } = useI18n();
-  const [host, setHost] = useState("");
-  const [hosts, setHosts] = useState<string[]>([]);
-  const [days, setDays] = useState<number>(7);
-  const [data, setData] = useState<Analytics | null>(null);
-  const [err, setErr] = useState("");
+  const host = useAnalyticsPage((s) => s.host);
+  const hosts = useAnalyticsPage((s) => s.hosts);
+  const days = useAnalyticsPage((s) => s.days);
+  const data = useAnalyticsPage((s) => s.data);
+  const err = useAnalyticsPage((s) => s.err);
 
   useEffect(() => {
-    fetchAnalytics("", days)
-      .then((g) => setHosts(g.by_host.map((h) => h.k)))
-      .catch(() => {});
-  }, [days]);
-
-  useEffect(() => {
-    setData(null);
-    setErr("");
-    fetchAnalytics(host, days)
-      .then(setData)
-      .catch((e) => setErr(e instanceof Error ? e.message : t("common.error")));
-  }, [host, days, t]);
+    useAnalyticsPage.getState().load();
+  }, []);
 
   const errCount = data ? (data.by_class["5xx"] ?? 0) : 0;
   const errPct = data && data.total > 0 ? `${((errCount / data.total) * 100).toFixed(1)}%` : "—";
@@ -44,7 +34,7 @@ export function AnalyticsPage() {
         meta={<span className="tnum font-mono text-[10px] text-muted-foreground">{t("overview.window", { label: windowLabel })}</span>}
       />
       <div className="flex flex-wrap items-center gap-2 border border-border bg-card/35 p-2">
-        <Select value={host || "__all"} onValueChange={(v: string | null) => setHost(v === "__all" || v == null ? "" : v)}>
+        <Select value={host || "__all"} onValueChange={(v: string | null) => useAnalyticsPage.getState().setHost(v === "__all" || v == null ? "" : v)}>
           <SelectTrigger className="tnum h-7 w-56 font-mono text-[10px]">
             <span className="truncate">{host || t("overview.analytics.allHosts")}</span>
           </SelectTrigger>
@@ -59,7 +49,7 @@ export function AnalyticsPage() {
         </Select>
         <Segmented
           value={String(days)}
-          onChange={(v) => setDays(Number(v))}
+          onChange={(v) => useAnalyticsPage.getState().setDays(Number(v))}
           label={t("overview.analytics.rangeAria")}
           items={RANGES.map((d) => ({ value: String(d), label: d === 1 ? "24h" : `${d}d` }))}
         />
