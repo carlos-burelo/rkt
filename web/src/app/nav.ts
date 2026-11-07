@@ -57,4 +57,5 @@ export const PAGE_LABEL: Record<string, string> = {
   settings: "nav.settings",
   users: "nav.users",
   app: "nav.app",
+  apps: "create.title",
 };

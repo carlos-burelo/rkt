@@ -33,8 +33,8 @@ interface CreateState {
   toggleRepos: (fail: (e: unknown) => void) => void;
   suggested: () => string;
   next: () => void;
-  submit: (cbs: { onCreated: (n: string) => void; onOpen: (n: string) => void; setOpen: (b: boolean) => void; fail: (e: unknown) => void }) => void;
-  closeTrack: (setOpen: (b: boolean) => void, onOpen: (n: string) => void) => void;
+  submit: (cbs: { onCreated: (n: string) => void; onOpen: (n: string) => void; fail: (e: unknown) => void }) => void;
+  closeTrack: (onOpen: (n: string) => void) => void;
 }
 
 let trackTimer: ReturnType<typeof setInterval> | null = null;
@@ -110,11 +110,10 @@ export const useCreate = create<CreateState>()((set, get) => ({
       }
     }
   },
-  submit: ({ onCreated, onOpen, setOpen, fail }) => {
+  submit: ({ onCreated, onOpen, fail }) => {
     const s = get();
     const done = (app: string) => {
       onCreated(app);
-      setOpen(false);
       get().reset();
       onOpen(app);
     };
@@ -172,9 +171,8 @@ export const useCreate = create<CreateState>()((set, get) => ({
         fail(e);
       });
   },
-  closeTrack: (setOpen, onOpen) => {
+  closeTrack: (onOpen) => {
     const app = get().track?.app;
-    setOpen(false);
     get().reset();
     if (app) onOpen(app);
   },

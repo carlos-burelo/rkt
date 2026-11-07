@@ -9,6 +9,7 @@ export const create = {
   "create.origin.manualHint": "Sin repositorio: defines el binario y el directorio a mano.",
 
   "create.title": "Nueva app",
+  "create.stepsAria": "pasos de creación",
   "create.step": "paso {step} de 3",
   "create.step1Title": "Origen de la app",
   "create.step2Title": "Detalles de la app",

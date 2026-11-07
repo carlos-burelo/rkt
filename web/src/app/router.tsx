@@ -18,6 +18,7 @@ import { Server } from "../features/server/Server";
 import { Alerts } from "../features/alerts/Alerts";
 import { EnvAll } from "../features/env/EnvAll";
 import { AppTabs } from "../features/apps/AppTabs";
+import { CreatePage } from "../features/apps/CreatePage";
 import { AppOverview } from "../features/apps/AppOverview";
 import { AppUsage } from "../features/apps/AppUsage";
 import { AppEnv } from "../features/apps/AppEnv";
@@ -126,6 +127,7 @@ export const router = createBrowserRouter(
             { path: "overview", element: <Overview /> },
             { path: "proxy", element: <Navigate to="/routes?tab=diagnostico" replace /> },
             { path: "deployments", element: <Deployments /> },
+            { path: "apps/new", element: <CreatePage /> },
             { path: "ci", element: <CI /> },
             { path: "logs", element: <Logs /> },
             { path: "cron", element: <Cron /> },

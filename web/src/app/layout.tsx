@@ -16,7 +16,6 @@ import { CommandPalette } from "../shared/components/CommandPalette";
 import { useAuth } from "../features/auth/store";
 import { useUI } from "./ui";
 import { useFleet } from "../features/overview/hooks";
-import { CreateDialog } from "../features/apps/CreateDialog";
 import { DeployDrawer } from "../features/deployments/DeployDrawer";
 import { AppSidebar, APP_TABS } from "../features/apps/AppSidebar";
 import { UserMenu } from "../shared/components/UserMenu";
@@ -30,7 +29,6 @@ export function ShellLayout() {
   const setOnline = useUI((u) => u.setOnline);
   const palette = useUI((u) => u.palette);
   const setPalette = useUI((u) => u.setPalette);
-  const setCreateOpen = useUI((u) => u.setCreateOpen);
   const appFilter = useUI((u) => u.appFilter);
   const setAppFilter = useUI((u) => u.setAppFilter);
   const err = useUI((u) => u.err);
@@ -77,12 +75,12 @@ export function ShellLayout() {
         setPalette(true);
       } else if (e.key.toLowerCase() === "n" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && canWrite) {
         e.preventDefault();
-        setCreateOpen(true);
+        navigate("/apps/new");
       }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [setPalette, setCreateOpen, canWrite]);
+  }, [setPalette, canWrite]);
 
   function openApp(name: string) {
     setAppFilter(name);
@@ -125,7 +123,7 @@ export function ShellLayout() {
           </SidebarMenu>
 
           {canWrite && !currentApp && (
-            <Button className="mt-3 w-full justify-between px-2.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0" size="sm" onClick={() => setCreateOpen(true)} aria-keyshortcuts="N">
+            <Button className="mt-3 w-full justify-between px-2.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0" size="sm" onClick={() => navigate("/apps/new")} aria-keyshortcuts="N">
               <span className="inline-flex items-center gap-1.5">
                 <Plus className="h-3.5 w-3.5" />
                 <span className="group-data-[collapsible=icon]:hidden">{t("shell.newApp")}</span>
@@ -299,7 +297,7 @@ export function ShellLayout() {
             </span>
           </Link>
           {canWrite && (
-            <Button size="sm" onClick={() => setCreateOpen(true)} className="h-7 md:hidden">
+            <Button size="sm" onClick={() => navigate("/apps/new")} className="h-7 md:hidden">
               <Plus className="h-3.5 w-3.5" /> {t("shell.newApp")}
             </Button>
           )}
@@ -328,29 +326,9 @@ export function ShellLayout() {
         </main>
       </SidebarInset>
 
-      <CreateDialogShell navigate={navigate} openApp={openApp} />
       <DeployDrawer />
       <CommandPaletteShell navigate={navigate} openApp={openApp} />
     </SidebarProvider>
-  );
-}
-
-function CreateDialogShell({ navigate, openApp }: { navigate: (p: string) => void; openApp: (n: string) => void }) {
-  const { t } = useI18n();
-  const createOpen = useUI((u) => u.createOpen);
-  const setCreateOpen = useUI((u) => u.setCreateOpen);
-  const fail = useUI((u) => u.fail);
-  return (
-    <CreateDialog
-      open={createOpen}
-      setOpen={setCreateOpen}
-      onCreated={(name) => {
-        toast.success(t("create.created", { name }));
-      }}
-      onOpen={(name) => openApp(name)}
-      goDomains={() => navigate("/routes")}
-      fail={fail}
-    />
   );
 }
 
@@ -358,7 +336,6 @@ function CommandPaletteShell({ navigate, openApp }: { navigate: (p: string) => v
   const palette = useUI((u) => u.palette);
   const setPalette = useUI((u) => u.setPalette);
   const setSel = useUI((u) => u.setSel);
-  const setCreateOpen = useUI((u) => u.setCreateOpen);
   const act = useUI((u) => u.act);
   const { status, deps, metas } = useFleet();
   return (
@@ -372,7 +349,7 @@ function CommandPaletteShell({ navigate, openApp }: { navigate: (p: string) => v
       openApp={openApp}
       openDeploy={setSel}
       onAction={act}
-      onNewApp={() => setCreateOpen(true)}
+      onNewApp={() => navigate("/apps/new")}
     />
   );
 }

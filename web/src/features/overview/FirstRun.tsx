@@ -1,13 +1,13 @@
+import { useNavigate } from "react-router";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useUI } from "../../app/ui";
 import { useI18n } from "../../shared/i18n";
 import type { AppMeta, AppStatus, Deployment } from "../../shared/lib/types";
 
 // Primer arranque: guía de 3 pasos. Puro presentacional.
 export function FirstRun({ apps, metas, deps }: { apps: AppStatus[]; metas: AppMeta[]; deps: Deployment[] }) {
   const { t } = useI18n();
-  const setCreateOpen = useUI((u) => u.setCreateOpen);
+  const navigate = useNavigate();
   const hasApp = apps.length > 0;
   const hasDomain = metas.some((m) => (m.domains ?? []).length > 0);
   const hasDeploy = deps.some((d) => d.status === "ok");
@@ -44,7 +44,7 @@ export function FirstRun({ apps, metas, deps }: { apps: AppStatus[]; metas: AppM
       </div>
       {!hasApp && (
         <div className="border-t border-border px-3 py-2.5">
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Button size="sm" onClick={() => navigate("/apps/new")}>
             {t("overview.firstRun.create")} <ArrowRight className="h-3 w-3" />
           </Button>
         </div>

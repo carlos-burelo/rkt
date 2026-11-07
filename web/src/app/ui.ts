@@ -10,7 +10,6 @@ import { UnauthorizedError } from "../shared/lib/http";
 interface UI {
   online: boolean;
   palette: boolean;
-  createOpen: boolean;
   appFilter: string;
   follow: boolean;
   sel: Deployment | null;
@@ -20,7 +19,6 @@ interface UI {
   setAppFilter: (s: string) => void;
   setFollow: (b: boolean) => void;
   setPalette: (b: boolean) => void;
-  setCreateOpen: (b: boolean) => void;
   setSel: (d: Deployment | null) => void;
   fail: (e: unknown) => void;
   clearErr: () => void;
@@ -32,7 +30,6 @@ interface UI {
 export const useUI = create<UI>()((set) => ({
   online: navigator.onLine,
   palette: false,
-  createOpen: false,
   appFilter: "",
   follow: true,
   sel: null,
@@ -42,7 +39,6 @@ export const useUI = create<UI>()((set) => ({
   setAppFilter: (s) => set({ appFilter: s }),
   setFollow: (b) => set({ follow: b }),
   setPalette: (b) => set({ palette: b }),
-  setCreateOpen: (b) => set({ createOpen: b }),
   setSel: (d) => {
     set({ sel: d });
     if (d) {
