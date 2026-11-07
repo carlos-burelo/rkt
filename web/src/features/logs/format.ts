@@ -172,6 +172,47 @@ export interface GroupedLine {
   count: number;
 }
 
+// Corriente del log operativo: divide la consola en accesos (tráfico
+// real), rechazados (bots/escaneos sin ruta) y sistema (config,
+// supervisor, deploys). En logs de app todo es "app".
+export type Stream = "access" | "rejected" | "system" | "app";
+
+export function streamOf(p: ParsedLine, appFilter: string): Stream {
+  if (appFilter !== "") return "app";
+  const m = (p.msg || "").toLowerCase();
+  if (m === "proxy") return "access";
+  if (m === "sin ruta") return "rejected";
+  return "system";
+}
+
+export function fieldOf(p: ParsedLine, ...keys: string[]): string {
+  for (const k of keys) {
+    const f = p.fields.find((f) => f.key === k);
+    if (f && f.value !== "") return f.value;
+  }
+  return "";
+}
+
+// Resumen de una línea de acceso: "GET / → 127.0.0.1:3000 · 9ms".
+// Null si faltan campos (se muestra genérico).
+export function accessSummary(p: ParsedLine): string | null {
+  const m = fieldOf(p, "method", "m");
+  const path = fieldOf(p, "path", "p");
+  if (!m || !path) return null;
+  const target = fieldOf(p, "target");
+  const dur = fieldOf(p, "dur", "duration", "latency");
+  return `${m.toUpperCase()} ${path}${target ? ` → ${target}` : ""}${dur ? ` · ${dur}` : ""}`;
+}
+
+// Resumen de un rechazo: "azenv.net / ← 160.119.71.168".
+export function rejectedSummary(p: ParsedLine): string | null {
+  const host = fieldOf(p, "host");
+  const path = fieldOf(p, "path", "p");
+  if (!host && !path) return null;
+  const remote = fieldOf(p, "remote", "remote_addr", "ip");
+  return `${host || "?"} ${path || "/"}${remote ? ` ← ${remote}` : ""}`;
+}
+
 // Agrupa líneas consecutivas con el mismo mensaje/campos. Conserva el raw
 // más reciente y el conteo para comprimir ráfagas repetidas.
 export function groupParsed(lines: ParsedLine[]): GroupedLine[] {

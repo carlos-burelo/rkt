@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupParsed, parseLogLine } from "./format";
+import { accessSummary, groupParsed, parseLogLine, rejectedSummary, streamOf } from "./format";
 
 describe("parseLogLine", () => {
   it("parsea logfmt con tiempo, nivel, mensaje y campos", () => {
@@ -42,5 +42,40 @@ describe("groupParsed", () => {
     expect(grouped).toHaveLength(2);
     expect(grouped[0].count).toBe(2);
     expect(grouped[1].count).toBe(1);
+  });
+});
+
+describe("streamOf", () => {
+  it("clasifica accesos, rechazados y sistema", () => {
+    const access = parseLogLine(
+      'time=2026-11-07T11:09:23Z level=INFO msg=proxy host=app1.coatl.in method=GET path=/ target=127.0.0.1:3000 dur=9.2ms',
+    );
+    const rejected = parseLogLine(
+      "time=2026-11-07T10:40:14Z level=WARN msg=\"sin ruta\" host=azenv.net remote=160.119.71.168:41552 path=/",
+    );
+    const system = parseLogLine("time=2026-11-07T11:10:33Z level=INFO msg=\"config recargada\" routes=1 apps=1");
+    expect(streamOf(access, "")).toBe("access");
+    expect(streamOf(rejected, "")).toBe("rejected");
+    expect(streamOf(system, "")).toBe("system");
+    expect(streamOf(access, "app1")).toBe("app");
+  });
+});
+
+describe("summaries", () => {
+  it("resume accesos como método path → target · dur", () => {
+    const p = parseLogLine(
+      "level=INFO msg=proxy host=app1.coatl.in method=GET path=/ target=127.0.0.1:3000 dur=9.188ms",
+    );
+    expect(accessSummary(p)).toBe("GET / → 127.0.0.1:3000 · 9.188ms");
+  });
+
+  it("resume rechazos como host path ← remote", () => {
+    const p = parseLogLine('level=WARN msg="sin ruta" host=azenv.net remote=160.119.71.168:41552 path=/');
+    expect(rejectedSummary(p)).toBe("azenv.net / ← 160.119.71.168:41552");
+  });
+
+  it("devuelve null sin campos suficientes", () => {
+    expect(accessSummary(parseLogLine("level=INFO msg=proxy"))).toBeNull();
+    expect(rejectedSummary(parseLogLine("level=WARN msg=hola"))).toBeNull();
   });
 });

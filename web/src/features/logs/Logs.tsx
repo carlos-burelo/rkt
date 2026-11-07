@@ -17,7 +17,7 @@ import {
 import { useFleet } from "../overview/hooks";
 import { useUI } from "../../app/ui";
 import { useI18n } from "../../shared/i18n";
-import { groupParsed, parseLogLine, type Level } from "./format";
+import { groupParsed, parseLogLine, accessSummary, rejectedSummary, streamOf, type Level, type Stream } from "./format";
 
 const LEVEL_TONE: Record<Level, string> = {
   info: "bg-info",
@@ -38,6 +38,15 @@ const LEVEL_KEY: Record<Level, string> = {
 };
 
 const LEVEL_SHORT: Record<Level, string> = { info: "INF", warning: "WRN", error: "ERR" };
+
+const STREAM_KEY: Record<Stream, string> = {
+  access: "ops.logs.stream.access",
+  rejected: "ops.logs.stream.rejected",
+  system: "ops.logs.stream.system",
+  app: "ops.logs.stream.app",
+};
+
+const STREAM_SHORT: Record<Stream, string> = { access: "ACC", rejected: "REJ", system: "SYS", app: "APP" };
 
 const LEVEL_BADGE: Record<Level, string> = {
   info: "border-console-info/45 bg-console-info/10 text-console-info",
@@ -154,6 +163,36 @@ function LevelToggle({
   );
 }
 
+function StreamToggle({
+  stream,
+  on,
+  count,
+  onClick,
+}: {
+  stream: Stream;
+  on: boolean;
+  count: number;
+  onClick: () => void;
+}) {
+  const { t } = useI18n();
+  const label = t(STREAM_KEY[stream]);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      aria-label={label}
+      title={label}
+      className={`inline-flex h-7 items-center gap-1.5 border px-2 font-mono text-[9px] tracking-[0.08em] uppercase transition-colors ${
+        on ? "border-input bg-accent/60 text-foreground" : "border-border bg-transparent text-muted-foreground/60 hover:text-foreground"
+      }`}
+    >
+      <span className={on ? undefined : "text-muted-foreground/50"}>{STREAM_SHORT[stream]}</span>
+      <span className={`tnum ${on ? undefined : "text-muted-foreground/50"}`}>{count}</span>
+    </button>
+  );
+}
+
 export function Logs() {
   const { t, tn } = useI18n();
   const { status, deps } = useFleet();
@@ -166,6 +205,7 @@ export function Logs() {
   const [q, setQ] = useState("");
   const [live, setLive] = useState(true);
   const [levels, setLevels] = useState<Record<Level, boolean>>({ info: true, warning: true, error: true });
+  const [stream, setStream] = useState<"all" | Stream>("all");
   const [log, setLog] = useState("");
   const [follow, setFollow] = useState(true);
   const [compact, setCompact] = useState(true);
@@ -190,6 +230,10 @@ export function Logs() {
   }, [appFilter, online]);
 
   useEffect(() => {
+    setStream("all");
+  }, [appFilter]);
+
+  useEffect(() => {
     if (!live || tab !== "runtime" || !online) return;
     const q = `n=200${appFilter !== "" ? `&app=${encodeURIComponent(appFilter)}` : ""}`;
     return streamLog(`/api/v1/logs/stream?${q}`, (text, append) => {
@@ -206,9 +250,18 @@ export function Logs() {
     const all = typeof log === "string" && log !== "" ? log.split("\n") : [];
     const parsed = all.map(parseLogLine);
     const counts: Record<Level, number> = { info: 0, warning: 0, error: 0 };
-    for (const p of parsed) counts[p.level]++;
+    const streams: Record<Stream, number> = { access: 0, rejected: 0, system: 0, app: 0 };
+    for (const p of parsed) {
+      counts[p.level]++;
+      streams[streamOf(p, appFilter)]++;
+    }
     const rx = q.trim() === "" ? null : new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    const vis = parsed.filter((p) => levels[p.level] && (!rx || rx.test(p.raw)));
+    const vis = parsed.filter(
+      (p) =>
+        levels[p.level] &&
+        (stream === "all" || streamOf(p, appFilter) === stream) &&
+        (!rx || rx.test(p.raw)),
+    );
     const buckets = new Array<number>(24).fill(0);
     let stamped = 0;
     const nowH = Date.now();
@@ -220,22 +273,23 @@ export function Logs() {
         stamped++;
       }
     }
-    return { vis, parsed, counts, buckets, stamped };
-  }, [log, q, levels]);
+    return { vis, parsed, counts, streams, buckets, stamped };
+  }, [log, q, levels, stream, appFilter]);
 
   const rendered = useMemo(() => {
     let list = lines.vis;
     if (context && q.trim() !== "") {
       const rx = new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      const inStream = (p: (typeof lines.parsed)[number]) => stream === "all" || streamOf(p, appFilter) === stream;
       const keep = new Set<number>();
       lines.parsed.forEach((p, i) => {
-        if (!levels[p.level] || !rx.test(p.raw)) return;
+        if (!levels[p.level] || !inStream(p) || !rx.test(p.raw)) return;
         for (let j = Math.max(0, i - 2); j <= Math.min(lines.parsed.length - 1, i + 2); j++) keep.add(j);
       });
-      list = lines.parsed.filter((p, i) => keep.has(i) && levels[p.level]);
+      list = lines.parsed.filter((p, i) => keep.has(i) && levels[p.level] && inStream(p));
     }
     return compact ? groupParsed(list) : list.map((line) => ({ line, count: 1 }));
-  }, [compact, context, lines, q, levels]);
+  }, [compact, context, lines, q, levels, stream, appFilter]);
 
   function download() {
     const blob = new Blob([log], { type: "text/plain" });
@@ -308,6 +362,33 @@ export function Logs() {
                   />
                 ))}
               </div>
+              {appFilter === "" && (
+                <div className="flex items-center gap-px" role="group" aria-label={t("ops.logs.streamsAria")}>
+                  <button
+                    type="button"
+                    onClick={() => setStream("all")}
+                    aria-pressed={stream === "all"}
+                    aria-label={t("ops.logs.stream.all")}
+                    title={t("ops.logs.stream.all")}
+                    className={`inline-flex h-7 items-center gap-1.5 border px-2 font-mono text-[9px] tracking-[0.08em] uppercase transition-colors ${
+                      stream === "all" ? "border-input bg-accent/60 text-foreground" : "border-border bg-transparent text-muted-foreground/60 hover:text-foreground"
+                    }`}
+                  >
+                    <span className={`tnum ${stream === "all" ? undefined : "text-muted-foreground/50"}`}>
+                      {lines.vis.length}
+                    </span>
+                  </button>
+                  {(["access", "rejected", "system"] as const).map((s) => (
+                    <StreamToggle
+                      key={s}
+                      stream={s}
+                      on={stream === s}
+                      count={lines.streams[s]}
+                      onClick={() => setStream(stream === s ? "all" : s)}
+                    />
+                  ))}
+                </div>
+              )}
               <span className="flex-1" />
               <Button variant="outline" size="sm" onClick={() => setLive(!live)}>
                 {live ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
@@ -382,6 +463,10 @@ export function Logs() {
                 {rendered.map(({ line: p, count }, i) => {
                   const lv = p.level;
                   const { scope, text } = splitScope(p.msg || p.raw);
+                  const st = streamOf(p, appFilter);
+                  const summary =
+                    st === "access" ? accessSummary(p) : st === "rejected" ? rejectedSummary(p) : null;
+                  const chips = compact && p.structured && p.fields.length > 0 && !summary;
                   return (
                     <div
                       key={i}
@@ -399,7 +484,7 @@ export function Logs() {
                       >
                         {LEVEL_SHORT[lv]}
                       </span>
-                      {compact && p.structured && scope && (
+                      {compact && p.structured && scope && !summary && (
                         <span
                           title={scope}
                           className="hidden shrink-0 self-start border border-console-border bg-console-raised px-1 font-mono text-[9px] tracking-[0.04em] text-console-muted uppercase sm:inline"
@@ -414,9 +499,17 @@ export function Logs() {
                           lv === "error" ? "text-console-bad" : lv === "warning" ? "text-console-warn" : "text-console-foreground/85"
                         }`}
                       >
-                        {compact ? (p.structured ? <Highlight text={text} q={q} /> : <Highlight text={p.raw} q={q} />) : <Highlight text={p.raw} q={q} />}
+                        {compact ? (
+                          p.structured ? (
+                            <Highlight text={summary ?? text} q={q} />
+                          ) : (
+                            <Highlight text={p.raw} q={q} />
+                          )
+                        ) : (
+                          <Highlight text={p.raw} q={q} />
+                        )}
                       </span>
-                      {compact && p.structured && p.fields.length > 0 && (
+                      {chips && (
                         <span className="hidden max-w-[52%] shrink-0 items-center gap-1 overflow-hidden sm:flex">
                           {p.fields.slice(0, 4).map((f, idx) => (
                             <span
