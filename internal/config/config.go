@@ -247,15 +247,40 @@ const maxBodyDefaultMB = 10
 const restartGraceDefault = "10s"
 
 // defaultDenyPaths escaneos ubicuos; jamás legítimos en backends propios.
+// Los patrones "/*.ext" aplican al nombre base en cualquier profundidad
+// (ver waf.matchPattern): frenan /api/x.php igual que /x.php.
 var defaultDenyPaths = []string{
-	"/.env",
+	"/.env*",
+	"/.git",
 	"/.git/*",
+	"/.git/*/*",
 	"/.DS_Store",
+	"/.ssh/*",
+	"/.aws/*",
+	"/_vti_pvt/*",
+	"/cgi-bin/*",
+	"/actuator/*",
+	"/hudson*",
+	"/druid/*",
 	"/php-cgi*",
 	"/php-cgi/*",
-	"/cgi-bin/*",
 	"/info.php",
 	"/wp-*",
+	"/wp-*/*",
+	"/*.php",
+	"/*.asp*",
+	"/*.aspx",
+	"/*.jsp",
+	"/*.sql",
+	"/*.bak",
+	"/*.swp",
+	"/*.pwd",
+	"/backup*",
+	"/dump*",
+	"/database*",
+	"/docker-compose*",
+	"/user_secrets*",
+	"/config.*",
 }
 
 // Config canónica. Un solo camino, nada legacy.

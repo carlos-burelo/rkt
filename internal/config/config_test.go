@@ -127,12 +127,12 @@ func TestDenyPathsDefaultsAndInvalid(t *testing.T) {
 	finalized(t, cfg)
 	found := false
 	for _, p := range cfg.DenyPaths {
-		if p == "/.env" {
+		if p == "/.env*" {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("defaults deben incluir /.env: %v", cfg.DenyPaths)
+		t.Fatalf("defaults deben incluir /.env*: %v", cfg.DenyPaths)
 	}
 	bad := &Config{
 		DenyPaths: []string{"/ok/*", "/mal/[/"},
