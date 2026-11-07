@@ -11,31 +11,33 @@ import { useI18n } from "../../shared/i18n";
 import { publicUrl, publicHost } from "../../shared/lib/url";
 import type { Route, Status } from "../../shared/lib/types";
 import { useRoutes } from "./routes.store";
-import { domainDetail, preflightDomain } from "./api";
+import { preflightDomain } from "./api";
 
-// Badge TLS por host (fetch propio por instancia: cada fila es
-// independiente y vive/muere con ella).
+// Badge TLS por host: lee el detalle cacheado del store (una lectura
+// por host aunque haya N filas + drawer abierto).
 export function TLSBadge({ host, onOpen }: { host: string; onOpen: () => void }) {
   const { t } = useI18n();
-  const [txt, setTxt] = useState("…");
-  const [state, setState] = useState<"off" | "ok" | "warn" | "bad">("off");
+  const detail = useRoutes((s) => (host ? s.details[host] : undefined));
+
   useEffect(() => {
-    domainDetail(host)
-      .then((d) => {
-        if (!d.tls.managed) {
-          setState("off");
-          setTxt("");
-          return;
-        }
-        setTxt(d.tls.expires || t("common.yes"));
-        const days = d.tls.expires ? Math.ceil((new Date(d.tls.expires).getTime() - Date.now()) / 86400000) : 999;
-        setState(Number.isNaN(days) ? "ok" : days <= 0 ? "bad" : days <= 14 ? "warn" : "ok");
-      })
-      .catch(() => {
-        setState("off");
-        setTxt("?");
-      });
-  }, [host, t]);
+    useRoutes.getState().detail(host);
+  }, [host]);
+
+  let txt = "…";
+  let state: "off" | "ok" | "warn" | "bad" = "off";
+  const d = detail?.data;
+  if (d) {
+    if (!d.tls.managed) {
+      state = "off";
+      txt = "";
+    } else {
+      txt = d.tls.expires || t("common.yes");
+      const days = d.tls.expires ? Math.ceil((new Date(d.tls.expires).getTime() - Date.now()) / 86400000) : 999;
+      state = Number.isNaN(days) ? "ok" : days <= 0 ? "bad" : days <= 14 ? "warn" : "ok";
+    }
+  } else if (detail && detail.error) {
+    txt = "?";
+  }
   const cls =
     state === "bad"
       ? "border-bad/40 bg-bad/10 text-bad"

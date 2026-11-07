@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { X } from "lucide-react";
-import { DomainDetail, domainDetail } from "./api";
 import { CopyButton } from "../../shared/components/feedback";
 import { useI18n } from "../../shared/i18n";
+import { useRoutes } from "./routes.store";
 
 const { Root, Portal, Backdrop, Popup, Title, Close } = DialogPrimitive;
 
@@ -18,24 +18,12 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 export function DomainDrawer({ host, onClose }: { host: string | null; onClose: () => void }) {
   const { t } = useI18n();
-  const [data, setData] = useState<DomainDetail | null>(null);
-  const [err, setErr] = useState("");
+  const entry = useRoutes((s) => (host ? s.details[host] : undefined));
+  const data = entry?.data ?? null;
+  const err = entry?.error ?? "";
 
   useEffect(() => {
-    setData(null);
-    setErr("");
-    if (!host) return;
-    let alive = true;
-    domainDetail(host)
-      .then((d) => {
-        if (alive) setData(d);
-      })
-      .catch((e) => {
-        if (alive) setErr(e instanceof Error ? e.message : t("common.error"));
-      });
-    return () => {
-      alive = false;
-    };
+    if (host) useRoutes.getState().detail(host);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [host]);
 
