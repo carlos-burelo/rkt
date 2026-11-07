@@ -268,7 +268,7 @@ func printDashboardURL(cfgPath string) {
 		fmt.Println("aviso: healthz desactivado, sin dashboard local")
 		return
 	}
-	fmt.Printf("dashboard: http://%s/ (crea tu admin ahí la primera vez)\n", cfg.Healthz.Listen)
+	fmt.Printf("dashboard local: http://%s/ (admin: rkt users add <nombre> --role admin)\n", cfg.Healthz.Listen)
 }
 
 // cmdDev levanta entorno local con los mismos puertos que producción

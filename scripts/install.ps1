@@ -27,7 +27,8 @@ param(
   [switch]$Rollback,
   [string]$GithubToken = "",
   [switch]$NoPublicDashboard,
-  [string]$AdminUser = "admin"
+  [string]$AdminUser = "admin",
+  [string]$PublicIP = ""
 )
 $ErrorActionPreference = "Stop"
 
@@ -127,8 +128,15 @@ Write-Host "Binario en $exe"
 #    Edítala desde el dashboard (loopback) o con `rkt settings/routes/apps`.
 New-Item -ItemType Directory -Force (Join-Path $InstallDir "logs") | Out-Null
 
-# 5b. ACL de datos (DB + logs): solo SYSTEM + Administradores
-icacls (Join-Path $InstallDir "logs") /inheritance:r /grant:r "SYSTEM:(F)" "Administradores:(F)" | Out-Null
+# 5b. ACL de datos (DB + logs): solo SYSTEM + Administradores.
+# (OI)(CI) es imprescindible: sin herencia, rkt.db y -wal nacen sin acceso
+# para el admin y `rkt settings` falla con "readonly database".
+$adminSid = "*S-1-5-32-544"
+icacls (Join-Path $InstallDir "logs") /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "${adminSid}:(OI)(CI)F" /T /C | Out-Null
+$secretsDir = Join-Path $InstallDir "secrets"
+if (Test-Path $secretsDir) {
+  icacls $secretsDir /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "${adminSid}:(OI)(CI)F" /T /C | Out-Null
+}
 
 # 6. firewall 80/443
 if (-not $SkipFirewall) {
@@ -202,8 +210,26 @@ try {
   }
 } catch {}
 
-$publicIp = ""
-try { $publicIp = (Invoke-RestMethod -Uri "https://api.ipify.org" -TimeoutSec 6).Trim() } catch {}
+function Test-PublicIPv4([string]$ip) {
+  if ([string]::IsNullOrWhiteSpace($ip)) { return $false }
+  return -not ($ip -match '^(10\.|127\.|169\.254\.|192\.168\.|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)')
+}
+
+$publicIp = $PublicIP
+if ([string]::IsNullOrWhiteSpace($publicIp)) {
+  try {
+    $route = Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
+      Sort-Object RouteMetric | Select-Object -First 1
+    if ($route) {
+      $candidate = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $route.ifIndex -ErrorAction SilentlyContinue |
+        Where-Object { $_.AddressState -eq "Preferred" } | Select-Object -First 1 -ExpandProperty IPAddress
+      if (Test-PublicIPv4 $candidate) { $publicIp = $candidate }
+    }
+  } catch {}
+}
+if ([string]::IsNullOrWhiteSpace($publicIp)) {
+  try { $publicIp = (Invoke-RestMethod -Uri "https://api.ipify.org" -TimeoutSec 6).Trim() } catch {}
+}
 if ($publicIp -and [string]::IsNullOrWhiteSpace($settings["public_ip"])) {
   try { Rkt-CLI @("settings", "set", "public_ip=$publicIp") | Out-Null } catch {}
   $settings["public_ip"] = $publicIp
@@ -244,24 +270,47 @@ if (-not $NoPublicDashboard -and [string]::IsNullOrWhiteSpace($existingListen)) 
   if (-not $busy -or $busyByRkt) {
     try {
       Rkt-CLI @("settings", "set", "dashboard_listen=0.0.0.0:8090") | Out-Null
-      $dashboardExposed = $true
-      $dashChanged = $true
+      # Verificar persistencia: si el ACL de la DB está mal, el CLI
+      # imprime "readonly database" pero no lanza excepción.
+      $after = ((& $exe -config $cfg settings list) -join "`n")
+      if ($after -match "(?m)^dashboard_listen=0\.0\.0\.0:8090\s*$") {
+        $dashboardExposed = $true
+        $dashChanged = $true
+        $settings["dashboard_listen"] = "0.0.0.0:8090"
+      } else {
+        Write-Warning "No pude persistir dashboard_listen. Revisa ACL de C:\Program Files\rkt-proxy\logs."
+      }
     } catch { Write-Warning "No pude configurar dashboard_listen: $_" }
   } else {
     Write-Warning "Puerto 8090 ocupado por otro proceso; dashboard queda solo en loopback."
   }
 }
 
-if (-not $SkipFirewall -and $dashboardExposed) {
-  if (-not (Get-NetFirewallRule -DisplayName "RKT Dashboard" -ErrorAction SilentlyContinue)) {
-    New-NetFirewallRule -DisplayName "RKT Dashboard" -Direction Inbound `
-      -LocalPort $dashPort -Protocol TCP -Action Allow | Out-Null
-  }
+# Si el setting ya existía pero el listener no está en wildcard, reiniciar.
+if ($dashboardExposed) {
+  $wild = Get-NetTCPConnection -LocalPort $dashPort -State Listen -ErrorAction SilentlyContinue |
+    Where-Object { $_.LocalAddress -eq "0.0.0.0" -or $_.LocalAddress -eq "::" }
+  if (-not $wild) { $dashChanged = $true }
 }
 
 if ($dashChanged) {
   Restart-Service Rkt -Force
   Start-Sleep 2
+}
+
+if ($dashboardExposed) {
+  $wild = Get-NetTCPConnection -LocalPort $dashPort -State Listen -ErrorAction SilentlyContinue |
+    Where-Object { $_.LocalAddress -eq "0.0.0.0" -or $_.LocalAddress -eq "::" }
+  if (-not $wild) {
+    $dashboardExposed = $false
+    Write-Warning "El dashboard no quedó escuchando en 0.0.0.0:$dashPort. Revisa logs."
+  }
+}
+
+if (-not $SkipFirewall -and $dashboardExposed) {
+  Remove-NetFirewallRule -DisplayName "RKT Dashboard" -ErrorAction SilentlyContinue | Out-Null
+  New-NetFirewallRule -DisplayName "RKT Dashboard" -Direction Inbound `
+    -LocalPort $dashPort -Protocol TCP -Action Allow -Profile Any | Out-Null
 }
 $ready = Wait-RktHealth
 $dashLocal = "http://127.0.0.1:8090/"
