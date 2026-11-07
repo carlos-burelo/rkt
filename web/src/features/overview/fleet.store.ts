@@ -15,6 +15,8 @@ interface FleetBusState {
   seq: number;
   conn: FleetConn;
   loading: boolean;
+  /** ya llegó algún snapshot/live: loading puede apagarse */
+  seen: boolean;
   applySnapshot: (topic: string, data: unknown) => void;
   setConn: (c: FleetConn) => void;
   setSeq: (seq: number) => void;
@@ -37,18 +39,20 @@ export const useFleetBus = create<FleetBusState>()((set) => ({
   seq: 0,
   conn: "retrying",
   loading: true,
+  seen: false,
   applySnapshot: (topic, data) =>
     set(() => {
       if (topic === "status") {
         const st = asStatus(data);
-        return st ? { status: st, loading: false } : {};
+        return st ? { status: st, loading: false, seen: true } : {};
       }
-      if (topic === "deployments") return { deps: asArray<Deployment>(data), loading: false };
-      if (topic === "events") return { evs: asArray<RktEvent>(data), loading: false };
-      if (topic === "metas") return { metas: asArray<AppMeta>(data) };
+      if (topic === "deployments") return { deps: asArray<Deployment>(data), loading: false, seen: true };
+      if (topic === "events") return { evs: asArray<RktEvent>(data), loading: false, seen: true };
+      if (topic === "metas") return { metas: asArray<AppMeta>(data), seen: true };
       return {};
     }),
-  setConn: (conn) => set({ conn }),
+  setConn: (conn) =>
+    set((s) => (conn === "offline" && !s.seen ? { conn, loading: false } : { conn })),
   setSeq: (seq) => set({ seq }),
 }));
 

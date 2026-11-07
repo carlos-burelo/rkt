@@ -5,9 +5,11 @@ import { applyFleetEvent, useFleetBus, type FleetConn } from "../../features/ove
 
 // Conexión única SSE al bus de flota (transporte, sin estado).
 // El estado vive en `features/overview/fleet.store` (zustand).
-// Reconexión manual: el cursor viaja en la URL (el retry nativo
-// repetiría el cursor viejo). Backoff + watchdog half-open; probe 401
-// distingue sesión muerta de red caída.
+// Puerta de probe: sin backend no se abre EventSource (el navegador
+// loguea cada intento fallido y no se puede silenciar). Solo con
+// backend reachable se conecta el SSE; el cursor viaja en la URL.
+// Backoff + watchdog half-open; probe 401 distingue sesión muerta
+// de red caída.
 
 const CURSOR_KEY = "rkt.fleet.cursor";
 const WATCHDOG_MS = 45000;
@@ -36,6 +38,7 @@ let lastEvent = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = false;
+let probing = false;
 
 function setConn(c: FleetConn) {
   useFleetBus.getState().setConn(c);
@@ -58,6 +61,20 @@ async function probeAuth(): Promise<boolean> {
   }
 }
 
+// probeAlive chequeo barato y público: cualquier respuesta HTTP = vivo.
+// Silencioso (sin fail ni banner): el estado lo refleja la conexión.
+async function probeAlive(): Promise<boolean> {
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 5000);
+    const res = await fetch("/api/v1/auth/status", { cache: "no-store", credentials: "include", signal: ctl.signal });
+    clearTimeout(t);
+    return res.status < 500;
+  } catch {
+    return false;
+  }
+}
+
 function connect() {
   if (stopped) return;
   try {
@@ -70,7 +87,7 @@ function connect() {
   try {
     cur = new EventSource(`/api/v1/fleet/stream?topics=${TOPICS}&cursor=${cursor}`);
   } catch {
-    scheduleRetry();
+    scheduleEnsure();
     return;
   }
   es = cur;
@@ -126,21 +143,53 @@ function connect() {
   cur.onerror = () => {
     if (stopped || es !== cur) return;
     setConn("retrying");
-    scheduleRetry();
+    scheduleEnsure();
   };
 }
 
-function scheduleRetry() {
-  if (stopped) return;
+// ensure: solo abre el SSE con backend reachable. Sin backend,
+// backoff de probes silenciosos (sin el spam de EventSource en consola).
+function ensure() {
+  if (stopped || probing) return;
+  probing = true;
+  closeES();
+  void probeAlive().then((up) => {
+    probing = false;
+    if (stopped) return;
+    if (up) {
+      connect();
+      return;
+    }
+    fails++;
+    if (fails >= 3) {
+      setConn("offline");
+    } else {
+      setConn("retrying");
+    }
+    scheduleEnsure();
+  });
+}
+
+function closeES() {
   try {
     es?.close();
   } catch {
     /* ignorar */
   }
   es = null;
+}
+
+function scheduleEnsure() {
+  if (stopped) return;
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = setTimeout(ensure, nextDelay(fails));
+}
+
+function scheduleRetry() {
+  if (stopped) return;
   fails++;
   if (fails >= 3) {
-    // ¿Red o sesión? Un probe decide: 401 => login, resto => offline.
+    // Reachable pero el stream falla: ¿sesión muerta? Un probe decide.
     void probeAuth().then((ok) => {
       if (stopped) return;
       if (!ok) {
@@ -152,15 +201,14 @@ function scheduleRetry() {
   } else {
     setConn("retrying");
   }
-  if (retryTimer) clearTimeout(retryTimer);
-  retryTimer = setTimeout(connect, nextDelay(fails));
+  scheduleEnsure();
 }
 
 function watch() {
   if (stopped) return;
   if (Date.now() - lastEvent > WATCHDOG_MS) {
     setConn("retrying");
-    connect();
+    ensure();
   }
 }
 
@@ -169,15 +217,17 @@ export function subscribeFleet(): () => void {
   subs++;
   if (subs === 1) {
     stopped = false;
+    probing = false;
     fails = 0;
     setConn("retrying");
-    connect();
+    ensure();
     timer = setInterval(watch, 15000);
   }
   return () => {
     subs = Math.max(0, subs - 1);
     if (subs === 0) {
       stopped = true;
+      probing = false;
       if (timer) clearInterval(timer);
       timer = null;
       if (retryTimer) clearTimeout(retryTimer);
