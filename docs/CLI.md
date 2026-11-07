@@ -23,6 +23,22 @@ Sintaxis: `rkt [-config <ruta>] [--json] <comando> [args]`.
 
 Sin args en terminal interactiva imprime ayuda; sin args como servicio arranca.
 
+## Desarrollo local (hot reload)
+
+Dos procesos: backend Go + Vite con HMR. El frontend cambia al instante;
+el backend se reconstruye y reinicia a mano.
+
+```powershell
+# 1. Backend (API + dashboard embebido en :8090, apps en :18080)
+.\bin\rkt.exe -config rkt.dev.db dev --http=127.0.0.1:18080 --https=
+
+# 2. Frontend con HMR (http://127.0.0.1:5173, /api proxieado a :8090)
+pnpm --dir web dev
+```
+
+Cambios web: recarga sola. Cambios Go: `go build -o bin/rkt.exe ./cmd/rkt-proxy`
+y reinicia el proceso del paso 1.
+
 ## Operación (contra el servicio en marcha)
 
 Requieren `healthz` activado (default `127.0.0.1:8090`, solo loopback).
