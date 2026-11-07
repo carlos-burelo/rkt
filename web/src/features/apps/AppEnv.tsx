@@ -9,7 +9,7 @@ import { FormDialog, Field } from "../../shared/components/FormDialog";
 import { getEnvValue, importAppEnv, patchAppEnv } from "./api";
 import { useEnv } from "./hooks";
 import { getGlobalValue } from "../env/api";
-import { useGlobalEnv } from "../env/hooks";
+import { useGlobalEnv } from "../env/env.store";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
 import { useI18n } from "../../shared/i18n";

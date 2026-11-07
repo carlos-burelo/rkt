@@ -11,7 +11,7 @@ import { PageHeader, EmptyState, Section, EnvSecret } from "../../shared/compone
 import { FormDialog, Field } from "../../shared/components/FormDialog";
 import { useUI } from "../../app/ui";
 import { useAuth } from "../auth/store";
-import { useGlobalEnv } from "./hooks";
+import { useGlobalEnv } from "./env.store";
 import { useI18n } from "../../shared/i18n";
 
 function GlobalEdit({ envKey, onSaved }: { envKey: string; onSaved: () => void }) {
