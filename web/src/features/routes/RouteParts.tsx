@@ -7,7 +7,7 @@ import { ConfirmButton } from "../../shared/components/ConfirmButton";
 import { CopyButton } from "../../shared/components/feedback";
 import { RowMenu } from "../../shared/components/menus";
 import { Avatar } from "../../shared/components/ui";
-import { ArrowRight, ExternalLink, Plus } from "lucide-react";
+import { ArrowRight, ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "../auth/store";
 import { useI18n } from "../../shared/i18n";
 import { publicUrl, publicHost } from "../../shared/lib/url";
@@ -98,7 +98,7 @@ export function RouteRow({ r, status, onOpen }: { r: Route; status: Status | nul
         <div className="col-span-3 flex justify-end gap-1 md:col-span-1">
           <RowMenu label={t("serve.routes.rowActions", { host: r.hosts[0] })}>
             <FormDialog
-              trigger={<DropdownMenuItem>{t("common.edit")}</DropdownMenuItem>}
+              trigger={<DropdownMenuItem><Pencil className="h-3.5 w-3.5" aria-hidden />{t("common.edit")}</DropdownMenuItem>}
               title={t("serve.routes.editTitle", { host: r.hosts[0] })}
               description={t("serve.routes.editDesc")}
               submitLabel={t("common.save")}
@@ -118,6 +118,7 @@ export function RouteRow({ r, status, onOpen }: { r: Route; status: Status | nul
             <ConfirmButton
               title={t("serve.routes.deleteTitle", { host: r.hosts[0] })}
               onConfirm={() => remove(r.hosts[0])}
+              icon={<Trash2 className="h-3.5 w-3.5" aria-hidden />}
             />
           </RowMenu>
         </div>

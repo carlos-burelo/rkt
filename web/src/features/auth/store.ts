@@ -61,7 +61,9 @@ export const useAuth = create<AuthState>()((set) => ({
       canWrite: m?.role === "admin" || m?.role === "operator",
     })),
   doLogout: () => {
-    logout().finally(() =>
+    // Silencioso: salir siempre limpia el estado local, haya o no sesión
+    // en el servidor (evita errores en consola al expirar).
+    logout().catch(() => {}).finally(() =>
       set({ who: null, authed: false, isAdmin: false, canWrite: false }),
     );
   },

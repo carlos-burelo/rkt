@@ -40,7 +40,30 @@ func roleLevel(r string) int {
 	return 0
 }
 
-// setSessionCookie fija la cookie httpOnly. Secure solo cuando el request
+// sameOriginLoopback igual que comparación de hosts, pero localhost,
+// 127.0.0.1 y ::1 (con cualquier puerto) cuentan como el mismo origen.
+func sameOriginLoopback(originHost, reqHost string) bool {
+	if strings.EqualFold(originHost, reqHost) {
+		return true
+	}
+	return isLoopbackHost(hostOnly(originHost)) && isLoopbackHost(hostOnly(reqHost))
+}
+
+func hostOnly(h string) string {
+	if i := strings.LastIndex(h, ":"); i >= 0 {
+		if strings.HasSuffix(h, "]") {
+			return h
+		}
+		return h[:i]
+	}
+	return h
+}
+
+func isLoopbackHost(h string) bool {
+	h = strings.ToLower(strings.Trim(h, "[]"))
+	return h == "localhost" || h == "127.0.0.1" || h == "::1"
+}
+
 // llegó por TLS: el dashboard local usa HTTP en loopback.
 func setSessionCookie(w http.ResponseWriter, r *http.Request, tok string) {
 	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
@@ -63,12 +86,14 @@ func bearerOf(r *http.Request) string {
 
 // RequireAuth cualquier sesión válida. Inyecta usuario/rol en contexto.
 // Rechaza mutaciones con Origin de otro host (defensa CSRF además de SameSite).
+// localhost/127.0.0.1/::1 se consideran el mismo origen (dev con proxy
+// Vite: el navegador manda Origin localhost y el backend ve 127.0.0.1).
 func RequireAuth(db *store.DB, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
 			if origin := r.Header.Get("Origin"); origin != "" {
 				u, err := url.Parse(origin)
-				if err != nil || !strings.EqualFold(u.Host, r.Host) {
+				if err != nil || !sameOriginLoopback(u.Host, r.Host) {
 					writeErr(w, http.StatusForbidden, "origen no permitido")
 					return
 				}

@@ -1,4 +1,4 @@
-import { Power } from "lucide-react";
+import { History, KeyRound, Power, Trash2 } from "lucide-react";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Avatar } from "../../shared/components/ui";
 import { ConfirmButton } from "../../shared/components/ConfirmButton";
@@ -44,21 +44,22 @@ export function UserRow({ u }: { u: User }) {
             name={u.name}
             self={false}
             onSaved={refresh}
-            trigger={<DropdownMenuItem>{t("system.users.passwordTitle")}</DropdownMenuItem>}
+            trigger={<DropdownMenuItem><KeyRound className="h-3.5 w-3.5" aria-hidden />{t("system.users.passwordTitle")}</DropdownMenuItem>}
           />
           <SessionsDialog
             name={u.name}
             onChanged={refresh}
-            trigger={<DropdownMenuItem>{t("system.users.sessions")}</DropdownMenuItem>}
+            trigger={<DropdownMenuItem><History className="h-3.5 w-3.5" aria-hidden />{t("system.users.sessions")}</DropdownMenuItem>}
           />
           <DropdownMenuItem disabled={self} onSelect={() => toggle(u.name, !u.disabled)}>
-            <Power className="h-3 w-3" /> {u.disabled ? t("system.users.enable") : t("system.users.disable")}
+            <Power className="h-3.5 w-3.5" /> {u.disabled ? t("system.users.enable") : t("system.users.disable")}
           </DropdownMenuItem>
           <ConfirmButton
             disabled={self}
             title={self ? t("system.users.cannotDeleteSelf") : t("system.users.deleteTitle", { name: u.name })}
             confirmLabel={t("common.confirm")}
             onConfirm={() => remove(u.name)}
+            icon={<Trash2 className="h-3.5 w-3.5" aria-hidden />}
           />
         </RowMenu>
       </div>

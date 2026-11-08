@@ -12,6 +12,7 @@ export function ConfirmButton({
   className,
   disabled,
   size = "xs",
+  icon,
 }: {
   onConfirm: () => void;
   label?: string;
@@ -20,6 +21,7 @@ export function ConfirmButton({
   className?: string;
   disabled?: boolean;
   size?: "xs" | "sm";
+  icon?: React.ReactNode;
 }) {
   const [armed, setArmed] = useState(false);
 
@@ -46,6 +48,7 @@ export function ConfirmButton({
         onConfirm();
       }}
     >
+      {icon}
       {armed ? confirmLabel : label}
     </Button>
   );

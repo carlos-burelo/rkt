@@ -1,4 +1,4 @@
-import { Power, Send } from "lucide-react";
+import { Power, Send, Pencil, History, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Dot, StateRail } from "../../shared/components/ui";
@@ -45,16 +45,17 @@ export function RuleRow({ id }: { id: number }) {
         {canWrite && (
           <RowMenu label={t("ops.alerts.rowActions", { id: r.id })}>
             <DropdownMenuItem onClick={() => toggle(r)}>
-              <Power className="h-3 w-3" /> {r.enabled ? t("ops.alerts.disable") : t("ops.alerts.enable")}
+              <Power className="h-3.5 w-3.5" /> {r.enabled ? t("ops.alerts.disable") : t("ops.alerts.enable")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => test(r.id).then((m) => { if (m) toast.success(m); })}>
-              <Send className="h-3 w-3" /> {t("ops.alerts.test")}
+              <Send className="h-3.5 w-3.5" /> {t("ops.alerts.test")}
             </DropdownMenuItem>
-            <RuleEdit rule={r} channels={channels} trigger={<DropdownMenuItem>{t("common.edit")}</DropdownMenuItem>} />
-            <FireHistory rule={r} trigger={<DropdownMenuItem>{t("ops.alerts.history")}</DropdownMenuItem>} />
+            <RuleEdit rule={r} channels={channels} trigger={<DropdownMenuItem><Pencil className="h-3.5 w-3.5" aria-hidden />{t("common.edit")}</DropdownMenuItem>} />
+            <FireHistory rule={r} trigger={<DropdownMenuItem><History className="h-3.5 w-3.5" aria-hidden />{t("ops.alerts.history")}</DropdownMenuItem>} />
             <ConfirmButton
               title={t("ops.alerts.deleteTitle", { id: r.id })}
               onConfirm={() => remove(r.id)}
+              icon={<Trash2 className="h-3.5 w-3.5" aria-hidden />}
             />
           </RowMenu>
         )}

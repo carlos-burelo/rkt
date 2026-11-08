@@ -1,4 +1,4 @@
-import { Monitor, Moon, Sun } from "lucide-react";
+import { LogOut, Monitor, Moon, Sun } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuItem,
@@ -48,8 +48,8 @@ export function UserMenu() {
             );
           })}
         </DropdownMenuRadioGroup>
-        <DropdownMenuItem onClick={() => doLogout()} className="font-mono text-[11px]">
-          {t("shell.logout")}
+        <DropdownMenuItem variant="destructive" onClick={() => doLogout()} className="font-mono text-[11px]">
+          <LogOut className="h-3.5 w-3.5" aria-hidden /> {t("shell.logout")}
         </DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>
