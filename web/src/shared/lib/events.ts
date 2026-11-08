@@ -149,8 +149,7 @@ function connect() {
   });
   cur.onerror = () => {
     if (stopped || es !== cur) return;
-    setConn("retrying");
-    scheduleEnsure();
+    scheduleRetry();
   };
 }
 
