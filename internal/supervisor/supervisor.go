@@ -277,6 +277,12 @@ func (m *Manager) Restart(name string) bool {
 		if alive {
 			a.killCurrent()
 		} else {
+			// Sin proceso vivo no hay muerte "pedida" que marcar: el flag
+			// quedaría true y la primera muerte natural del proceso nuevo
+			// se clasificaría intentional (sin crash, sin backoff).
+			a.mu.Lock()
+			a.intentional = false
+			a.mu.Unlock()
 			go a.loop()
 		}
 		return true
@@ -345,6 +351,11 @@ func (m *Manager) SwapAndRestart(name string, swap func() error) error {
 	default:
 	}
 	if !alive {
+		// Sin proceso vivo: el flag intentional quedaría stale y la primera
+		// muerte natural del proceso nuevo no contaría como crash.
+		a.mu.Lock()
+		a.intentional = false
+		a.mu.Unlock()
 		go a.loop()
 	}
 	return err
@@ -500,7 +511,7 @@ func (a *app) loop() {
 			}
 		}
 
-		if fast && crashes > maxCrashes {
+		if fast && crashes >= maxCrashes {
 			a.mu.Lock()
 			a.failed = true
 			a.mu.Unlock()
@@ -516,25 +527,33 @@ func (a *app) loop() {
 		n := a.restarts
 		a.mu.Unlock()
 		a.log.Warn("app murió, reinicio", "intento", n, "en", delay.String(), "uptime", uptime.String())
+		timer := time.NewTimer(delay)
 		select {
 		case <-a.stopCh:
+			timer.Stop()
 			return
 		case <-a.restartC:
 			// restart manual: sin espera
+			timer.Stop()
 		case <-a.resumeC:
 			// resume tardío de SwapAndRestart: sin espera
-		case <-time.After(delay):
+			timer.Stop()
+		case <-timer.C:
 		}
 	}
 }
 
 // backoffFor duplica por crash rápido seguido, topado a maxBackoff.
+// base <= 0 (no llega por config validada, sí por tests) = sin espera.
 func backoffFor(base time.Duration, consec int) time.Duration {
+	if base <= 0 {
+		return 0
+	}
 	d := base
 	for i := 0; i < consec && d < maxBackoff; i++ {
 		d *= 2
 	}
-	if d > maxBackoff || d <= 0 {
+	if d > maxBackoff {
 		return maxBackoff
 	}
 	return d
