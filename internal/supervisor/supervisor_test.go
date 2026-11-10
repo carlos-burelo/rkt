@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -337,4 +339,50 @@ func TestSwapLiveAdoptaCanario(t *testing.T) {
 	if err := m.SwapLive("nadie", canario, "", ""); err == nil {
 		t.Fatal("app inexistente debe fallar")
 	}
+}
+
+func TestBlueGreenCanarioHTTP(t *testing.T) {
+	if _, err := exec.LookPath("python"); err != nil {
+		t.Skip("sin python")
+	}
+	script := `import http.server,os
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200); self.end_headers(); self.wfile.write(b"ok")
+    def log_message(self, *a): pass
+http.server.HTTPServer(("127.0.0.1", int(os.environ["PORT"])), H).serve_forever()`
+	app := app1("web", "python", []string{"-c", script}, time.Second, time.Second)
+	m := New([]config.App{app}, nil, t.TempDir(), testLog(t))
+	defer m.Stop()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
+	_ = ln.Close()
+
+	canario, err := m.StartCanary("web", t.TempDir(), port, io.Discard)
+	if err != nil {
+		t.Fatalf("StartCanary: %v", err)
+	}
+	url := "http://127.0.0.1:" + port + "/"
+	waitFor(t, 15*time.Second, func() bool {
+		resp, err := http.Get(url)
+		if err != nil {
+			return false
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}, "canario responde HTTP")
+
+	if err := m.SwapLive("web", canario, "", ""); err != nil {
+		t.Fatalf("SwapLive: %v", err)
+	}
+	// mismo proceso, sin reinicio: sigue respondiendo
+	resp, err := http.Get(url)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("tras SwapLive el canario no responde: %v (status %d)", err, resp.StatusCode)
+	}
+	_ = resp.Body.Close()
 }
