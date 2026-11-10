@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -194,18 +195,20 @@ func (d *DB) UpdateChannel(id int64, name, url string, enabled bool) error {
 
 // DeleteChannel borra un canal y desasigna reglas.
 func (d *DB) DeleteChannel(id int64) error {
-	if _, err := d.sql.Exec(`UPDATE alert_rules SET channel_id=0 WHERE channel_id=?`, id); err != nil {
-		return err
-	}
-	res, err := d.sql.Exec(`DELETE FROM alert_channels WHERE id=?`, id)
-	if err != nil {
-		return err
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("canal #%d inexistente", id)
-	}
-	return d.bumpVersion()
+	return d.WithTx(context.Background(), func(tx *Tx) error {
+		if _, err := tx.Exec(`UPDATE alert_rules SET channel_id=0 WHERE channel_id=?`, id); err != nil {
+			return err
+		}
+		res, err := tx.Exec(`DELETE FROM alert_channels WHERE id=?`, id)
+		if err != nil {
+			return err
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			return fmt.Errorf("canal #%d inexistente", id)
+		}
+		return bumpVersion(tx)
+	})
 }
 
 // AddFire guarda un disparo.

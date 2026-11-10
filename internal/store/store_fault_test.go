@@ -76,9 +76,9 @@ func TestScanErroresConVistas(t *testing.T) {
 			case "alerts":
 				_, _ = db.AddRule("a", "failed", 1, 60)
 			case "apps":
-				_ = db.UpsertApp(&config.App{Name: "a", Command: "x", Env: map[string]string{}})
+				_ = db.ImportFleet(&config.Config{Apps: []config.App{{Name: "a", Command: "x", Env: map[string]string{}}}})
 			case "routes":
-				_, _ = db.AddRoute([]string{"a.test"}, "http://127.0.0.1:1")
+				_ = db.ImportFleet(&config.Config{Routes: []config.Route{{Hosts: []string{"a.test"}, Target: "http://127.0.0.1:1"}}})
 			case "deployments":
 				_, _ = db.InsertDeployment("a", "r", "", "")
 			case "events":
@@ -96,11 +96,13 @@ func TestScanErroresConVistas(t *testing.T) {
 }
 
 func TestTriggersDeError(t *testing.T) {
-	// routes INSERT (AddRoute e ImportFleet)
+	// routes INSERT
 	db := faultDB(t)
 	exec(t, db, `CREATE TRIGGER no_routes BEFORE INSERT ON routes BEGIN SELECT RAISE(ABORT,'no'); END;`)
-	if _, err := db.AddRoute([]string{"a.test"}, "http://127.0.0.1:1"); err == nil {
-		t.Fatal("AddRoute debía fallar por trigger")
+	if err := db.ImportFleet(&config.Config{
+		Routes: []config.Route{{Hosts: []string{"a.test"}, Target: "http://127.0.0.1:1"}},
+	}); err == nil {
+		t.Fatal("ImportFleet ruta debía fallar por trigger")
 	}
 	if err := db.ImportFleet(&config.Config{
 		Apps:   []config.App{{Name: "a", Command: "x"}},
@@ -118,7 +120,7 @@ func TestTriggersDeError(t *testing.T) {
 
 	// apps DELETE
 	db = faultDB(t)
-	_ = db.UpsertApp(&config.App{Name: "a", Command: "x"})
+	_ = db.ImportFleet(&config.Config{Apps: []config.App{{Name: "a", Command: "x"}}})
 	exec(t, db, `CREATE TRIGGER no_apps_del BEFORE DELETE ON apps BEGIN SELECT RAISE(ABORT,'no'); END;`)
 	if err := db.ImportFleet(&config.Config{}); err == nil {
 		t.Fatal("ImportFleet delete apps debía fallar")
@@ -126,7 +128,7 @@ func TestTriggersDeError(t *testing.T) {
 
 	// routes DELETE
 	db = faultDB(t)
-	_, _ = db.AddRoute([]string{"a.test"}, "http://127.0.0.1:1")
+	_ = db.ImportFleet(&config.Config{Routes: []config.Route{{Hosts: []string{"a.test"}, Target: "http://127.0.0.1:1"}}})
 	exec(t, db, `CREATE TRIGGER no_routes_del BEFORE DELETE ON routes BEGIN SELECT RAISE(ABORT,'no'); END;`)
 	if err := db.ImportFleet(&config.Config{}); err == nil {
 		t.Fatal("ImportFleet delete routes debía fallar")
@@ -249,11 +251,11 @@ func TestRamasRestantes(t *testing.T) {
 		t.Fatal("LoadFleet sin routes debía fallar")
 	}
 
-	// AddRoute: fallo al subir versión (meta)
+	// AddRoute: fallo al subir versión (meta) — el bump vive en ImportFleet
 	db = faultDB(t)
 	exec(t, db, `CREATE TRIGGER no_meta3 BEFORE INSERT ON meta BEGIN SELECT RAISE(ABORT,'no'); END;`)
-	if _, err := db.AddRoute([]string{"a.test"}, "http://127.0.0.1:1"); err == nil {
-		t.Fatal("AddRoute debía fallar en bumpVersion")
+	if err := db.ImportFleet(&config.Config{Routes: []config.Route{{Hosts: []string{"a.test"}, Target: "http://127.0.0.1:1"}}}); err == nil {
+		t.Fatal("ImportFleet debía fallar en bumpVersion")
 	}
 
 	// ImportFleet: fallo en la fila de meta
@@ -282,8 +284,10 @@ func TestRamasRestantes(t *testing.T) {
 // en la segunda fila) para cubrir rows.Err.
 func TestLoadFleetRowsErr(t *testing.T) {
 	db := faultDB(t)
-	_ = db.UpsertApp(&config.App{Name: "a", Command: "x", Env: map[string]string{}})
-	_ = db.UpsertApp(&config.App{Name: "b", Command: "x", Env: map[string]string{}})
+	_ = db.ImportFleet(&config.Config{Apps: []config.App{
+		{Name: "a", Command: "x", Env: map[string]string{}},
+		{Name: "b", Command: "x", Env: map[string]string{}},
+	}})
 	exec(t, db, `ALTER TABLE apps RENAME TO apps_real`)
 	exec(t, db, `CREATE VIEW apps AS SELECT name, runtime, command,
 		CASE WHEN name='b' THEN json_extract('no-json','$') ELSE args END AS args,

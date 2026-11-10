@@ -237,6 +237,12 @@ func Open(path string) (*DB, error) {
 			return nil, fmt.Errorf("%s: %w", p, err)
 		}
 	}
+	// La DB guarda env en claro: restringe a 0600 (Unix). En Windows los
+	// permisos los manda la ACL del instalador (SYSTEM + Admins), no chmod.
+	if err := os.Chmod(path, 0o600); err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("chmod %s: %w", path, err)
+	}
 	db := &DB{sql: sqlDB}
 	if err := db.migrate(); err != nil {
 		sqlDB.Close()

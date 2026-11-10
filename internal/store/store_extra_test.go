@@ -59,12 +59,11 @@ func TestFleetRoundtripYColisiones(t *testing.T) {
 		},
 	}
 	a.SetDelays(2*time.Second, 10*time.Second)
-	if err := db.UpsertApp(a); err != nil {
+	if err := db.ImportFleet(&config.Config{
+		Apps:   []config.App{*a},
+		Routes: []config.Route{{Hosts: []string{"w.test"}, Target: "http://127.0.0.1:3000"}},
+	}); err != nil {
 		t.Fatal(err)
-	}
-	id, err := db.AddRoute([]string{"w.test"}, "http://127.0.0.1:3000")
-	if err != nil || id == 0 {
-		t.Fatalf("AddRoute = %d %v", id, err)
 	}
 	fleet, err := db.LoadFleet()
 	if err != nil {
@@ -92,10 +91,10 @@ func TestFleetRoundtripYColisiones(t *testing.T) {
 		t.Fatalf("cron = %+v", got.Cron)
 	}
 
-	// Upsert actualiza estado y cron (no solo inserta).
+	// ImportFleet actualiza estado y cron (no solo inserta).
 	a.Disabled = false
 	a.Cron = append(a.Cron, config.CronJob{Name: "cleanup", Schedule: "*/5 * * * *", Command: "node clean.js"})
-	if err := db.UpsertApp(a); err != nil {
+	if err := db.ImportFleet(&config.Config{Apps: []config.App{*a}}); err != nil {
 		t.Fatal(err)
 	}
 	fleet, err = db.LoadFleet()
@@ -160,7 +159,7 @@ func TestRuntimeExternalRoundtrip(t *testing.T) {
 	dir := t.TempDir()
 	app := config.App{Name: "ext", Runtime: config.RuntimeExternal, Dir: dir, Env: map[string]string{"PORT": "3999"}}
 	app.SetDelays(time.Second, time.Second)
-	if err := db.UpsertApp(&app); err != nil {
+	if err := db.ImportFleet(&config.Config{Apps: []config.App{app}}); err != nil {
 		t.Fatal(err)
 	}
 	f, err := db.LoadFleet()
@@ -408,12 +407,6 @@ func TestOpenCloseYErrores(t *testing.T) {
 	}
 	if err := db.SetSetting("k", "v"); err == nil {
 		t.Fatal("SetSetting cerrada debe fallar")
-	}
-	if _, err := db.AddRoute(nil, ""); err == nil {
-		t.Fatal("AddRoute cerrada debe fallar")
-	}
-	if err := db.UpsertApp(&config.App{Name: "x"}); err == nil {
-		t.Fatal("UpsertApp cerrada debe fallar")
 	}
 	if err := db.ImportFleet(&config.Config{}); err == nil {
 		t.Fatal("ImportFleet cerrada debe fallar")

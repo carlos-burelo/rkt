@@ -4,6 +4,7 @@
 package store
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -95,13 +96,14 @@ func (d *DB) CreateUser(name, password, role string) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.sql.Exec(
-		`INSERT INTO users(name, pass_hash, role, created_at) VALUES(?,?,?,?)`,
-		name, string(hash), role, time.Now().UTC().Format(time.RFC3339))
-	if err != nil {
-		return fmt.Errorf("alta %q: %w", name, err)
-	}
-	return d.bumpVersion()
+	return d.WithTx(context.Background(), func(tx *Tx) error {
+		if _, err := tx.Exec(
+			`INSERT INTO users(name, pass_hash, role, created_at) VALUES(?,?,?,?)`,
+			name, string(hash), role, time.Now().UTC().Format(time.RFC3339)); err != nil {
+			return fmt.Errorf("alta %q: %w", name, err)
+		}
+		return bumpVersion(tx)
+	})
 }
 
 // ListUsers sin hashes.
@@ -159,32 +161,40 @@ func (d *DB) ImportUsers(rows []UserDump) error {
 		if !ValidUserName(u.Name) || !validRole(u.Role) || u.PassHash == "" {
 			return fmt.Errorf("usuario inválido %q", u.Name)
 		}
-		if _, err := d.sql.Exec(
-			`INSERT INTO users(name, pass_hash, role, created_at, updated_at, last_login, disabled) VALUES(?,?,?,?,?,?,?)`,
-			u.Name, u.PassHash, u.Role, u.CreatedAt, u.UpdatedAt, u.LastLogin, u.Disabled); err != nil {
-			return fmt.Errorf("importar %q: %w", u.Name, err)
-		}
 	}
-	return d.bumpVersion()
+	return d.WithTx(context.Background(), func(tx *Tx) error {
+		for _, u := range rows {
+			if _, err := tx.Exec(
+				`INSERT INTO users(name, pass_hash, role, created_at, updated_at, last_login, disabled) VALUES(?,?,?,?,?,?,?)`,
+				u.Name, u.PassHash, u.Role, u.CreatedAt, u.UpdatedAt, u.LastLogin, u.Disabled); err != nil {
+				return fmt.Errorf("importar %q: %w", u.Name, err)
+			}
+		}
+		return bumpVersion(tx)
+	})
 }
 
 // DeleteUser borra; rechaza si es el último admin.
 func (d *DB) DeleteUser(name string) error {
-	var role string
-	var admins int
-	if err := d.sql.QueryRow(
-		`SELECT role, (SELECT COUNT(*) FROM users WHERE role='admin') FROM users WHERE name=?`, name).
-		Scan(&role, &admins); err != nil {
-		return fmt.Errorf("usuario %q inexistente", name)
-	}
-	if role == RoleAdmin && admins <= 1 {
-		return fmt.Errorf("no se puede borrar el último admin")
-	}
-	if _, err := d.sql.Exec(`DELETE FROM users WHERE name=?`, name); err != nil {
-		return err
-	}
-	_, _ = d.sql.Exec(`DELETE FROM sessions WHERE user=?`, name)
-	return d.bumpVersion()
+	return d.WithTx(context.Background(), func(tx *Tx) error {
+		var role string
+		var admins int
+		if err := tx.QueryRow(
+			`SELECT role, (SELECT COUNT(*) FROM users WHERE role='admin') FROM users WHERE name=?`, name).
+			Scan(&role, &admins); err != nil {
+			return fmt.Errorf("usuario %q inexistente", name)
+		}
+		if role == RoleAdmin && admins <= 1 {
+			return fmt.Errorf("no se puede borrar el último admin")
+		}
+		if _, err := tx.Exec(`DELETE FROM users WHERE name=?`, name); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM sessions WHERE user=?`, name); err != nil {
+			return err
+		}
+		return bumpVersion(tx)
+	})
 }
 
 // SetPassword rota password e invalida sesiones (re-login).
@@ -192,19 +202,23 @@ func (d *DB) SetPassword(name, password string) error {
 	if len(password) < 12 {
 		return fmt.Errorf("password mínimo 12 caracteres")
 	}
-	var exists string
-	if err := d.sql.QueryRow(`SELECT name FROM users WHERE name=?`, name).Scan(&exists); err != nil {
-		return fmt.Errorf("usuario %q inexistente", name)
-	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	if _, err := d.sql.Exec(`UPDATE users SET pass_hash=? WHERE name=?`, string(hash), name); err != nil {
-		return err
-	}
-	_, _ = d.sql.Exec(`DELETE FROM sessions WHERE user=?`, name)
-	return d.bumpVersion()
+	return d.WithTx(context.Background(), func(tx *Tx) error {
+		var exists string
+		if err := tx.QueryRow(`SELECT name FROM users WHERE name=?`, name).Scan(&exists); err != nil {
+			return fmt.Errorf("usuario %q inexistente", name)
+		}
+		if _, err := tx.Exec(`UPDATE users SET pass_hash=? WHERE name=?`, string(hash), name); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM sessions WHERE user=?`, name); err != nil {
+			return err
+		}
+		return bumpVersion(tx)
+	})
 }
 
 // CheckPassword compara password (tiempo constante en hash bcrypt).
@@ -286,22 +300,26 @@ func (d *DB) SetUserRole(name, role string) error {
 
 // SetUserDisabled habilita/deshabilita y revoca sesiones al deshabilitar.
 func (d *DB) SetUserDisabled(name string, disabled bool) error {
-	var role string
-	var admins int
-	if err := d.sql.QueryRow(`SELECT role, (SELECT COUNT(*) FROM users WHERE role='admin') FROM users WHERE name=?`, name).
-		Scan(&role, &admins); err != nil {
-		return fmt.Errorf("usuario %q inexistente", name)
-	}
-	if disabled && role == RoleAdmin && admins <= 1 {
-		return fmt.Errorf("no se puede deshabilitar el último admin")
-	}
-	if _, err := d.sql.Exec(`UPDATE users SET disabled=?, updated_at=? WHERE name=?`, disabled, time.Now().UTC().Format(time.RFC3339), name); err != nil {
-		return err
-	}
-	if disabled {
-		_, _ = d.sql.Exec(`DELETE FROM sessions WHERE user=?`, name)
-	}
-	return nil
+	return d.WithTx(context.Background(), func(tx *Tx) error {
+		var role string
+		var admins int
+		if err := tx.QueryRow(`SELECT role, (SELECT COUNT(*) FROM users WHERE role='admin') FROM users WHERE name=?`, name).
+			Scan(&role, &admins); err != nil {
+			return fmt.Errorf("usuario %q inexistente", name)
+		}
+		if disabled && role == RoleAdmin && admins <= 1 {
+			return fmt.Errorf("no se puede deshabilitar el último admin")
+		}
+		if _, err := tx.Exec(`UPDATE users SET disabled=?, updated_at=? WHERE name=?`, disabled, time.Now().UTC().Format(time.RFC3339), name); err != nil {
+			return err
+		}
+		if disabled {
+			if _, err := tx.Exec(`DELETE FROM sessions WHERE user=?`, name); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // Audit registra una acción administrativa.

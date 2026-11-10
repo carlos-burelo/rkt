@@ -91,28 +91,6 @@ func bumpVersion(q execer) error {
 	return err
 }
 
-// UpsertApp crea/actualiza app + bump.
-func (d *DB) UpsertApp(a *config.App) error {
-	if err := insertApp(d.sql, a); err != nil {
-		return err
-	}
-	return d.bumpVersion()
-}
-
-// AddRoute agrega ruta + bump. Devuelve id.
-func (d *DB) AddRoute(hosts []string, target string) (int64, error) {
-	h, _ := json.Marshal(hosts)
-	res, err := d.sql.Exec(`INSERT INTO routes(hosts, target) VALUES(?,?)`, string(h), target)
-	if err != nil {
-		return 0, err
-	}
-	id, _ := res.LastInsertId()
-	if err := d.bumpVersion(); err != nil {
-		return 0, err
-	}
-	return id, nil
-}
-
 func insertApp(ex execer, a *config.App) error {
 	args, _ := json.Marshal(a.Args)
 	env, _ := json.Marshal(a.Env)

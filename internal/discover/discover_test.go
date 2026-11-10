@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/store"
 )
@@ -195,7 +196,7 @@ func TestFreePortSkipsUsed(t *testing.T) {
 	fmt.Sscanf(used[strings.LastIndex(used, ":")+1:], "%d", &port)
 	db.SetSetting("port_pool", fmt.Sprintf("%d-%d", port, port+1))
 	// registra el ocupado en routes para probar ambas vías
-	db.AddRoute([]string{"x.test"}, fmt.Sprintf("http://127.0.0.1:%d", port))
+	_ = db.ImportFleet(&config.Config{Routes: []config.Route{{Hosts: []string{"x.test"}, Target: fmt.Sprintf("http://127.0.0.1:%d", port)}}})
 
 	got, err := freePort(db)
 	if err != nil {
