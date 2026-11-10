@@ -59,10 +59,10 @@ func (d *Deps) handleEnvSub(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleGlobalEnv PATCH /env/global {set,unset}.
+// handleGlobalEnv PUT /env/global {set,unset}.
 func (d *Deps) handleGlobalEnv(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPatch {
-		writeErr(w, http.StatusMethodNotAllowed, "solo PATCH")
+	if r.Method != http.MethodPut {
+		writeErr(w, http.StatusMethodNotAllowed, "solo PUT")
 		return
 	}
 	set, unset, ok := decodeEnvPatch(w, r)

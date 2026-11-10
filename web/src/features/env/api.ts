@@ -16,7 +16,7 @@ export async function getGlobalValue(key: string): Promise<string> {
 }
 
 export async function patchGlobalEnv(set: Record<string, string>, unset: string[] = []): Promise<void> {
-  await api("/api/v1/env/global", { method: "PATCH", body: JSON.stringify({ set, unset }) });
+  await api("/api/v1/env/global", { method: "PUT", body: JSON.stringify({ set, unset }) });
 }
 
 export async function importGlobalEnv(raw: string): Promise<string[]> {

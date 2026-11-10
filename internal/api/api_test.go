@@ -466,7 +466,7 @@ func TestEnvCRUD(t *testing.T) {
 		t.Fatalf("viewer env valor: quiere 403, got %d", rec.Code)
 	}
 	// viewer no muta env por app (PATCH)
-	req := httptest.NewRequest(http.MethodPatch, "/api/v1/apps/w/env",
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/apps/w/env",
 		strings.NewReader(`{"set":{"X":"1"}}`))
 	req.Header.Set("Authorization", "Bearer "+visTok)
 	rec = httptest.NewRecorder()
@@ -496,7 +496,7 @@ func TestEnvCRUD(t *testing.T) {
 		t.Fatalf("get value: %d %s", rec.Code, rec.Body.String())
 	}
 	// patch set + unset
-	req = httptest.NewRequest(http.MethodPatch, "/api/v1/apps/w/env",
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/apps/w/env",
 		strings.NewReader(`{"set":{"N":"1"},"unset":["K"]}`))
 	req.Header.Set("Authorization", "Bearer "+opTok)
 	rec = httptest.NewRecorder()
@@ -519,7 +519,7 @@ func TestEnvCRUD(t *testing.T) {
 		t.Fatalf("import: %d %s", rec.Code, rec.Body.String())
 	}
 	// PORT no se toca por entorno
-	req = httptest.NewRequest(http.MethodPatch, "/api/v1/apps/w/env",
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/apps/w/env",
 		strings.NewReader(`{"set":{"PORT":"9"}}`))
 	req.Header.Set("Authorization", "Bearer "+opTok)
 	rec = httptest.NewRecorder()
@@ -535,7 +535,7 @@ func TestGlobalEnv(t *testing.T) {
 	h := NewHandler(d)
 	opTok := loginAs(t, h, db, "op", store.RoleOperator)
 
-	req := httptest.NewRequest(http.MethodPatch, "/api/v1/env/global",
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/env/global",
 		strings.NewReader(`{"set":{"G":"1"},"unset":[]}`))
 	req.Header.Set("Authorization", "Bearer "+opTok)
 	rec := httptest.NewRecorder()

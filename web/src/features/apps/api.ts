@@ -30,7 +30,7 @@ export async function listGithubRepos(): Promise<GithubRepo[]> {
 }
 
 export async function patchAppEnv(app: string, set: Record<string, string>, unset: string[] = []): Promise<void> {
-  await api(`/api/v1/apps/${app}/env`, { method: "PATCH", body: JSON.stringify({ set, unset }) });
+  await api(`/api/v1/apps/${app}/env`, { method: "PUT", body: JSON.stringify({ set, unset }) });
 }
 
 export async function importAppEnv(app: string, raw: string): Promise<string[]> {

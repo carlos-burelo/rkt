@@ -246,7 +246,7 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, envKeys(a.Env))
-	case action == "env" && r.Method == http.MethodPatch:
+	case action == "env" && r.Method == http.MethodPut:
 		if !requireOperator(w, r) {
 			return
 		}
