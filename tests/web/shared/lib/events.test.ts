@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
-import { subscribeFleet } from "./events";
-import { useFleetBus } from "../../features/overview/fleet.store";
+import { subscribeFleet } from "@/shared/lib/events";
+import { useFleetBus } from "@/features/overview/fleet.store";
 
 type Listener = (e: { data: string }) => void;
 

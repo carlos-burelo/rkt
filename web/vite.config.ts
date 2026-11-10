@@ -1,10 +1,20 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { VitePWA } from "vite-plugin-pwa";
 
+const fromConfig = (path: string) =>
+  decodeURIComponent(new URL(path, import.meta.url).pathname).replace(/^\/([A-Za-z]:\/)/, "$1");
+
 export default defineConfig({
+  test: { include: ["../tests/web/**/*.test.ts"] },
+  resolve: {
+    alias: {
+      "@": fromConfig("./src"),
+      vitest: fromConfig("./node_modules/vitest"),
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),

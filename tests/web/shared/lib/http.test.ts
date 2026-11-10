@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextDelay, POLL_BASE_MS, POLL_MAX_MS } from "./http";
+import { nextDelay, POLL_BASE_MS, POLL_MAX_MS } from "@/shared/lib/http";
 
 describe("nextDelay", () => {
   it("base 5s en el primer fallo", () => {

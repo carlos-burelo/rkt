@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { applyFleetEvent, useFleetBus } from "./fleet.store";
+import { applyFleetEvent, useFleetBus } from "@/features/overview/fleet.store";
 
 function reset() {
   useFleetBus.setState({ status: null, deps: [], evs: [], metas: [], seq: 0, conn: "retrying", loading: true });

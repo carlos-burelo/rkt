@@ -36,6 +36,8 @@ scripts/shots/node_modules/
 # cobertura local
 /cover.out
 /cover
+/.gocache/
+/.playwright/
 
 # estado local del servicio (db, logs, certs)
 /logs/

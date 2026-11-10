@@ -171,11 +171,14 @@ el remoto.
 
 ```powershell
 gofmt -l .
-go vet ./...
-go test ./...
+go run ./tests/run.go vet ./...
+go run ./tests/run.go test ./... -count=1
 pnpm --dir web exec tsc --noEmit
+  pnpm --dir web test
 pnpm --dir web build
 ```
+
+  Suite de navegador y organización de pruebas: [tests/README.md](tests/README.md).
 
 Las capturas del dashboard se generan con datos ficticios (sin datos reales)
 desde `scripts/shots`: `pnpm --dir scripts/shots mock` con `web` en `:5173`.

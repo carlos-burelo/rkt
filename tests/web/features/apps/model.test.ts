@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSaveApp, normalizeDomain } from "./model";
+import { canSaveApp, normalizeDomain } from "@/features/apps/model";
 
 describe("canSaveApp", () => {
   it("permite externas sin command", () => {

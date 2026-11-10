@@ -60,11 +60,11 @@ jobs:
         shell: pwsh
 
       - name: Vet
-        run: go vet ./...
+        run: go run ./tests/run.go vet ./...
         shell: pwsh
 
       - name: Tests (sin cache)
-        run: go test ./... -count=1
+        run: go run ./tests/run.go test ./... -count=1
         shell: pwsh
 
       - name: Cobertura mínima en paquetes blindados
@@ -83,7 +83,7 @@ jobs:
           foreach ($p in $locked) {
             $min = 100
             if ($thresholds.ContainsKey($p)) { $min = $thresholds[$p] }
-            $out = go test "./internal/$p" -count=1 -cover 2>&1
+            $out = go run ./tests/run.go test "./internal/$p" -count=1 -cover 2>&1
             $text = $out -join "`n"
             $m = [regex]::Match($text, 'coverage: ([0-9.]+)%')
             if ($LASTEXITCODE -ne 0 -or -not $m.Success -or [double]$m.Groups[1].Value -lt $min) {
@@ -98,6 +98,14 @@ jobs:
 
       - name: Build
         run: go build -trimpath -o bin/rkt.exe ./cmd/rkt-proxy
+        shell: pwsh
+
+      - name: Instalar Chromium para E2E
+        run: go run github.com/mxschmitt/playwright-go/cmd/playwright@v0.6401.0 install chromium
+        shell: pwsh
+
+      - name: Browser E2E
+        run: go test -tags=e2e ./tests/e2e -count=1
         shell: pwsh
 
   linux:
@@ -117,10 +125,10 @@ jobs:
         run: test -z "$(gofmt -l .)"
 
       - name: Vet
-        run: go vet ./...
+        run: go run ./tests/run.go vet ./...
 
       - name: Tests
-        run: go test ./... -count=1
+        run: go run ./tests/run.go test ./... -count=1
 
       - name: Build
         run: go build -trimpath -o bin/rkt ./cmd/rkt-proxy
@@ -139,4 +147,4 @@ jobs:
         run: mkdir -p web/dist && echo '<!doctype html><title>rkt</title>' > web/dist/index.html
 
       - name: Race detector
-        run: CGO_ENABLED=1 go test -race ./... -count=1 -p 1
+        run: CGO_ENABLED=1 go run ./tests/run.go test -race ./... -count=1 -p 1

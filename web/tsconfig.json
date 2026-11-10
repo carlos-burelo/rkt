@@ -10,8 +10,8 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] },
+    "paths": { "@/*": ["src/*"], "vitest": ["node_modules/vitest"] },
     "types": ["vite/client"]
   },
-  "include": ["src"]
+  "include": ["src", "../tests/web"]
 }

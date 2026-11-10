@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { useAuth } from "./store";
+import { useAuth } from "@/features/auth/store";
 
 describe("auth store", () => {
   it("setWho cierra setupRequired al completar setup/login", () => {

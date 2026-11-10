@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accessSummary, groupParsed, parseLogLine, rejectedSummary, streamOf } from "./format";
+import { accessSummary, groupParsed, parseLogLine, rejectedSummary, streamOf } from "@/features/logs/format";
 
 describe("parseLogLine", () => {
   it("parsea logfmt con tiempo, nivel, mensaje y campos", () => {

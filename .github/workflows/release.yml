@@ -31,10 +31,10 @@ jobs:
         run: pnpm --dir web install --frozen-lockfile; pnpm --dir web build
         shell: pwsh
 
-      - run: go vet ./...
+      - run: go run ./tests/run.go vet ./...
         shell: pwsh
 
-      - run: go test ./...
+      - run: go run ./tests/run.go test ./... -count=1
         shell: pwsh
 
       - name: Build windows/amd64

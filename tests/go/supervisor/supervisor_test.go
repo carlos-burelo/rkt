@@ -23,6 +23,18 @@ func testLog(t *testing.T) *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
+func pythonForTest(t *testing.T) string {
+	t.Helper()
+	for _, name := range []string{"python", "python3"} {
+		path, err := exec.LookPath(name)
+		if err == nil && exec.Command(path, "--version").Run() == nil {
+			return path
+		}
+	}
+	t.Skip("sin Python ejecutable")
+	return ""
+}
+
 func shell(t *testing.T, script string) (string, []string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -171,13 +183,7 @@ func TestMemoryLimitKills(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("Job Object con límite RAM: solo Windows")
 	}
-	py, err := exec.LookPath("python")
-	if err != nil {
-		py, err = exec.LookPath("python3")
-	}
-	if err != nil {
-		t.Skip("sin python para la prueba")
-	}
+	py := pythonForTest(t)
 	// bytearray 300MB con tope 100MB: el commit falla -> MemoryError ->
 	// python muere -> supervisor reinicia. (El job niega memoria, no
 	// mata directo: runtimes que tragan OOM no reiniciarían.)
@@ -342,16 +348,14 @@ func TestSwapLiveAdoptaCanario(t *testing.T) {
 }
 
 func TestBlueGreenCanarioHTTP(t *testing.T) {
-	if _, err := exec.LookPath("python"); err != nil {
-		t.Skip("sin python")
-	}
+	py := pythonForTest(t)
 	script := `import http.server,os
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200); self.end_headers(); self.wfile.write(b"ok")
     def log_message(self, *a): pass
 http.server.HTTPServer(("127.0.0.1", int(os.environ["PORT"])), H).serve_forever()`
-	app := app1("web", "python", []string{"-c", script}, time.Second, time.Second)
+	app := app1("web", py, []string{"-c", script}, time.Second, time.Second)
 	m := New([]config.App{app}, nil, t.TempDir(), testLog(t))
 	defer m.Stop()
 
