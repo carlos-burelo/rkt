@@ -111,8 +111,9 @@ func (l *Limiter) ipAllowed(ip string) bool {
 	return false
 }
 
-// Middleware responde 429 sin tocar el backend. Bucket por (IP, host):
-// una app pesada no consume el cupo de las demás para esa IP.
+// Middleware responde 429 sin tocar el backend. Bucket por IP: indexar por
+// Host permitiría al cliente rotar el header y crear un bucket nuevo por
+// valor, anulando el freno (el Host lo controla el atacante).
 func (l *Limiter) Middleware(next http.Handler, log *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := netutil.ClientIP(r)
@@ -120,12 +121,8 @@ func (l *Limiter) Middleware(next http.Handler, log *slog.Logger) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		host := r.Host
-		if h, _, err := net.SplitHostPort(host); err == nil {
-			host = h
-		}
-		if !l.Allow(ip + "|" + strings.ToLower(host)) {
-			log.Warn("rate limit", "ip", ip, "host", host, "path", r.URL.Path)
+		if !l.Allow(ip) {
+			log.Warn("rate limit", "ip", ip, "path", r.URL.Path)
 			w.Header().Set("Retry-After", "1")
 			http.Error(w, "demasiadas peticiones", http.StatusTooManyRequests)
 			return

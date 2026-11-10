@@ -64,6 +64,34 @@ func TestMiddleware429(t *testing.T) {
 	}
 }
 
+func TestMiddlewareHostNoEvade(t *testing.T) {
+	l := New(1, 1)
+	defer l.Stop()
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})
+	h := l.Middleware(next, log)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "9.9.9.9:1234"
+	req.Host = "a.test"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTeapot {
+		t.Fatal("primera debe pasar")
+	}
+	// misma IP, otro Host: el bucket es por IP, no por Host
+	req2 := httptest.NewRequest("GET", "/", nil)
+	req2.RemoteAddr = "9.9.9.9:1234"
+	req2.Host = "b.test"
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Fatalf("rotar Host no debe evadir: got %d, quiere 429", rec2.Code)
+	}
+}
+
 func TestAllowlistYRetryAfter(t *testing.T) {
 	l := New(1, 1, "10.0.0.0/8", "bad-cidr")
 	defer l.Stop()
