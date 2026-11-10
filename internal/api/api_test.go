@@ -148,9 +148,19 @@ func TestSetupOneShot(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"setup_required":true`) {
 		t.Fatalf("status: %d %s", rec.Code, rec.Body.String())
 	}
-	// setup crea admin + auto-login (cookie)
+	// setup remoto (no loopback) prohibido: fail-closed
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/setup",
 		strings.NewReader(`{"user":"jefe","password":"password-larga-1"}`))
+	req.RemoteAddr = "203.0.113.7:45678"
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("setup remoto: quiere 403, got %d", rec.Code)
+	}
+	// setup local crea admin + auto-login (cookie)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/setup",
+		strings.NewReader(`{"user":"jefe","password":"password-larga-1"}`))
+	req.RemoteAddr = "127.0.0.1:45678"
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -175,6 +185,7 @@ func TestSetupOneShot(t *testing.T) {
 	// segundo setup prohibido (one-shot)
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/setup",
 		strings.NewReader(`{"user":"otro","password":"password-larga-2"}`))
+	req.RemoteAddr = "127.0.0.1:45678"
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -449,6 +460,30 @@ func TestEnvCRUD(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("viewer env: quiere 403, got %d", rec.Code)
 	}
+	// viewer no lee el valor de una clave (fuga de secreto)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w/env/K", visTok))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer env valor: quiere 403, got %d", rec.Code)
+	}
+	// viewer no muta env por app (PATCH)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/apps/w/env",
+		strings.NewReader(`{"set":{"X":"1"}}`))
+	req.Header.Set("Authorization", "Bearer "+visTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer env patch: quiere 403, got %d", rec.Code)
+	}
+	// viewer no importa env por app (POST)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/apps/w/env/import",
+		strings.NewReader(`{"raw":"X=1\n"}`))
+	req.Header.Set("Authorization", "Bearer "+visTok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer env import: quiere 403, got %d", rec.Code)
+	}
 	// lista solo claves
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w/env", opTok))
@@ -462,7 +497,7 @@ func TestEnvCRUD(t *testing.T) {
 		t.Fatalf("get value: %d %s", rec.Code, rec.Body.String())
 	}
 	// patch set + unset
-	req := httptest.NewRequest(http.MethodPatch, "/api/v1/apps/w/env",
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/apps/w/env",
 		strings.NewReader(`{"set":{"N":"1"},"unset":["K"]}`))
 	req.Header.Set("Authorization", "Bearer "+opTok)
 	rec = httptest.NewRecorder()

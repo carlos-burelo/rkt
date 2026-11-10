@@ -257,7 +257,7 @@ func NewHandler(d Deps) http.Handler {
 	// setup se validan aparte por ruta para no romper el bootstrap
 	// sin usuarios).
 	audited := auditMutations(d, mux)
-	authed := RequireAuth(d.DB, audited)
+	authed := RequireAuth(d.DB, func() bool { return d.Live.Get().LocalCA }, audited)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/auth/login", "/api/v1/auth/status", "/api/v1/auth/setup":

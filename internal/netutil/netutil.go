@@ -30,3 +30,14 @@ func ClientIP(r *http.Request) string {
 	}
 	return r.RemoteAddr
 }
+
+// IsLoopbackHost true si host es localhost o una IP de loopback. Acepta
+// "localhost", "127.0.0.1" o "::1" (con o sin corchetes).
+func IsLoopbackHost(host string) bool {
+	host = strings.Trim(strings.TrimSpace(host), "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}

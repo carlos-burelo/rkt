@@ -247,10 +247,19 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, envKeys(a.Env))
 	case action == "env" && r.Method == http.MethodPatch:
+		if !requireOperator(w, r) {
+			return
+		}
 		d.patchAppEnv(w, r, name)
 	case action == "env/import" && r.Method == http.MethodPost:
+		if !requireOperator(w, r) {
+			return
+		}
 		d.handleEnvImport(w, r, name)
 	case strings.HasPrefix(action, "env/") && r.Method == http.MethodGet:
+		if !requireOperator(w, r) {
+			return
+		}
 		d.handleEnvValue(w, r, strings.TrimPrefix(action, "env/"), name)
 	default:
 		writeErr(w, http.StatusNotFound, "ruta inválida")

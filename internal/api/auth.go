@@ -40,13 +40,20 @@ func roleLevel(r string) int {
 	return 0
 }
 
-// sameOriginLoopback igual que comparación de hosts, pero localhost,
-// 127.0.0.1 y ::1 (con cualquier puerto) cuentan como el mismo origen.
-func sameOriginLoopback(originHost, reqHost string) bool {
+// sameOrigin compara el Origin con el Host del request. En producción la
+// comparación es exacta (host + puerto): un origen en otro puerto del mismo
+// host loopback no puede mutar (SameSite=Lax no distingue puertos). En dev
+// (LocalCA) localhost/127.0.0.1/::1 con cualquier puerto cuentan como el
+// mismo origen: el proxy Vite (5173) reenvía Origin localhost mientras el
+// backend ve 127.0.0.1:8090.
+func sameOrigin(originHost, reqHost string, dev bool) bool {
 	if strings.EqualFold(originHost, reqHost) {
 		return true
 	}
-	return isLoopbackHost(hostOnly(originHost)) && isLoopbackHost(hostOnly(reqHost))
+	if dev {
+		return isLoopbackHost(hostOnly(originHost)) && isLoopbackHost(hostOnly(reqHost))
+	}
+	return false
 }
 
 func hostOnly(h string) string {
@@ -86,14 +93,15 @@ func bearerOf(r *http.Request) string {
 
 // RequireAuth cualquier sesión válida. Inyecta usuario/rol en contexto.
 // Rechaza mutaciones con Origin de otro host (defensa CSRF además de SameSite).
-// localhost/127.0.0.1/::1 se consideran el mismo origen (dev con proxy
-// Vite: el navegador manda Origin localhost y el backend ve 127.0.0.1).
-func RequireAuth(db *store.DB, next http.Handler) http.Handler {
+// dev informa si el entorno es de desarrollo (LocalCA): ahí localhost/
+// 127.0.0.1/::1 se relajan (proxy Vite); en producción la comparación es
+// exacta por host + puerto.
+func RequireAuth(db *store.DB, dev func() bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
 			if origin := r.Header.Get("Origin"); origin != "" {
 				u, err := url.Parse(origin)
-				if err != nil || !sameOriginLoopback(u.Host, r.Host) {
+				if err != nil || !sameOrigin(u.Host, r.Host, dev()) {
 					writeErr(w, http.StatusForbidden, "origen no permitido")
 					return
 				}
@@ -187,9 +195,15 @@ func (d *Deps) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSetup crea el primer admin y abre sesión (one-shot).
+// Solo desde loopback: aunque el dashboard esté expuesto en LAN, el primer
+// admin no puede reclamarse en remoto (fail-closed; en remoto: rkt users add).
 func (d *Deps) handleSetup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErr(w, http.StatusMethodNotAllowed, "solo POST")
+		return
+	}
+	if !netutil.IsLoopbackHost(netutil.ClientIP(r)) {
+		writeErr(w, http.StatusForbidden, "setup solo local (usa `rkt users add`)")
 		return
 	}
 	n, err := d.DB.CountUsers()
