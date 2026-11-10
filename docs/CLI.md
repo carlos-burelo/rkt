@@ -48,8 +48,8 @@ Requieren `healthz` activado (default `127.0.0.1:8090`, solo loopback).
 | `status [--json]` | Salud: versión, backends (ok/fallo), apps (running/pid/restarts/failed) |
 | `logs [-n 50] [-f] [-app nombre]` | Últimas N líneas; `-f` sigue; `-app` lee `logs/apps/<nombre>.log` |
 | `restart <app>` | Mata y arranca al instante (salta delay, resetea crashloop, revive `failed`) |
-| `deploy <app>` | Clone + build + swap atómico + restart + health 30s + rollback auto |
-| `rollback <app>` | Devuelve `live.prev` a `live` + restart + health |
+| `deploy <app>` | Clone + build en slot inactivo + canario + corte de ruta (zero downtime) + rollback auto |
+| `rollback <app>` | Corta al slot inactivo (versión anterior) con blue-green + health |
 | `deployments [-n 20] [--app x] [--json]` | Historial SQLite (`id, app, status, rev, started_at`) |
 
 `deploy`/`rollback`/`restart`/`deployments`/`status` hablan HTTP a healthz;

@@ -33,8 +33,9 @@ Internet ──:80/:443──▶ rkt ──HTTP──▶ 127.0.0.1:3001  app ges
 - **Apps externas**: registro de host/puerto para un dev server que corre el
   humano. Solo usan proxy, TLS, access log y dashboard; no hay build, deploy ni
   supervisor.
-- **Deploy desde Git**: clone, build, swap atómico, restart, verificación y
-  rollback automático si la versión nueva no queda sana.
+- **Deploy desde Git**: clone, build en el slot inactivo, canario en puerto
+  efímero, corte de ruta y rollback automático. Zero downtime: la app nunca
+  deja de servir.
 - **GitHub App**: instalación desde el dashboard, repos personales y de
   organizaciones, auto-deploy por webhook (producción) o polling (local).
 - **Buildpacks propios**: Next, Vite, Astro, SvelteKit, Nuxt, Remix, Node, Go,
@@ -66,7 +67,7 @@ Internet ──:80/:443──▶ rkt ──HTTP──▶ 127.0.0.1:3001  app ges
 rkt arranca el proceso, lo supervisa y aplica el pipeline de deploy.
 
 ```text
-Git push ─▶ clone ─▶ build ─▶ swap live/prev ─▶ restart ─▶ health ─▶ rollback si falla
+Git push ─▶ clone ─▶ build (slot inactivo) ─▶ canario sano ─▶ corte de ruta ─▶ rollback si falla
 ```
 
 ### Externa (`external`)
