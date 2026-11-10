@@ -18,7 +18,8 @@ certs/
 AGENTS.md
 PRODUCT.md
 
-# web (monorepo): deps y build (pero .gitkeep mantiene embed compilable)
+# web (monorepo): deps y build. .gitkeep solo mantiene el dir en git;
+# go:embed ignora los archivos ocultos, así que go build exige pnpm build.
 web/node_modules/
 web/dist/*
 !web/dist/.gitkeep
@@ -26,6 +27,11 @@ scripts/shots/node_modules/
 
 # estado local de skill de diseño (no se comitea)
 .impeccable/
+
+# tooling de agentes (impeccable): no se comitea
+.github/agents/
+.github/hooks/
+.github/skills/
 
 # cobertura local
 /cover.out
