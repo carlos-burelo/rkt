@@ -230,6 +230,16 @@ func (p *Program) Run() {
 			}
 		}
 	}
+	// Reconciliar layout de deploys antes de arrancar: si un swap quedó a
+	// medias (crash entre renames), restaura live desde prev o staging.
+	for _, a := range cfg.Apps {
+		if a.External() || a.Dir == "" {
+			continue
+		}
+		if err := deploy.RecoverDir(a.Dir); err != nil {
+			p.log.Warn("layout de app sin reparar", "app", a.Name, "err", err)
+		}
+	}
 	sup.Start()
 	cronRunner.Start()
 

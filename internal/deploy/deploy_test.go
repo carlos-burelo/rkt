@@ -261,3 +261,46 @@ func TestDeployNeedsToken(t *testing.T) {
 		t.Fatal("https sin token debe fallar sin tocar red")
 	}
 }
+
+func TestRecoverDir(t *testing.T) {
+	base := t.TempDir()
+	live := filepath.Join(base, "live")
+	prev := live + ".prev"
+	staging := live + ".staging"
+
+	// live ausente + prev presente -> restaura prev
+	os.MkdirAll(prev, 0o755)
+	os.WriteFile(filepath.Join(prev, "old.txt"), []byte("viejo\n"), 0o644)
+	if err := RecoverDir(live); err != nil {
+		t.Fatalf("recover prev: %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(live, "old.txt")); strings.TrimSpace(string(b)) != "viejo" {
+		t.Fatalf("live sin restaurar desde prev: %q", b)
+	}
+
+	// live presente + staging huérfano -> limpia staging
+	os.MkdirAll(staging, 0o755)
+	if err := RecoverDir(live); err != nil {
+		t.Fatalf("recover staging cleanup: %v", err)
+	}
+	if _, err := os.Stat(staging); !os.IsNotExist(err) {
+		t.Fatal("staging huérfano debe limpiarse")
+	}
+
+	// live ausente + staging presente (sin prev) -> completa publicación
+	os.RemoveAll(live)
+	os.MkdirAll(staging, 0o755)
+	os.WriteFile(filepath.Join(staging, "new.txt"), []byte("nuevo\n"), 0o644)
+	if err := RecoverDir(live); err != nil {
+		t.Fatalf("recover staging: %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(live, "new.txt")); strings.TrimSpace(string(b)) != "nuevo" {
+		t.Fatalf("live sin completar desde staging: %q", b)
+	}
+
+	// primer deploy: sin live/prev/staging -> no-op sin error
+	empty := filepath.Join(base, "otra")
+	if err := RecoverDir(empty); err != nil {
+		t.Fatalf("primer deploy: %v", err)
+	}
+}

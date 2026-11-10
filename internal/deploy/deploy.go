@@ -1,11 +1,15 @@
 // Package deploy: publica apps desde git.
-// pull (clone) + build + swap atómico + restart + verificación + rollback.
+// pull (clone) + build + swap + restart + verificación + rollback.
 //
 // Layout en disco (live = app.Dir):
 //
 //	live/            código sirviendo
 //	live.prev/       backup del deploy anterior
 //	live.staging/    clonado + build en curso (temporal)
+//
+// El swap son dos renames (live→prev, staging→live); cada rename es
+// atómico, la secuencia no. Un crash entre ambos deja live ausente:
+// RecoverDir (llamada al arrancar el servicio) restaura prev→live.
 //
 // El swap lo ejecuta quien posee los procesos (el servicio, vía Controller):
 // en Windows el rename se bloquea con la app viva. El token (PAT
@@ -369,6 +373,34 @@ func runStepContext(ctx context.Context, step, dir string, env map[string]string
 func dirExists(p string) bool {
 	st, err := os.Stat(p)
 	return err == nil && st.IsDir()
+}
+
+// RecoverDir repara el layout de una app tras un crash a mitad del swap
+// (dos renames: live→prev y staging→live no son atómicos como secuencia).
+// Si live falta, restaura live.prev (o completa staging); limpia un
+// staging huérfano. Idempotente: seguro de llamar en cada arranque.
+func RecoverDir(live string) error {
+	if dirExists(live) {
+		if dirExists(live + ".staging") {
+			_ = os.RemoveAll(live + ".staging")
+		}
+		return nil
+	}
+	prev := live + ".prev"
+	if dirExists(prev) {
+		if err := renameRetry(prev, live); err != nil {
+			return fmt.Errorf("recuperar backup %s: %w", prev, err)
+		}
+		_ = os.RemoveAll(live + ".staging")
+		return nil
+	}
+	if dirExists(live + ".staging") {
+		if err := renameRetry(live+".staging", live); err != nil {
+			return fmt.Errorf("recuperar staging %s: %w", live+".staging", err)
+		}
+		return nil
+	}
+	return nil // primer deploy: aún no hay directorio
 }
 
 // preservePersist copia las rutas persistentes del live anterior al staging
