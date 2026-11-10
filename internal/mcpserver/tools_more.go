@@ -23,6 +23,7 @@ import (
 	"rkt-proxy/internal/appview"
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/deploy"
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/hosts"
 	"rkt-proxy/internal/logx"
@@ -483,9 +484,9 @@ func (s *Server) doDiffRev(app string) (string, error) {
 	if a == nil {
 		return "", fmt.Errorf("app %q inexistente", app)
 	}
-	prev := a.Dir + ".prev"
+	prev := deploy.OtherSlot(a.Dir)
 	if _, err := os.Stat(prev); err != nil {
-		return "", fmt.Errorf("sin backup previo para %s", app)
+		return "", fmt.Errorf("sin versión previa para %s", app)
 	}
 	prevRev := ""
 	if out, err := exec.Command("git", "-C", prev, "rev-parse", "HEAD").Output(); err == nil {
@@ -526,20 +527,13 @@ func (s *Server) doDiskUsage(app string) (string, error) {
 		return "", fmt.Errorf("app %q inexistente", app)
 	}
 	out := map[string]any{"app": app, "dir": a.Dir}
-	for _, suffix := range []string{"", ".prev", ".staging"} {
-		p := a.Dir + suffix
+	slots := map[string]string{"live": a.Dir, "prev": deploy.OtherSlot(a.Dir)}
+	for name, p := range slots {
 		if st, err := os.Stat(p); err == nil && st.IsDir() {
-			out[suffixOrLive(suffix)] = dirSize(p)
+			out[name] = dirSize(p)
 		}
 	}
 	return jsonText(out)
-}
-
-func suffixOrLive(s string) string {
-	if s == "" {
-		return "live"
-	}
-	return strings.TrimPrefix(s, ".")
 }
 
 func (s *Server) doLogSearch(a logSearchArg) (string, error) {

@@ -4,18 +4,18 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/supervisor"
 )
-
-func init() { stableFor = 10 * time.Millisecond }
 
 func TestPreservePersist(t *testing.T) {
 	root := t.TempDir()
@@ -93,10 +93,15 @@ func mkRepo(t *testing.T, files map[string]string) (string, string) {
 	return dir, run("rev-parse", "HEAD")
 }
 
-// fakeCtl ejecuta swap de verdad contra disco y simula salud.
+// fakeCtl simula el controller para el blue-green: arranca un mini servidor
+// HTTP en el puerto del canario y registra el corte.
 type fakeCtl struct {
-	swaps   int
-	healthy bool
+	swaps       int
+	cutoverDir  string
+	cutoverPort string
+	noHTTP      bool // si true, StartCanary no arranca el server (canario mudo)
+	srvs        []*http.Server
+	lns         []net.Listener
 }
 
 func (f *fakeCtl) SwapAndRestart(name string, swap func() error) error {
@@ -105,7 +110,49 @@ func (f *fakeCtl) SwapAndRestart(name string, swap func() error) error {
 }
 
 func (f *fakeCtl) Snapshot() []supervisor.Status {
-	return []supervisor.Status{{Name: "web", Running: f.healthy, Failed: !f.healthy}}
+	return []supervisor.Status{{Name: "web", Running: true}}
+}
+
+// StartCanary sirve 200 en el puerto (simula el canario sano) y devuelve un
+// proceso que duerme (para que Kill/Cutover tengan Process no-nil).
+func (f *fakeCtl) StartCanary(name, dir, port string, out io.Writer) (*exec.Cmd, error) {
+	if !f.noHTTP {
+		ln, err := net.Listen("tcp", "127.0.0.1:"+port)
+		if err != nil {
+			return nil, err
+		}
+		srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})}
+		go srv.Serve(ln)
+		f.srvs = append(f.srvs, srv)
+		f.lns = append(f.lns, ln)
+	}
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd.exe", "/c", "ping -n 1000 127.0.0.1 >nul")
+	} else {
+		cmd = exec.Command("sleep", "1000")
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	return cmd, nil
+}
+
+func (f *fakeCtl) Cutover(name string, cmd *exec.Cmd, dir, port string) error {
+	f.cutoverDir = dir
+	f.cutoverPort = port
+	return nil
+}
+
+func (f *fakeCtl) close() {
+	for _, s := range f.srvs {
+		_ = s.Close()
+	}
+	for _, l := range f.lns {
+		_ = l.Close()
+	}
 }
 
 func TestDiffFilesEntreRevisiones(t *testing.T) {
@@ -166,89 +213,91 @@ func testApp(dir, repo string, build []string) config.App {
 func TestDeployHappy(t *testing.T) {
 	gitOK(t)
 	repo, _ := mkRepo(t, map[string]string{"app.txt": "v2\n"})
-	live := filepath.Join(t.TempDir(), "live")
+	live := filepath.Join(t.TempDir(), "live.a")
 	os.MkdirAll(live, 0o755)
 	os.WriteFile(filepath.Join(live, "old.txt"), []byte("viejo\n"), 0o644)
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	rev, err := Run(testApp(live, repo, nil), "", &fakeCtl{healthy: true}, io.Discard, log)
+	ctl := &fakeCtl{}
+	defer ctl.close()
+	rev, err := Run(testApp(live, repo, nil), "", ctl, io.Discard, log)
 	if err != nil {
 		t.Fatalf("deploy: %v", err)
 	}
 	if rev == "" || rev == "?" {
 		t.Fatalf("rev vacío: %q", rev)
 	}
-	if b, _ := os.ReadFile(filepath.Join(live, "app.txt")); strings.TrimSpace(string(b)) != "v2" {
-		t.Fatalf("live sin lo nuevo: %q", b)
+	inactive := filepath.Join(filepath.Dir(live), "live.b")
+	if b, _ := os.ReadFile(filepath.Join(inactive, "app.txt")); strings.TrimSpace(string(b)) != "v2" {
+		t.Fatalf("slot inactivo sin lo nuevo: %q", b)
 	}
-	if _, err := os.Stat(filepath.Join(live, "old.txt")); !os.IsNotExist(err) {
-		t.Fatal("live reemplazado: old.txt no debe seguir")
+	if ctl.cutoverDir != inactive {
+		t.Fatalf("corte a %q, quiere %q", ctl.cutoverDir, inactive)
 	}
-	if b, _ := os.ReadFile(filepath.Join(live+".prev", "old.txt")); strings.TrimSpace(string(b)) != "viejo" {
-		t.Fatal("backup .prev sin lo viejo")
+	if ctl.cutoverPort == "" {
+		t.Fatal("corte sin puerto")
 	}
-	if _, err := os.Stat(live + ".staging"); !os.IsNotExist(err) {
-		t.Fatal("staging debe limpiarse")
+	// el slot activo (viejo) queda intacto hasta el corte
+	if b, _ := os.ReadFile(filepath.Join(live, "old.txt")); strings.TrimSpace(string(b)) != "viejo" {
+		t.Fatal("slot activo intacto durante el corte")
 	}
 }
 
 func TestDeployBuildFailure(t *testing.T) {
 	gitOK(t)
 	repo, _ := mkRepo(t, map[string]string{"app.txt": "v2\n"})
-	live := filepath.Join(t.TempDir(), "live")
+	live := filepath.Join(t.TempDir(), "live.a")
 	os.MkdirAll(live, 0o755)
 	os.WriteFile(filepath.Join(live, "old.txt"), []byte("viejo\n"), 0o644)
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	ctl := &fakeCtl{healthy: true}
+	ctl := &fakeCtl{}
+	defer ctl.close()
 	if _, err := Run(testApp(live, repo, []string{"exit 1"}), "", ctl, io.Discard, log); err == nil {
 		t.Fatal("build roto debe fallar")
 	}
 	if b, _ := os.ReadFile(filepath.Join(live, "old.txt")); strings.TrimSpace(string(b)) != "viejo" {
-		t.Fatal("live intacto tras build roto")
+		t.Fatal("slot activo intacto tras build roto")
 	}
-	if ctl.swaps != 0 {
-		t.Fatal("sin swap si el build falla")
-	}
-	if _, err := os.Stat(live + ".staging"); !os.IsNotExist(err) {
-		t.Fatal("staging debe limpiarse")
+	if ctl.cutoverDir != "" {
+		t.Fatal("sin corte si el build falla")
 	}
 }
 
-func TestDeployRollbackOnUnhealthy(t *testing.T) {
+func TestDeployCanarioMudo(t *testing.T) {
 	gitOK(t)
 	repo, _ := mkRepo(t, map[string]string{"app.txt": "v2\n"})
-	live := filepath.Join(t.TempDir(), "live")
+	live := filepath.Join(t.TempDir(), "live.a")
 	os.MkdirAll(live, 0o755)
-	os.WriteFile(filepath.Join(live, "old.txt"), []byte("viejo\n"), 0o644)
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	ctl := &fakeCtl{healthy: false}
+	ctl := &fakeCtl{noHTTP: true}
+	defer ctl.close()
 	_, err := Run(testApp(live, repo, nil), "", ctl, io.Discard, log)
-	if err == nil || !strings.Contains(err.Error(), "rollback") {
-		t.Fatalf("debió fallar con rollback: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "canario") {
+		t.Fatalf("debió fallar por canario mudo: %v", err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(live, "old.txt")); strings.TrimSpace(string(b)) != "viejo" {
-		t.Fatal("rollback: live con lo viejo")
-	}
-	if ctl.swaps != 2 {
-		t.Fatalf("swap x2 (deploy+rollback), got %d", ctl.swaps)
+	if ctl.cutoverDir != "" {
+		t.Fatal("sin corte si el canario no responde")
 	}
 }
 
 func TestDeploySHARef(t *testing.T) {
 	gitOK(t)
 	repo, sha := mkRepo(t, map[string]string{"app.txt": "v1\n"})
-	live := filepath.Join(t.TempDir(), "live")
+	live := filepath.Join(t.TempDir(), "live.a")
 	os.MkdirAll(live, 0o755)
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	app := testApp(live, repo, nil)
 	app.Deploy.Ref = sha
-	if _, err := Run(app, "", &fakeCtl{healthy: true}, io.Discard, log); err != nil {
+	ctl := &fakeCtl{}
+	defer ctl.close()
+	if _, err := Run(app, "", ctl, io.Discard, log); err != nil {
 		t.Fatalf("deploy por SHA: %v", err)
 	}
-	out, _ := exec.Command("git", "-C", live, "rev-parse", "HEAD").Output()
+	inactive := filepath.Join(filepath.Dir(live), "live.b")
+	out, _ := exec.Command("git", "-C", inactive, "rev-parse", "HEAD").Output()
 	if got := strings.TrimSpace(string(out)); got != sha {
 		t.Fatalf("clonado en %s, quiere %s", got, sha)
 	}
@@ -257,50 +306,20 @@ func TestDeploySHARef(t *testing.T) {
 func TestDeployNeedsToken(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	app := testApp(t.TempDir(), "https://github.com/o/r.git", nil)
-	if _, err := Run(app, "", &fakeCtl{healthy: true}, io.Discard, log); err == nil {
+	if _, err := Run(app, "", &fakeCtl{}, io.Discard, log); err == nil {
 		t.Fatal("https sin token debe fallar sin tocar red")
 	}
 }
 
-func TestRecoverDir(t *testing.T) {
-	base := t.TempDir()
-	live := filepath.Join(base, "live")
-	prev := live + ".prev"
-	staging := live + ".staging"
-
-	// live ausente + prev presente -> restaura prev
-	os.MkdirAll(prev, 0o755)
-	os.WriteFile(filepath.Join(prev, "old.txt"), []byte("viejo\n"), 0o644)
-	if err := RecoverDir(live); err != nil {
-		t.Fatalf("recover prev: %v", err)
+func TestOtherSlot(t *testing.T) {
+	cases := map[string]string{
+		"/apps/x.a": "/apps/x.b",
+		"/apps/x.b": "/apps/x.a",
+		"/apps/x":   "/apps/x.b", // app antigua: primer blue-green va a .b
 	}
-	if b, _ := os.ReadFile(filepath.Join(live, "old.txt")); strings.TrimSpace(string(b)) != "viejo" {
-		t.Fatalf("live sin restaurar desde prev: %q", b)
-	}
-
-	// live presente + staging huérfano -> limpia staging
-	os.MkdirAll(staging, 0o755)
-	if err := RecoverDir(live); err != nil {
-		t.Fatalf("recover staging cleanup: %v", err)
-	}
-	if _, err := os.Stat(staging); !os.IsNotExist(err) {
-		t.Fatal("staging huérfano debe limpiarse")
-	}
-
-	// live ausente + staging presente (sin prev) -> completa publicación
-	os.RemoveAll(live)
-	os.MkdirAll(staging, 0o755)
-	os.WriteFile(filepath.Join(staging, "new.txt"), []byte("nuevo\n"), 0o644)
-	if err := RecoverDir(live); err != nil {
-		t.Fatalf("recover staging: %v", err)
-	}
-	if b, _ := os.ReadFile(filepath.Join(live, "new.txt")); strings.TrimSpace(string(b)) != "nuevo" {
-		t.Fatalf("live sin completar desde staging: %q", b)
-	}
-
-	// primer deploy: sin live/prev/staging -> no-op sin error
-	empty := filepath.Join(base, "otra")
-	if err := RecoverDir(empty); err != nil {
-		t.Fatalf("primer deploy: %v", err)
+	for in, want := range cases {
+		if got := OtherSlot(in); got != want {
+			t.Fatalf("OtherSlot(%q) = %q, quiere %q", in, got, want)
+		}
 	}
 }

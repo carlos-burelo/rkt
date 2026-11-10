@@ -6,6 +6,7 @@ package supervisor
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -56,11 +57,14 @@ type app struct {
 	failed   bool
 	// intentional: la muerte actual fue pedida (restart/swap), no crash.
 	intentional bool
-	lastExit    string
-	crashes     []time.Time
-	stopCh      chan struct{}
-	restartC    chan struct{}
-	resumeC     chan struct{}
+	// adopt: proceso ya arrancado (canario) que el loop debe tomar en la
+	// siguiente vuelta en vez de start(). Lo setea SwapLive.
+	adopt    *exec.Cmd
+	lastExit string
+	crashes  []time.Time
+	stopCh   chan struct{}
+	restartC chan struct{}
+	resumeC  chan struct{}
 }
 
 func (a *app) startedAt() time.Time {
@@ -429,7 +433,16 @@ func (a *app) loop() {
 		}()
 	}
 	for {
-		if !a.start(job) {
+		a.mu.Lock()
+		adopt := a.adopt
+		a.adopt = nil
+		a.mu.Unlock()
+		if adopt != nil {
+			// Proceso canario ya arrancado y sano: adoptarlo en vez de start.
+			if !a.attach(job, adopt) {
+				continue
+			}
+		} else if !a.start(job) {
 			return // parado a propósito o fallo fatal de arranque
 		}
 		startedAt := a.startedAt()
@@ -557,6 +570,113 @@ func backoffFor(base time.Duration, consec int) time.Duration {
 		return maxBackoff
 	}
 	return d
+}
+
+// attach registra un proceso ya arrancado (canario) como la instancia
+// supervisada: asigna el job y fija estado para que Wait() lo rastree.
+// El stdout/stderr ya lo apunta quien arrancó el canario; el reinicio
+// posterior sí abre el log de la app (start()).
+func (a *app) attach(job *jobCtx, cmd *exec.Cmd) bool {
+	if cmd == nil || cmd.Process == nil {
+		return false
+	}
+	a.mu.Lock()
+	a.cmd = cmd
+	a.done = make(chan struct{})
+	a.running = true
+	a.pid = cmd.Process.Pid
+	a.started = time.Now()
+	a.mu.Unlock()
+	if job != nil {
+		if err := job.Assign(uint32(cmd.Process.Pid)); err != nil {
+			a.log.Warn("sin job assign (canario)", "err", err)
+		}
+	}
+	a.log.Info("app arriba (canario adoptado)", "pid", cmd.Process.Pid)
+	return true
+}
+
+// SwapLive reemplaza la instancia actual por un proceso ya arrancado y
+// sano (el canario), matando la vieja. El corte de tráfico ya ocurrió en
+// la ruta; aquí solo se transfiere la supervisión sin arrancar de cero.
+// dir/port (no vacíos) actualizan la spec para que los reinicios
+// posteriores usen el slot y puerto nuevos.
+func (m *Manager) SwapLive(name string, cmd *exec.Cmd, dir, port string) error {
+	m.mu.Lock()
+	if m.stopping {
+		m.mu.Unlock()
+		return fmt.Errorf("servicio parando")
+	}
+	var a *app
+	for _, x := range m.apps {
+		if x.cfg.Name == name {
+			a = x
+		}
+	}
+	if a == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("app %q inexistente", name)
+	}
+	m.mu.Unlock()
+
+	a.mu.Lock()
+	a.adopt = cmd
+	a.failed = false
+	a.crashes = nil
+	a.consec = 0
+	a.intentional = true
+	if dir != "" {
+		a.cfg.Dir = dir
+	}
+	if port != "" {
+		if a.cfg.Env == nil {
+			a.cfg.Env = map[string]string{}
+		}
+		a.cfg.Env["PORT"] = port
+	}
+	alive := a.alive
+	a.mu.Unlock()
+
+	a.killCurrent()
+	if !alive {
+		go a.loop()
+	}
+	return nil
+}
+
+// StartCanary arranca la app en dir con PORT=port (proceso crudo, sin job
+// object), para el blue-green: la instancia actual sigue viva y sirviendo.
+// El deploy posee el proceso hasta Cutover (SwapLive) o lo mata si el corte
+// no ocurre. out captura stdout/stderr del canario.
+func (m *Manager) StartCanary(name, dir, port string, out io.Writer) (*exec.Cmd, error) {
+	m.mu.Lock()
+	var a *app
+	for _, x := range m.apps {
+		if x.cfg.Name == name {
+			a = x
+		}
+	}
+	if a == nil {
+		m.mu.Unlock()
+		return nil, fmt.Errorf("app %q inexistente", name)
+	}
+	m.mu.Unlock()
+
+	cmd := exec.Command(a.cfg.Command, a.cfg.Args...)
+	configureProc(cmd)
+	cmd.Dir = dir
+	env := map[string]string{}
+	for k, v := range a.cfg.Env {
+		env[k] = v
+	}
+	env["PORT"] = port
+	cmd.Env = dotenv.EnvironListApp(env)
+	cmd.Stdout = out
+	cmd.Stderr = out
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("canario no arrancó: %w", err)
+	}
+	return cmd, nil
 }
 
 // start lanza el proceso una vez y lo mete al job. False = no reintentar.

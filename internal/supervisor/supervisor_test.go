@@ -305,3 +305,36 @@ func TestExternalNoSeSupervisa(t *testing.T) {
 		t.Fatalf("apply externa no debe crear procesos: %d", got)
 	}
 }
+
+func TestSwapLiveAdoptaCanario(t *testing.T) {
+	cmd, args := sleepProc(t, 30*time.Second)
+	apps := []config.App{app1("largo", cmd, args, 5*time.Second, 10*time.Second)}
+	m := New(apps, nil, t.TempDir(), testLog(t))
+	m.Start()
+	defer m.Stop()
+	waitFor(t, 5*time.Second, func() bool {
+		s := m.Snapshot()[0]
+		return s.Running && s.Pid > 0
+	}, "app corriendo")
+	pidViejo := m.Snapshot()[0].Pid
+
+	// canario ya arrancado (lo haría el deploy) desde otro dir/puerto
+	canario := exec.Command(cmd, args...)
+	configureProc(canario)
+	if err := canario.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer canario.Process.Kill()
+
+	if err := m.SwapLive("largo", canario, "", ""); err != nil {
+		t.Fatalf("SwapLive: %v", err)
+	}
+	waitFor(t, 5*time.Second, func() bool {
+		s := m.Snapshot()[0]
+		return s.Running && s.Pid != pidViejo && s.Pid == canario.Process.Pid
+	}, "supervisor adopta el canario y mata la vieja")
+
+	if err := m.SwapLive("nadie", canario, "", ""); err == nil {
+		t.Fatal("app inexistente debe fallar")
+	}
+}

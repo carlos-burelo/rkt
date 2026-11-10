@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -209,6 +210,13 @@ func (p *Program) Run() {
 		p.log.Error("config inválida", "err", err)
 		os.Exit(1)
 	}
+	// Migrar apps con layout antiguo (Dir sin sufijo .a/.b) al layout de
+	// slots del blue-green: renombra <name> → <name>.a y persiste el Dir.
+	if migrated, merr := migrateSlots(db, cfg); merr != nil {
+		p.log.Warn("migración de slots incompleta", "err", merr)
+	} else if migrated != nil {
+		cfg = migrated
+	}
 	live := config.NewLive(cfg)
 	sup := supervisor.New(cfg.Apps, cfg.GlobalEnv, filepath.Join(logx.DirFor(p.cfgPath), "apps"), p.log)
 	cronRunner := cronjobs.New(live, db, logx.DirFor(p.cfgPath), p.log)
@@ -228,16 +236,6 @@ func (p *Program) Run() {
 			if kind == "failed" {
 				p.maybeAutoRollback(app)
 			}
-		}
-	}
-	// Reconciliar layout de deploys antes de arrancar: si un swap quedó a
-	// medias (crash entre renames), restaura live desde prev o staging.
-	for _, a := range cfg.Apps {
-		if a.External() || a.Dir == "" {
-			continue
-		}
-		if err := deploy.RecoverDir(a.Dir); err != nil {
-			p.log.Warn("layout de app sin reparar", "app", a.Name, "err", err)
 		}
 	}
 	sup.Start()
@@ -579,7 +577,9 @@ func (p *Program) restartApp(name string) bool {
 
 // supCtl adapta Manager a deploy.Controller.
 type supCtl struct {
-	sup *supervisor.Manager
+	sup  *supervisor.Manager
+	db   *store.DB
+	live *config.Live
 }
 
 func (c *supCtl) SwapAndRestart(name string, swap func() error) error {
@@ -588,6 +588,68 @@ func (c *supCtl) SwapAndRestart(name string, swap func() error) error {
 
 func (c *supCtl) Snapshot() []supervisor.Status {
 	return c.sup.Snapshot()
+}
+
+func (c *supCtl) StartCanary(name, dir, port string, out io.Writer) (*exec.Cmd, error) {
+	return c.sup.StartCanary(name, dir, port, out)
+}
+
+// Cutover persiste el corte (Dir, PORT y ruta→port) y adopta el canario.
+// La ruta cambia en el próximo request vía Live.Swap; el canario ya sano.
+func (c *supCtl) Cutover(name string, cmd *exec.Cmd, dir, port string) error {
+	portInt, err := strconv.Atoi(port)
+	if err != nil {
+		return fmt.Errorf("puerto canario inválido %q: %w", port, err)
+	}
+	cp, err := cfgfile.MutateFleet(c.db, func(cp *config.Config) error {
+		return cfgfile.UpdateApp(cp, name, cfgfile.AppPatch{Dir: &dir, Port: &portInt})
+	})
+	if err != nil {
+		return err
+	}
+	c.live.Swap(cp)
+	return c.sup.SwapLive(name, cmd, dir, port)
+}
+
+// migrateSlots convierte apps con layout antiguo (Dir sin sufijo .a/.b) al
+// layout de slots del blue-green: renombra <name> → <name>.a y persiste el
+// nuevo Dir. Devuelve la config migrada (nil si no hubo cambios).
+func migrateSlots(db *store.DB, cfg *config.Config) (*config.Config, error) {
+	type mv struct{ name, from, to string }
+	var moves []mv
+	for i := range cfg.Apps {
+		a := &cfg.Apps[i]
+		if a.External() || a.Dir == "" ||
+			strings.HasSuffix(a.Dir, ".a") || strings.HasSuffix(a.Dir, ".b") {
+			continue
+		}
+		moves = append(moves, mv{a.Name, a.Dir, a.Dir + ".a"})
+	}
+	if len(moves) == 0 {
+		return nil, nil
+	}
+	for _, m := range moves {
+		if st, err := os.Stat(m.from); err == nil && st.IsDir() {
+			if err := os.Rename(m.from, m.to); err != nil {
+				return nil, fmt.Errorf("migrar slot %s: %w", m.name, err)
+			}
+		}
+	}
+	cp, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
+		for i := range cp.Apps {
+			a := &cp.Apps[i]
+			if a.External() || a.Dir == "" ||
+				strings.HasSuffix(a.Dir, ".a") || strings.HasSuffix(a.Dir, ".b") {
+				continue
+			}
+			a.Dir = a.Dir + ".a"
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return cp, nil
 }
 
 // nilFS FS vacío (dist ausente): todo Stat falla -> dashboard 503.
@@ -897,7 +959,7 @@ func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, 
 			defer dropCancel()
 			defer p.endOp(app.Name)
 			defer out.Close()
-			rev, runErr := deploy.RunContext(ctx, app, token, &supCtl{sup: p.sup}, out, p.log)
+			rev, runErr := deploy.RunContext(ctx, app, token, &supCtl{sup: p.sup, db: p.db, live: p.live}, out, p.log)
 			if runErr != nil {
 				fmt.Fprintf(out, "\n✗ deploy fallido: %v\n", runErr)
 			} else {
@@ -909,7 +971,7 @@ func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, 
 	}
 	defer out.Close()
 	defer dropCancel()
-	rev, err := deploy.RunContext(ctx, app, token, &supCtl{sup: p.sup}, out, p.log)
+	rev, err := deploy.RunContext(ctx, app, token, &supCtl{sup: p.sup, db: p.db, live: p.live}, out, p.log)
 	if err != nil {
 		fmt.Fprintf(out, "\n✗ deploy fallido: %v\n", err)
 	} else {
@@ -1045,7 +1107,7 @@ func (p *Program) rollbackApp(name, actor string) error {
 	if p.db != nil {
 		depID, _ = p.db.InsertDeployment(app.Name, "", "", actor)
 	}
-	err := deploy.Rollback(*app, &supCtl{sup: p.sup}, p.log)
+	err := deploy.Rollback(*app, &supCtl{sup: p.sup, db: p.db, live: p.live}, p.log)
 	if p.db != nil && depID > 0 {
 		status, rev := "ok", deploy.HeadRev(app.Dir)
 		if err != nil {

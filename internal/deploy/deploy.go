@@ -1,20 +1,24 @@
 // Package deploy: publica apps desde git.
-// pull (clone) + build + swap + restart + verificación + rollback.
+// pull (clone) + build + canario + corte + rollback.
 //
-// Layout en disco (live = app.Dir):
+// Layout en disco (app.Dir = slot activo, termina en .a o .b):
 //
-//	live/            código sirviendo
-//	live.prev/       backup del deploy anterior
-//	live.staging/    clonado + build en curso (temporal)
+//	<name>.a/        slot A (código)
+//	<name>.b/        slot B (código)
 //
-// El swap son dos renames (live→prev, staging→live); cada rename es
-// atómico, la secuencia no. Un crash entre ambos deja live ausente:
-// RecoverDir (llamada al arrancar el servicio) restaura prev→live.
+// Zero downtime (blue-green): el build ocurre en el slot inactivo, se
+// arranca un canario en un puerto efímero, se espera a que responda HTTP
+// y solo entonces se corta la ruta (Live.Swap) y se adopta el canario,
+// matando la instancia vieja. La app nunca deja de servir: el corte es
+// atómico a nivel de config y el canario ya está sano antes.
 //
-// El swap lo ejecuta quien posee los procesos (el servicio, vía Controller):
-// en Windows el rename se bloquea con la app viva. El token (PAT
-// contents:read) NUNCA va en YAML: se lee de env y viaja solo en header
-// HTTP de git (-c), jamás se persiste en .git/config.
+// Trade-off: el build escribe sobre el slot inactivo, así que un build
+// fallido deja ese slot sin la versión anterior (la app activa sigue viva;
+// no hay nada que deshacer porque no se desplegó). El rollback manual o
+// automático tras un deploy exitoso sí tiene la versión anterior intacta.
+//
+// El token (PAT contents:read) NUNCA va en YAML: se lee de env y viaja solo
+// en header HTTP de git (-c), jamás se persiste en .git/config.
 package deploy
 
 import (
@@ -23,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -36,26 +41,25 @@ import (
 	"rkt-proxy/internal/supervisor"
 )
 
-// healthWait tope esperando app sana tras restart.
-const healthWait = 45 * time.Second
-
-// maxDeploy acota clone+build+swap: un repo colgado no bloquea la cola.
+// maxDeploy acota clone+build+corte: un repo colgado no bloquea la cola.
 const maxDeploy = 30 * time.Minute
 
-// stableFor ventana continua sana antes de dar el deploy por bueno:
-// atrapa apps que arrancan y mueren al segundo (puerto ocupado, crashloop).
-// var para tests (10ms) sin dormir 5s por deploy.
-var stableFor = 5 * time.Second
-
-// httpWait tope del probe HTTP post-restart (app debe responder).
+// httpWait tope del probe HTTP del canario (debe responder antes del corte).
 const httpWait = 15 * time.Second
 
 // Controller lo implementa quien posee los procesos (el servicio).
 type Controller interface {
 	// SwapAndRestart ejecuta swap con la app muerta y arranca al instante.
+	// (build local y rutas sin blue-green).
 	SwapAndRestart(name string, swap func() error) error
 	// Snapshot estado actual de apps.
 	Snapshot() []supervisor.Status
+	// StartCanary arranca la app nueva en dir con port (proceso crudo), sin
+	// tocar la instancia actual. El caller posee el *exec.Cmd hasta Cutover.
+	StartCanary(name, dir, port string, out io.Writer) (*exec.Cmd, error)
+	// Cutover persiste (Dir, PORT, ruta→port) y adopta el canario matando
+	// la instancia vieja. El corte de tráfico es atómico a nivel de config.
+	Cutover(name string, cmd *exec.Cmd, dir, port string) error
 }
 
 // Run despliega sin cancelación (CLI/tests). El servicio usa RunContext.
@@ -64,13 +68,16 @@ func Run(app config.App, token string, ctl Controller, out io.Writer, log *slog.
 }
 
 // RunContext despliega y devuelve la rev publicada.
+// Zero downtime: construye en el slot inactivo, arranca un canario en un
+// puerto efímero, espera a que responda HTTP y solo entonces corta la ruta
+// y adopta el canario (matando la instancia vieja). Sin puerto HTTP la app
+// se corta igual: el canario se valida por proceso estable.
 func RunContext(ctx context.Context, app config.App, token string, ctl Controller, out io.Writer, log *slog.Logger) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, maxDeploy)
 	defer cancel()
 	d := app.Deploy
 	live := app.Dir
-	staging := live + ".staging"
-	prev := live + ".prev"
+	inactive := OtherSlot(live)
 
 	if _, err := exec.LookPath("git"); err != nil {
 		return "", fmt.Errorf("git no instalado en PATH")
@@ -79,11 +86,11 @@ func RunContext(ctx context.Context, app config.App, token string, ctl Controlle
 		return "", fmt.Errorf("falta token en env %s", d.TokenEnv)
 	}
 
-	_ = os.RemoveAll(staging)
-	if err := gitClone(ctx, d, token, staging, log); err != nil {
+	_ = os.RemoveAll(inactive)
+	if err := gitClone(ctx, d, token, inactive, log); err != nil {
 		return "", err
 	}
-	rev := gitRev(ctx, staging)
+	rev := gitRev(ctx, inactive)
 	buildEnv := map[string]string{}
 	for k, v := range app.Env {
 		buildEnv[k] = v
@@ -92,88 +99,74 @@ func RunContext(ctx context.Context, app config.App, token string, ctl Controlle
 	if _, ok := buildEnv["NODE_ENV"]; !ok {
 		buildEnv["NODE_ENV"] = "production"
 	}
-	if err := RunStepsContext(ctx, d.Build, staging, buildEnv, out); err != nil {
-		_ = os.RemoveAll(staging)
+	if err := RunStepsContext(ctx, d.Build, inactive, buildEnv, out); err != nil {
+		_ = os.RemoveAll(inactive)
 		return "", err
 	}
-	if err := preservePersist(app, live, staging); err != nil {
-		_ = os.RemoveAll(staging)
+	if err := preservePersist(app, live, inactive); err != nil {
+		_ = os.RemoveAll(inactive)
 		return "", err
 	}
-	if err := RunStepsContext(ctx, d.Release, staging, buildEnv, out); err != nil {
-		_ = os.RemoveAll(staging)
+	if err := RunStepsContext(ctx, d.Release, inactive, buildEnv, out); err != nil {
+		_ = os.RemoveAll(inactive)
 		return "", err
 	}
 
-	hadLive := dirExists(live)
-	swap := func() error {
-		if hadLive {
-			_ = os.RemoveAll(prev)
-			if err := renameRetry(live, prev); err != nil {
-				return fmt.Errorf("backup: %w", err)
-			}
-		}
-		if err := renameRetry(staging, live); err != nil {
-			if hadLive {
-				_ = renameRetry(prev, live)
-			}
-			return fmt.Errorf("swap: %w", err)
-		}
-		return nil
+	port, err := freeEphemeralPort()
+	if err != nil {
+		_ = os.RemoveAll(inactive)
+		return "", err
 	}
-	if err := ctl.SwapAndRestart(app.Name, swap); err != nil {
-		_ = os.RemoveAll(staging)
-		// Swap parcial: si live desapareció, devolver el backup antes de salir.
-		if hadLive && !dirExists(live) && dirExists(prev) {
-			_ = ctl.SwapAndRestart(app.Name, func() error {
-				return renameRetry(prev, live)
-			})
-		}
-		fmt.Fprintf(out, "\n✗ swap: %v\n", err)
-		return "", fmt.Errorf("swap: %w", err)
+	canario, err := ctl.StartCanary(app.Name, inactive, port, out)
+	if err != nil {
+		_ = os.RemoveAll(inactive)
+		return "", err
 	}
-	if err := WaitAppHealthy(ctl.Snapshot, app.Name, healthWait); err != nil {
-		back := func() error {
-			if !hadLive {
-				_ = os.RemoveAll(live)
-				return fmt.Errorf("sin backup previo")
-			}
-			_ = os.RemoveAll(live)
-			return renameRetry(prev, live)
-		}
-		_ = ctl.SwapAndRestart(app.Name, back)
-		fmt.Fprintf(out, "\n✗ app no quedó sana: %v\n↺ rollback aplicado\n", err)
-		log.Warn("rollback aplicado", "app", app.Name)
-		return "", fmt.Errorf("deploy fallido, rollback aplicado: %w", err)
+	if err := waitHTTP(port, app.HealthPath, httpWait); err != nil {
+		_ = canario.Process.Kill()
+		_ = os.RemoveAll(inactive)
+		fmt.Fprintf(out, "\n✗ canario no responde: %v\n", err)
+		return "", fmt.Errorf("canario no responde: %w", err)
 	}
-	// Verificación real: el proceso no basta. Si no responde HTTP, se revierte.
-	if err := WaitAppHTTP(app, httpWait); err != nil {
-		back := func() error {
-			if !hadLive {
-				_ = os.RemoveAll(live)
-				return fmt.Errorf("sin backup previo")
-			}
-			_ = os.RemoveAll(live)
-			return renameRetry(prev, live)
-		}
-		_ = ctl.SwapAndRestart(app.Name, back)
-		fmt.Fprintf(out, "\n✗ sin respuesta HTTP: %v\n↺ rollback aplicado\n", err)
-		log.Warn("rollback por HTTP", "app", app.Name)
-		return "", fmt.Errorf("deploy fallido (sin respuesta HTTP), rollback aplicado: %w", err)
+	// Corte atómico: persiste Dir/PORT/ruta y adopta el canario. La ruta
+	// cambia en el próximo request (Live.Swap); el canario ya está sano.
+	if err := ctl.Cutover(app.Name, canario, inactive, port); err != nil {
+		_ = canario.Process.Kill()
+		_ = os.RemoveAll(inactive)
+		fmt.Fprintf(out, "\n✗ corte fallido: %v\n", err)
+		return "", err
 	}
-	_ = os.RemoveAll(staging)
-	log.Info("deploy ok", "app", app.Name, "rev", rev)
+	log.Info("deploy ok (zero downtime)", "app", app.Name, "rev", rev, "port", port)
 	return rev, nil
 }
 
-// WaitAppHTTP espera respuesta HTTP del puerto de la app (cualquier status
-// < 500 cuenta: 404 es una app viva, 502 no). Sin puerto no hay probe.
-func WaitAppHTTP(app config.App, timeout time.Duration) error {
-	port := app.Env["PORT"]
-	if port == "" {
-		return nil
+// OtherSlot devuelve el slot inactivo para un dir activo terminado en .a/.b.
+// Un dir sin sufijo (app antigua) devuelve .b: el primer blue-green migra.
+func OtherSlot(dir string) string {
+	if strings.HasSuffix(dir, ".a") {
+		return strings.TrimSuffix(dir, ".a") + ".b"
 	}
-	path := app.HealthPath
+	if strings.HasSuffix(dir, ".b") {
+		return strings.TrimSuffix(dir, ".b") + ".a"
+	}
+	return dir + ".b"
+}
+
+// freeEphemeralPort pide un puerto libre al SO (efímero). El puerto real de
+// la app es el que guarda la ruta; no se reserva del pool.
+func freeEphemeralPort() (string, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", err
+	}
+	defer l.Close()
+	_, port, err := net.SplitHostPort(l.Addr().String())
+	return port, err
+}
+
+// waitHTTP espera respuesta HTTP en 127.0.0.1:port (cualquier status < 500
+// cuenta: 404 es una app viva, 502 no).
+func waitHTTP(port, path string, timeout time.Duration) error {
 	if path == "" {
 		path = "/"
 	}
@@ -194,75 +187,49 @@ func WaitAppHTTP(app config.App, timeout time.Duration) error {
 			last = err
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("app %s no responde en %s: %v (el start debe escuchar en $PORT; Next: `next start -H 127.0.0.1`, sin -p)", app.Name, url, last)
+			return fmt.Errorf("app no responde en %s: %v (el start debe escuchar en $PORT)", url, last)
 		}
-		time.Sleep(time.Second)
+		time.Sleep(250 * time.Millisecond)
 	}
 }
 
-// WaitAppHealthy espera app corriendo, no failed y estable durante
-// stableFor seguido (poll 0.5s). Una app que arranca y muere al instante
-// no cuenta como sana.
-func WaitAppHealthy(snap func() []supervisor.Status, name string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	var since time.Time
-	for {
-		ok := false
-		for _, s := range snap() {
-			if s.Name == name && s.Running && !s.Failed {
-				ok = true
-				break
-			}
-		}
-		if ok {
-			if since.IsZero() {
-				since = time.Now()
-			}
-			if time.Since(since) >= stableFor {
-				return nil
-			}
-		} else {
-			since = time.Time{}
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("app %s no estable tras %v", name, timeout)
-		}
-		time.Sleep(500 * time.Millisecond)
+// WaitAppHTTP espera respuesta HTTP del puerto de la app (cualquier status
+// < 500 cuenta: 404 es una app viva, 502 no). Sin puerto no hay probe.
+func WaitAppHTTP(app config.App, timeout time.Duration) error {
+	port := app.Env["PORT"]
+	if port == "" {
+		return nil
 	}
+	return waitHTTP(port, app.HealthPath, timeout)
 }
 
-// Rollback devuelve live.prev a live con la app parada y reinicia.
+// Rollback vuelve al slot inactivo (la versión anterior) con blue-green:
+// arranca un canario desde ese slot en un puerto efímero, valida y corta.
 // Para `rollback <app>` manual (el automático vive en Run).
 func Rollback(app config.App, ctl Controller, log *slog.Logger) error {
 	live := app.Dir
-	prev := live + ".prev"
+	prev := OtherSlot(live)
 	if !dirExists(prev) {
-		return fmt.Errorf("sin backup %s", prev)
+		return fmt.Errorf("sin versión previa en %s", prev)
 	}
-	back := func() error {
-		_ = os.RemoveAll(live)
-		return renameRetry(prev, live)
+	port, err := freeEphemeralPort()
+	if err != nil {
+		return err
 	}
-	if err := ctl.SwapAndRestart(app.Name, back); err != nil {
-		return fmt.Errorf("rollback swap: %w", err)
+	canario, err := ctl.StartCanary(app.Name, prev, port, io.Discard)
+	if err != nil {
+		return err
 	}
-	if err := WaitAppHealthy(ctl.Snapshot, app.Name, healthWait); err != nil {
-		return fmt.Errorf("rollback sin salud: %w", err)
+	if err := waitHTTP(port, app.HealthPath, httpWait); err != nil {
+		_ = canario.Process.Kill()
+		return fmt.Errorf("rollback canario no responde: %w", err)
 	}
-	log.Info("rollback ok", "app", app.Name)
+	if err := ctl.Cutover(app.Name, canario, prev, port); err != nil {
+		_ = canario.Process.Kill()
+		return fmt.Errorf("rollback corte: %w", err)
+	}
+	log.Info("rollback ok (blue-green)", "app", app.Name)
 	return nil
-}
-
-// renameRetry reintenta (Windows: AV/indexadores retienen handles).
-func renameRetry(old, new string) error {
-	var err error
-	for i := 0; i < 3; i++ {
-		if err = os.Rename(old, new); err == nil {
-			return nil
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	return err
 }
 
 func NeedsAuth(repo string) bool {
@@ -375,37 +342,9 @@ func dirExists(p string) bool {
 	return err == nil && st.IsDir()
 }
 
-// RecoverDir repara el layout de una app tras un crash a mitad del swap
-// (dos renames: live→prev y staging→live no son atómicos como secuencia).
-// Si live falta, restaura live.prev (o completa staging); limpia un
-// staging huérfano. Idempotente: seguro de llamar en cada arranque.
-func RecoverDir(live string) error {
-	if dirExists(live) {
-		if dirExists(live + ".staging") {
-			_ = os.RemoveAll(live + ".staging")
-		}
-		return nil
-	}
-	prev := live + ".prev"
-	if dirExists(prev) {
-		if err := renameRetry(prev, live); err != nil {
-			return fmt.Errorf("recuperar backup %s: %w", prev, err)
-		}
-		_ = os.RemoveAll(live + ".staging")
-		return nil
-	}
-	if dirExists(live + ".staging") {
-		if err := renameRetry(live+".staging", live); err != nil {
-			return fmt.Errorf("recuperar staging %s: %w", live+".staging", err)
-		}
-		return nil
-	}
-	return nil // primer deploy: aún no hay directorio
-}
-
-// preservePersist copia las rutas persistentes del live anterior al staging
-// nuevo antes del swap. Sin esto, data/uploads/sqlite se pierden en cada
-// deploy porque staging reemplaza el árbol completo.
+// preservePersist copia las rutas persistentes del slot activo al slot
+// inactivo recién construido, antes del corte. Sin esto, data/uploads/sqlite
+// se pierden en cada deploy porque el slot reemplaza el árbol completo.
 func preservePersist(app config.App, live, staging string) error {
 	for _, rel := range app.Persist {
 		clean := filepath.Clean(filepath.FromSlash(rel))
