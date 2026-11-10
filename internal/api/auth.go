@@ -246,7 +246,7 @@ func (d *Deps) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setSessionCookie(w, r, tok)
-	writeJSON(w, map[string]any{"user": in.User, "role": store.RoleAdmin, "token": tok})
+	writeJSON(w, map[string]any{"user": in.User, "role": store.RoleAdmin})
 }
 
 // handleLogin valida credenciales y abre sesión bearer + cookie httpOnly.
@@ -284,7 +284,7 @@ func (d *Deps) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setSessionCookie(w, r, tok)
-	writeJSON(w, map[string]any{"user": in.User, "role": role, "token": tok})
+	writeJSON(w, map[string]any{"user": in.User, "role": role})
 }
 
 // handleLogout invalida la sesión y borra la cookie.
@@ -441,7 +441,7 @@ func (d *Deps) handleUser(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			setSessionCookie(w, r, tok)
-			writeJSON(w, map[string]any{"ok": true, "token": tok})
+			writeJSON(w, map[string]string{"ok": "true"})
 			return
 		}
 		writeJSON(w, map[string]string{"ok": "true"})

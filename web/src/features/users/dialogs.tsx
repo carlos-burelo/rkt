@@ -42,10 +42,8 @@ export function PasswordDialog({ name, self, onSaved, trigger }: { name: string;
       submitLabel={t("common.save")}
       canSubmit={next.length >= 12 && next === repeat && (!self || cur !== "")}
       onSubmit={async () => {
-        const token = await changePassword(self ? "me" : name, cur, next);
-        if (token) {
-          onSaved();
-        }
+        await changePassword(self ? "me" : name, cur, next);
+        onSaved();
         setCur("");
         setNext("");
         setRepeat("");

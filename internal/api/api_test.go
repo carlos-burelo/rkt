@@ -96,13 +96,13 @@ func login(t *testing.T, h http.Handler, user, pass string) string {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("login %s: %d %s", user, rec.Code, rec.Body.String())
 	}
-	var out struct {
-		Token string `json:"token"`
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "rkt_token" && c.Value != "" {
+			return c.Value
+		}
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || out.Token == "" {
-		t.Fatalf("login sin token: %s", rec.Body.String())
-	}
-	return out.Token
+	t.Fatalf("login sin cookie de sesión: %s", rec.Body.String())
+	return ""
 }
 
 func strconv_quote(s string) string {
@@ -167,19 +167,18 @@ func TestSetupOneShot(t *testing.T) {
 		t.Fatalf("setup: %d %s", rec.Code, rec.Body.String())
 	}
 	var out struct {
-		Token string `json:"token"`
-		Role  string `json:"role"`
+		Role string `json:"role"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || out.Token == "" || out.Role != "admin" {
-		t.Fatalf("setup sin sesión admin: %s", rec.Body.String())
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || out.Role != "admin" {
+		t.Fatalf("setup sin rol admin: %s", rec.Body.String())
 	}
-	foundCookie := false
+	var tok string
 	for _, c := range rec.Result().Cookies() {
 		if c.Name == "rkt_token" && c.Value != "" && c.HttpOnly {
-			foundCookie = true
+			tok = c.Value
 		}
 	}
-	if !foundCookie {
+	if tok == "" {
 		t.Fatal("setup sin cookie httpOnly")
 	}
 	// segundo setup prohibido (one-shot)
@@ -199,7 +198,7 @@ func TestSetupOneShot(t *testing.T) {
 	}
 	// sesión del setup opera
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/status", out.Token))
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/status", tok))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status con sesión setup: %d", rec.Code)
 	}

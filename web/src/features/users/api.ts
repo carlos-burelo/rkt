@@ -17,12 +17,11 @@ export async function deleteUser(name: string): Promise<void> {
   await api(`/api/v1/users/${encodeURIComponent(name)}`, { method: "DELETE" });
 }
 
-export async function changePassword(name: string, current: string, next: string): Promise<string> {
-  const res = await api<{ token?: string }>(`/api/v1/users/${encodeURIComponent(name)}/password`, {
+export async function changePassword(name: string, current: string, next: string): Promise<void> {
+  await api(`/api/v1/users/${encodeURIComponent(name)}/password`, {
     method: "PUT",
     body: JSON.stringify({ current, next }),
   });
-  return res.token ?? "";
 }
 
 export async function listSessions(name: string): Promise<{ sessions: UserSession[]; current: string }> {
