@@ -289,6 +289,10 @@ func (d *Deps) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 // handleLogout invalida la sesión y borra la cookie.
 func (d *Deps) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, "solo POST")
+		return
+	}
 	if tok := bearerOf(r); tok != "" {
 		d.DB.DeleteSession(tok)
 	}

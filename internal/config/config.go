@@ -718,8 +718,9 @@ func ValidateRoutes(routes []Route) error {
 		if err := r.Resolve(); err != nil {
 			return fmt.Errorf("route %d %w", i, err)
 		}
-		for _, h := range r.Hosts {
-			h = strings.ToLower(strings.TrimSpace(h))
+		for j := range r.Hosts {
+			h := strings.ToLower(strings.TrimSpace(r.Hosts[j]))
+			r.Hosts[j] = h // normaliza: " App.com " -> "app.com"
 			if h == "" {
 				return fmt.Errorf("route %d con host vacío", i)
 			}
@@ -1023,7 +1024,7 @@ func (c *Config) Match(host string) *url.URL {
 	}
 	for i := range c.Routes {
 		for _, h := range c.Routes[i].Hosts {
-			if strings.ToLower(h) == host {
+			if strings.ToLower(strings.TrimSpace(h)) == host {
 				return c.Routes[i].targetURL
 			}
 		}
