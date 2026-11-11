@@ -51,7 +51,10 @@ export function ProxyTable() {
             <StateRail status={r.ok ? "ok" : "failed"} />
             <div className="min-w-0">
               <p className="flex min-w-0 items-center gap-1.5 font-mono text-[12px]">
-                <span className="truncate">{r.hosts.join(", ")}</span>
+                <span className="truncate">
+                  {r.hosts.join(", ")}
+                  {r.path ? r.path : ""}
+                </span>
                 {r.dns_ok?.some((v) => !v) && (
                   <span
                     className="shrink-0 font-mono text-[9px] tracking-[0.08em] uppercase text-warn"

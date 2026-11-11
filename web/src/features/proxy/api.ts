@@ -3,6 +3,7 @@ import { api } from "../../shared/lib/http";
 export interface ProxyRoute {
   hosts: string[];
   target: string;
+  path?: string;
   ok: boolean;
   tls: string[];
   /** por host: resuelve a loopback en esta máquina */

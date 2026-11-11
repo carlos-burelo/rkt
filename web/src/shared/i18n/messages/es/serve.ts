@@ -56,15 +56,9 @@ export const serve = {
   "serve.routes.mode.path": "Ruta",
   "serve.routes.mode.pathHint": "IP/app (recorta el prefijo)",
   "serve.routes.mode.pathTitle": "por prefijo de ruta (gana el más largo)",
-  "serve.routes.mode.port": "Puerto",
-  "serve.routes.mode.portHint": "IP:3000 (listener propio)",
-  "serve.routes.mode.portTitle": "por puerto del edge (requiere reinicio)",
   "serve.routes.example": "así se verá",
   "serve.routes.path": "Prefijo de ruta",
   "serve.routes.pathHint": "empieza por / · /app caza /app y /app/… (no /app2)",
-  "serve.routes.port": "Puerto del edge",
-  "serve.routes.portHint": "1–65535 · no puede pisar 80/443 ni dashboard/healthz",
-  "serve.routes.portRestart": "los puertos nuevos exigen reinicio del servicio",
   "serve.routes.anyHostTitle": "vale para cualquier host (incluida una IP)",
 
   // Detalle de dominio

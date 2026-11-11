@@ -5,10 +5,7 @@ describe("routeMode", () => {
   it("dominio por defecto", () => {
     expect(routeMode({ hosts: ["a.test"], target: "http://127.0.0.1:1" })).toBe("host");
   });
-  it("puerto manda sobre path", () => {
-    expect(routeMode({ hosts: [], target: "http://127.0.0.1:1", path: "/app", port: 3000 })).toBe("port");
-  });
-  it("path sin puerto", () => {
+  it("path sin hosts", () => {
     expect(routeMode({ hosts: [], target: "http://127.0.0.1:1", path: "/app" })).toBe("path");
   });
 });
@@ -24,11 +21,5 @@ describe("routeAddr", () => {
   });
   it("path sin host marca comodín", () => {
     expect(routeAddr({ hosts: [], target: "x", path: "/app" })).toBe("∗/app");
-  });
-  it("puerto con IP", () => {
-    expect(routeAddr({ hosts: ["192.0.2.10"], target: "x", port: 3000 })).toBe("192.0.2.10:3000");
-  });
-  it("puerto sin host", () => {
-    expect(routeAddr({ hosts: [], target: "x", port: 3000 })).toBe("∗:3000");
   });
 });

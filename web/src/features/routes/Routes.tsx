@@ -89,7 +89,7 @@ export function Routes() {
             </div>
             {routes.map((r) => (
               <RouteRow
-                key={(r.hosts.join(",") || "∗") + (r.path ?? "") + (r.port ?? 0) + r.target}
+                key={(r.hosts.join(",") || "∗") + (r.path ?? "") + r.target}
                 r={r}
                 status={status}
                 onOpen={() => setSelectedHost(r.hosts[0] ?? null)}

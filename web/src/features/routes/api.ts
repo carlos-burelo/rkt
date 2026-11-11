@@ -5,8 +5,8 @@ export async function listRoutes(): Promise<Route[]> {
   return api<Route[]>("/api/v1/routes");
 }
 
-export async function addRoute(hosts: string[], target: string, path?: string, port?: number): Promise<void> {
-  await api("/api/v1/routes", { method: "POST", body: JSON.stringify({ hosts, target, path: path || "", port: port || 0 }) });
+export async function addRoute(hosts: string[], target: string, path?: string): Promise<void> {
+  await api("/api/v1/routes", { method: "POST", body: JSON.stringify({ hosts, target, path: path || "" }) });
 }
 
 export async function delRoute(host: string): Promise<void> {

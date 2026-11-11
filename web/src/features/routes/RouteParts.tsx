@@ -16,20 +16,17 @@ import type { Route, Status } from "../../shared/lib/types";
 import { useRoutes } from "./routes.store";
 import { preflightDomain } from "./api";
 
-// Estrategia de la ruta según selector.
-export type RouteMode = "host" | "path" | "port";
+// Estrategia de la ruta: dominio o prefijo de ruta.
+export type RouteMode = "host" | "path";
 
 export function routeMode(r: Route): RouteMode {
-  if (r.port) return "port";
-  if (r.path) return "path";
-  return "host";
+  return r.path ? "path" : "host";
 }
 
-// Dirección visible: app.midominio.com · ∗/app · IP:3000.
+// Dirección visible: app.midominio.com · ∗/app · IP/app.
 export function routeAddr(r: Route): string {
   const host = r.hosts.length ? r.hosts.join(", ") : "∗";
-  const port = r.port ? `:${r.port}` : "";
-  return `${host}${r.path ?? ""}${port}`;
+  return `${host}${r.path ?? ""}`;
 }
 
 // Badge TLS por host: lee el detalle cacheado del store (una lectura
@@ -171,7 +168,7 @@ export function RouteRow({ r, status, onOpen }: { r: Route; status: Status | nul
   );
 }
 
-// Diálogo de alta con 3 modos visuales (dominio / ruta / puerto),
+// Diálogo de alta con 2 modos visuales (dominio / ruta),
 // ejemplo vivo y preflight DNS solo en modo dominio.
 export function NewRouteDialog({ onAdded }: { onAdded: () => void }) {
   const { t } = useI18n();
@@ -180,30 +177,19 @@ export function NewRouteDialog({ onAdded }: { onAdded: () => void }) {
   const [mode, setMode] = useState<RouteMode>("host");
   const [hosts, setHosts] = useState("");
   const [path, setPath] = useState("/app");
-  const [port, setPort] = useState("3000");
   const [target, setTarget] = useState("");
   const [dnsMsg, setDnsMsg] = useState("");
 
   const hostList = hosts.split(",").map((s) => s.trim()).filter(Boolean);
-  const portNum = parseInt(port, 10);
   const valid =
     target.trim() !== "" &&
-    (mode === "host"
-      ? hostList.length > 0
-      : mode === "path"
-        ? path.startsWith("/") && path.length > 1
-        : Number.isInteger(portNum) && portNum > 0 && portNum < 65536);
+    (mode === "host" ? hostList.length > 0 : path.startsWith("/") && path.length > 1);
   const example =
-    mode === "host"
-      ? (hostList[0] ?? "app.midominio.com")
-      : mode === "path"
-        ? `${hostList[0] ?? "IP"}${path || "/app"}`
-        : `${hostList[0] || "IP"}:${port || "3000"}`;
+    mode === "host" ? (hostList[0] ?? "app.midominio.com") : `${hostList[0] || "IP"}${path || "/app"}`;
 
   const reset = () => {
     setHosts("");
     setPath("/app");
-    setPort("3000");
     setTarget("");
     setDnsMsg("");
     setMode("host");
@@ -223,18 +209,13 @@ export function NewRouteDialog({ onAdded }: { onAdded: () => void }) {
       submitLabel={t("common.create")}
       canSubmit={valid}
       onSubmit={async () => {
-        await add(
-          hostList,
-          target.trim(),
-          mode === "path" ? path : undefined,
-          mode === "port" ? portNum : undefined,
-        );
+        await add(hostList, target.trim(), mode === "path" ? path : undefined);
         reset();
         onAdded();
       }}
     >
-      <div className="grid grid-cols-3 gap-1.5" role="tablist" aria-label={t("serve.routes.modeLabel")}>
-        {(["host", "path", "port"] as RouteMode[]).map((m) => (
+      <div className="grid grid-cols-2 gap-1.5" role="tablist" aria-label={t("serve.routes.modeLabel")}>
+        {(["host", "path"] as RouteMode[]).map((m) => (
           <button
             key={m}
             type="button"
@@ -265,12 +246,12 @@ export function NewRouteDialog({ onAdded }: { onAdded: () => void }) {
           />
         </Field>
       )}
-      {mode !== "host" && (
+      {mode === "path" && (
         <Field label={t("serve.field.hostsOptional")} hint={t("serve.field.hostsOptionalHint")}>
           <Input
             value={hosts}
             onChange={(e) => setHosts(e.target.value)}
-            placeholder="148.236.150.38 (vacío = cualquier host)"
+            placeholder="192.0.2.10 (vacío = cualquier host)"
             className="h-8 font-mono text-[12px]"
             autoFocus
           />
@@ -286,17 +267,6 @@ export function NewRouteDialog({ onAdded }: { onAdded: () => void }) {
           />
         </Field>
       )}
-      {mode === "port" && (
-        <Field label={t("serve.routes.port")} hint={t("serve.routes.portHint")}>
-          <Input
-            value={port}
-            onChange={(e) => setPort(e.target.value.replace(/[^0-9]/g, ""))}
-            placeholder="3000"
-            inputMode="numeric"
-            className="tnum h-8 font-mono text-[12px]"
-          />
-        </Field>
-      )}
       <Field label={t("serve.field.target")} hint={t("serve.field.targetHint")}>
         <Input
           value={target}
@@ -305,9 +275,6 @@ export function NewRouteDialog({ onAdded }: { onAdded: () => void }) {
           className="tnum h-8 font-mono text-[12px]"
         />
       </Field>
-      {mode === "port" && (
-        <p className="font-mono text-[10px] text-warn">{t("serve.routes.portRestart")}</p>
-      )}
       {mode === "host" && (
         <div className="flex flex-wrap items-center gap-2">
           <Button

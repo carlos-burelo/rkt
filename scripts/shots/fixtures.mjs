@@ -84,7 +84,6 @@ export const routes = [
   { hosts: ["api.ejemplo.com"], target: "http://127.0.0.1:3002" },
   { hosts: ["documentacion.ejemplo.com", "www.ejemplo.com"], target: "http://127.0.0.1:3003" },
   { hosts: ["app.ejemplo.com"], path: "/panel", target: "http://127.0.0.1:3004" },
-  { hosts: ["192.0.2.10"], port: 3000, target: "http://127.0.0.1:3007" },
   { hosts: ["panel.ejemplo.com"], target: "http://127.0.0.1:3005" },
   { hosts: ["legado.ejemplo.com"], target: "http://127.0.0.1:3006" },
   { hosts: ["vista-previa.ejemplo.com"], target: "http://127.0.0.1:3010" },
