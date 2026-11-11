@@ -12,6 +12,10 @@ export interface GraphLink {
   stale?: boolean;
 }
 
+export function isWildcard(host: string): boolean {
+  return host.trimStart().startsWith("*.");
+}
+
 export function shortTarget(target: string): string {
   const t = target.trim();
   const m = t.match(/^(?:https?:\/\/)?([^/]+)(\/.*)?$/i);

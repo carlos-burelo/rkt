@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buildLinks, groupByTarget, radialPos, shortTarget } from "@/features/proxy/graph";
+import { buildLinks, groupByTarget, isWildcard, radialPos, shortTarget } from "@/features/proxy/graph";
+
+describe("isWildcard", () => {
+  it("detecta comodín DNS", () => {
+    expect(isWildcard("*.ejemplo.com")).toBe(true);
+    expect(isWildcard("api.ejemplo.com")).toBe(false);
+    expect(isWildcard("*.localhost")).toBe(true);
+  });
+});
 
 describe("shortTarget", () => {
   it("loopback se abrevia a local", () => {

@@ -96,7 +96,25 @@ export function Routes() {
               />
             ))}
             {routes.length === 0 && (
-              <EmptyState title={t("serve.routes.emptyTitle")} hint={t("serve.routes.emptyHint")} />
+              canWrite ? (
+                <div className="space-y-3 px-4 py-6">
+                  <p className="micro">{t("serve.routes.guideTitle")}</p>
+                  <ol className="space-y-2">
+                    {[
+                      t("serve.routes.guide1"),
+                      t("serve.routes.guide2"),
+                      t("serve.routes.guide3"),
+                    ].map((step, i) => (
+                      <li key={i} className="flex items-baseline gap-2.5">
+                        <span className="tnum font-mono text-[10px] text-signal">{String(i + 1).padStart(2, "0")}</span>
+                        <span className="font-mono text-[11px] text-muted-foreground">{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ) : (
+                <EmptyState title={t("serve.routes.emptyTitle")} hint={t("serve.routes.emptyHint")} />
+              )
             )}
           </div>
         </>

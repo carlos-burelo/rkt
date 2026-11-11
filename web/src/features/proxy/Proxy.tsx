@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { useProxy } from "./proxy.store";
 import { ProxyFilters } from "./ProxyFilters";
 import { ProxyTable } from "./ProxyTable";
+import { WafShield } from "./WafShield";
 import { MicroLink } from "../../shared/components/ui";
 import { buildLinks } from "./graph";
 import { RadialMap } from "./ProxyMap";
@@ -78,6 +79,7 @@ export function Proxy({ embedded = false }: { embedded?: boolean }) {
           )}
 
           <ProxyTable />
+          <WafShield />
         </>
       )}
     </div>

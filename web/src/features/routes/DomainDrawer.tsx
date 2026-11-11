@@ -3,6 +3,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { X } from "lucide-react";
 import { CopyButton } from "../../shared/components/feedback";
 import { StatusText } from "../../shared/components/ui";
+import { isWildcard } from "../proxy/graph";
 import { useI18n } from "../../shared/i18n";
 import { useRoutes } from "./routes.store";
 
@@ -41,6 +42,13 @@ export function DomainDrawer({ host, onClose }: { host: string | null; onClose: 
               <Title className="mt-1 block truncate font-mono text-[18px] leading-none font-medium tracking-[-0.03em]">
                 {host ?? ""}
               </Title>
+              {host && (
+                <p className="mt-1.5">
+                  <span className="inline-block border border-border px-1.5 py-0.5 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase">
+                    {isWildcard(host) ? t("serve.routes.wildcardMatch") : t("serve.routes.exactMatch")}
+                  </span>
+                </p>
+              )}
             </div>
             <Close
               aria-label={t("common.close")}
@@ -85,6 +93,12 @@ export function DomainDrawer({ host, onClose }: { host: string | null; onClose: 
                       {data.dns_ok ? t("serve.domain.resolves") : t("serve.domain.noResolve")}
                     </StatusText>
                   </div>
+                  {!data.dns_ok && data.expected && (
+                    <p className="border-b border-border bg-warn/[0.04] px-3 py-2 font-mono text-[10px] leading-relaxed text-warn">
+                      {t("serve.domain.suggestA", { ip: data.expected })}{" "}
+                      <CopyButton text={data.expected} />
+                    </p>
+                  )}
                   <Row label="A" value={data.dns.a.length ? data.dns.a.join(", ") : "-"} />
                   <Row label="AAAA" value={data.dns.aaaa.length ? data.dns.aaaa.join(", ") : "-"} />
                   <Row label="CNAME" value={data.dns.cname || "-"} />

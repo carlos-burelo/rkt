@@ -43,6 +43,16 @@ export interface RktEvent {
   msg: string;
 }
 
+/** Bloqueo del WAF (anillo en memoria del edge, sin persistir). */
+export interface WafBlock {
+  at: string;
+  ip: string;
+  host: string;
+  method: string;
+  path: string;
+  rule: string;
+}
+
 export interface User {
   name: string;
   role: string;

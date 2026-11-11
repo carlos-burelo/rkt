@@ -11,6 +11,7 @@ import { ArrowRight, ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "../auth/store";
 import { useI18n } from "../../shared/i18n";
 import { publicUrl, publicHost } from "../../shared/lib/url";
+import { isWildcard } from "../proxy/graph";
 import type { Route, Status } from "../../shared/lib/types";
 import { useRoutes } from "./routes.store";
 import { preflightDomain } from "./api";
@@ -86,6 +87,12 @@ export function RouteRow({ r, status, onOpen }: { r: Route; status: Status | nul
           </a>
           <CopyButton text={r.hosts[0]} />
           <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground/45" />
+          <span
+            title={t(isWildcard(r.hosts[0] ?? "") ? "serve.routes.wildcardTitle" : "serve.routes.exactTitle")}
+            className="shrink-0 border border-border px-1 font-mono text-[8px] tracking-[0.08em] text-muted-foreground/70 uppercase"
+          >
+            {isWildcard(r.hosts[0] ?? "") ? t("serve.routes.wildcard") : t("serve.routes.exact")}
+          </span>
         </div>
         <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground md:hidden">→ {r.target}</p>
       </div>
