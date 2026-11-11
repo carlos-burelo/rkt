@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PathInput } from "../../shared/components/PathPicker";
 import { DomainSuggest } from "../../shared/components/DomainSuggest";
+import { TechIcon } from "../../shared/components/TechIcon";
 import { Field, ORIGINS, type Origin } from "./createDialog.model";
 import type { DetectOut, GithubRepo } from "./api";
 import { useI18n } from "../../shared/i18n";
@@ -341,7 +342,8 @@ export function ReviewStep({
             {planBusy ? (
               <span className="font-mono text-[9px] text-muted-foreground">{t("create.analyzing")}</span>
             ) : plan ? (
-              <span className="border border-signal/40 bg-signal/10 px-1.5 font-mono text-[9px] tracking-[0.08em] uppercase text-signal">
+              <span className="flex items-center gap-1.5 border border-signal/40 bg-signal/10 px-1.5 py-0.5 font-mono text-[9px] tracking-[0.08em] uppercase text-signal">
+                <TechIcon kind={plan.framework} size={14} />
                 {plan.framework}
                 {plan.pm ? ` · ${plan.pm}` : ""}
               </span>

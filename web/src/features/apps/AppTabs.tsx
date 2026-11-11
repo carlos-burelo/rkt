@@ -14,6 +14,8 @@ import { useAuth } from "../auth/store";
 import { fixHost } from "../routes/api";
 import { useI18n } from "../../shared/i18n";
 import { ConfirmButton } from "../../shared/components/ConfirmButton";
+import { TechIcon } from "../../shared/components/TechIcon";
+import { stackOfApp } from "./model";
 import { buildApp } from "./api";
 
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {
@@ -41,6 +43,8 @@ export function AppTabs() {
   }, [name, setAppFilter]);
 
   const meta = metas.find((m) => m.name === name);
+  const stack = meta ? stackOfApp(meta) : "unknown";
+  const showStack = stack !== "unknown" && stack !== "external";
   const st = status?.apps.find((a) => a.name === name);
   const state = meta?.disabled ? "stopped" : st?.failed ? "failed" : st?.running ? (st.http_ok === false ? "degraded" : "running") : "stopped";
   const domains = meta?.domains ?? [];
@@ -58,6 +62,7 @@ export function AppTabs() {
           <span aria-hidden className="mt-1.5 h-5 w-1 shrink-0 bg-signal" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2.5">
+              {showStack && <TechIcon kind={stack} size={24} />}
               <h1 className="truncate font-mono text-[24px] leading-none font-medium tracking-[-0.04em]">{name || t("apps.tabs.noApp")}</h1>
               {external && (
                 <span className="border border-info/40 bg-info/10 px-1.5 font-mono text-[9px] tracking-[0.08em] text-info uppercase">

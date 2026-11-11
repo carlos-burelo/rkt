@@ -1,7 +1,7 @@
 import { ArrowRight } from "lucide-react";
-import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "../../shared/i18n";
+import { Steps } from "../deployments/steps";
 
 // Panel de seguimiento en vivo de un build/deploy lanzado al crear la app.
 export function CreateTrack({
@@ -22,7 +22,7 @@ export function CreateTrack({
   const { t } = useI18n();
   return (
     <div className="space-y-3">
-      <DialogHeader>
+      <div>
         <div className="flex items-center gap-2 pr-8">
           <span
             aria-hidden
@@ -36,8 +36,8 @@ export function CreateTrack({
             {t(status === "running" ? "create.track.running" : status === "ok" ? "create.track.ok" : "create.track.failed")}
           </span>
         </div>
-        <DialogTitle className="mt-1 font-mono text-[18px]">{app}</DialogTitle>
-        <DialogDescription className="font-mono text-[10px] leading-relaxed">
+        <p className="mt-1 font-mono text-[18px]">{app}</p>
+        <p className="font-mono text-[10px] leading-relaxed text-muted-foreground">
           {t(
             status === "running"
               ? "create.track.runningHint"
@@ -45,8 +45,9 @@ export function CreateTrack({
                 ? "create.track.okHint"
                 : "create.track.failedHint",
           )}
-        </DialogDescription>
-      </DialogHeader>
+        </p>
+      </div>
+      <Steps log={log} />
       <pre className="max-h-64 overflow-auto border border-border bg-background p-3 font-mono text-[10px] leading-relaxed whitespace-pre-wrap">
         {log || t("create.track.waiting")}
       </pre>

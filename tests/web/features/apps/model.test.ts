@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSaveApp, normalizeDomain } from "@/features/apps/model";
+import { canSaveApp, normalizeDomain, stackOfApp } from "@/features/apps/model";
 
 describe("canSaveApp", () => {
   it("permite externas sin command", () => {
@@ -18,5 +18,28 @@ describe("normalizeDomain", () => {
   it("quita esquema, path y punto final", () => {
     expect(normalizeDomain(" HTTPS://App.Localhost/path ")).toBe("app.localhost");
     expect(normalizeDomain("app.test.")).toBe("app.test");
+  });
+});
+
+describe("stackOfApp", () => {
+  it("externa y estática van primero", () => {
+    expect(stackOfApp({ external: true, command: "node server.js" })).toBe("external");
+    expect(stackOfApp({ static: "dist", command: "" })).toBe("static");
+  });
+  it("detecta frameworks por command/args", () => {
+    expect(stackOfApp({ command: "pnpm", args: ["exec", "next", "start", "-H", "127.0.0.1"] })).toBe("next");
+    expect(stackOfApp({ command: "pnpm", args: ["exec", "vite", "--host", "127.0.0.1"] })).toBe("vite");
+    expect(stackOfApp({ command: "python", args: ["-u", "app.py"] })).toBe("python");
+  });
+  it("detecta el runtime por pasos de build", () => {
+    expect(stackOfApp({ command: "C:/rkt/apps/api/api.exe", deploy: { build: ["go build ./cmd/api"] } })).toBe("go");
+    expect(stackOfApp({ command: "node server.js", deploy: { build: ["pnpm install", "pnpm build"] } })).toBe("node");
+  });
+  it("no confunde server.js con el paquete serve", () => {
+    expect(stackOfApp({ command: "node server.js" })).toBe("node");
+  });
+  it("desconocido no inventa", () => {
+    expect(stackOfApp({ command: "C:/rkt/apps/legado/legado.exe" })).toBe("unknown");
+    expect(stackOfApp({})).toBe("unknown");
   });
 });

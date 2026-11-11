@@ -148,7 +148,9 @@ export const useCreate = create<CreateState>()((set, get) => ({
     createApp(input)
       .then((app) => {
         set({ busy: false });
-        onCreated(app);
+        // Sin build: a la ficha directo. Con build: quedarse en el
+        // seguimiento en vivo (el track muestra pasos + log); navegar
+        // aquí lo ocultaría y el build correría sin feedback.
         if (!wantBuild) {
           done(app);
           return;

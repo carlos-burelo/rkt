@@ -12,6 +12,8 @@ import { useFleet } from "./hooks";
 import { useI18n } from "../../shared/i18n";
 import { Departures } from "./Departures";
 import { UsageStrip } from "./UsageStrip";
+import { TechIcon } from "../../shared/components/TechIcon";
+import { stackOfApp } from "../apps/model";
 import type { AppMeta, AppStatus, Deployment, Status } from "../../shared/lib/types";
 
 // Tabla de unidades: estado, dominio, puerto, rev. Lee fleet + actions.
@@ -58,6 +60,8 @@ export function UnitsTable({
         </div>
         {sortedApps.map((a) => {
           const meta = metas.find((m) => m.name === a.name);
+          const stack = meta ? stackOfApp(meta) : "unknown";
+          const showStack = stack !== "unknown" && stack !== "external";
           const domain = meta?.domains[0];
           const dep = lastDep(a.name);
           const state = stateOf(a);
@@ -86,6 +90,7 @@ export function UnitsTable({
               </span>
               <div role="cell" className="flex min-w-0 items-center gap-2.5">
                 <Avatar name={a.name} />
+                {showStack && <TechIcon kind={stack} size={18} />}
                 <div className="min-w-0">
                   <p className="flex min-w-0 items-baseline gap-1.5 font-mono text-[13px]">
                     <span className="truncate font-medium">{a.name}</span>

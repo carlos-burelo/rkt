@@ -1,76 +1,25 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { rel, dur } from "../../shared/lib/time";
 import { Dot } from "../../shared/components/ui";
 import { deployStateLabel } from "../../shared/lib/labels";
+import { ConfirmButton } from "../../shared/components/ConfirmButton";
+import { TechIcon } from "../../shared/components/TechIcon";
+import { stackOfApp } from "../apps/model";
 import { CopyButton } from "../../shared/components/feedback";
 import { Button } from "@/components/ui/button";
 import { streamLog, bust } from "../../shared/lib/http";
 import { diffDeployment, getDeployment, cancelDeployment, type DiffFile } from "./api";
 import { Timeline } from "./Timeline";
+import { Steps } from "./steps";
 import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
 import { useAuth } from "../auth/store";
 import { useI18n } from "../../shared/i18n";
 
 const { Root, Portal, Backdrop, Popup, Title, Close } = DialogPrimitive;
-
-// steps checklist CI desde marcadores "▶/✔/✘ step" del build log.
-function Steps({ log }: { log: string }) {
-  const { t } = useI18n();
-  const steps = useMemo(() => {
-    const out: { name: string; state: "ok" | "bad" | "run" }[] = [];
-    for (const line of log.split("\n")) {
-      if (line.startsWith("▶ step: ")) out.push({ name: line.slice(8), state: "run" });
-      else if (line.startsWith("✔ step ok: ")) {
-        const name = line.slice(11);
-        const s = [...out].reverse().find((x) => x.name === name);
-        if (s) s.state = "ok";
-      } else if (line.startsWith("✘ step failed: ")) {
-        const name = line.slice(15);
-        const s = [...out].reverse().find((x) => x.name === name);
-        if (s) s.state = "bad";
-      }
-    }
-    return out;
-  }, [log]);
-  if (steps.length === 0) return null;
-  return (
-    <ol className="divide-y divide-border/60 border border-border">
-      {steps.map((s, i) => (
-        <li key={i} className="flex items-center gap-2 bg-card/30 px-2.5 py-1.5">
-          <span className="folio w-5 shrink-0">{String(i + 1).padStart(2, "0")}</span>
-          <span
-            className={`h-1.5 w-1.5 shrink-0 ${
-              s.state === "ok" ? "bg-ok" : s.state === "bad" ? "bg-bad" : "bg-warn animate-signal-blink"
-            }`}
-            aria-label={t(
-              s.state === "ok"
-                ? "deployments.stepAria.ok"
-                : s.state === "bad"
-                  ? "deployments.stepAria.bad"
-                  : "deployments.stepAria.run",
-            )}
-          />
-          <span className="min-w-0 flex-1 truncate font-mono text-[10px]">{s.name}</span>
-          <span
-            className={`font-mono text-[9px] tracking-[0.08em] uppercase ${
-              s.state === "ok" ? "text-ok" : s.state === "bad" ? "text-bad" : "text-warn"
-            }`}
-          >
-            {s.state === "run"
-              ? t("deployments.step.run")
-              : s.state === "ok"
-                ? t("deployments.step.ok")
-                : t("deployments.step.failed")}
-          </span>
-        </li>
-      ))}
-    </ol>
-  );
-}
 
 const CHANGE_LABEL: Record<string, string> = {
   A: "deployments.change.added",
@@ -99,8 +48,13 @@ export function DeployDrawer() {
   const setSel = useUI((u) => u.setSel);
   const canWrite = useAuth((a) => a.canWrite);
   const navigate = useNavigate();
-  const { deps } = useFleet();
+  const { deps, metas } = useFleet();
   const dep = sel ? (deps.find((d) => d.id === sel.id) ?? sel) : null;
+  const depStack = (() => {
+    const m = dep ? metas.find((x) => x.name === dep.app) : undefined;
+    const k = m ? stackOfApp(m) : "unknown";
+    return k !== "unknown" && k !== "external" ? k : null;
+  })();
   const [diff, setDiff] = useState<DiffFile[] | null>(null);
   const [diffErr, setDiffErr] = useState("");
 
@@ -163,6 +117,7 @@ export function DeployDrawer() {
               <div className="border-b border-border px-4 py-4">
                 <div className="flex items-start gap-3">
                   <Dot status={dep.status} className="mt-1.5" />
+                  {depStack && <TechIcon kind={depStack} size={22} />}
                   <div className="min-w-0 flex-1">
                     <Title className="truncate font-mono text-[18px] leading-none font-medium tracking-tight">
                       {dep.app} <span className="tnum text-muted-foreground">#{dep.id}</span>
@@ -199,12 +154,17 @@ export function DeployDrawer() {
                       {([
                         ["restart", "deployments.action.restart", "outline"],
                         ["deploy", "deployments.action.redeploy", "outline"],
-                        ["rollback", "deployments.action.rollback", "destructive"],
                       ] as const).map(([a, labelKey, variant]) => (
                         <Button key={a} variant={variant} size="sm" onClick={() => act(dep.app, a)}>
                           {t(labelKey)}
                         </Button>
                       ))}
+                      <ConfirmButton
+                        label={t("deployments.action.rollback")}
+                        confirmLabel={t("deployments.action.rollbackConfirm")}
+                        onConfirm={() => act(dep.app, "rollback")}
+                        size="sm"
+                      />
                       <Button variant="ghost" size="sm" onClick={() => retry(dep.id)}>
                         {t("deployments.retryId", { id: dep.id })}
                       </Button>

@@ -49,6 +49,7 @@ export const deployments = {
   "deployments.action.restart": "reiniciar",
   "deployments.action.redeploy": "redesplegar",
   "deployments.action.rollback": "revertir",
+  "deployments.action.rollbackConfirm": "confirmar reversión",
   "deployments.retryId": "reintentar #{id}",
   "deployments.cancel": "cancelar",
   "deployments.cancelled": "despliegue #{id} cancelado",
