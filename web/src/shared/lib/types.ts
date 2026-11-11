@@ -108,6 +108,8 @@ export interface AppMeta {
 export interface Route {
   hosts: string[];
   target: string;
+  path?: string;
+  port?: number;
 }
 
 export interface UsageTraffic {

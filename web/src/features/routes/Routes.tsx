@@ -11,7 +11,7 @@ import { useFleet } from "../overview/hooks";
 import { useProxy } from "../proxy/proxy.store";
 import { buildLinks } from "../proxy/graph";
 import { useRoutes } from "./routes.store";
-import { RouteRow, NewRouteDialog } from "./RouteParts";
+import { RouteRow, NewRouteDialog, routeAddr } from "./RouteParts";
 import { useI18n } from "../../shared/i18n";
 
 // Rutas: layout + tabs. Estado en stores, piezas aparte.
@@ -34,8 +34,8 @@ export function Routes() {
     proxyRows?.length
       ? buildLinks(proxyRows)
       : routes.flatMap((r) =>
-          r.hosts.map((h) => ({
-            host: h,
+          (r.hosts.length ? r.hosts : ["∗"]).map((h) => ({
+            host: r.hosts.length ? h : routeAddr(r),
             target: r.target,
             short: r.target.replace(/^https?:\/\//, "").replace(/^127\.0\.0\.1/, "local"),
             ok: true,
@@ -89,10 +89,10 @@ export function Routes() {
             </div>
             {routes.map((r) => (
               <RouteRow
-                key={r.hosts.join(",") + r.target}
+                key={(r.hosts.join(",") || "∗") + (r.path ?? "") + (r.port ?? 0) + r.target}
                 r={r}
                 status={status}
-                onOpen={() => setSelectedHost(r.hosts[0])}
+                onOpen={() => setSelectedHost(r.hosts[0] ?? null)}
               />
             ))}
             {routes.length === 0 && (

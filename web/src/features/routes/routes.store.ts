@@ -11,7 +11,7 @@ interface RoutesState {
   details: Record<string, { data: DomainDetail | null; error: string } | undefined>;
   setAddOpen: (b: boolean) => void;
   load: () => Promise<void>;
-  add: (hosts: string[], target: string) => Promise<void>;
+  add: (hosts: string[], target: string, path?: string, port?: number) => Promise<void>;
   retarget: (host: string, target: string) => Promise<void>;
   remove: (host: string) => Promise<void>;
   detail: (host: string) => Promise<void>;
@@ -31,8 +31,8 @@ export const useRoutes = create<RoutesState>()((set, get) => ({
       useUI.getState().fail(e);
     }
   },
-  add: async (hosts, target) => {
-    await addRoute(hosts, target);
+  add: async (hosts, target, path, port) => {
+    await addRoute(hosts, target, path, port);
     await get().load();
   },
   retarget: async (host, target) => {

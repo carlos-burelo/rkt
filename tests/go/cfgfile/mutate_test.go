@@ -85,14 +85,31 @@ func TestRemoveAppRutas(t *testing.T) {
 
 func TestRouteMutaciones(t *testing.T) {
 	cfg := mutateCfg(t)
-	if err := AddRoute(cfg, []string{"new.test"}, "http://127.0.0.1:5000"); err != nil {
+	if err := AddRoute(cfg, []string{"new.test"}, "http://127.0.0.1:5000", "", 0); err != nil {
 		t.Fatal(err)
 	}
-	if err := AddRoute(cfg, []string{"w.test"}, "http://127.0.0.1:5000"); err == nil {
+	if err := AddRoute(cfg, []string{"w.test"}, "http://127.0.0.1:5000", "", 0); err == nil {
 		t.Fatal("host duplicado debió fallar")
 	}
-	if err := AddRoute(cfg, nil, ""); err == nil {
+	if err := AddRoute(cfg, nil, "", "", 0); err == nil {
 		t.Fatal("ruta vacía debió fallar")
+	}
+	// Mismo host con distinto path: conviven (gana el prefijo más largo).
+	if err := AddRoute(cfg, []string{"w.test"}, "http://127.0.0.1:5001", "/app", 0); err != nil {
+		t.Fatalf("path distinto: %v", err)
+	}
+	if err := AddRoute(cfg, []string{"w.test"}, "http://127.0.0.1:5001", "/app", 0); err == nil {
+		t.Fatal("duplicado exacto (host+path) debió fallar")
+	}
+	// Ruta solo-path (vale para cualquier host/IP) y solo-puerto.
+	if err := AddRoute(cfg, nil, "http://127.0.0.1:5002", "/pub", 0); err != nil {
+		t.Fatalf("solo path: %v", err)
+	}
+	if err := AddRoute(cfg, nil, "http://127.0.0.1:5003", "", 3000); err != nil {
+		t.Fatalf("solo port: %v", err)
+	}
+	if err := AddRoute(cfg, nil, "http://127.0.0.1:5003", "/x", 99999); err == nil {
+		t.Fatal("puerto fuera de rango debió fallar")
 	}
 
 	ok, err := SetRouteTarget(cfg, "NEW.test", "http://127.0.0.1:5001")

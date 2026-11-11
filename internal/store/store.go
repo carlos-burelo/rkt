@@ -198,6 +198,9 @@ var migrations = []string{
 	`ALTER TABLE apps ADD COLUMN basic_auth TEXT NOT NULL DEFAULT '';
 	ALTER TABLE apps ADD COLUMN allow_ips TEXT NOT NULL DEFAULT '[]';
 	ALTER TABLE apps ADD COLUMN maintenance INTEGER NOT NULL DEFAULT 0;`,
+	// v21: estrategias de enrutado path/port por ruta.
+	`ALTER TABLE routes ADD COLUMN path TEXT NOT NULL DEFAULT '';
+	ALTER TABLE routes ADD COLUMN port INTEGER NOT NULL DEFAULT 0;`,
 }
 
 // DB wrapper.

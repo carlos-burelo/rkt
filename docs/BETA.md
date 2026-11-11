@@ -33,3 +33,35 @@ a mano antes de cada beta, en una máquina Windows limpia.
 - [ ] `rkt deploy` y `rkt rollback` desde CLI contra el servicio en marcha.
 - [ ] Webhook de GitHub (`/hook`) dispara deploy con push a main.
 - [ ] Cron real ejecuta y deja historial; alertas llegan al canal configurado.
+
+## Estrategias de enrutado (nuevo en esta beta)
+
+Tres formas de exponer una app, configurables desde Dominios (visual:
+tarjeta por modo con ejemplo vivo):
+
+- [ ] **Host**: `app.midominio.com` → app (comportamiento clásico, sin cambios).
+- [ ] **Path**: `http://IP/app` → app (recorta `/app`; prefijo más largo gana;
+  `/app2` no caza `/app`).
+- [ ] **Puerto**: `http://IP:3000` → app (listener propio por puerto;
+  cambiar puertos exige reinicio — el dashboard lo avisa).
+- [ ] Puertos reservados (80/443/dashboard/healthz) se rechazan al guardar.
+- [ ] Host desconocido → 404; path sin match → cae a la ruta del host.
+
+## Setup por pasos + doctor integrado
+
+- [ ] Primera visita abre el stepper: admin → red (dominio/IP, puertos) →
+  toolchains (bins) → GitHub App (omitible) → resumen.
+- [ ] Pasos no obligatorios se omiten y quedan pendientes visibles.
+- [ ] El doctor corre dentro del setup: lo que bloquee el arranque ofrece
+  reparación (fijar bin, abrir puerto) en el mismo paso.
+- [ ] `/_rkt/new-app` y `/_rkt/setup` documentados (qué permiso pide cada
+  scope y por qué); instalar pide todo (orgs + repos) y el usuario
+  desmarca conscientemente lo que no quiera (nada queda huérfano en
+  silencio: el pre-check avisa antes de crear/desplegar).
+
+## MCP en prod
+
+- [ ] Token con alcance (lectura / deploy / admin) en vez de todo-o-nada.
+- [ ] Allowlist de tools por token; `config_import` y `users_*` fuera del
+  perfil de solo-lectura.
+- [ ] Límite de ritmo en `/mcp` y auditoría por herramienta.

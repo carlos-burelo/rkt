@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"os"
 	pathpkg "path"
+	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -19,10 +21,17 @@ import (
 	"rkt-proxy/internal/platform"
 )
 
-// Route mapea uno o varios hosts al mismo backend.
+// Route mapea una o varias formas de llegar al mismo backend:
+//   - host: app.midominio.com (Hosts con el host o *.dominio)
+//   - path: IP/app (Path con el prefijo, se recorta al proxear)
+//   - puerto: IP:3000 (Port con el puerto del edge; requiere listener)
+//
+// Al menos un selector (Hosts, Path o Port); el resto afina.
 type Route struct {
 	Hosts  []string `yaml:"hosts"`
 	Target string   `yaml:"target"`
+	Path   string   `yaml:"path,omitempty" json:"path,omitempty"`
+	Port   int      `yaml:"port,omitempty" json:"port,omitempty"`
 
 	targetURL *url.URL `yaml:"-"`
 }
@@ -710,17 +719,56 @@ func (cfg *Config) Validate() error {
 			return err
 		}
 	}
+	if err := checkRoutePorts(cfg); err != nil {
+		return err
+	}
 	return ValidateRoutes(cfg.Routes)
 }
 
-// ValidateRoutes hosts duplicados, targets resolvibles. Canónica;
-// Validate y cfgfile.Snapshot la usan (antes 2 copias).
+// checkRoutePorts evita que una ruta por puerto pise un listener
+// (http/https/dashboard/healthz): el bind fallaría al arrancar.
+func checkRoutePorts(cfg *Config) error {
+	taken := map[int]string{}
+	for _, a := range []struct{ name, addr string }{
+		{"listen_http", cfg.ListenHTTP},
+		{"listen_https", cfg.ListenHTTPS},
+		{"dashboard.listen", cfg.Dashboard.Listen},
+		{"healthz.listen", cfg.Healthz.Listen},
+	} {
+		if p := listenPortNum(a.addr); p > 0 {
+			taken[p] = a.name
+		}
+	}
+	for i := range cfg.Routes {
+		if p := cfg.Routes[i].Port; p != 0 {
+			if who, ok := taken[p]; ok {
+				return fmt.Errorf("route %d: puerto %d ocupado por %s", i, p, who)
+			}
+		}
+	}
+	return nil
+}
+
+func listenPortNum(addr string) int {
+	_, p, err := net.SplitHostPort(strings.TrimSpace(addr))
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(p)
+	return n
+}
+
+// ValidateRoutes valida el conjunto: al menos un selector por ruta
+// (hosts, path o port), targets resolvibles y sin duplicados exactos.
+// La clave de duplicado es (host, path, puerto): el mismo host puede
+// repetirse con distinto path o puerto (el más específico gana).
+// Canónica: Validate y cfgfile.Snapshot la usan.
 func ValidateRoutes(routes []Route) error {
 	seen := map[string]string{}
 	for i := range routes {
 		r := &routes[i]
-		if len(r.Hosts) == 0 {
-			return fmt.Errorf("route %d sin hosts", i)
+		if len(r.Hosts) == 0 && r.Path == "" && r.Port == 0 {
+			return fmt.Errorf("route %d sin selector (hosts, path o port)", i)
 		}
 		if r.Target == "" {
 			return fmt.Errorf("route %d sin target", i)
@@ -728,16 +776,37 @@ func ValidateRoutes(routes []Route) error {
 		if err := r.Resolve(); err != nil {
 			return fmt.Errorf("route %d %w", i, err)
 		}
+		if r.Path != "" {
+			p := pathpkg.Clean("/" + strings.Trim(r.Path, "/"))
+			if !strings.HasPrefix(r.Path, "/") {
+				return fmt.Errorf("route %d con path %q: debe empezar por /", i, r.Path)
+			}
+			r.Path = strings.TrimSuffix(p, "/")
+		}
+		if r.Port < 0 || r.Port > 65535 {
+			return fmt.Errorf("route %d con port %d inválido", i, r.Port)
+		}
+		hosts := r.Hosts
+		if len(hosts) == 0 {
+			hosts = []string{""} // comodín: vale para IP o cualquier host
+		}
 		for j := range r.Hosts {
 			h := strings.ToLower(strings.TrimSpace(r.Hosts[j]))
 			r.Hosts[j] = h // normaliza: " App.com " -> "app.com"
 			if h == "" {
 				return fmt.Errorf("route %d con host vacío", i)
 			}
-			if prev, ok := seen[h]; ok {
-				return fmt.Errorf("host %q duplicado (en %q y %q)", h, prev, r.Target)
+		}
+		for _, h := range hosts {
+			key := h + "\x00" + r.Path + "\x00" + strconv.Itoa(r.Port)
+			if prev, ok := seen[key]; ok {
+				where := h
+				if where == "" {
+					where = "(cualquier host)"
+				}
+				return fmt.Errorf("ruta duplicada %q path %q port %d (en %q y %q)", where, r.Path, r.Port, prev, r.Target)
 			}
-			seen[h] = r.Target
+			seen[key] = r.Target
 		}
 	}
 	return nil
@@ -866,7 +935,32 @@ func NeedRestart(old, new *Config) []string {
 	if !githubEqual(old.Github, new.Github) {
 		out = append(out, "github")
 	}
+	if edgePortsKey(old.Routes) != edgePortsKey(new.Routes) {
+		out = append(out, "routes.ports")
+	}
 	return out
+}
+
+// edgePortsKey conjunto ordenado de puertos del edge (rutas por puerto).
+// Cambiarlos exige reinicio: los listeners nacen al arrancar.
+func edgePortsKey(routes []Route) string {
+	set := map[int]bool{}
+	for _, r := range routes {
+		if r.Port != 0 {
+			set[r.Port] = true
+		}
+	}
+	ports := make([]int, 0, len(set))
+	for p := range set {
+		ports = append(ports, p)
+	}
+	sort.Ints(ports)
+	var sb strings.Builder
+	for _, p := range ports {
+		sb.WriteString(strconv.Itoa(p))
+		sb.WriteByte(',')
+	}
+	return sb.String()
 }
 
 // rateLimitEqual compara también la allowlist (slice no comparable).
@@ -1041,29 +1135,132 @@ func (c *Config) AppForTarget(target string) *App {
 	return nil
 }
 
-// Match resuelve Host -> backend. Exacto primero, luego *.dominio.
-func (c *Config) Match(host string) *url.URL {
+// RouteMatch resultado de matchear: backend + prefijo a recortar.
+type RouteMatch struct {
+	Target *url.URL
+	Strip  string // prefijo Path a quitar antes de proxear ("" = intacto)
+}
+
+// MatchRoute resuelve (host, puerto local, path) -> backend.
+// Puerto: en listeners extra solo valen rutas con ese Port; en los
+// principales, el caller pasa 0 y solo matchean rutas con Port 0.
+// Host: exacto, luego *.dominio, luego rutas sin hosts (IP o comodín).
+// Path: el prefijo más largo gana; a igual prefijo, exacto > wildcard.
+// Sin hosts ni path ni port no hay match (fail-closed).
+func (c *Config) MatchRoute(host string, localPort int, path string) *RouteMatch {
 	host = strings.ToLower(strings.TrimSpace(host))
 	if i := strings.LastIndex(host, ":"); i >= 0 {
 		host = host[:i]
 	}
+	if path == "" {
+		path = "/"
+	}
+	type cand struct {
+		target *url.URL
+		strip  string
+		exact  bool
+		wild   bool
+		plen   int
+	}
+	var best *cand
+	score := func(cc *cand) (int, int) {
+		s := 0
+		switch {
+		case cc.exact:
+			s = 2
+		case cc.wild:
+			s = 1
+		}
+		return cc.plen, s
+	}
+	// Puertos extra = los declarados por las rutas. Si el request llegó por
+	// uno de ellos, solo valen rutas de ese Port; si no, solo Port 0.
+	// Sin rutas con Port, todo es principal (comportamiento clásico).
+	extra := map[int]bool{}
 	for i := range c.Routes {
-		for _, h := range c.Routes[i].Hosts {
-			if strings.ToLower(strings.TrimSpace(h)) == host {
-				return c.Routes[i].targetURL
+		if p := c.Routes[i].Port; p != 0 {
+			extra[p] = true
+		}
+	}
+	onExtra := extra[localPort]
+	for i := range c.Routes {
+		r := &c.Routes[i]
+		if r.targetURL == nil {
+			continue
+		}
+		if len(r.Hosts) == 0 && r.Path == "" && r.Port == 0 {
+			continue
+		}
+		if onExtra {
+			if r.Port != localPort {
+				continue
+			}
+		} else if r.Port != 0 {
+			continue
+		}
+		exact, wild := false, false
+		if len(r.Hosts) == 0 {
+			// sin hosts: vale para IP o cualquier host
+		} else if hostIn(r.Hosts, host) {
+			exact = true
+		} else if hostWildcard(r.Hosts, host) {
+			wild = true
+		} else {
+			continue
+		}
+		plen, strip := 0, ""
+		if r.Path != "" {
+			if path != r.Path && !strings.HasPrefix(path, r.Path+"/") {
+				continue
+			}
+			plen, strip = len(r.Path), r.Path
+		}
+		cur := &cand{target: r.targetURL, strip: strip, exact: exact, wild: wild, plen: plen}
+		if best == nil {
+			best = cur
+			continue
+		}
+		bl, bs := score(best)
+		cl, cs := score(cur)
+		if cl > bl || (cl == bl && cs > bs) {
+			best = cur
+		}
+	}
+	if best == nil {
+		return nil
+	}
+	return &RouteMatch{Target: best.target, Strip: best.strip}
+}
+
+// hostIn match exacto insensible a mayúsculas.
+func hostIn(hosts []string, host string) bool {
+	for _, h := range hosts {
+		if strings.ToLower(strings.TrimSpace(h)) == host {
+			return true
+		}
+	}
+	return false
+}
+
+// hostWildcard *.dominio.
+func hostWildcard(hosts []string, host string) bool {
+	for _, h := range hosts {
+		h = strings.ToLower(strings.TrimSpace(h))
+		if strings.HasPrefix(h, "*.") {
+			suffix := h[1:]
+			if strings.HasSuffix(host, suffix) && len(host) > len(suffix) {
+				return true
 			}
 		}
 	}
-	for i := range c.Routes {
-		for _, h := range c.Routes[i].Hosts {
-			h = strings.ToLower(strings.TrimSpace(h))
-			if strings.HasPrefix(h, "*.") {
-				suffix := h[1:] // .ejemplo.com
-				if strings.HasSuffix(host, suffix) && len(host) > len(suffix) {
-					return c.Routes[i].targetURL
-				}
-			}
-		}
+	return false
+}
+
+// Match resuelve Host -> backend. Exacto primero, luego *.dominio.
+// (Compat: equivale a MatchRoute sin puerto ni path.)
+func (c *Config) Match(host string) *url.URL {
+	if m := c.MatchRoute(host, 0, "/"); m != nil {
+		return m.Target
 	}
 	return nil
 }
