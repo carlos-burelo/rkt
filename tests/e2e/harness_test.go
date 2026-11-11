@@ -31,6 +31,10 @@ type browserApp struct {
 }
 
 func newBrowserApp(t *testing.T) *browserApp {
+	return newBrowserAppWith(t, nil)
+}
+
+func newBrowserAppWith(t *testing.T, mut func(*api.Deps)) *browserApp {
 	t.Helper()
 	dist := filepath.Join("..", "..", "web", "dist")
 	if _, err := os.Stat(filepath.Join(dist, "index.html")); err != nil {
@@ -55,6 +59,9 @@ func newBrowserApp(t *testing.T) *browserApp {
 	live := config.NewLive(cfg)
 	bus := hub.New()
 	deps := api.Deps{DB: db, Live: live, Hub: bus, Version: "e2e", LogsDir: t.TempDir(), Apps: func() []health.AppStatus { return nil }}
+	if mut != nil {
+		mut(&deps)
+	}
 	deps.Apply = func(_ []config.App, _ map[string]string) {
 		current := live.Get()
 		metas := make([]map[string]any, 0, len(current.Apps))
