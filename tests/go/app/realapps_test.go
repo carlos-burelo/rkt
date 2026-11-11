@@ -8,6 +8,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -18,6 +19,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -219,6 +221,88 @@ func pnpmOrSkip(t *testing.T) {
 		t.Skip("sin pnpm en PATH")
 	} else if exec.Command(path, "--version").Run() != nil {
 		t.Skip("pnpm no ejecutable")
+	}
+}
+
+// TestRealEstaticoSirve: deploy de demo-static con el binario rkt real
+// (`rkt __static .` resuelve contra el slot; escucha en $PORT).
+func TestRealEstaticoSirve(t *testing.T) {
+	repo := fixtureRepo(t, "demo-static")
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	_, live, _, ctl := realWorld(t, rktBin(t), []string{"__static", "."}, repo, nil, nil)
+	if _, err := deploy.RunContext(context.Background(), bbAppOf(live), "", ctl, io.Discard, log); err != nil {
+		t.Fatalf("deploy estático: %v", err)
+	}
+	port := bbPortOf(ctl.live)
+	client := &http.Client{Timeout: 3 * time.Second}
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		resp, err := client.Get("http://127.0.0.1:" + port + "/")
+		if err == nil {
+			b, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if strings.Contains(string(b), "demo-estatica-v1") {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("estático no sirvió el marcador en %s", port)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+var (
+	rktBinOnce sync.Once
+	rktBinPath string
+	rktBinErr  error
+)
+
+// rktBin compila el binario real una vez por corrida (el mismo que corre
+// en prod; __static solo existe ahí).
+func rktBin(t *testing.T) string {
+	t.Helper()
+	rktBinOnce.Do(func() {
+		dir, err := os.MkdirTemp("", "rkt-bin")
+		if err != nil {
+			rktBinErr = err
+			return
+		}
+		exe := filepath.Join(dir, "rkt-test")
+		if runtime.GOOS == "windows" {
+			exe += ".exe"
+		}
+		root := repoRoot(t)
+		cmd := exec.Command("go", "build", "-o", exe, "./cmd/rkt-proxy")
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			rktBinErr = fmt.Errorf("build rkt: %v: %s", err, out)
+			return
+		}
+		rktBinPath = exe
+	})
+	if rktBinErr != nil {
+		t.Skipf("sin binario rkt: %v", rktBinErr)
+	}
+	return rktBinPath
+}
+
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("sin caller")
+	}
+	d := filepath.Dir(file)
+	for {
+		if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+			return d
+		}
+		parent := filepath.Dir(d)
+		if parent == d {
+			t.Fatal("go.mod no encontrado")
+		}
+		d = parent
 	}
 }
 
