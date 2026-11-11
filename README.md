@@ -59,6 +59,10 @@ Internet ──:80/:443──▶ rkt ──HTTP──▶ 127.0.0.1:3001  app ges
   <img src="docs/shots/deployments.png" alt="Despliegues" width="49%">
   <img src="docs/shots/app-external.png" alt="App externa" width="49%">
 </p>
+<p align="center">
+  <img src="docs/shots/deploy-running.png" alt="Deploy en curso en vivo" width="49%">
+  <img src="docs/shots/app-create-track.png" alt="Seguimiento de creación" width="49%">
+</p>
 
 ## Modelo de aplicaciones
 

@@ -28,11 +28,29 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
     if (p === "/api/v1/auth/logout") return json(route, { ok: "bye" });
     if (p === "/api/v1/status") return json(route, { version: "0.6.6", routes: routes.length, apps });
     if (p === "/api/v1/deployments") return json(route, deps);
-    if (p.startsWith("/api/v1/deployments/") && p.endsWith("/log")) return json(route, { log: buildLog });
+    if (p.startsWith("/api/v1/deployments/") && p.endsWith("/log")) {
+      if (url.searchParams.get("stream") === "1") {
+        const init = { log: "▶ step: pnpm install\n✔ step ok: pnpm install (1.2s)\n▶ step: pnpm run build\n" };
+        const chunk = { chunk: "✔ step ok: pnpm run build (8.4s)\n▶ step: health\n" };
+        const body = `event: init\ndata: ${JSON.stringify(init)}\n\nevent: chunk\ndata: ${JSON.stringify(chunk)}\n\n`;
+        return route.fulfill({ status: 200, contentType: "text/event-stream", body });
+      }
+      return json(route, { log: buildLog });
+    }
     if (p.startsWith("/api/v1/deployments/") && p.endsWith("/retry")) return json(route, { rev: "9f3c2a1" });
     if (p.startsWith("/api/v1/deployments/") && p.endsWith("/cancel")) return json(route, { ok: "true" });
+    if (/^\/api\/v1\/deployments\/\d+$/.test(p) && method === "GET") {
+      const id = Number(p.split("/").pop());
+      const found = deps.find((d) => d.id === id);
+      if (found) return json(route, found);
+      return json(route, {
+        id, app: "nueva-app", rev: fullRev("pending"), prev_rev: "",
+        status: "running", started_at: new Date().toISOString(), finished_at: "",
+        triggered_by: "alex", env_snapshot: "{}",
+      });
+    }
     if (p === "/api/v1/events") return json(route, evs);
-    if (p === "/api/v1/apps") return json(route, metas);
+    if (p === "/api/v1/apps" && method === "GET") return json(route, metas);
     if (p === "/api/v1/apps" && method === "POST") return json(route, { app: "nueva-app" });
     if (p.startsWith("/api/v1/apps/") && p.endsWith("/diff")) {
       return json(route, {
@@ -59,6 +77,8 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
       return json(route, { key, value: envs[name]?.[key] ?? "" });
     }
     if (p.startsWith("/api/v1/apps/") && /\/apps\/[^/]+\/(start|stop)$/.test(p)) return json(route, { ok: true });
+    if (/^\/api\/v1\/apps\/[^/]+\/build$/.test(p) && method === "POST") return json(route, { deployment: 900 });
+    if (/^\/api\/v1\/apps\/[^/]+\/deploy$/.test(p) && method === "POST") return json(route, { deployment: 901 });
     if (p.startsWith("/api/v1/apps/") && method !== "GET") return json(route, {});
     if (p === "/api/v1/proxy") return json(route, proxy);
     if (p === "/api/v1/routes") return json(route, method === "GET" ? routes : {});
@@ -103,7 +123,34 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
     if (p === "/api/v1/settings") return json(route, settings);
     if (p === "/api/v1/github") return json(route, { configured: false });
     if (p === "/api/v1/github/repos") return json(route, []);
+    if (p === "/api/v1/detect") {
+      return json(route, {
+        path: "C:\\rkt\\apps\\tienda", framework: "next", pm: "pnpm",
+        install: ["pnpm install"], build: ["pnpm run build"],
+        start: ["pnpm", "exec", "next", "start", "-H", "127.0.0.1"],
+        evidence: ["package.json", "pnpm-lock.yaml"],
+      });
+    }
+    if (p === "/api/v1/fs") {
+      const q = url.searchParams.get("path");
+      if (!q) {
+        return json(route, {
+          path: "", parent: "",
+          entries: [{ name: "C:\\", path: "C:\\", dir: true }],
+          truncated: false,
+        });
+      }
+      return json(route, {
+        path: q, parent: "C:\\rkt\\apps",
+        entries: [
+          { name: "tienda", path: q, dir: true },
+          { name: "package.json", path: `${q}\\package.json`, dir: false },
+        ],
+        truncated: false,
+      });
+    }
     if (p === "/api/v1/users") return json(route, users);
+    if (p === "/api/v1/tokens") return json(route, []);
     if (p === "/api/v1/audit") return json(route, audit);
     if (p.startsWith("/api/v1/users/") && p.endsWith("/sessions")) {
       return json(route, {
@@ -125,6 +172,18 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
       return route.fulfill({ status: 200, contentType: "text/event-stream", body });
     }
     if (p === "/api/v1/logs") return json(route, { log: logText });
+    if (p === "/api/v1/fleet/stream") {
+      const frames = [
+        ["snapshot", { seq: 0, topic: "status", data: { version: "0.6.6", routes: routes.length, apps, http_port: "80", https_port: "443" } }],
+        ["snapshot", { seq: 0, topic: "deployments", data: deps }],
+        ["snapshot", { seq: 0, topic: "events", data: evs }],
+        ["snapshot", { seq: 0, topic: "metas", data: metas }],
+        ["hello", { seq: 1, resync: true }],
+        ["ping", { t: new Date().toISOString() }],
+      ];
+      const body = frames.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`).join("");
+      return route.fulfill({ status: 200, contentType: "text/event-stream", body });
+    }
     return json(route, { error: `mock sin ruta: ${p}` }, 404);
   });
 }
@@ -183,6 +242,61 @@ const main = async () => {
   await page.waitForTimeout(400);
   await page.screenshot({ path: join(OUT, "overlay-drawer.png"), fullPage: false });
   console.log("ok overlay-drawer");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+
+  // drawer de un deploy en curso (SSE en vivo + checklist de pasos)
+  await page.locator('[role="row"]').filter({ hasText: "#125" }).click();
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: join(OUT, "deploy-running.png"), fullPage: false });
+  console.log("ok deploy-running");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+
+  // drawer de un deploy fallido (reintento + reversión)
+  await page.goto(`${BASE}/deployments`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(300);
+  await page.locator('[role="row"]').filter({ hasText: "#139" }).click();
+  await page.getByText("DETALLE DEL DESPLIEGUE").waitFor({ timeout: 10000 });
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: join(OUT, "deploy-failed.png"), fullPage: false });
+  console.log("ok deploy-failed");
+
+  // confirmación de reversión en dos pasos (dispatch directo: el SSE del
+  // mock reconecta en bucle y el click de ratón cae en re-renders)
+  await page.getByRole("button", { name: "Revertir" }).dispatchEvent("click");
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: join(OUT, "deploy-rollback-confirm.png"), fullPage: false });
+  console.log("ok deploy-rollback-confirm");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+
+  // menú de acciones de la ficha de app (redesplegar/reiniciar/revertir)
+  await page.goto(`${BASE}/app/tienda/overview`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "acciones de tienda" }).click();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: join(OUT, "app-actions-menu.png"), fullPage: false });
+  console.log("ok app-actions-menu");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+
+  // revisión de creación con plan detectado (icono del stack)
+  await page.goto(`${BASE}/apps/new`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(300);
+  await page.getByText("Directorio local", { exact: true }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByPlaceholder("C:\\proyectos\\mi-app").fill("C:\\rkt\\apps\\tienda");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: join(OUT, "app-create-review.png"), fullPage: true });
+  console.log("ok app-create-review");
+
+  // seguimiento en vivo tras crear (checklist + log del build)
+  await page.getByRole("button", { name: "Crear aplicación" }).click();
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: join(OUT, "app-create-track.png"), fullPage: true });
+  console.log("ok app-create-track");
 
   await page.goto(`${BASE}/overview`, { waitUntil: "networkidle" });
   await page.waitForTimeout(300);
