@@ -8,7 +8,7 @@ import { useAuth } from "../auth/store";
 import { useUI } from "../../app/ui";
 import { useI18n } from "../../shared/i18n";
 import { rel } from "../../shared/lib/time";
-import { fetchWaf, putWaf, type WafState } from "./waf";
+import { fetchWaf, putWaf, unban, type WafState } from "./api";
 
 const POLL_MS = 15000;
 
@@ -176,6 +176,42 @@ export function WafShield() {
                 </Button>
               </div>
             </div>
+          </div>
+
+          <div className="border border-border">
+            <p className="micro border-b border-border bg-secondary/20 px-3 py-1.5">
+              {t("serve.waf.bannedTitle")} · <span className="tnum">{tn("serve.waf.banned", waf.banned.length)}</span>
+            </p>
+            <p className="border-b border-border/60 px-3 py-1.5 font-mono text-[9px] text-muted-foreground">
+              {t("serve.waf.policy")}
+            </p>
+            {waf.banned.length === 0 ? (
+              <p className="px-3 py-3 font-mono text-[10px] text-muted-foreground">{t("serve.waf.noBanned")}</p>
+            ) : (
+              <ul className="max-h-44 divide-y divide-border/60 overflow-auto">
+                {waf.banned.map((b) => (
+                  <li key={b.ip} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-1.5 font-mono text-[10px]">
+                    <span className="tnum text-foreground/80">{b.ip}</span>
+                    <span className="tnum text-muted-foreground">{tn("serve.waf.hits", b.hits)}</span>
+                    <span className="tnum text-muted-foreground">{t("serve.waf.until", { at: b.until.replace("T", " ").slice(0, 19) })}</span>
+                    <span className="flex-1" />
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        unban(b.ip)
+                          .then(fetchWaf)
+                          .then(setWaf)
+                          .catch(fail)
+                      }
+                      className="border border-border px-1.5 py-0.5 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:border-input hover:text-foreground"
+                    >
+                      {t("serve.waf.unban")}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div className="border border-border">

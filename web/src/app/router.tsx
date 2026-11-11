@@ -24,6 +24,7 @@ import { AppUsage } from "../features/apps/AppUsage";
 import { AppEnv } from "../features/apps/AppEnv";
 import { AppSettings } from "../features/apps/AppSettings";
 import { Routes } from "../features/routes/Routes";
+import { Waf } from "../features/waf/Waf";
 import { Settings } from "../features/settings/Settings";
 import { Users } from "../features/users/Users";
 
@@ -75,6 +76,12 @@ function UsersRoute() {
   const { isAdmin } = useAuth();
   if (!isAdmin) return <Navigate to="/overview" replace />;
   return <Users />;
+}
+
+function WafRoute() {
+  const { canWrite } = useAuth();
+  if (!canWrite) return <Navigate to="/overview" replace />;
+  return <Waf />;
 }
 
 function AppDeploysTab() {
@@ -151,6 +158,7 @@ export const router = createBrowserRouter(
               ],
             },
             { path: "routes", element: <Routes /> },
+            { path: "waf", element: <WafRoute /> },
             { path: "settings", element: <Settings /> },
             { path: "users", element: <UsersRoute /> },
             { path: "*", element: <Navigate to="/overview" replace /> },

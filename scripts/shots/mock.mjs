@@ -155,12 +155,17 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
       return json(route, {
         deny_paths: ["/.env*", "/.git/*", "/wp-*", "/*.php"],
         deny_methods: ["TRACE", "TRACK", "CONNECT"],
+        banned: [
+          { ip: "45.155.204.66", hits: 23, until: new Date(Date.now() + 8 * 60000).toISOString() },
+          { ip: "185.220.101.4", hits: 41, until: new Date(Date.now() + 3 * 60000).toISOString() },
+        ],
         blocked: [
           { at: new Date(Date.now() - 4 * 60000).toISOString(), ip: "45.155.204.66", host: "tienda.ejemplo.com", method: "GET", path: "/.env", rule: "/.env*" },
           { at: new Date(Date.now() - 11 * 60000).toISOString(), ip: "45.155.204.66", host: "api.ejemplo.com", method: "TRACE", path: "/", rule: "método TRACE" },
         ],
       });
     }
+    if (p === "/api/v1/waf/bans" && method === "DELETE") return json(route, { ok: "true" });
     if (p === "/api/v1/waf") return json(route, { deny_paths: [], deny_methods: [] });
     if (p === "/api/v1/audit") return json(route, audit);
     if (p.startsWith("/api/v1/users/") && p.endsWith("/sessions")) {
@@ -221,6 +226,7 @@ const main = async () => {
 
   await shot("overview", "overview");
   await shot("deployments", "deployments");
+  await shot("waf", "waf");
   await shot("ci", "ci");
   await shot("logs", "logs");
   await shot("cron", "cron");
@@ -327,6 +333,7 @@ const main = async () => {
   for (const [name, route] of [
     ["mobile-overview", "overview"],
     ["mobile-deployments", "deployments"],
+    ["mobile-waf", "waf"],
     ["mobile-app-overview", "app/tienda/overview"],
     ["mobile-proxy", "proxy"],
     ["mobile-logs", "logs"],
@@ -372,6 +379,7 @@ const main = async () => {
   console.log("ok overview-light");
   for (const [name, route] of [
     ["deployments", "deployments"],
+    ["waf", "waf"],
     ["logs", "logs"],
     ["cron", "cron"],
     ["routes", "routes"],

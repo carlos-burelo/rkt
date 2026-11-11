@@ -120,11 +120,12 @@ Vacío = `[]` (nunca `null` en listas).
 `state: fail` bloquea (git, pool, DB, bins mal configurados);
 `warn` avisa (toolchain ausente, *_bin sin fijar).
 
-`GET /api/v1/waf` (operator): reglas y últimos bloqueos del edge.
+`GET /api/v1/waf` (operator): reglas, bloqueos y baneos activos.
 ```json
-{"deny_paths": ["/*.php"], "deny_methods": ["TRACE"], "blocked": [{"at": "...", "ip": "...", "host": "...", "method": "GET", "path": "/.env", "rule": "/.env*"}]}
+{"deny_paths": ["/*.php"], "deny_methods": ["TRACE"], "blocked": [{"at": "...", "ip": "...", "host": "...", "method": "GET", "path": "/.env", "rule": "/.env*"}], "banned": [{"ip": "...", "hits": 23, "until": "..."}]}
 ```
 `PUT /api/v1/waf` reemplaza listas (ausente = conserva).
+`DELETE /api/v1/waf/bans?ip=` levanta un bloqueo.
 
 ## Dashboard (`/` + `/api/v1/`)
 

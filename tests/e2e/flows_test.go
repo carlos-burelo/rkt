@@ -24,7 +24,7 @@ func TestBrowserNavSmoke(t *testing.T) {
 	routes := []string{
 		"/overview", "/deployments", "/ci", "/logs", "/cron",
 		"/analytics", "/observability", "/server", "/alerts",
-		"/environment", "/routes", "/settings", "/users",
+		"/environment", "/routes", "/waf", "/settings", "/users",
 	}
 	for _, r := range routes {
 		if _, err := page.Goto(app.url + r); err != nil {

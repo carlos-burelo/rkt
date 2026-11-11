@@ -140,7 +140,9 @@ export function ShellLayout() {
           ) : (
           <>
           {GROUPS.map((g) => {
-            const items = g.items.filter((n) => !("admin" in n && n.admin) || isAdmin);
+            const items = g.items.filter(
+              (n) => (!("admin" in n && n.admin) || isAdmin) && (!("write" in n && n.write) || canWrite),
+            );
             if (items.length === 0) return null;
             return (
               <SidebarGroup key={g.labelKey} className="py-0 group-data-[collapsible=icon]:p-0">
