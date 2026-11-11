@@ -75,11 +75,13 @@ func TestMCPAuth(t *testing.T) {
 	h := mcpAuth(db, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	}))
+	// mcpAuth solo valida el token; el rol por herramienta lo exige
+	// el gate (gateHTTP). Aquí cualquier token válido pasa.
 	for tok, want := range map[string]int{
 		"":       http.StatusUnauthorized,
 		"basura": http.StatusUnauthorized,
-		viewer:   http.StatusForbidden,
-		op:       http.StatusForbidden,
+		viewer:   http.StatusOK,
+		op:       http.StatusOK,
 		admin:    http.StatusOK,
 	} {
 		req := httptest.NewRequest("POST", "/mcp", nil)

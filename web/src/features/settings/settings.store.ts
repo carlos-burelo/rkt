@@ -14,7 +14,7 @@ interface SettingsState {
   save: (k: string) => Promise<void>;
   resetKey: (k: string) => Promise<void>;
   loadTokens: () => Promise<void>;
-  mintToken: (name: string) => Promise<string>;
+  mintToken: (name: string, role?: string) => Promise<string>;
   revoke: (id: number) => Promise<void>;
 }
 
@@ -51,8 +51,8 @@ export const useSettings = create<SettingsState>()((set, get) => ({
   loadTokens: async () => {
     set({ tokens: await listTokens() });
   },
-  mintToken: async (name) => {
-    const tok = await createToken(name.trim() || "mcp-agent", "admin", 24 * 90);
+  mintToken: async (name, role = "operator") => {
+    const tok = await createToken(name.trim() || "mcp-agent", role, 24 * 90);
     await get().loadTokens();
     return tok;
   },

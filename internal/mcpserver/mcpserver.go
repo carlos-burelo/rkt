@@ -799,11 +799,13 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 // HTTPHandler sirve el MCP por Streamable HTTP (stateless). La auth por
-// API key vive fuera, en el listener de la consola.
+// API key vive fuera, en el listener de la consola; el gate por
+// herramienta (rol + auditoría) va aquí dentro, por request.
 func (s *Server) HTTPHandler() http.Handler {
 	srv := s.newMCP()
-	return mcp.NewStreamableHTTPHandler(
+	base := mcp.NewStreamableHTTPHandler(
 		func(*http.Request) *mcp.Server { return srv },
 		&mcp.StreamableHTTPOptions{Stateless: true, DisableLocalhostProtection: true},
 	)
+	return s.gateHTTP(base)
 }

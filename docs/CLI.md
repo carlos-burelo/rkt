@@ -154,14 +154,21 @@ externa solo sirve SPA + `/api/v1` + `/mcp`.
 
 ### MCP remoto
 
-`POST /mcp` habla MCP Streamable HTTP. Requiere una API key de rol `admin`:
+`POST /mcp` habla MCP Streamable HTTP. Requiere una API key Bearer
+(`rkt_...`, se generan en Ajustes → MCP remoto, se muestran una sola
+vez). Las sesiones de navegador no valen para MCP.
 
-```text
-Authorization: Bearer rkt_...
-```
+**Alcances por rol** (se elige al crear la key; cada herramienta exige
+el suyo y las mutaciones quedan en auditoría):
 
-Se generan en Ajustes → MCP remoto. La key se muestra una sola vez; se puede
-revocar desde la misma tarjeta. Las sesiones de navegador no valen para MCP.
+| Alcance | Puede |
+|---|---|
+| lectura (viewer) | consultar estado, logs, deployments, métricas, zonas, dominios, detectar planes, long-polls |
+| operar (operator) | lo anterior + deploy, rollback, retry, restart, stop/start, build, apps, env, rutas, alertas, discover |
+| admin | todo + usuarios, `config_import`, `prune`, `hosts_*` |
+
+Herramientas sin entrada en la tabla exigen `admin` (fail-closed).
+`/mcp` lleva rate-limit (8 rps, burst 32) contra agotamiento.
 
 Endpoints principales (todos salvo login exigen sesión):
 `GET status|deployments|events|logs|apps|routes|settings|users|alerts|env|audit|cron`,

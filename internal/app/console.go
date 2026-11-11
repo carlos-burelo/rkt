@@ -9,8 +9,9 @@ import (
 	"rkt-proxy/internal/store"
 )
 
-// mcpAuth exige un API token rkt_ de rol operator/admin. Las sesiones de
-// navegador no valen: el MCP remoto es para agentes/automatización.
+// mcpAuth exige un API token rkt_ (cualquier rol): el gate por
+// herramienta (rol mínimo + auditoría) decide cada llamada. Las sesiones
+// de navegador no valen: el MCP remoto es para agentes/automatización.
 func mcpAuth(db *store.DB, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := r.Header.Get("Authorization")
@@ -19,15 +20,8 @@ func mcpAuth(db *store.DB, next http.Handler) http.Handler {
 			http.Error(w, "MCP requiere API key Bearer", http.StatusUnauthorized)
 			return
 		}
-		_, role, ok := db.TokenUser(strings.TrimPrefix(h, "Bearer "))
-		if !ok {
+		if _, _, ok := db.TokenUser(strings.TrimPrefix(h, "Bearer ")); !ok {
 			http.Error(w, "API key inválida o expirada", http.StatusUnauthorized)
-			return
-		}
-		// El MCP expone todas las tools (incluida gestión de usuarios):
-		// solo admin para no escalar privilegios desde una key operator.
-		if role != store.RoleAdmin {
-			http.Error(w, "API key MCP requiere rol admin", http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)

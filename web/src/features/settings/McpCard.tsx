@@ -14,6 +14,7 @@ export function McpCard() {
   const isAdmin = useAuth((a) => a.isAdmin);
   const tokens = useSettings((s) => s.tokens);
   const [name, setName] = useState("mcp-agent");
+  const [role, setRole] = useState("operator");
   const [created, setCreated] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -45,7 +46,7 @@ export function McpCard() {
     setErr("");
     setCreated("");
     try {
-      setCreated(await useSettings.getState().mintToken(name));
+      setCreated(await useSettings.getState().mintToken(name, role));
     } catch (e) {
       setErr(e instanceof Error ? e.message : t("common.error"));
     } finally {
@@ -70,10 +71,24 @@ export function McpCard() {
             <span className="micro">{t("system.mcp.name")}</span>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 h-8 font-mono text-[12px]" />
           </label>
+          <label className="w-32">
+            <span className="micro">{t("system.mcp.role")}</span>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="mt-1 h-8 w-full border border-input bg-card px-2 font-mono text-[12px]"
+              aria-label={t("system.mcp.role")}
+            >
+              <option value="viewer">{t("system.mcp.roleViewer")}</option>
+              <option value="operator">{t("system.mcp.roleOperator")}</option>
+              <option value="admin">{t("system.mcp.roleAdmin")}</option>
+            </select>
+          </label>
           <Button size="sm" disabled={busy} onClick={create}>
             <KeyRound className="h-3 w-3" /> {t("system.mcp.create")}
           </Button>
         </div>
+        <p className="font-mono text-[9px] leading-relaxed text-muted-foreground/80">{t("system.mcp.scopeNote")}</p>
         {err && <p className="font-mono text-[10px] text-bad">{err}</p>}
         {created && (
           <div className="space-y-2 border border-ok/35 bg-ok/5 px-3 py-2">

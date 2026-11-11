@@ -44,6 +44,7 @@ import (
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/mcpserver"
 	"rkt-proxy/internal/proxy"
+	"rkt-proxy/internal/ratelimit"
 	"rkt-proxy/internal/server"
 	"rkt-proxy/internal/servermetrics"
 	"rkt-proxy/internal/store"
@@ -276,6 +277,10 @@ func (p *Program) Run() {
 	}
 	dashH := dashboard.NewHandler(sub)
 	mcpH := mcpAuth(db, mcpserver.New(p.cfgPath).HTTPHandler())
+	// Freno anti-abuso en /mcp: un token filtrado no debe agotar el
+	// servicio con long-polls encadenados. Generoso para no estorbar
+	// a agentes legítimos (los polls largos ocupan, no golpean).
+	mcpH = ratelimit.New(8, 32).Middleware(mcpH, p.log)
 	gate := dashboardGate(live, apiH, dashH, mcpH, proxy.NewHandler(live, p.log))
 	handler := http.Handler(gate)
 	var alog *accesslog.Logger
