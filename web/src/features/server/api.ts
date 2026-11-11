@@ -53,3 +53,14 @@ export function fetchServerHistory(hours = 6): Promise<ServerPoint[]> {
 export function fetchServerProcesses(limit = 10): Promise<ServerProcess[]> {
   return api<ServerProcess[]>(`/api/v1/server/processes?limit=${limit}`);
 }
+
+export interface DoctorCheck {
+  name: string;
+  state: "ok" | "warn" | "fail";
+  detail: string;
+  hint?: string;
+}
+
+export function fetchDoctor(): Promise<DoctorCheck[]> {
+  return api<DoctorCheck[]>("/api/v1/server/doctor");
+}

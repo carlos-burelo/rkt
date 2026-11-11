@@ -117,6 +117,24 @@ func (a *browserApp) setup(t *testing.T) playwright.Page {
 	if err := page.Locator("form button[type=submit]").Click(); err != nil {
 		t.Fatal(err)
 	}
+	// Stepper: admin creado → red (omitir) → herramientas (omitir) →
+	// GitHub (opt-out consciente) → fin → overview.
+	omitir := page.GetByRole("button", playwright.PageGetByRoleOptions{Name: "Omitir y continuar"})
+	if err := omitir.First().Click(); err != nil {
+		t.Fatalf("stepper red: %v", err)
+	}
+	if err := omitir.First().Click(); err != nil {
+		t.Fatalf("stepper herramientas: %v", err)
+	}
+	if err := page.GetByRole("checkbox").First().Check(); err != nil {
+		t.Fatalf("opt-out github: %v", err)
+	}
+	if err := omitir.First().Click(); err != nil {
+		t.Fatalf("stepper github: %v", err)
+	}
+	if err := page.GetByRole("button", playwright.PageGetByRoleOptions{Name: "Entrar en rkt"}).Click(); err != nil {
+		t.Fatalf("stepper fin: %v", err)
+	}
 	if err := page.WaitForURL("**/overview"); err != nil {
 		t.Fatalf("setup no inició sesión: %v", err)
 	}
