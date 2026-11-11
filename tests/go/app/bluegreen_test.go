@@ -12,17 +12,20 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/deploy"
+	"rkt-proxy/internal/proxy"
 	"rkt-proxy/internal/store"
 	"rkt-proxy/internal/supervisor"
 )
@@ -153,6 +156,15 @@ func bbWorld(t *testing.T, py, repo string, build []string) (*store.DB, *config.
 	if err != nil {
 		t.Fatalf("seed: %v", err)
 	}
+	// El martillo pasaría el freno (20rps): se desactiva en infra para que
+	// los MutateFleet del corte lo conserven, y en la copia viva actual.
+	if _, err := cfgfile.MutateInfra(db, func(cp *config.Config) error {
+		cp.RateLimit.Enabled = false
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cp.RateLimit.Enabled = false
 	live := config.NewLive(cp)
 	sup := supervisor.New(cp.Apps, nil, filepath.Join(base, "logs"), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	t.Cleanup(sup.Stop)
@@ -169,6 +181,77 @@ func bbWaitServe(t *testing.T, port, want string, timeout time.Duration) {
 		time.Sleep(200 * time.Millisecond)
 	}
 	t.Fatalf("puerto %s no sirvió %q", port, want)
+}
+
+// hammer martilla el proxy (Host bb.test) hasta cerrar stop. Devuelve los
+// bodies en orden y cuántos requests fallaron. Es la prueba real del cero
+// downtime: el corte de ruta es atómico, así que ningún request puede caer.
+func hammer(t *testing.T, proxyURL string, stop <-chan struct{}) (bodies func() []string, errs func() int) {
+	t.Helper()
+	var mu sync.Mutex
+	var got []string
+	var nerr int
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			req, _ := http.NewRequest("GET", proxyURL, nil)
+			req.Host = "bb.test"
+			resp, err := bbClient.Do(req)
+			mu.Lock()
+			if err != nil {
+				nerr++
+			} else {
+				b, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				got = append(got, string(b))
+			}
+			mu.Unlock()
+		}
+	}()
+	return func() []string {
+			mu.Lock()
+			defer mu.Unlock()
+			return append([]string(nil), got...)
+		}, func() int {
+			mu.Lock()
+			defer mu.Unlock()
+			return nerr
+		}
+}
+
+// assertCorteLimpio exige: cero errores, solo from/to, ambos vistos y una
+// sola transición from* to* (sin flapping ni huecos).
+func assertCorteLimpio(t *testing.T, bodies []string, nerr int, from, to string) {
+	t.Helper()
+	if nerr != 0 {
+		t.Fatalf("corte con %d requests caídos de %d", nerr, len(bodies)+nerr)
+	}
+	if len(bodies) == 0 {
+		t.Fatal("el martillo no registró respuestas")
+	}
+	seenFrom, seenTo := false, false
+	flipped := false
+	for _, b := range bodies {
+		switch b {
+		case from:
+			seenFrom = true
+			if flipped {
+				t.Fatalf("flapping: volvió %q tras %q", from, to)
+			}
+		case to:
+			seenTo = true
+			flipped = true
+		default:
+			t.Fatalf("contenido inesperado %q (quiere %q/%q)", b, from, to)
+		}
+	}
+	if !seenFrom || !seenTo {
+		t.Fatalf("sin transición completa %q->%q (v1=%v v2=%v, n=%d)", from, to, seenFrom, seenTo, len(bodies))
+	}
 }
 
 // Deploy sync con cero downtime real: mientras el build+canario corren,
@@ -208,6 +291,12 @@ func TestBlueGreenZeroDowntimeReal(t *testing.T) {
 	ctl.live.Swap(cp)
 
 	done := make(chan string, 1)
+	// Martillo contra el PROXY (no contra los puertos): la ruta bb.test
+	// retargeta en el Live.Swap y el corte debe ser invisible.
+	front := httptest.NewServer(proxy.NewHandler(ctl.live, log))
+	defer front.Close()
+	stop := make(chan struct{})
+	bodies, errs := hammer(t, front.URL, stop)
 	go func() {
 		rev, err := deploy.RunContext(context.Background(), bbAppOf(ctl.live), "", ctl, io.Discard, log)
 		if err != nil {
@@ -216,13 +305,9 @@ func TestBlueGreenZeroDowntimeReal(t *testing.T) {
 		}
 		done <- rev
 	}()
-	// a mitad del build lento: la vieja sigue viva (esencia zero downtime)
-	time.Sleep(3 * time.Second)
-	if body, err := bbGet(t, p1); err != nil || body != "v1" {
-		t.Fatalf("corte durante el build: v1 caída (body=%q err=%v)", body, err)
-	}
 	select {
 	case r := <-done:
+		close(stop)
 		if strings.HasPrefix(r, "ERR:") {
 			t.Fatalf("deploy v2: %s", r)
 		}
@@ -230,8 +315,12 @@ func TestBlueGreenZeroDowntimeReal(t *testing.T) {
 			t.Fatalf("rev vacío: %q", r)
 		}
 	case <-time.After(120 * time.Second):
+		close(stop)
 		t.Fatal("deploy v2 no terminó")
 	}
+	// Cero downtime real: ningún request al proxy cayó y el contenido pasó
+	// de v1 a v2 en una sola transición (sin huecos ni flapping).
+	assertCorteLimpio(t, bodies(), errs(), "v1", "v2")
 	p2 := bbPortOf(live)
 	if p2 == "" || p2 == p1 {
 		t.Fatalf("corte sin puerto nuevo: p1=%q p2=%q", p1, p2)
@@ -241,10 +330,15 @@ func TestBlueGreenZeroDowntimeReal(t *testing.T) {
 		t.Fatal("la instancia vieja sigue viva tras el corte")
 	}
 
-	// rollback: vuelve la v1 a un puerto nuevo, la v2 muere.
+	// rollback martillando el proxy: vuelve v2->v1 sin caídas.
+	stopRb := make(chan struct{})
+	bodiesRb, errsRb := hammer(t, front.URL, stopRb)
 	if err := deploy.Rollback(bbAppOf(live), ctl, log); err != nil {
+		close(stopRb)
 		t.Fatalf("rollback: %v", err)
 	}
+	close(stopRb)
+	assertCorteLimpio(t, bodiesRb(), errsRb(), "v2", "v1")
 	p3 := bbPortOf(live)
 	if p3 == "" || p3 == p2 {
 		t.Fatalf("rollback sin puerto nuevo: p2=%q p3=%q", p2, p3)
