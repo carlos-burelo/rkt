@@ -246,6 +246,9 @@ const maxBodyDefaultMB = 10
 // restartGraceDefault cubre el hueco de un restart de app.
 const restartGraceDefault = "10s"
 
+// defaultDenyMethods verbos jamás legítimos hacia backends propios.
+var defaultDenyMethods = []string{"TRACE", "TRACK", "CONNECT"}
+
 // defaultDenyPaths escaneos ubicuos; jamás legítimos en backends propios.
 // Los patrones "/*.ext" aplican al nombre base en cualquier profundidad
 // (ver waf.matchPattern): frenan /api/x.php igual que /x.php.
@@ -305,6 +308,7 @@ type Config struct {
 	MaxBodyMB           int64           `yaml:"max_body_mb" json:"max_body_mb"`
 	Github              *Github         `yaml:"github" json:"github,omitempty"`
 	DenyPaths           []string        `yaml:"deny_paths" json:"deny_paths"`
+	DenyMethods         []string        `yaml:"deny_methods" json:"deny_methods"`
 	TLSCerts            []TLSCert       `yaml:"tls_certs" json:"tls_certs,omitempty"`
 	// GlobalEnv se aplica a todas las apps; la app puede sobrescribir claves.
 	GlobalEnv map[string]string `yaml:"global_env" json:"global_env,omitempty"`
@@ -349,6 +353,7 @@ func defaultConfig() Config {
 		RateLimit:           RateLimitConfig{Enabled: true, RPS: 20, Burst: 40},
 		MaxBodyMB:           maxBodyDefaultMB,
 		DenyPaths:           append([]string{}, defaultDenyPaths...),
+		DenyMethods:         append([]string{}, defaultDenyMethods...),
 	}
 }
 
@@ -665,6 +670,11 @@ func (cfg *Config) Validate() error {
 			return fmt.Errorf("deny_paths patrón inválido %q", p)
 		}
 	}
+	for _, m := range cfg.DenyMethods {
+		if !validMethod(m) {
+			return fmt.Errorf("deny_methods método inválido %q (usa mayúsculas, ej TRACE)", m)
+		}
+	}
 	for _, c := range cfg.TLSCerts {
 		if len(c.Hosts) == 0 || c.CertFile == "" || c.KeyFile == "" {
 			return fmt.Errorf("tls_certs incompleto: hosts, cert_file y key_file")
@@ -733,6 +743,20 @@ func ValidateRoutes(routes []Route) error {
 	return nil
 }
 
+// validMethod verbo HTTP en mayúsculas (token RFC 9110).
+func validMethod(m string) bool {
+	if m == "" || len(m) > 16 {
+		return false
+	}
+	for i := 0; i < len(m); i++ {
+		c := m[i]
+		if !(c >= 'A' && c <= 'Z') {
+			return false
+		}
+	}
+	return true
+}
+
 // Clone devuelve una copia profunda y editable de la config. La config viva
 // se comparte entre goroutines sin lock: toda mutación pasa por una copia.
 func (c *Config) Clone() *Config {
@@ -741,6 +765,7 @@ func (c *Config) Clone() *Config {
 	}
 	out := *c
 	out.DenyPaths = append([]string(nil), c.DenyPaths...)
+	out.DenyMethods = append([]string(nil), c.DenyMethods...)
 	out.TLSCerts = make([]TLSCert, len(c.TLSCerts))
 	for i, t := range c.TLSCerts {
 		out.TLSCerts[i] = t

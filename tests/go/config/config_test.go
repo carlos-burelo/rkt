@@ -143,6 +143,30 @@ func TestDenyPathsDefaultsAndInvalid(t *testing.T) {
 	}
 }
 
+func TestDenyMethodsDefaultsAndInvalid(t *testing.T) {
+	cfg := Default()
+	cfg.Routes = []Route{{Hosts: []string{"a.com"}, Target: "http://127.0.0.1:3000"}}
+	finalized(t, cfg)
+	found := false
+	for _, m := range cfg.DenyMethods {
+		if m == "TRACE" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("defaults deben incluir TRACE: %v", cfg.DenyMethods)
+	}
+	for _, bad := range [][]string{{"trace"}, {"TR ACE"}, {"GET "}, {""}, {"MUY-LARGO-PARA-SER-VERBO"}} {
+		c := &Config{
+			DenyMethods: bad,
+			Routes:      []Route{{Hosts: []string{"a.com"}, Target: "http://127.0.0.1:3000"}},
+		}
+		if err := c.Finalize(); err == nil {
+			t.Fatalf("método inválido %q debe fallar", bad)
+		}
+	}
+}
+
 func TestAppsValidation(t *testing.T) {
 	dir := t.TempDir()
 	good := &Config{

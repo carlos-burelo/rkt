@@ -1,10 +1,14 @@
 package waf
 
 import (
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 
 	"rkt-proxy/internal/config"
@@ -101,5 +105,98 @@ func TestDefaultsDenyCommon(t *testing.T) {
 func TestValidPattern(t *testing.T) {
 	if !ValidPattern("/a/*.php") || ValidPattern("/a/[") {
 		t.Fatal("validación de glob mal")
+	}
+}
+
+func TestDenyMethods(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})
+	live := liveWith(t, nil) // defaults traen TRACE/TRACK/CONNECT
+
+	for _, m := range []string{"TRACE", "TRACK", "CONNECT"} {
+		rec := httptest.NewRecorder()
+		Middleware(live, next, log).ServeHTTP(rec, httptest.NewRequest(m, "/", nil))
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("%s: got %d, quiere 403", m, rec.Code)
+		}
+	}
+	for _, m := range []string{"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH"} {
+		rec := httptest.NewRecorder()
+		Middleware(live, next, log).ServeHTTP(rec, httptest.NewRequest(m, "/", nil))
+		if rec.Code != http.StatusTeapot {
+			t.Fatalf("%s: got %d, quiere paso", m, rec.Code)
+		}
+	}
+}
+
+func TestDenyEscapado(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})
+	live := liveWith(t, []string{"/.env", "/s%20dir/*"})
+
+	// Patrón con escape: el path decodificado no matchea, el escapado sí.
+	u, err := url.Parse("http://a.test/s%20dir/x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &http.Request{Method: "GET", URL: u, Host: "a.test", Header: http.Header{}}
+	rec := httptest.NewRecorder()
+	Middleware(live, next, log).ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("escapado: got %d, quiere 403", rec.Code)
+	}
+	// Sin escape no hay falso positivo: otra carpeta con espacio pasa.
+	u2, _ := url.Parse("http://a.test/otra%20dir/x")
+	req2 := &http.Request{Method: "GET", URL: u2, Host: "a.test", Header: http.Header{}}
+	rec2 := httptest.NewRecorder()
+	Middleware(live, next, log).ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusTeapot {
+		t.Fatalf("otra carpeta: got %d, quiere paso", rec2.Code)
+	}
+}
+
+func TestRecentRing(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})
+	ringMu.Lock()
+	ring = nil
+	ringMu.Unlock()
+
+	live := liveWith(t, []string{"/.env"})
+	req := httptest.NewRequest("TRACE", "/.env", nil)
+	req.RemoteAddr = "9.9.9.9:1234"
+	req.Host = "a.test"
+	Middleware(live, next, log).ServeHTTP(httptest.NewRecorder(), req)
+
+	recent := Recent()
+	if len(recent) != 1 {
+		t.Fatalf("bloqueos = %d, quiere 1", len(recent))
+	}
+	b := recent[0]
+	if b.IP != "9.9.9.9" || b.Host != "a.test" || b.Method != "TRACE" || b.Path != "/.env" || b.Rule == "" || b.At == "" {
+		t.Fatalf("bloqueo mal registrado: %+v", b)
+	}
+	// el método manda sobre el path en el motivo
+	if !strings.Contains(b.Rule, "TRACE") {
+		t.Fatalf("motivo = %q, quiere el método", b.Rule)
+	}
+
+	// tope del anillo: solo sobreviven los últimos 50
+	ringMu.Lock()
+	ring = nil
+	for i := 0; i < 60; i++ {
+		ring = append(ring, Block{Path: fmt.Sprintf("/%d", i)})
+	}
+	ringMu.Unlock()
+	req = httptest.NewRequest("GET", "/.env", nil)
+	Middleware(live, next, log).ServeHTTP(httptest.NewRecorder(), req)
+	if got := len(Recent()); got != maxBlocks {
+		t.Fatalf("anillo = %d, quiere %d", got, maxBlocks)
 	}
 }
