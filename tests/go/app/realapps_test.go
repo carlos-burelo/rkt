@@ -429,6 +429,99 @@ func TestRealViteConRed(t *testing.T) {
 	}
 }
 
+// TestRealMultiAppAislamiento: dos apps reales (py + node) desplegadas en
+// la misma flota, servidas por un solo proxy: cada host ve su versión y
+// no hay cross-talk. Host desconocido da 404.
+func TestRealMultiAppAislamiento(t *testing.T) {
+	py := pythonOrSkip(t)
+	node := nodeOrSkip(t)
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	pyRepo := fixtureRepo(t, "demo-py")
+	nodeRepo := fixtureRepo(t, "demo-node-server")
+	for _, tc := range []struct{ repo, v string }{{pyRepo, "py-v1"}, {nodeRepo, "node-v1"}} {
+		if err := os.WriteFile(filepath.Join(tc.repo, "VERSION"), []byte(tc.v+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		commitAll(t, tc.repo, tc.v)
+	}
+
+	base := t.TempDir()
+	db, err := store.Open(filepath.Join(base, "rkt.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	cp, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
+		cp.Apps = append(cp.Apps,
+			config.App{Name: "py", Command: py, Args: []string{"-u", "app.py"},
+				Dir: filepath.Join(base, "py.a"), Env: map[string]string{"PORT": "1"},
+				RestartDelay: "5s", MinUptime: "1s",
+				Deploy: &config.Deploy{Repo: pyRepo, Ref: "main", Build: []string{pyCompileStep(py)}},
+			},
+			config.App{Name: "node", Command: node, Args: []string{"server.js"},
+				Dir: filepath.Join(base, "node.a"), Env: map[string]string{"PORT": "2"},
+				RestartDelay: "5s", MinUptime: "1s",
+				Deploy: &config.Deploy{Repo: nodeRepo, Ref: "main", Build: []string{nodeCheckStep()}},
+			},
+		)
+		cp.Routes = append(cp.Routes,
+			config.Route{Hosts: []string{"py.test"}, Target: "http://127.0.0.1:1"},
+			config.Route{Hosts: []string{"node.test"}, Target: "http://127.0.0.1:2"},
+		)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := cfgfile.MutateInfra(db, func(cp *config.Config) error {
+		cp.RateLimit.Enabled = false
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cp.RateLimit.Enabled = false
+	live := config.NewLive(cp)
+	sup := supervisor.New(cp.Apps, nil, filepath.Join(base, "logs"), log)
+	defer sup.Stop()
+	ctl := &supCtl{sup: sup, db: db, live: live}
+
+	for _, name := range []string{"py", "node"} {
+		var app config.App
+		for _, a := range live.Get().Apps {
+			if a.Name == name {
+				app = a
+			}
+		}
+		if _, err := deploy.RunContext(context.Background(), app, "", ctl, io.Discard, log); err != nil {
+			t.Fatalf("deploy %s: %v", name, err)
+		}
+	}
+
+	front := httptest.NewServer(proxy.NewHandler(ctl.live, log))
+	defer front.Close()
+	getHost := func(host string) (int, string) {
+		t.Helper()
+		req, _ := http.NewRequest("GET", front.URL, nil)
+		req.Host = host
+		resp, err := bbClient.Do(req)
+		if err != nil {
+			t.Fatalf("host %s: %v", host, err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	if code, body := getHost("py.test"); code != 200 || body != "py-v1" {
+		t.Fatalf("py.test = %d %q", code, body)
+	}
+	if code, body := getHost("node.test"); code != 200 || body != "node-v1" {
+		t.Fatalf("node.test = %d %q", code, body)
+	}
+	if code, _ := getHost("nadie.test"); code != 404 {
+		t.Fatalf("host desconocido = %d, quiere 404", code)
+	}
+}
+
 // TestRealNodePnpmWrapperSinHuerfanos: arranque vía `pnpm run start` como en
 // prod (launcher con nieto). Con job-desde-el-inicio el corte mata el árbol
 // y no quedan huérfanos sirviendo el puerto viejo. Sin el fix, p1 seguiría
