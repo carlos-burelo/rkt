@@ -58,6 +58,28 @@ dependencias). Los frameworks con build (`next build`, `vite build`…)
 requieren `pnpm install` con red y quedan en detección: el plan que el
 test afirma es el mismo que `discover`/`apps add` consume.
 
+## Con red (lo que revienta en prod)
+
+- `demo-next` (+`app/layout.tsx`, `app/page.tsx`, `tsconfig.json`,
+  typescript en devDeps): `pnpm install` + `pnpm run build` dentro del
+  pipeline y canario del server compilado. El `tsconfig.json` y los
+  `@types` van en el fixture para no depender del auto-setup de Next
+  en mitad del build.
+- `demo-react-vite` (+`pnpm-workspace.yaml` con `allowBuilds`):
+  pnpm v10+ bloquea los postinstall (`ERR_PNPM_IGNORED_BUILDS`,
+  esbuild) y `pnpm install` muere sin esa declaración; es la misma
+  que una app real necesita. `pnpm install` + `pnpm run build` y dos
+  versiones servidas con el preview del `dist` (v1→v2 con corte).
+- Ambos arrancan con `node` directo sobre el bin del framework
+  (`node_modules/next/dist/bin/next`, `node_modules/vite/bin/vite.js`):
+  proceso único, supervisado limpio.
+
+> Nota: los arranques con wrapper (`pnpm run/exec`, `go run`) generan
+> un nieto antes de que el canario adoptado entre al job object; ese
+> nieto sobrevive al `Stop` (retiene puerto y pipe) y cuelga
+> `killCurrent`. Por eso los fixtures usan el binario/proceso final.
+> Arreglar el supervisor (job desde `StartCanary`) queda pendiente.
+
 ## Reglas
 
 - Nada de red en build/arranque (solo stdlib). Los tests deben pasar

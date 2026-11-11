@@ -1,0 +1,5 @@
+# pnpm bloquea los postinstall por defecto (ERR_PNPM_IGNORED_BUILDS):
+# sin esto, `pnpm install` falla y el deploy muere en el install.
+# Es la misma declaracion que una app real necesita en prod.
+allowBuilds:
+  esbuild: true

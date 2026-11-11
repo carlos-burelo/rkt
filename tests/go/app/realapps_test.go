@@ -201,6 +201,15 @@ func nodeOrSkip(t *testing.T) string {
 
 func nodeCheckStep() string { return "node --check server.js" }
 
+func pnpmOrSkip(t *testing.T) {
+	t.Helper()
+	if path, err := exec.LookPath("pnpm"); err != nil {
+		t.Skip("sin pnpm en PATH")
+	} else if exec.Command(path, "--version").Run() != nil {
+		t.Skip("pnpm no ejecutable")
+	}
+}
+
 // TestRealNodeServerCorteYRollback: lo mismo que py pero con Node stdlib
 // (proceso único: `node server.js` directo, sin wrapper pnpm).
 func TestRealNodeServerCorteYRollback(t *testing.T) {
@@ -314,6 +323,98 @@ func TestRealGoCompilaYSirve(t *testing.T) {
 		t.Fatalf("deploy go: %v", err)
 	}
 	bbWaitServe(t, bbPortOf(ctl.live), "v1", 90*time.Second)
+}
+
+// TestRealNextConRed: stack completo con red de verdad dentro del pipeline:
+// pnpm install + next build en el slot inactivo, canario del server ya
+// compilado y corte. El arranque es `node` directo sobre el bin de next
+// (proceso único supervisado limpio; ver nota sobre launchers pnpm).
+func TestRealNextConRed(t *testing.T) {
+	node := nodeOrSkip(t)
+	pnpmOrSkip(t)
+	repo := fixtureRepo(t, "demo-next")
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	nextBin := filepath.Join("node_modules", "next", "dist", "bin", "next")
+	_, live, _, ctl := realWorld(t, node, []string{nextBin, "start", "-H", "127.0.0.1"},
+		repo, []string{"pnpm install", "pnpm run build"}, nil)
+
+	app := bbAppOf(live)
+	if _, err := deploy.RunContext(context.Background(), app, "", ctl, io.Discard, log); err != nil {
+		t.Fatalf("deploy next: %v", err)
+	}
+	port := bbPortOf(ctl.live)
+	if port == "" || port == "1" {
+		t.Fatalf("corte sin puerto nuevo: %q", port)
+	}
+	deadline := time.Now().Add(240 * time.Second)
+	for {
+		body, err := bbGet(t, port)
+		if err == nil && strings.Contains(body, "demo-next-v1") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("next no sirvió el marcador (body=%q err=%v)", body, err)
+		}
+		time.Sleep(2 * time.Second)
+	}
+	if body, err := bbGet(t, "1"); err == nil {
+		t.Fatalf("placeholder 1 no debe servir: %q", body)
+	}
+}
+
+// TestRealViteConRed: install+build con red y dos versiones servidas con el
+// preview del dist compilado (proceso único vía node directo).
+func TestRealViteConRed(t *testing.T) {
+	node := nodeOrSkip(t)
+	pnpmOrSkip(t)
+	repo := fixtureRepo(t, "demo-react-vite")
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	viteBin := filepath.Join("node_modules", "vite", "bin", "vite.js")
+	start := []string{viteBin, "preview", "--host", "127.0.0.1", "--port", "$PORT", "--strictPort"}
+	_, live, _, ctl := realWorld(t, node, start,
+		repo, []string{"pnpm install", "pnpm run build"}, nil)
+
+	serveMarker := func(port, want string, timeout time.Duration) {
+		t.Helper()
+		deadline := time.Now().Add(timeout)
+		for {
+			body, err := bbGet(t, port)
+			if err == nil && strings.Contains(body, want) {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("vite no sirvió %q (body=%q err=%v)", want, body, err)
+			}
+			time.Sleep(2 * time.Second)
+		}
+	}
+
+	if _, err := deploy.RunContext(context.Background(), bbAppOf(live), "", ctl, io.Discard, log); err != nil {
+		t.Fatalf("deploy vite v1: %v", err)
+	}
+	p1 := bbPortOf(ctl.live)
+	serveMarker(p1, "demo-vite-v1", 120*time.Second)
+
+	if err := os.WriteFile(filepath.Join(repo, "index.html"), []byte(`<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>demo-vite-v2</title></head>
+<body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body>
+</html>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, repo, "v2")
+	if _, err := deploy.RunContext(context.Background(), bbAppOf(ctl.live), "", ctl, io.Discard, log); err != nil {
+		t.Fatalf("deploy vite v2: %v", err)
+	}
+	p2 := bbPortOf(ctl.live)
+	if p2 == "" || p2 == p1 {
+		t.Fatalf("corte sin puerto nuevo: p1=%q p2=%q", p1, p2)
+	}
+	serveMarker(p2, "demo-vite-v2", 120*time.Second)
+	if body, err := bbGet(t, p1); err == nil {
+		t.Fatalf("la v1 sigue viva en %s con %q", p1, body)
+	}
 }
 
 // TestRealBuildRotoConservaViva: syntax error real; el build falla y la v1
