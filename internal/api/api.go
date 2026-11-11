@@ -254,6 +254,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("/api/v1/proxy", d.handleProxy)
 	mux.HandleFunc("/api/v1/proxy/capabilities", d.handleProxyCapabilities)
 
+	// WAF: reglas y bloqueos recientes (operator: expone IPs).
+	mux.HandleFunc("/api/v1/waf", d.handleWAF)
+
 	// Build log de un deploy (para vista detalle) + retry mismo rev.
 	mux.HandleFunc("/api/v1/deployments/", d.handleDeploymentDetail)
 
