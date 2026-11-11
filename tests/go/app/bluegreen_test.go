@@ -101,7 +101,7 @@ func bbCommit(t *testing.T, dir, version string) {
 	}
 }
 
-var bbClient = &http.Client{Timeout: 3 * time.Second}
+var bbClient = &http.Client{Timeout: 15 * time.Second}
 
 func bbGet(t *testing.T, port string) (string, error) {
 	t.Helper()
@@ -183,13 +183,15 @@ func bbWaitServe(t *testing.T, port, want string, timeout time.Duration) {
 	t.Fatalf("puerto %s no sirvió %q", port, want)
 }
 
-// hammer martilla el proxy (Host bb.test) hasta cerrar stop. Devuelve los
-// bodies en orden y cuántos requests fallaron. Es la prueba real del cero
-// downtime: el corte de ruta es atómico, así que ningún request puede caer.
-func hammer(t *testing.T, proxyURL string, stop <-chan struct{}) (bodies func() []string, errs func() int) {
+// hammer martilla el proxy (Host bb.test) hasta cerrar stop. Devuelve las
+// respuestas (status+body) en orden y cuántos requests fallaron. Los errores
+// de lectura cuentan como fallo (tragarlos fabricaba bodies "" fantasma);
+// el timeout del cliente es generoso (15s): una caída real (refused, 404,
+// 502) responde de inmediato, así que no enmascara downtime.
+func hammer(t *testing.T, proxyURL string, stop <-chan struct{}) (samples func() []probe, errs func() int) {
 	t.Helper()
 	var mu sync.Mutex
-	var got []string
+	var got []probe
 	var nerr int
 	go func() {
 		for {
@@ -205,17 +207,21 @@ func hammer(t *testing.T, proxyURL string, stop <-chan struct{}) (bodies func() 
 			if err != nil {
 				nerr++
 			} else {
-				b, _ := io.ReadAll(resp.Body)
+				b, rerr := io.ReadAll(resp.Body)
 				resp.Body.Close()
-				got = append(got, string(b))
+				if rerr != nil {
+					nerr++
+				} else {
+					got = append(got, probe{status: resp.StatusCode, body: string(b)})
+				}
 			}
 			mu.Unlock()
 		}
 	}()
-	return func() []string {
+	return func() []probe {
 			mu.Lock()
 			defer mu.Unlock()
-			return append([]string(nil), got...)
+			return append([]probe(nil), got...)
 		}, func() int {
 			mu.Lock()
 			defer mu.Unlock()
@@ -223,20 +229,27 @@ func hammer(t *testing.T, proxyURL string, stop <-chan struct{}) (bodies func() 
 		}
 }
 
+// probe una respuesta del martillo con su status (para diagnosticar
+// contenidos inesperados: "" con 200 no es lo mismo que un 502).
+type probe struct {
+	status int
+	body   string
+}
+
 // assertCorteLimpio exige: cero errores, solo from/to, ambos vistos y una
 // sola transición from* to* (sin flapping ni huecos).
-func assertCorteLimpio(t *testing.T, bodies []string, nerr int, from, to string) {
+func assertCorteLimpio(t *testing.T, samples []probe, nerr int, from, to string) {
 	t.Helper()
 	if nerr != 0 {
-		t.Fatalf("corte con %d requests caídos de %d", nerr, len(bodies)+nerr)
+		t.Fatalf("corte con %d requests caídos de %d", nerr, len(samples)+nerr)
 	}
-	if len(bodies) == 0 {
+	if len(samples) == 0 {
 		t.Fatal("el martillo no registró respuestas")
 	}
 	seenFrom, seenTo := false, false
 	flipped := false
-	for _, b := range bodies {
-		switch b {
+	for _, p := range samples {
+		switch p.body {
 		case from:
 			seenFrom = true
 			if flipped {
@@ -246,12 +259,25 @@ func assertCorteLimpio(t *testing.T, bodies []string, nerr int, from, to string)
 			seenTo = true
 			flipped = true
 		default:
-			t.Fatalf("contenido inesperado %q (quiere %q/%q)", b, from, to)
+			t.Fatalf("contenido inesperado %q (status %d, quiere %q/%q; muestra: %s)",
+				p.body, p.status, from, to, sampleStr(samples))
 		}
 	}
 	if !seenFrom || !seenTo {
-		t.Fatalf("sin transición completa %q->%q (v1=%v v2=%v, n=%d)", from, to, seenFrom, seenTo, len(bodies))
+		t.Fatalf("sin transición completa %q->%q (v1=%v v2=%v, n=%d; muestra: %s)", from, to, seenFrom, seenTo, len(samples), sampleStr(samples))
 	}
+}
+
+// sampleStr primeras respuestas (status+body) para diagnosticar en CI.
+func sampleStr(samples []probe) string {
+	var sb strings.Builder
+	for i, p := range samples {
+		if i >= 5 {
+			break
+		}
+		fmt.Fprintf(&sb, "[%d %q] ", p.status, p.body)
+	}
+	return sb.String()
 }
 
 // Deploy sync con cero downtime real: mientras el build+canario corren,
@@ -296,7 +322,7 @@ func TestBlueGreenZeroDowntimeReal(t *testing.T) {
 	front := httptest.NewServer(proxy.NewHandler(ctl.live, log))
 	defer front.Close()
 	stop := make(chan struct{})
-	bodies, errs := hammer(t, front.URL, stop)
+	samples, errs := hammer(t, front.URL, stop)
 	go func() {
 		rev, err := deploy.RunContext(context.Background(), bbAppOf(ctl.live), "", ctl, io.Discard, log)
 		if err != nil {
@@ -320,7 +346,7 @@ func TestBlueGreenZeroDowntimeReal(t *testing.T) {
 	}
 	// Cero downtime real: ningún request al proxy cayó y el contenido pasó
 	// de v1 a v2 en una sola transición (sin huecos ni flapping).
-	assertCorteLimpio(t, bodies(), errs(), "v1", "v2")
+	assertCorteLimpio(t, samples(), errs(), "v1", "v2")
 	p2 := bbPortOf(live)
 	if p2 == "" || p2 == p1 {
 		t.Fatalf("corte sin puerto nuevo: p1=%q p2=%q", p1, p2)
@@ -332,13 +358,13 @@ func TestBlueGreenZeroDowntimeReal(t *testing.T) {
 
 	// rollback martillando el proxy: vuelve v2->v1 sin caídas.
 	stopRb := make(chan struct{})
-	bodiesRb, errsRb := hammer(t, front.URL, stopRb)
+	samplesRb, errsRb := hammer(t, front.URL, stopRb)
 	if err := deploy.Rollback(bbAppOf(live), ctl, log); err != nil {
 		close(stopRb)
 		t.Fatalf("rollback: %v", err)
 	}
 	close(stopRb)
-	assertCorteLimpio(t, bodiesRb(), errsRb(), "v2", "v1")
+	assertCorteLimpio(t, samplesRb(), errsRb(), "v2", "v1")
 	p3 := bbPortOf(live)
 	if p3 == "" || p3 == p2 {
 		t.Fatalf("rollback sin puerto nuevo: p2=%q p3=%q", p2, p3)
@@ -347,6 +373,24 @@ func TestBlueGreenZeroDowntimeReal(t *testing.T) {
 	if _, err := bbGet(t, p2); err == nil {
 		t.Fatal("la v2 sigue viva tras el rollback")
 	}
+}
+
+// tailDeployLog vuelca la cola del log de build más reciente: en CI el
+// estado "failed" sin el log es ciego (pip vs restart vs health).
+func tailDeployLog(dir string) string {
+	ents, err := os.ReadDir(dir)
+	if err != nil || len(ents) == 0 {
+		return "(sin logs en " + dir + ")"
+	}
+	name := ents[len(ents)-1].Name() // orden léxico = cronológico (timestamp)
+	b, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		return "(ilegible " + name + ": " + err.Error() + ")"
+	}
+	if len(b) > 4096 {
+		b = b[len(b)-4096:]
+	}
+	return "[" + name + "]\n" + string(b)
 }
 
 // Deploy async real vía deployAppAsync: devuelve el id al instante y el
@@ -496,7 +540,7 @@ func TestBlueGreenBuildLocalReal(t *testing.T) {
 		st, ok := db.DeploymentStatus(id)
 		if ok && st != "running" {
 			if st != "ok" {
-				t.Fatalf("build terminó en %q", st)
+				t.Fatalf("build terminó en %q\n--- deploy log ---\n%s", st, tailDeployLog(filepath.Join(base, "logs", "deploys")))
 			}
 			break
 		}

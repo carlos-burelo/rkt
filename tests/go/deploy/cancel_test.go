@@ -21,7 +21,10 @@ func TestDeployCancelMidBuild(t *testing.T) {
 	live := filepath.Join(base, "live.a")
 	os.MkdirAll(live, 0o755)
 
-	slow := `i=0; while [ $i -lt 1000000 ]; do i=$((i+1)); done`
+	// sleep 60: el ctx mata sh y el paso falla sí o sí (dura 60s, ninguna
+	// máquina lo termina antes del cancel). El sleep huérfano expira solo
+	// y en Linux no retiene el dir para el RemoveAll.
+	slow := `sleep 60`
 	if runtime.GOOS == "windows" {
 		// for+dir son builtins de cmd: sin procesos hijos, la kill no
 		// deja huérfanos que retengan el dir (ping sí los deja).
@@ -45,7 +48,25 @@ func TestDeployCancelMidBuild(t *testing.T) {
 		_, err := RunContext(ctx, testApp(live, repo, []string{slow}), "", ctl, out, log)
 		done <- err
 	}()
-	time.Sleep(3 * time.Second) // deja que el clone termine y el build arranque
+	// Espera al arranque real del build (marca ▶ step:): cancelar a ciegas
+	// con sleep fijo es una carrera (en máquinas rápidas el build ya
+	// terminó y el cancel no prueba nada). Con sleep 60 el cancel cae
+	// siempre a mitad de paso, en cualquier hardware.
+	stepped := false
+	for dead := time.Now().Add(60 * time.Second); ; {
+		if b, err := os.ReadFile(out.Name()); err == nil && strings.Contains(string(b), "▶ step:") {
+			stepped = true
+			break
+		}
+		if time.Now().After(dead) {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if !stepped {
+		cancel()
+		t.Fatal("el build no arrancó (sin marca ▶ step:)")
+	}
 	cancel()
 
 	select {
