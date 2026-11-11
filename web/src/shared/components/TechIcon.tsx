@@ -16,6 +16,10 @@ const FILES: Record<string, string> = {
   rust: "rust.svg",
   java: "java.svg",
   python: "python.svg",
+  php: "php.svg",
+  ruby: "ruby.svg",
+  dotnet: "dotnet.svg",
+  deno: "deno.svg",
   static: "static.svg",
 };
 
@@ -32,6 +36,10 @@ const LABELS: Record<string, string> = {
   rust: "Rust",
   java: "Java",
   python: "Python",
+  php: "PHP",
+  ruby: "Ruby",
+  dotnet: ".NET",
+  deno: "Deno",
   static: "Static",
 };
 

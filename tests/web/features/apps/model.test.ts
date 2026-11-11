@@ -35,6 +35,12 @@ describe("stackOfApp", () => {
     expect(stackOfApp({ command: "C:/rkt/apps/api/api.exe", deploy: { build: ["go build ./cmd/api"] } })).toBe("go");
     expect(stackOfApp({ command: "node server.js", deploy: { build: ["pnpm install", "pnpm build"] } })).toBe("node");
   });
+  it("detecta php, ruby, dotnet y deno", () => {
+    expect(stackOfApp({ command: "php", args: ["artisan", "serve", "--port", "$PORT"] })).toBe("php");
+    expect(stackOfApp({ command: "bundle", args: ["exec", "puma", "-b", "tcp://127.0.0.1:$PORT"] })).toBe("ruby");
+    expect(stackOfApp({ command: "dotnet", args: ["./publish/app.dll", "--urls", "http://127.0.0.1:1"] })).toBe("dotnet");
+    expect(stackOfApp({ command: "deno", args: ["serve", "--port", "$PORT", "main.ts"] })).toBe("deno");
+  });
   it("no confunde server.js con el paquete serve", () => {
     expect(stackOfApp({ command: "node server.js" })).toBe("node");
   });

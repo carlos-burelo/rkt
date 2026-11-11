@@ -8,7 +8,8 @@ export function canSaveApp(command: string, external: boolean, staticDir?: strin
 // "unknown" = sin icono (no adivinar en la UI).
 export type StackKind =
   | "next" | "vite" | "astro" | "sveltekit" | "nuxt" | "remix" | "solidstart"
-  | "node" | "go" | "rust" | "java" | "python" | "static" | "external" | "unknown";
+  | "node" | "go" | "rust" | "java" | "python" | "php" | "ruby" | "dotnet" | "deno"
+  | "static" | "external" | "unknown";
 
 // stackOfApp heurística display-only sobre command/args/build: el manifiesto
 // no guarda el plan, así que la UI lo deriva. Orden: frameworks concretos
@@ -31,6 +32,11 @@ export function stackOfApp(meta: {
   if (has("remix")) return "remix";
   if (has("solid", "solidstart")) return "solidstart";
   if (has("python")) return "python";
+  if (has("php", "artisan", "composer")) return "php";
+  if (has("bundle", "puma", "rackup", "rails", "jekyll")) return "ruby";
+  if (has("dotnet") || hay.includes(".dll")) return "dotnet";
+  if (has("deno")) return "deno";
+  if (has("mkdocs", "hugo")) return "static";
   if (has("cargo") || hay.includes("target/release") || hay.includes("target\\release")) return "rust";
   if (has("mvn", "gradle", "gradlew") || hay.includes(".jar") || hay.includes("spring-boot")) return "java";
   if (hay.includes("go build") || /(^|\/)go(\.exe)?$/.test((meta.command ?? "").toLowerCase().replace(/\\/g, "/"))) return "go";
