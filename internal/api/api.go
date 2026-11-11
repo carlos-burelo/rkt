@@ -229,6 +229,10 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("/api/v1/server/history", d.handleServerHistory)
 	mux.HandleFunc("/api/v1/server/processes", d.handleServerProcesses)
 
+	// Doctor del entorno (mismo que `rkt doctor`): toolchains, bins,
+	// pool y DB. Solo lectura, sin secretos.
+	mux.HandleFunc("/api/v1/server/doctor", d.handleServerDoctor)
+
 	// Cron jobs por app: lista, alta/edición, borrado, ejecución e historial.
 	mux.HandleFunc("/api/v1/cron", d.handleCron)
 	mux.HandleFunc("/api/v1/cron/", d.handleCronDetail)

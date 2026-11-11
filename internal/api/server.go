@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+
+	"rkt-proxy/internal/doctor"
 )
 
 // handleServer snapshot local de la instancia.
@@ -46,4 +48,17 @@ func (d *Deps) handleServerProcesses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, d.Server.Processes(queryInt(r, "limit", 10)))
+}
+
+// handleServerDoctor diagnóstico del entorno (toolchains, bins, pool).
+func (d *Deps) handleServerDoctor(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
+		return
+	}
+	getSetting := func(string) string { return "" }
+	if d.DB != nil {
+		getSetting = d.DB.GetSetting
+	}
+	writeJSON(w, doctor.Run(doctor.SystemEnv(getSetting)))
 }
