@@ -1,0 +1,12 @@
+{
+  "name": "demo-remix",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "remix build",
+    "start": "remix-serve build/index.js"
+  },
+  "dependencies": {
+    "@remix-run/node": "^2.0.0"
+  }
+}

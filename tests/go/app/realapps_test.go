@@ -188,6 +188,64 @@ func pyCompileStep(py string) string {
 	return base + " -m py_compile app.py"
 }
 
+func nodeOrSkip(t *testing.T) string {
+	t.Helper()
+	if path, err := exec.LookPath("node"); err == nil {
+		if exec.Command(path, "--version").Run() == nil {
+			return path
+		}
+	}
+	t.Skip("sin Node ejecutable")
+	return ""
+}
+
+func nodeCheckStep() string { return "node --check server.js" }
+
+// TestRealNodeServerCorteYRollback: lo mismo que py pero con Node stdlib
+// (proceso único: `node server.js` directo, sin wrapper pnpm).
+func TestRealNodeServerCorteYRollback(t *testing.T) {
+	node := nodeOrSkip(t)
+	repo := fixtureRepo(t, "demo-node-server")
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	_, live, _, ctl := realWorld(t, node, []string{"server.js"}, repo, []string{nodeCheckStep()}, nil)
+
+	app := bbAppOf(live)
+	if _, err := deploy.RunContext(context.Background(), app, "", ctl, io.Discard, log); err != nil {
+		t.Fatalf("deploy v1: %v", err)
+	}
+	p1 := bbPortOf(ctl.live)
+	bbWaitServe(t, p1, "v1", 30*time.Second)
+
+	if err := os.WriteFile(filepath.Join(repo, "VERSION"), []byte("v2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, repo, "v2")
+	app = bbAppOf(ctl.live)
+	if _, err := deploy.RunContext(context.Background(), app, "", ctl, io.Discard, log); err != nil {
+		t.Fatalf("deploy v2: %v", err)
+	}
+	p2 := bbPortOf(ctl.live)
+	if p2 == "" || p2 == p1 {
+		t.Fatalf("corte sin puerto nuevo: p1=%q p2=%q", p1, p2)
+	}
+	bbWaitServe(t, p2, "v2", 30*time.Second)
+	if body, err := bbGet(t, p1); err == nil {
+		t.Fatalf("la v1 sigue viva en %s con %q", p1, body)
+	}
+
+	if err := deploy.Rollback(bbAppOf(ctl.live), ctl, log); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+	p3 := bbPortOf(ctl.live)
+	if p3 == "" || p3 == p2 {
+		t.Fatalf("rollback sin puerto nuevo: p2=%q p3=%q", p2, p3)
+	}
+	bbWaitServe(t, p3, "v1", 30*time.Second)
+	if body, err := bbGet(t, p2); err == nil {
+		t.Fatalf("la v2 sigue viva en %s con %q", p2, body)
+	}
+}
+
 // TestRealPyDeployCorteYRollback: v1 sirve, v2 corta sin dejar muertos y el
 // rollback devuelve v1. Todo con repo git y procesos de verdad.
 func TestRealPyDeployCorteYRollback(t *testing.T) {
@@ -334,5 +392,52 @@ func TestRealFixturesDetectanPlan(t *testing.T) {
 	}
 	if st.StaticDir != "." {
 		t.Fatalf("demo-static dir=%q, quiere .", st.StaticDir)
+	}
+
+	// Familia Node: cada stack con sus archivos reales (sin red ni install).
+	nodeCases := []struct {
+		dir       string
+		kind      string
+		start     []string
+		staticDir string
+		buildSub  string
+	}{
+		{"demo-node-server", "node", []string{"pnpm", "run", "start"}, "", ""},
+		{"demo-react-vite", "vite", nil, "dist", "pnpm run build"},
+		{"demo-next", "next", []string{"pnpm", "exec", "next", "start", "-H", "127.0.0.1"}, "", "pnpm run build"},
+		{"demo-sveltekit", "sveltekit", []string{"node", "build"}, "", "pnpm run build"},
+		{"demo-nuxt", "nuxt", []string{"node", filepath.Join(".output", "server", "index.mjs")}, "", "pnpm run build"},
+		{"demo-remix", "remix", []string{"pnpm", "run", "start"}, "", "pnpm run build"},
+		{"demo-astro", "astro", nil, "dist", "pnpm run build"},
+		{"demo-node-serve", "node", []string{"pnpm", "exec", "serve", "dist"}, "", "pnpm run build"},
+		{"demo-node-static", "static", nil, ".", ""},
+	}
+	for _, c := range nodeCases {
+		t.Run(c.dir, func(t *testing.T) {
+			p, err := buildpack.DetectDir(filepath.Join(root, c.dir))
+			if err != nil {
+				t.Fatalf("detect: %v", err)
+			}
+			if p.Kind != c.kind {
+				t.Fatalf("kind = %q, quiere %q", p.Kind, c.kind)
+			}
+			if c.start != nil && strings.Join(p.Start, " ") != strings.Join(c.start, " ") {
+				t.Fatalf("start = %v, quiere %v", p.Start, c.start)
+			}
+			if c.staticDir != "" && (!p.IsStatic() || p.StaticDir != c.staticDir) {
+				t.Fatalf("static = %q (dir %q), quiere %q", p.Kind, p.StaticDir, c.staticDir)
+			}
+			if c.buildSub != "" {
+				found := false
+				for _, s := range p.Build {
+					if strings.Contains(s, c.buildSub) {
+						found = true
+					}
+				}
+				if !found {
+					t.Fatalf("build %v sin %q", p.Build, c.buildSub)
+				}
+			}
+		})
 	}
 }

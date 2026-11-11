@@ -1,0 +1,11 @@
+{
+  "name": "demo-node-serve",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "serve": "^14.0.0"
+  }
+}

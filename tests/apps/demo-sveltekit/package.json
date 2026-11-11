@@ -1,0 +1,11 @@
+{
+  "name": "demo-sveltekit",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@sveltejs/kit": "^2.0.0"
+  }
+}

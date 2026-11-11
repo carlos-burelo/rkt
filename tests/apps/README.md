@@ -39,6 +39,25 @@ Go stdlib, sin dependencias externas.
   El deploy de estáticos corre como `rkt __static <dir>`, no como canario
   de app; por eso aquí solo se prueba detección, no pipeline.
 
+## Familia Node (detección real sobre archivos, sin red ni install)
+
+| fixture | kind | arranque / salida |
+|---|---|---|
+| `demo-node-server` | `node` | `pnpm run start` (flujo real: `node --check` + `node server.js`) |
+| `demo-react-vite` | `vite` | estático `dist` |
+| `demo-next` | `next` | `pnpm exec next start -H 127.0.0.1` |
+| `demo-sveltekit` | `sveltekit` | `node build` |
+| `demo-nuxt` | `nuxt` | `node .output/server/index.mjs` |
+| `demo-remix` | `remix` | `pnpm run start` |
+| `demo-astro` | `astro` | estático `dist` |
+| `demo-node-serve` | `node` | `pnpm exec serve dist` |
+| `demo-node-static` | `static` | `.` (package.json sin scripts + index.html) |
+
+Solo `demo-node-server` corre el pipeline (Node stdlib, sin
+dependencias). Los frameworks con build (`next build`, `vite build`…)
+requieren `pnpm install` con red y quedan en detección: el plan que el
+test afirma es el mismo que `discover`/`apps add` consume.
+
 ## Reglas
 
 - Nada de red en build/arranque (solo stdlib). Los tests deben pasar
