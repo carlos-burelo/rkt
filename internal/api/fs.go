@@ -3,7 +3,9 @@
 package api
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -50,7 +52,8 @@ func (d *Deps) handleFS(w http.ResponseWriter, r *http.Request) {
 	listing, err := listDir(abs)
 	if err != nil {
 		status := http.StatusForbidden
-		if os.IsNotExist(err) {
+		// errors.Is sí desenvuelve fmt %w (os.IsNotExist no lo hace).
+		if errors.Is(err, fs.ErrNotExist) {
 			status = http.StatusNotFound
 		}
 		writeErr(w, status, err.Error())
@@ -63,7 +66,7 @@ func (d *Deps) handleFS(w http.ResponseWriter, r *http.Request) {
 func listDir(abs string) (fsListing, error) {
 	st, err := os.Stat(abs)
 	if err != nil {
-		return fsListing{}, fmt.Errorf("ruta no existe: %s", abs)
+		return fsListing{}, fmt.Errorf("ruta no existe %s: %w", abs, err)
 	}
 	if !st.IsDir() {
 		abs = filepath.Dir(abs)
