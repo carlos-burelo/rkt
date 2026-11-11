@@ -204,7 +204,7 @@ func loadFleet(q queryer) (*FleetData, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	rrows, err := q.Query(`SELECT hosts, target, path, port FROM routes ORDER BY id`)
+	rrows, err := q.Query(`SELECT hosts, target, path FROM routes ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func loadFleet(q queryer) (*FleetData, error) {
 	for rrows.Next() {
 		var r config.Route
 		var h string
-		if err := rrows.Scan(&h, &r.Target, &r.Path, &r.Port); err != nil {
+		if err := rrows.Scan(&h, &r.Target, &r.Path); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal([]byte(h), &r.Hosts)
@@ -251,8 +251,8 @@ func importFleet(ex execer, cfg *config.Config) error {
 	}
 	for i := range cfg.Routes {
 		hosts, _ := json.Marshal(cfg.Routes[i].Hosts)
-		if _, err := ex.Exec(`INSERT INTO routes(hosts, target, path, port) VALUES(?,?,?,?)`,
-			string(hosts), cfg.Routes[i].Target, cfg.Routes[i].Path, cfg.Routes[i].Port); err != nil {
+		if _, err := ex.Exec(`INSERT INTO routes(hosts, target, path) VALUES(?,?,?)`,
+			string(hosts), cfg.Routes[i].Target, cfg.Routes[i].Path); err != nil {
 			return err
 		}
 	}

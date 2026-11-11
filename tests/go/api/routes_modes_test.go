@@ -1,7 +1,7 @@
 package api
 
-// Rutas por path y puerto vía API: alta, listado, retarget y borrado por
-// selector completo; el legacy por host queda intacto.
+// Rutas por path vía API: alta, listado, retarget y borrado por selector;
+// el legacy por host queda intacto.
 
 import (
 	"encoding/json"
@@ -22,42 +22,42 @@ func postJSON(t *testing.T, h http.Handler, tok, path, body string) (int, string
 	return rec.Code, rec.Body.String()
 }
 
-func TestRutasPathPortAPI(t *testing.T) {
+func TestRutasPathAPI(t *testing.T) {
 	d, db, done := testDeps(t)
 	defer done()
 	h := NewHandler(d)
 	opTok := loginAs(t, h, db, "op", store.RoleOperator)
 
-	// Alta por path y por puerto.
+	// Alta por path (vale sin hosts: cualquier host/IP).
 	if code, body := postJSON(t, h, opTok, "/api/v1/routes", `{"hosts":["a.test"],"path":"/panel","target":"http://127.0.0.1:9"}`); code != http.StatusCreated {
 		t.Fatalf("alta path: %d %s", code, body)
 	}
-	if code, body := postJSON(t, h, opTok, "/api/v1/routes", `{"hosts":["9.9.9.9"],"port":3000,"target":"http://127.0.0.1:10"}`); code != http.StatusCreated {
-		t.Fatalf("alta port: %d %s", code, body)
+	if code, body := postJSON(t, h, opTok, "/api/v1/routes", `{"path":"/pub","target":"http://127.0.0.1:10"}`); code != http.StatusCreated {
+		t.Fatalf("alta path sin host: %d %s", code, body)
 	}
 	// Duplicado exacto (host+path) se rechaza.
 	if code, _ := postJSON(t, h, opTok, "/api/v1/routes", `{"hosts":["a.test"],"path":"/panel","target":"http://127.0.0.1:11"}`); code != http.StatusBadRequest {
 		t.Fatalf("duplicado: %d", code)
 	}
 
-	// El listado expone path y port.
+	// El listado expone path.
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/routes", opTok))
 	var got []map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	var seenPath, seenPort bool
+	var seenPath, seenBare bool
 	for _, r := range got {
 		if r["path"] == "/panel" {
 			seenPath = true
 		}
-		if p, _ := r["port"].(float64); p == 3000 {
-			seenPort = true
+		if r["path"] == "/pub" {
+			seenBare = true
 		}
 	}
-	if !seenPath || !seenPort {
-		t.Fatalf("listado sin path/port: %s", rec.Body.String())
+	if !seenPath || !seenBare {
+		t.Fatalf("listado sin path: %s", rec.Body.String())
 	}
 
 	// Retarget por selector completo.
@@ -69,16 +69,16 @@ func TestRutasPathPortAPI(t *testing.T) {
 		t.Fatalf("retarget: %d %s", rec.Code, rec.Body.String())
 	}
 
-	// Borrado por path y por puerto.
+	// Borrado por path (con y sin host).
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/routes?host=a.test&path=/panel", opTok))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("borrado path: %d %s", rec.Code, rec.Body.String())
 	}
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/routes?port=3000", opTok))
+	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/routes?path=/pub", opTok))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("borrado port: %d %s", rec.Code, rec.Body.String())
+		t.Fatalf("borrado path suelto: %d %s", rec.Code, rec.Body.String())
 	}
 
 	// Legacy por host intacto: borrar lo que no existe da 404.

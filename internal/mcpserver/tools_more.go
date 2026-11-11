@@ -38,16 +38,14 @@ type routesAddArg struct {
 	Hosts  []string `json:"hosts,omitempty" jsonschema:"hosts a enrutar (vacío = cualquier host/IP)"`
 	Target string   `json:"target" jsonschema:"backend http(s)://127.0.0.1:puerto"`
 	Path   string   `json:"path,omitempty" jsonschema:"prefijo de ruta (ej /app, se recorta al proxear)"`
-	Port   int      `json:"port,omitempty" jsonschema:"puerto del edge (ej 3000, requiere reinicio)"`
 }
 type routesUpdateArg struct {
 	Host   string `json:"host" jsonschema:"host existente en la ruta"`
 	Target string `json:"target" jsonschema:"nuevo backend"`
 }
 type hostArg struct {
-	Host string `json:"host,omitempty" jsonschema:"host (ej app.localhost)"`
+	Host string `json:"host,omitempty" jsonschema:"host a quitar"`
 	Path string `json:"path,omitempty" jsonschema:"prefijo a quitar (rutas sin host)"`
-	Port int    `json:"port,omitempty" jsonschema:"puerto a quitar (rutas sin host)"`
 }
 type verifyArg struct {
 	Host string `json:"host" jsonschema:"host a verificar"`
@@ -234,8 +232,8 @@ func (s *Server) doEnvGlobalDelete(a envGlobalArg) (string, error) {
 }
 
 func (s *Server) doRoutesAdd(a routesAddArg) (string, error) {
-	if len(a.Hosts) == 0 && a.Path == "" && a.Port == 0 {
-		return "", fmt.Errorf("faltan hosts/path/port")
+	if len(a.Hosts) == 0 && a.Path == "" {
+		return "", fmt.Errorf("faltan hosts o path")
 	}
 	if a.Target == "" {
 		return "", fmt.Errorf("falta target")
@@ -246,7 +244,7 @@ func (s *Server) doRoutesAdd(a routesAddArg) (string, error) {
 	}
 	defer db.Close()
 	if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
-		return cfgfile.AddRoute(cp, a.Hosts, a.Target, a.Path, a.Port)
+		return cfgfile.AddRoute(cp, a.Hosts, a.Target, a.Path)
 	}); err != nil {
 		return "", err
 	}
@@ -277,15 +275,15 @@ func (s *Server) doRoutesUpdate(a routesUpdateArg) (string, error) {
 }
 
 func (s *Server) doRoutesRemove(a hostArg) (string, error) {
-	if a.Host == "" && a.Path == "" && a.Port == 0 {
-		return "", fmt.Errorf("falta host, path o port")
+	if a.Host == "" && a.Path == "" {
+		return "", fmt.Errorf("falta host o path")
 	}
 	_, db, err := s.load()
 	if err != nil {
 		return "", err
 	}
 	defer db.Close()
-	if a.Path == "" && a.Port == 0 {
+	if a.Path == "" {
 		removed := false
 		if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
 			ok, err := cfgfile.RemoveRouteHost(cp, a.Host)
@@ -301,7 +299,7 @@ func (s *Server) doRoutesRemove(a hostArg) (string, error) {
 	}
 	dropped := 0
 	if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
-		n, err := cfgfile.RemoveRoutesFull(cp, a.Host, a.Path, a.Port)
+		n, err := cfgfile.RemoveRoutesFull(cp, a.Host, a.Path)
 		dropped = n
 		return err
 	}); err != nil {
@@ -997,7 +995,7 @@ func (s *Server) registerMore(srv *mcp.Server) {
 		func(ctx context.Context, req *mcp.CallToolRequest, a envGlobalArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEnvGlobalDelete(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "routes_add", Description: "Crea una ruta: hosts (dominio) y/o path (/app) y/o port (3000) → target."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "routes_add", Description: "Crea una ruta: hosts (dominio) y/o path (/app) → target."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a routesAddArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doRoutesAdd(a))
 		})
@@ -1005,7 +1003,7 @@ func (s *Server) registerMore(srv *mcp.Server) {
 		func(ctx context.Context, req *mcp.CallToolRequest, a routesUpdateArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doRoutesUpdate(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "routes_remove", Description: "Quita un host de sus rutas, o rutas enteras por path/port (sin host)."},
+	mcp.AddTool(srv, &mcp.Tool{Name: "routes_remove", Description: "Quita un host de sus rutas, o rutas enteras por path (sin host)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a hostArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doRoutesRemove(a))
 		})

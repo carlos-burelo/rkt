@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
@@ -18,11 +17,10 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 			Hosts  []string `json:"hosts"`
 			Target string   `json:"target"`
 			Path   string   `json:"path,omitempty"`
-			Port   int      `json:"port,omitempty"`
 		}
 		out := []routeOut{}
 		for _, x := range d.Live.Get().Routes {
-			out = append(out, routeOut{x.Hosts, x.Target, x.Path, x.Port})
+			out = append(out, routeOut{x.Hosts, x.Target, x.Path})
 		}
 		writeJSON(w, out)
 	case http.MethodPost:
@@ -33,14 +31,13 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 			Hosts  []string `json:"hosts"`
 			Target string   `json:"target"`
 			Path   string   `json:"path"`
-			Port   int      `json:"port"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
 			writeErr(w, http.StatusBadRequest, "JSON inválido")
 			return
 		}
 		if err := d.mutateFleet(false, func(cp *config.Config) error {
-			return cfgfile.AddRoute(cp, in.Hosts, in.Target, in.Path, in.Port)
+			return cfgfile.AddRoute(cp, in.Hosts, in.Target, in.Path)
 		}); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
@@ -53,23 +50,18 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 		host := r.URL.Query().Get("host")
 		path := r.URL.Query().Get("path")
-		port := 0
 		if p := r.URL.Query().Get("port"); p != "" {
-			var err error
-			port, err = strconv.Atoi(p)
-			if err != nil || port <= 0 {
-				writeErr(w, http.StatusBadRequest, "port inválido")
-				return
-			}
+			writeErr(w, http.StatusBadRequest, "estrategia por puerto eliminada: usa dominio o path")
+			return
 		}
-		if host == "" && path == "" && port == 0 {
-			writeErr(w, http.StatusBadRequest, "falta ?host= (o ?path= / ?port= para rutas sin host)")
+		if host == "" && path == "" {
+			writeErr(w, http.StatusBadRequest, "falta ?host= (o ?path= para rutas sin host)")
 			return
 		}
 		// Solo host: quirúrgico legacy (conserva el resto de hosts).
-		// Con path/port: se quita la ruta entera (único camino para
+		// Con path: se quita la ruta entera (único camino para
 		// rutas sin host).
-		if path == "" && port == 0 {
+		if path == "" {
 			removed := false
 			if err := d.mutateFleet(false, func(cp *config.Config) error {
 				ok, err := cfgfile.RemoveRouteHost(cp, host)
@@ -88,7 +80,7 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 		dropped := 0
 		if err := d.mutateFleet(false, func(cp *config.Config) error {
-			n, err := cfgfile.RemoveRoutesFull(cp, host, path, port)
+			n, err := cfgfile.RemoveRoutesFull(cp, host, path)
 			dropped = n
 			return err
 		}); err != nil {
@@ -108,7 +100,6 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 			Host   string `json:"host"`
 			Target string `json:"target"`
 			Path   string `json:"path"`
-			Port   int    `json:"port"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&pin); err != nil {
 			writeErr(w, http.StatusBadRequest, "JSON inválido")
@@ -118,7 +109,7 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "falta target")
 			return
 		}
-		if pin.Host != "" && pin.Path == "" && pin.Port == 0 {
+		if pin.Host != "" && pin.Path == "" {
 			found := false
 			if err := d.mutateFleet(false, func(cp *config.Config) error {
 				ok, err := cfgfile.SetRouteTarget(cp, pin.Host, pin.Target)
@@ -135,14 +126,14 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, map[string]string{"ok": "true"})
 			return
 		}
-		if pin.Host == "" && pin.Path == "" && pin.Port == 0 {
-			writeErr(w, http.StatusBadRequest, "falta host, path o port")
+		if pin.Host == "" && pin.Path == "" {
+			writeErr(w, http.StatusBadRequest, "falta host o path")
 			return
 		}
 		n := 0
 		if err := d.mutateFleet(false, func(cp *config.Config) error {
 			var err error
-			n, err = cfgfile.RetargetRoutes(cp, pin.Host, pin.Path, pin.Port, pin.Target)
+			n, err = cfgfile.RetargetRoutes(cp, pin.Host, pin.Path, pin.Target)
 			return err
 		}); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())

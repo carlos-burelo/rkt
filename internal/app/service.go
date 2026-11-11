@@ -16,7 +16,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -72,7 +71,6 @@ type Program struct {
 	srvTLS       *http.Server
 	srvHealth    *http.Server
 	srvDashboard *http.Server
-	srvExtra     []*http.Server
 	alog         *accesslog.Logger
 	sup          *supervisor.Manager
 	mgr          *autocert.Manager
@@ -153,22 +151,6 @@ func (p *Program) Start(_ service.Service) error {
 	return nil
 }
 
-// edgePorts puertos del edge distintos, ordenados (un listener por puerto).
-func edgePorts(cfg *config.Config) []int {
-	set := map[int]bool{}
-	for _, r := range cfg.Routes {
-		if r.Port != 0 {
-			set[r.Port] = true
-		}
-	}
-	out := make([]int, 0, len(set))
-	for p := range set {
-		out = append(out, p)
-	}
-	sort.Ints(out)
-	return out
-}
-
 // hasTLS refleja el listener 443 real (bindeado), no la config: con
 // hot-reload la config adelanta al listener y redirigir entonces
 // mandaría a un https que aún no existe.
@@ -186,7 +168,6 @@ func (p *Program) Stop(_ service.Service) error {
 	defer cancel()
 	p.stateMu.Lock()
 	srvTLS, srvHTTP, srvHealth, srvDashboard := p.srvTLS, p.srvHTTP, p.srvHealth, p.srvDashboard
-	extra := append([]*http.Server(nil), p.srvExtra...)
 	sup, alog, db, cron := p.sup, p.alog, p.db, p.cron
 	p.stateMu.Unlock()
 	if srvTLS != nil {
@@ -200,9 +181,6 @@ func (p *Program) Stop(_ service.Service) error {
 	}
 	if srvDashboard != nil {
 		_ = srvDashboard.Shutdown(ctx)
-	}
-	for _, s := range extra {
-		_ = s.Shutdown(ctx)
 	}
 	if sup != nil {
 		sup.Stop()
@@ -387,28 +365,6 @@ func (p *Program) Run() {
 			}
 		}
 	}()
-	// Puertos del edge (rutas por puerto): un listener por puerto distinto
-	// con el mismo handler (la distinción la hace el puerto local, y el
-	// dashboardGate sigue mandando: un Host de consola en IP:puerto la abre).
-	// Bind eager: un puerto ocupado aborta el arranque con el culpable.
-	for _, port := range edgePorts(cfg) {
-		addr := net.JoinHostPort("", strconv.Itoa(port))
-		ln, err := net.Listen("tcp", addr)
-		if err != nil {
-			p.log.Error("puerto del edge ocupado (revisa routes con port)", "port", port, "err", err)
-			os.Exit(1)
-		}
-		srv := &http.Server{Handler: handler, ErrorLog: errLog}
-		p.stateMu.Lock()
-		p.srvExtra = append(p.srvExtra, srv)
-		p.stateMu.Unlock()
-		p.log.Info("edge extra escuchando", "port", port)
-		go func(s *http.Server, l net.Listener, port int) {
-			if err := s.Serve(l); err != nil && err != http.ErrServerClosed {
-				p.log.Error("edge extra muerto", "port", port, "err", err)
-			}
-		}(srv, ln, port)
-	}
 	shareDashPort := false
 	if cfg.Healthz.Enabled {
 		controlToken, err := logx.EnsureControlToken(p.cfgPath)

@@ -148,13 +148,12 @@ func RemoveApp(cp *config.Config, name string, keepRoutes bool) (int, error) {
 	return dropped, nil
 }
 
-// AddRoute agrega hosts/target[/path][:port] y valida el conjunto.
-// Con hosts vacíos la ruta vale para cualquier host (IP); con Port
-// escucha en ese puerto del edge.
-func AddRoute(cp *config.Config, hosts []string, target, path string, port int) error {
-	r := config.Route{Hosts: hosts, Target: target, Path: path, Port: port}
-	if len(r.Hosts) == 0 && r.Path == "" && r.Port == 0 {
-		return fmt.Errorf("route requiere hosts, path o port")
+// AddRoute agrega hosts/target[/path] y valida el conjunto.
+// Con hosts vacíos la ruta vale para cualquier host (IP).
+func AddRoute(cp *config.Config, hosts []string, target, path string) error {
+	r := config.Route{Hosts: hosts, Target: target, Path: path}
+	if len(r.Hosts) == 0 && r.Path == "" {
+		return fmt.Errorf("route requiere hosts o path")
 	}
 	if strings.TrimSpace(r.Target) == "" {
 		return fmt.Errorf("route requiere target")
@@ -168,8 +167,8 @@ func AddRoute(cp *config.Config, hosts []string, target, path string, port int) 
 }
 
 // RemoveRouteHost quita un host (case-insensitive). La ruta sobrevive si
-// le queda otro selector (path o port): solo se descarta la que queda
-// sin hosts, sin path y sin port. false = el host no estaba.
+// le queda el otro selector (path): solo se descarta la que queda sin
+// hosts y sin path. false = el host no estaba.
 func RemoveRouteHost(cp *config.Config, host string) (bool, error) {
 	removed := false
 	routes := make([]config.Route, 0, len(cp.Routes))
@@ -182,7 +181,7 @@ func RemoveRouteHost(cp *config.Config, host string) (bool, error) {
 			}
 			hosts = append(hosts, h)
 		}
-		if len(hosts) > 0 || r.Path != "" || r.Port != 0 {
+		if len(hosts) > 0 || r.Path != "" {
 			r.Hosts = hosts
 			routes = append(routes, r)
 		}
@@ -221,8 +220,8 @@ func SetRouteTarget(cp *config.Config, host, target string) (bool, error) {
 }
 
 // routeMatchSelector true si la ruta cumple todos los selectores dados
-// (vacío/cero = no filtra por ese eje).
-func routeMatchSelector(r config.Route, host, path string, port int) bool {
+// (vacío = no filtra por ese eje).
+func routeMatchSelector(r config.Route, host, path string) bool {
 	if host != "" {
 		found := false
 		for _, h := range r.Hosts {
@@ -238,24 +237,21 @@ func routeMatchSelector(r config.Route, host, path string, port int) bool {
 	if path != "" && r.Path != path {
 		return false
 	}
-	if port != 0 && r.Port != port {
-		return false
-	}
 	return true
 }
 
 // RemoveRoutesFull quita rutas COMPLETAS que cumplan todos los selectores
-// dados (host contenido, path y port exactos). Devuelve cuántas quitó.
-// Es el camino para rutas sin host (path/port). Con solo host, se prefiere
+// dados (host contenido y/o path exacto). Devuelve cuántas quitó.
+// Es el camino para rutas sin host (path). Con solo host, se prefiere
 // RemoveRouteHost (quirúrgico: conserva el resto de hosts).
-func RemoveRoutesFull(cp *config.Config, host, path string, port int) (int, error) {
-	if host == "" && path == "" && port == 0 {
-		return 0, fmt.Errorf("indica host, path o port")
+func RemoveRoutesFull(cp *config.Config, host, path string) (int, error) {
+	if host == "" && path == "" {
+		return 0, fmt.Errorf("indica host o path")
 	}
 	routes := make([]config.Route, 0, len(cp.Routes))
 	n := 0
 	for _, r := range cp.Routes {
-		if routeMatchSelector(r, host, path, port) {
+		if routeMatchSelector(r, host, path) {
 			n++
 			continue
 		}
@@ -267,9 +263,9 @@ func RemoveRoutesFull(cp *config.Config, host, path string, port int) (int, erro
 
 // RetargetRoutes apunta al target nuevo las rutas que cumplan todos los
 // selectores dados. Devuelve cuántas tocó.
-func RetargetRoutes(cp *config.Config, host, path string, port int, target string) (int, error) {
-	if host == "" && path == "" && port == 0 {
-		return 0, fmt.Errorf("indica host, path o port")
+func RetargetRoutes(cp *config.Config, host, path, target string) (int, error) {
+	if host == "" && path == "" {
+		return 0, fmt.Errorf("indica host o path")
 	}
 	if strings.TrimSpace(target) == "" {
 		return 0, fmt.Errorf("target requerido")
@@ -277,7 +273,7 @@ func RetargetRoutes(cp *config.Config, host, path string, port int, target strin
 	work := cp.Clone()
 	n := 0
 	for i := range work.Routes {
-		if routeMatchSelector(work.Routes[i], host, path, port) {
+		if routeMatchSelector(work.Routes[i], host, path) {
 			work.Routes[i].Target = target
 			n++
 		}

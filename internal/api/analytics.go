@@ -265,13 +265,14 @@ func (d *Deps) handleProxy(w http.ResponseWriter, r *http.Request) {
 	type routeStatus struct {
 		Hosts  []string `json:"hosts"`
 		Target string   `json:"target"`
+		Path   string   `json:"path,omitempty"`
 		OK     bool     `json:"ok"`
 		TLS    []string `json:"tls"`
 		DNSOK  []bool   `json:"dns_ok"`
 	}
 	out := []routeStatus{}
 	for _, x := range d.Live.Get().Routes {
-		rs := routeStatus{Hosts: x.Hosts, Target: x.Target, TLS: []string{}, DNSOK: []bool{}}
+		rs := routeStatus{Hosts: x.Hosts, Target: x.Target, Path: x.Path, TLS: []string{}, DNSOK: []bool{}}
 		if u, err := url.Parse(x.Target); err == nil && u.Host != "" {
 			rs.OK = health.BackendOK(u.Host)
 		}

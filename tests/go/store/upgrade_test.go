@@ -139,8 +139,8 @@ func assertMigrada(t *testing.T, path, wantRev, wantRole string) {
 	if err := db.FinishDeployment(id, "ok", wantRev, "rev-nueva"); err != nil {
 		t.Fatalf("finish post-upgrade: %v", err)
 	}
-	// Columnas nuevas de v21: insert directo + lectura por LoadFleet.
-	if _, err := db.sql.Exec(`INSERT INTO routes(hosts,target,path,port) VALUES('["h.test"]','http://127.0.0.1:9','/app',3000)`); err != nil {
+	// Columnas nuevas: insert directo + lectura por LoadFleet.
+	if _, err := db.sql.Exec(`INSERT INTO routes(hosts,target,path) VALUES('["h.test"]','http://127.0.0.1:9','/app')`); err != nil {
 		t.Fatalf("insert ruta v21: %v", err)
 	}
 	fleet2, err := db.LoadFleet()
@@ -149,12 +149,12 @@ func assertMigrada(t *testing.T, path, wantRev, wantRole string) {
 	}
 	found := false
 	for _, r := range fleet2.Routes {
-		if r.Path == "/app" && r.Port == 3000 {
+		if r.Path == "/app" {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("ruta path/port no sobrevivió: %+v", fleet2.Routes)
+		t.Fatalf("ruta path no sobrevivió: %+v", fleet2.Routes)
 	}
 
 	// Reapertura idempotente.

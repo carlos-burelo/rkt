@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -101,7 +100,7 @@ func NewHandler(live *config.Live, log *slog.Logger) http.Handler {
 
 	backend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg := live.Get()
-		m := cfg.MatchRoute(r.Host, localPortOf(r), r.URL.Path)
+		m := cfg.MatchRoute(r.Host, r.URL.Path)
 		if m == nil || m.Target == nil {
 			log.Warn("sin ruta", "host", r.Host, "remote", r.RemoteAddr, "path", r.URL.Path)
 			http.Error(w, "dominio no configurado", http.StatusNotFound)
@@ -141,25 +140,6 @@ func NewHandler(live *config.Live, log *slog.Logger) http.Handler {
 	inner = maxBody(live, waf.Middleware(live, inner, log), log)
 	inner = recovery(log, inner)
 	return RequestID(EdgeHeaders(inner))
-}
-
-// localPortOf puerto del listener que recibió el request (estrategia por
-// puerto). Prefiere LocalAddr (lado servidor); sin él (handler directo en
-// tests) usa el puerto declarado en Host; sin ninguno, 0 = principal.
-func localPortOf(r *http.Request) int {
-	if addr, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok && addr != nil {
-		if _, p, err := net.SplitHostPort(addr.String()); err == nil {
-			if n, err := strconv.Atoi(p); err == nil {
-				return n
-			}
-		}
-	}
-	if _, p, err := net.SplitHostPort(r.Host); err == nil {
-		if n, cerr := strconv.Atoi(p); cerr == nil {
-			return n
-		}
-	}
-	return 0
 }
 
 // guardApp aplica protección declarada por app: allowlist IP, mantenimiento

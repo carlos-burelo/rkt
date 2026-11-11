@@ -198,9 +198,11 @@ var migrations = []string{
 	`ALTER TABLE apps ADD COLUMN basic_auth TEXT NOT NULL DEFAULT '';
 	ALTER TABLE apps ADD COLUMN allow_ips TEXT NOT NULL DEFAULT '[]';
 	ALTER TABLE apps ADD COLUMN maintenance INTEGER NOT NULL DEFAULT 0;`,
-	// v21: estrategias de enrutado path/port por ruta.
+	// v21: prefijos de ruta por app (path-based) y puerto del edge.
 	`ALTER TABLE routes ADD COLUMN path TEXT NOT NULL DEFAULT '';
 	ALTER TABLE routes ADD COLUMN port INTEGER NOT NULL DEFAULT 0;`,
+	// v22: se retira la estrategia por puerto (solo dominio y path).
+	`ALTER TABLE routes DROP COLUMN port;`,
 }
 
 // DB wrapper.

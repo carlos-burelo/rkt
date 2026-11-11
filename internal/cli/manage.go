@@ -536,11 +536,10 @@ func cmdRoutes(args []string, cfgPath string) {
 			Hosts  []string `json:"hosts"`
 			Target string   `json:"target"`
 			Path   string   `json:"path,omitempty"`
-			Port   int      `json:"port,omitempty"`
 		}
 		out := []routeOut{}
 		for _, r := range cfg.Routes {
-			out = append(out, routeOut{r.Hosts, r.Target, r.Path, r.Port})
+			out = append(out, routeOut{r.Hosts, r.Target, r.Path})
 		}
 		if asJSON {
 			if out == nil {
@@ -561,9 +560,6 @@ func cmdRoutes(args []string, cfgPath string) {
 			if r.Path != "" {
 				where += r.Path
 			}
-			if r.Port != 0 {
-				where += fmt.Sprintf(":%d", r.Port)
-			}
 			fmt.Printf("%-40s -> %s\n", where, r.Target)
 		}
 	case "add":
@@ -572,12 +568,11 @@ func cmdRoutes(args []string, cfgPath string) {
 		fs.Var(&hosts, "host", "host (repetible; vacío = cualquier host/IP)")
 		target := fs.String("target", "", "http://127.0.0.1:puerto")
 		path := fs.String("path", "", "prefijo de ruta (ej /app)")
-		port := fs.Int("port", 0, "puerto del edge (ej 3000, requiere reinicio)")
 		if err := fs.Parse(args[1:]); err != nil {
 			os.Exit(2)
 		}
-		if len(hosts) == 0 && *path == "" && *port == 0 {
-			log.Fatal("routes add requiere --host (repetible), --path o --port")
+		if len(hosts) == 0 && *path == "" {
+			log.Fatal("routes add requiere --host (repetible) o --path")
 		}
 		if *target == "" {
 			log.Fatal("routes add requiere --target")
@@ -585,16 +580,15 @@ func cmdRoutes(args []string, cfgPath string) {
 		_, db := merged(cfgPath)
 		defer db.Close()
 		if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
-			return cfgfile.AddRoute(cp, hosts, *target, *path, *port)
+			return cfgfile.AddRoute(cp, hosts, *target, *path)
 		}); err != nil {
 			log.Fatalf("routes add: %v", err)
 		}
-		fmt.Printf("route %s -> %s (hot-reload la aplica; puerto nuevo = reinicio)\n", hosts, *target)
+		fmt.Printf("route %s -> %s (hot-reload la aplica)\n", hosts, *target)
 	case "rm":
 		fs := flag.NewFlagSet("routes rm", flag.ContinueOnError)
 		host := fs.String("host", "", "host a quitar")
 		path := fs.String("path", "", "prefijo a quitar (rutas sin host)")
-		port := fs.Int("port", 0, "puerto a quitar (rutas sin host)")
 		if err := fs.Parse(args[1:]); err != nil {
 			os.Exit(2)
 		}
@@ -603,9 +597,9 @@ func cmdRoutes(args []string, cfgPath string) {
 		}
 		_, db := merged(cfgPath)
 		defer db.Close()
-		if *path == "" && *port == 0 {
+		if *path == "" {
 			if *host == "" {
-				log.Fatal("uso: routes rm <host> | routes rm [--host H] [--path P] [--port N]")
+				log.Fatal("uso: routes rm <host> | routes rm [--host H] [--path P]")
 			}
 			removed := false
 			if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
@@ -623,7 +617,7 @@ func cmdRoutes(args []string, cfgPath string) {
 		}
 		dropped := 0
 		if _, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
-			n, err := cfgfile.RemoveRoutesFull(cp, *host, *path, *port)
+			n, err := cfgfile.RemoveRoutesFull(cp, *host, *path)
 			dropped = n
 			return err
 		}); err != nil {
