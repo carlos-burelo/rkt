@@ -136,15 +136,22 @@ func register(d Deps, owner, repo, branch, tok string) error {
 				return fmt.Errorf("%s no es ejecutable: %s", binKey, bin)
 			}
 		} else {
-			// Sin setting propio: el comando del plan debe estar en PATH.
+			// Sin setting propio: el comando del plan debe estar en PATH,
+			// salvo arranque relativo al proyecto (./app, target/...):
+			// ese binario lo genera el build dentro del slot, así que se
+			// acepta tal cual (el canario lo valida al arrancar en su dir).
 			if len(plan.Start) == 0 {
 				return fmt.Errorf("plan %q sin arranque", plan.Kind)
 			}
-			found, err := exec.LookPath(plan.Start[0])
-			if err != nil {
-				return fmt.Errorf("plan %q requiere %q en PATH", plan.Kind, plan.Start[0])
+			if strings.ContainsAny(plan.Start[0], `/\`) {
+				bin = plan.Start[0]
+			} else {
+				found, err := exec.LookPath(plan.Start[0])
+				if err != nil {
+					return fmt.Errorf("plan %q requiere %q en PATH", plan.Kind, plan.Start[0])
+				}
+				bin = found
 			}
-			bin = found
 		}
 	}
 	port, err := freePort(d.DB)

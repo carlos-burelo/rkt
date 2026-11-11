@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -163,6 +164,37 @@ func TestDiscoverUnknownStack(t *testing.T) {
 	fleet, _ := db.LoadFleet()
 	if len(fleet.Apps) != 0 || len(*deployed) != 0 {
 		t.Fatalf("stack raro no debe registrar: %+v %v", fleet.Apps, *deployed)
+	}
+}
+
+// TestDiscoverGoBinarioRelativo: el plan go arranca `./app` (binario que
+// genera el build en el slot). No está en PATH ni existe al registrar:
+// se acepta tal cual en vez de exigir LookPath.
+func TestDiscoverGoBinarioRelativo(t *testing.T) {
+	pem := testKey(t)
+	srv := fakeAPI(t,
+		`[{"full_name":"o/srv-go","default_branch":"main"}]`,
+		map[string]string{"go.mod": "module srv-go\n\ngo 1.24\n"})
+	defer srv.Close()
+	d, db, deployed := testDeps(t, srv, pem)
+
+	if _, err := Run(d); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	fleet, _ := db.LoadFleet()
+	if len(fleet.Apps) != 1 {
+		t.Fatalf("app go no registrada: %+v", fleet.Apps)
+	}
+	a := fleet.Apps[0]
+	want := "." + string(filepath.Separator) + "app"
+	if runtime.GOOS == "windows" {
+		want += ".exe"
+	}
+	if a.Command != want {
+		t.Fatalf("command = %q, quiere %q (relativo al slot)", a.Command, want)
+	}
+	if a.Deploy == nil || !a.Deploy.Auto || len(*deployed) != 1 {
+		t.Fatalf("deploy auto no disparado: %+v %v", a.Deploy, *deployed)
 	}
 }
 

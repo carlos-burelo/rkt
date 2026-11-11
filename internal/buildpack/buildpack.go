@@ -187,9 +187,12 @@ func detect(packageJSON string, hasPkg bool, file func(string) bool, list func()
 			name += ".exe"
 		}
 		return Plan{
-			Kind:     "go",
-			Build:    []string{"go build -trimpath -o " + name + " ."},
-			Start:    []string{filepath.Join(".", name)},
+			Kind:  "go",
+			Build: []string{"go build -trimpath -o " + name + " ."},
+			// Relativo al slot con separador: se resuelve contra el dir
+			// del canario/instancia (los slots .a/.b cambian por corte;
+			// absoluto al slot viejo quedaría apuntando al anterior).
+			Start:    []string{"." + string(filepath.Separator) + name},
 			Evidence: []string{"go.mod"},
 		}
 	}
