@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -64,8 +65,15 @@ func TestDoStatus(t *testing.T) {
 func TestDoStatusSinServicio(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	// healthz en un puerto cerrado: determinista aunque el dev local corra
-	seedConfig(t, cfgPath, `{"healthz":{"enabled":true,"listen":"127.0.0.1:1"}}`)
+	// Puerto reservado y cerrado: determinista aunque otro test escuche en
+	// :1 (los tests de app bindean PORT "1" en Windows y corren en paralelo).
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := ln.Addr().String()
+	ln.Close()
+	seedConfig(t, cfgPath, `{"healthz":{"enabled":true,"listen":"`+closed+`"}}`)
 	s := New(cfgPath)
 	if _, err := s.doStatus(); err == nil {
 		t.Fatal("debía fallar sin servicio")

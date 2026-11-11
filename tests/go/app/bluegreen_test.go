@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -236,9 +237,24 @@ type probe struct {
 	body   string
 }
 
+// liveWhere resume ruta+Dir+PORT del live para el parte de un corte que
+// no se refleja en el tráfico (¿no se movió la ruta o el backend miente?).
+func liveWhere(live *config.Live) string {
+	app := bbAppOf(live)
+	target := ""
+	for _, r := range live.Get().Routes {
+		for _, h := range r.Hosts {
+			if h == "bb.test" {
+				target = r.Target
+			}
+		}
+	}
+	return fmt.Sprintf("ruta=%s dir=%s port=%s", target, app.Dir, app.Env["PORT"])
+}
+
 // assertCorteLimpio exige: cero errores, solo from/to, ambos vistos y una
 // sola transición from* to* (sin flapping ni huecos).
-func assertCorteLimpio(t *testing.T, samples []probe, nerr int, from, to string) {
+func assertCorteLimpio(t *testing.T, samples []probe, nerr int, from, to, where string) {
 	t.Helper()
 	if nerr != 0 {
 		t.Fatalf("corte con %d requests caídos de %d", nerr, len(samples)+nerr)
@@ -259,12 +275,12 @@ func assertCorteLimpio(t *testing.T, samples []probe, nerr int, from, to string)
 			seenTo = true
 			flipped = true
 		default:
-			t.Fatalf("contenido inesperado %q (status %d, quiere %q/%q; muestra: %s)",
-				p.body, p.status, from, to, sampleStr(samples))
+			t.Fatalf("contenido inesperado %q (status %d, quiere %q/%q; %s; muestra: %s)",
+				p.body, p.status, from, to, where, sampleStr(samples))
 		}
 	}
 	if !seenFrom || !seenTo {
-		t.Fatalf("sin transición completa %q->%q (v1=%v v2=%v, n=%d; muestra: %s)", from, to, seenFrom, seenTo, len(samples), sampleStr(samples))
+		t.Fatalf("sin transición completa %q->%q (v1=%v v2=%v, n=%d; %s; muestra: %s)", from, to, seenFrom, seenTo, len(samples), where, sampleStr(samples))
 	}
 }
 
@@ -323,6 +339,7 @@ func TestBlueGreenZeroDowntimeReal(t *testing.T) {
 	defer front.Close()
 	stop := make(chan struct{})
 	samples, errs := hammer(t, front.URL, stop)
+	rev2 := ""
 	go func() {
 		rev, err := deploy.RunContext(context.Background(), bbAppOf(ctl.live), "", ctl, io.Discard, log)
 		if err != nil {
@@ -340,13 +357,17 @@ func TestBlueGreenZeroDowntimeReal(t *testing.T) {
 		if r == "" || r == "?" {
 			t.Fatalf("rev vacío: %q", r)
 		}
+		rev2 = r
 	case <-time.After(120 * time.Second):
 		close(stop)
 		t.Fatal("deploy v2 no terminó")
 	}
 	// Cero downtime real: ningún request al proxy cayó y el contenido pasó
 	// de v1 a v2 en una sola transición (sin huecos ni flapping).
-	assertCorteLimpio(t, samples(), errs(), "v1", "v2")
+	// rev1 vs rev2 deja constancia de qué clon sirvió el canario v2.
+	where := fmt.Sprintf("rev %s->%s %s", rev1, rev2, liveWhere(live))
+	t.Logf("corte v1->v2: %s", where)
+	assertCorteLimpio(t, samples(), errs(), "v1", "v2", where)
 	p2 := bbPortOf(live)
 	if p2 == "" || p2 == p1 {
 		t.Fatalf("corte sin puerto nuevo: p1=%q p2=%q", p1, p2)
@@ -364,7 +385,8 @@ func TestBlueGreenZeroDowntimeReal(t *testing.T) {
 		t.Fatalf("rollback: %v", err)
 	}
 	close(stopRb)
-	assertCorteLimpio(t, samplesRb(), errsRb(), "v2", "v1")
+	rollbackWhere := liveWhere(live)
+	assertCorteLimpio(t, samplesRb(), errsRb(), "v2", "v1", rollbackWhere)
 	p3 := bbPortOf(live)
 	if p3 == "" || p3 == p2 {
 		t.Fatalf("rollback sin puerto nuevo: p2=%q p3=%q", p2, p3)
@@ -373,6 +395,22 @@ func TestBlueGreenZeroDowntimeReal(t *testing.T) {
 	if _, err := bbGet(t, p2); err == nil {
 		t.Fatal("la v2 sigue viva tras el rollback")
 	}
+}
+
+// freeTestPort reserva un puerto alto libre y lo suelta: evita los
+// privilegiados (<1024, sin bind sin root en Linux) en seeds directos.
+func freeTestPort(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("puerto efímero: %v", err)
+	}
+	defer l.Close()
+	_, port, err := net.SplitHostPort(l.Addr().String())
+	if err != nil {
+		t.Fatalf("puerto efímero: %v", err)
+	}
+	return port
 }
 
 // tailDeployLog vuelca la cola del log de build más reciente: en CI el
@@ -491,14 +529,18 @@ func TestBlueGreenBuildLocalReal(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	// Puerto alto reservado: PORT "1" no se puede bindear en Linux sin
+	// root (EACCES) y el build local moriría en el health check. En Windows
+	// :1 sí bindea, por eso aquí pasaba y en CI no.
+	livePort := freeTestPort(t)
 	cp, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
 		cp.Apps = append(cp.Apps, config.App{
 			Name: "bb", Command: py, Args: []string{"-u", "app.py"},
-			Dir: liveDir, Env: map[string]string{"PORT": "1"},
+			Dir: liveDir, Env: map[string]string{"PORT": livePort},
 			RestartDelay: "5s", MinUptime: "1s",
 		})
 		cp.Routes = append(cp.Routes, config.Route{
-			Hosts: []string{"bb.test"}, Target: "http://127.0.0.1:1",
+			Hosts: []string{"bb.test"}, Target: "http://127.0.0.1:" + livePort,
 		})
 		return nil
 	})
