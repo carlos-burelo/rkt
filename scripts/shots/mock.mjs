@@ -151,6 +151,17 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
     }
     if (p === "/api/v1/users") return json(route, users);
     if (p === "/api/v1/tokens") return json(route, []);
+    if (p === "/api/v1/waf" && method === "GET") {
+      return json(route, {
+        deny_paths: ["/.env*", "/.git/*", "/wp-*", "/*.php"],
+        deny_methods: ["TRACE", "TRACK", "CONNECT"],
+        blocked: [
+          { at: new Date(Date.now() - 4 * 60000).toISOString(), ip: "45.155.204.66", host: "tienda.ejemplo.com", method: "GET", path: "/.env", rule: "/.env*" },
+          { at: new Date(Date.now() - 11 * 60000).toISOString(), ip: "45.155.204.66", host: "api.ejemplo.com", method: "TRACE", path: "/", rule: "método TRACE" },
+        ],
+      });
+    }
+    if (p === "/api/v1/waf") return json(route, { deny_paths: [], deny_methods: [] });
     if (p === "/api/v1/audit") return json(route, audit);
     if (p.startsWith("/api/v1/users/") && p.endsWith("/sessions")) {
       return json(route, {

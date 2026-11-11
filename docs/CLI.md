@@ -120,6 +120,12 @@ Vacío = `[]` (nunca `null` en listas).
 `state: fail` bloquea (git, pool, DB, bins mal configurados);
 `warn` avisa (toolchain ausente, *_bin sin fijar).
 
+`GET /api/v1/waf` (operator): reglas y últimos bloqueos del edge.
+```json
+{"deny_paths": ["/*.php"], "deny_methods": ["TRACE"], "blocked": [{"at": "...", "ip": "...", "host": "...", "method": "GET", "path": "/.env", "rule": "/.env*"}]}
+```
+`PUT /api/v1/waf` reemplaza listas (ausente = conserva).
+
 ## Dashboard (`/` + `/api/v1/`)
 
 SPA embebida servida en la raíz del listener healthz (loopback). Auth por
