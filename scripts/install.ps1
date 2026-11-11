@@ -15,6 +15,10 @@
   & ([scriptblock]::Create($s)) -Version v0.1.0
   & ([scriptblock]::Create($s)) -Rollback
   & ([scriptblock]::Create($s)) -GithubToken "ghp_..."
+.EXAMPLE
+  # Instalación destructiva: borra servicio, datos, firewall y PATH, e
+  # instala desde cero (no pide confirmación):
+  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1))) -Destructivo
 #>
 [CmdletBinding()]
 param(
@@ -28,7 +32,8 @@ param(
   [string]$GithubToken = "",
   [switch]$NoPublicDashboard,
   [string]$AdminUser = "admin",
-  [string]$PublicIP = ""
+  [string]$PublicIP = "",
+  [switch]$Destructivo
 )
 $ErrorActionPreference = "Stop"
 
@@ -43,6 +48,44 @@ $exe = Join-Path $InstallDir "rkt.exe"
 $cfg = Join-Path $InstallDir "rkt.db"
 $bak = "$exe.bak"
 $verFile = Join-Path $InstallDir "VERSION.txt"
+
+# Test-RktNukeDir dice si InstallDir es borrable: nunca la raíz de una
+# unidad ni carpetas del sistema. El instalador aborta antes de tocar nada.
+function Test-RktNukeDir([string]$Dir) {
+  if ([string]::IsNullOrWhiteSpace($Dir)) { return $false }
+  try { $full = [System.IO.Path]::GetFullPath($Dir) } catch { return $false }
+  $root = [System.IO.Path]::GetPathRoot($full)
+  if ($full.TrimEnd('\', '/') -ieq $root.TrimEnd('\', '/')) { return $false }
+  foreach ($b in @($env:SystemRoot, "$env:SystemDrive\Windows",
+      "$env:SystemDrive\Program Files", "$env:SystemDrive\Program Files (x86)",
+      "$env:SystemDrive\Users")) {
+    if ($b -and $full.TrimEnd('\', '/') -ieq $b.TrimEnd('\', '/')) { return $false }
+  }
+  return $true
+}
+
+# 0a. destructivo: borra servicio, datos, firewall, env y PATH, y sigue
+# como primera vez (la idempotencia de abajo ya no salta: no hay VERSION).
+if ($Destructivo) {
+  if (-not (Test-RktNukeDir $InstallDir)) { throw "InstallDir no borrable (raíz o sistema): $InstallDir" }
+  $full = [System.IO.Path]::GetFullPath($InstallDir)
+  Write-Host "Borrado destructivo de $full ..."
+  Stop-Service Rkt -Force -ErrorAction SilentlyContinue
+  if (Test-Path $exe) { try { & $exe -config $cfg uninstall } catch {} }
+  try { sc.exe delete Rkt | Out-Null } catch {}
+  foreach ($rule in @("RKT HTTP/HTTPS", "RKT Dashboard", "RKT Proxy HTTP/HTTPS")) {
+    Remove-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Out-Null
+  }
+  [Environment]::SetEnvironmentVariable("RKT_GITHUB_TOKEN_FILE", $null, "Machine")
+  $mp = [Environment]::GetEnvironmentVariable("Path", "Machine")
+  if ($mp) {
+    $kept = ($mp -split ";" | ForEach-Object { $_.Trim() } |
+      Where-Object { $_ -ne "" -and $_.TrimEnd("\") -ine $full.TrimEnd("\") })
+    [Environment]::SetEnvironmentVariable("Path", ($kept -join ";"), "Machine")
+  }
+  if (Test-Path $full) { Remove-Item $full -Recurse -Force }
+  Write-Host "Limpieza destructiva OK. Instalando desde cero..."
+}
 New-Item -ItemType Directory -Force $InstallDir | Out-Null
 
 # 0b. token deploy en archivo con ACL, nunca en env de máquina (legible

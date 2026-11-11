@@ -121,8 +121,18 @@ bin\rkt.exe -config rkt.local.db dev
 Requisitos: registro DNS `A`, puertos `80/443` abiertos y PowerShell como
 administrador.
 
+Primera vez (un comando):
+
 ```powershell
 irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 | iex
+```
+
+Destructiva: borra lo anterior (servicio, `C:\Program Files\rkt-proxy` con
+base de datos y logs, reglas de firewall, variable `RKT_GITHUB_TOKEN_FILE` y
+`PATH`) e instala desde cero (un comando, sin confirmación):
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1))) -Destructivo
 ```
 
 El instalador descarga el release, verifica checksum, registra el servicio
@@ -132,7 +142,9 @@ primer admin con password aleatoria (la imprime una vez). La configuración se
 administra desde el dashboard o el CLI; no se edita YAML.
 
 Opciones: `-NoPublicDashboard` deja el dashboard solo en loopback;
-`-AdminUser nombre` cambia el usuario inicial.
+`-AdminUser nombre` cambia el usuario inicial; `-Destructivo` borra la
+instalación anterior antes de instalar (servicio, datos, firewall, env y
+`PATH`).
 
 ## CLI
 
