@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"net/url"
+	"strings"
 
 	"rkt-proxy/internal/github"
 )
@@ -23,6 +25,16 @@ func (d *Deps) handleGithub(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, http.StatusServiceUnavailable, err.Error())
 		return
+	}
+	// ?org= instala en una organización: se propaga al form new-app.
+	if org := strings.TrimSpace(r.URL.Query().Get("org")); org != "" {
+		if u, ok := st["setup_url"].(string); ok && u != "" {
+			sep := "&"
+			if !strings.Contains(u, "?") {
+				sep = "?"
+			}
+			st["setup_url"] = u + sep + "org=" + url.QueryEscape(org)
+		}
 	}
 	writeJSON(w, st)
 }

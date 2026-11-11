@@ -7,8 +7,8 @@ import (
 )
 
 func TestGithubInitURL(t *testing.T) {
-	got := githubInitURL("app1.coatl.in", "rkt-deployer", "dacyti-gsi")
-	want := "https://app1.coatl.in/_rkt/new-app?name=rkt-deployer&domain=app1.coatl.in&org=dacyti-gsi"
+	got := githubInitURL("app1.coatl.in", "rkt-deployer", "dacyti-gsi", "tok123")
+	want := "https://app1.coatl.in/_rkt/new-app?name=rkt-deployer&domain=app1.coatl.in&org=dacyti-gsi&state=tok123"
 	if got != want {
 		t.Fatalf("got %q quiere %q", got, want)
 	}

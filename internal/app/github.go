@@ -172,8 +172,10 @@ func (p *Program) githubStatus() (map[string]any, error) {
 	name := "rkt-" + label + "-" + strconv.FormatInt(time.Now().UnixNano()%10000, 10)
 	setupURL := origin + "/_rkt/new-app?name=" + url.QueryEscape(name) +
 		"&domain=" + url.QueryEscape(domain) + "&local=" + boolStr(local) + "&tls=" + boolStr(tls)
+	// TTL generoso: el usuario se entretiene creando la App en GitHub y
+	// el state one-time caducado obligaba a reiniciar el flujo.
 	if p.db != nil {
-		if state, err := p.db.NewSetupState(10 * time.Minute); err == nil {
+		if state, err := p.db.NewSetupState(30 * time.Minute); err == nil {
 			setupURL += "&state=" + url.QueryEscape(state)
 		} else {
 			p.log.Warn("setup state no generado", "err", err)

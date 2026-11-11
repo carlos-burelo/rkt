@@ -1276,7 +1276,7 @@ func cmdGithub(args []string, cfgPath string) {
 	case "login":
 		cmdGithubLogin(cfgPath)
 	case "init":
-		cmdGithubInit(args[1:])
+		cmdGithubInit(cfgPath, args[1:])
 	default:
 		log.Fatalf("github: subcomando %q (login|init)", args[0])
 	}
@@ -1304,7 +1304,7 @@ func cmdGithubLogin(cfgPath string) {
 //
 // Imprime (y abre) la URL del form que crea la App en GitHub; al aprobar,
 // GitHub vuelve a /_rkt/setup y rkt se autoconfigura (PEM + settings).
-func cmdGithubInit(args []string) {
+func cmdGithubInit(cfgPath string, args []string) {
 	fs := flag.NewFlagSet("github init", flag.ContinueOnError)
 	name := fs.String("name", "rkt-deployer", "nombre de la App")
 	domain := fs.String("domain", "", "dominio público del VPS")
@@ -1315,18 +1315,34 @@ func cmdGithubInit(args []string) {
 	if *name == "" || *domain == "" {
 		log.Fatal("github init requiere --name y --domain")
 	}
-	link := githubInitURL(*domain, *name, *org)
+	// El form /_rkt/new-app exige ?state= (el callback /_rkt/setup lo
+	// consume one-time): se acuña aquí contra la DB local para que el
+	// enlace del CLI funcione sin pasar por el dashboard.
+	db, err := store.Open(logx.DBPath(cfgPath))
+	if err != nil {
+		log.Fatalf("github init: %v", err)
+	}
+	defer db.Close()
+	state, err := db.NewSetupState(30 * time.Minute)
+	if err != nil {
+		log.Fatalf("github init: %v", err)
+	}
+	link := githubInitURL(*domain, *name, *org, state)
 	fmt.Println("Crea la GitHub App (permisos mínimos ya rellenados):")
 	fmt.Println("  " + link)
 	fmt.Println("Pulsa Create en GitHub; rkt se configura solo y te da el link de instalación.")
 	openBrowser(link)
 }
 
-// githubInitURL construye la URL del form new-app.
-func githubInitURL(domain, name, org string) string {
+// githubInitURL construye la URL del form new-app (con state one-time:
+// sin él el form responde 400 y el callback 403).
+func githubInitURL(domain, name, org, state string) string {
 	link := "https://" + domain + "/_rkt/new-app?name=" + url.QueryEscape(name) + "&domain=" + url.QueryEscape(domain)
 	if org != "" {
 		link += "&org=" + url.QueryEscape(org)
+	}
+	if state != "" {
+		link += "&state=" + url.QueryEscape(state)
 	}
 	return link
 }
