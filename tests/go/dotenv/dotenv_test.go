@@ -78,6 +78,27 @@ func TestExpand(t *testing.T) {
 	}
 }
 
+func TestExpandValueYArgs(t *testing.T) {
+	scope := map[string]string{"PORT": "3007", "HOST": "127.0.0.1"}
+	if got := ExpandValue("http://$HOST:${PORT}/x", scope); got != "http://127.0.0.1:3007/x" {
+		t.Fatalf("expand value mal: %q", got)
+	}
+	if got := ExpandValue("sin vars", scope); got != "sin vars" {
+		t.Fatalf("literal mal: %q", got)
+	}
+	args := ExpandArgs([]string{"-S", "$HOST:$PORT", "--port=${PORT}", "fijo"}, scope)
+	want := []string{"-S", "127.0.0.1:3007", "--port=3007", "fijo"}
+	for i := range want {
+		if args[i] != want[i] {
+			t.Fatalf("args = %q, quiere %q", args, want)
+		}
+	}
+	// el scope no se muta al expandir
+	if len(scope) != 2 {
+		t.Fatalf("scope mutado: %v", scope)
+	}
+}
+
 func TestParseErroresYExportSolo(t *testing.T) {
 	if _, err := Parse("1MAL=x\n"); err == nil {
 		t.Fatal("clave que empieza con número debe fallar")

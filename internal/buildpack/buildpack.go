@@ -56,9 +56,21 @@ func DetectDir(dir string) (Plan, error) {
 	if b, err := os.ReadFile(filepath.Join(dir, "package.json")); err == nil {
 		pkg, hasPkg = string(b), true
 	}
-	plan := detect(pkg, hasPkg, func(name string) bool { return exists(name) })
+	plan := detect(pkg, hasPkg,
+		func(name string) bool { return exists(name) },
+		func() []string {
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				return nil
+			}
+			out := make([]string, 0, len(entries))
+			for _, e := range entries {
+				out = append(out, e.Name())
+			}
+			return out
+		})
 	if plan.Kind == "" {
-		return Plan{}, fmt.Errorf("no reconocí el proyecto en %s: falta package.json, go.mod, requirements.txt, pyproject.toml, Cargo.toml o index.html", dir)
+		return Plan{}, fmt.Errorf("no reconocí el proyecto en %s: falta package.json, go.mod, Cargo.toml, requirements.txt, pyproject.toml, composer.json, Gemfile, deno.json, *.csproj, mkdocs.yml, hugo.toml o index.html", dir)
 	}
 	if plan.Kind == "node" && plan.NodeVersion == "" {
 		if b, err := os.ReadFile(filepath.Join(dir, ".nvmrc")); err == nil {
@@ -113,6 +125,12 @@ func FromPackageJSON(pkg string, hasRequirements bool) Plan {
 func FromRemote(packageJSON string, files map[string]bool) Plan {
 	return detect(packageJSON, strings.TrimSpace(packageJSON) != "", func(name string) bool {
 		return files[name]
+	}, func() []string {
+		out := make([]string, 0, len(files))
+		for n := range files {
+			out = append(out, n)
+		}
+		return out
 	})
 }
 
@@ -159,8 +177,9 @@ func execCmd(pm, bin string, args ...string) []string {
 	}
 }
 
-// detect decide plan con los datos disponibles. file = existencia puntual.
-func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
+// detect decide plan con los datos disponibles. file = existencia puntual;
+// list = nombres del árbol (para patrones como *.csproj).
+func detect(packageJSON string, hasPkg bool, file func(string) bool, list func() []string) Plan {
 	// Binarios sin ecosistema de paquetes.
 	if file("go.mod") {
 		name := "app"
@@ -200,6 +219,120 @@ func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
 			Build:    []string{wrapper + " build -x test"},
 			Start:    []string{wrapper, "bootRun"},
 			Evidence: []string{"build.gradle"},
+		}
+	}
+	// .NET: el nombre del proyecto varía, se detecta por extensión y se
+	// fija el ensamblado a "app" para un arranque determinista.
+	if proj, ok := firstExt(list(), ".csproj", ".fsproj"); ok {
+		return Plan{
+			Kind:     "dotnet",
+			Build:    []string{"dotnet publish -c Release -o ./publish -p:AssemblyName=app"},
+			Start:    []string{"dotnet", "./publish/app.dll", "--urls", "http://127.0.0.1:$PORT"},
+			Evidence: []string{proj},
+		}
+	}
+	// Parseadores de package.json para frontSteps (Laravel/Shakapacker).
+	var pjEarly pkgJSON
+	_ = json.Unmarshal([]byte(packageJSON), &pjEarly)
+	pmEarly := packageManager(file)
+	hasEarly := func(script string) bool { _, ok := pjEarly.Scripts[script]; return ok }
+	// frontSteps antepone install+build del frontend cuando el repo trae
+	// package.json con script build (Laravel, Shakapacker).
+	frontSteps := func() (install, build []string) {
+		if hasPkg && hasEarly("build") {
+			ins := pmEarly + " install"
+			if pmEarly == "pnpm" && file("pnpm-lock.yaml") {
+				ins = pmEarly + " install --frozen-lockfile"
+			}
+			install = []string{ins}
+			build = []string{pmEarly + " run build"}
+		}
+		return install, build
+	}
+	if file("composer.json") {
+		plan := Plan{Kind: "php", Evidence: []string{"composer.json"}}
+		fi, fb := frontSteps()
+		plan.Install = append([]string{"composer install --no-dev --optimize-autoloader"}, fi...)
+		plan.Build = fb
+		switch {
+		case file("artisan"):
+			plan.Start = []string{"php", "artisan", "serve", "--host", "127.0.0.1", "--port", "$PORT"}
+			plan.Evidence = append(plan.Evidence, "artisan")
+		case file("public/index.php"):
+			plan.Start = []string{"php", "-S", "127.0.0.1:$PORT", "-t", "public"}
+		case file("index.php"):
+			plan.Start = []string{"php", "-S", "127.0.0.1:$PORT"}
+		}
+		if len(plan.Start) == 0 && len(fb) == 0 {
+			return Plan{}
+		}
+		return plan
+	}
+	if file("Gemfile") {
+		// Jekyll es estático (se sirve, no se ejecuta).
+		if file("_config.yml") {
+			return Plan{
+				Kind: "static", Install: []string{"bundle install"},
+				Build:     []string{"bundle exec jekyll build"},
+				StaticDir: "_site", Evidence: []string{"_config.yml", "Gemfile"},
+			}
+		}
+		plan := Plan{Kind: "ruby", Evidence: []string{"Gemfile"}}
+		fi, fb := frontSteps()
+		plan.Install = append([]string{"bundle install"}, fi...)
+		plan.Build = fb
+		if file("config.ru") {
+			plan.Start = []string{"bundle", "exec", "puma", "-b", "tcp://127.0.0.1:$PORT", "-e", "production"}
+			plan.Evidence = append(plan.Evidence, "config.ru")
+		}
+		if len(plan.Start) == 0 && len(fb) == 0 {
+			return Plan{}
+		}
+		return plan
+	}
+	if file("deno.json") || file("deno.jsonc") {
+		if file("fresh.config.ts") {
+			// Fresh aún sin plan automático: el genérico pide comando manual.
+			return Plan{}
+		}
+		entry := ""
+		for _, e := range []string{"main.ts", "server.ts", "mod.ts", "main.js", "server.js"} {
+			if file(e) {
+				entry = e
+				break
+			}
+		}
+		if entry == "" {
+			return Plan{}
+		}
+		ev := "deno.json"
+		if file("deno.jsonc") {
+			ev = "deno.jsonc"
+		}
+		return Plan{
+			Kind:     "deno",
+			Start:    []string{"deno", "serve", "--host", "127.0.0.1", "--port", "$PORT", entry},
+			Evidence: []string{ev, entry},
+		}
+	}
+	for _, f := range []string{"hugo.toml", "hugo.yaml", "hugo.json"} {
+		if file(f) {
+			return Plan{
+				Kind: "static", Build: []string{"hugo --minify"},
+				StaticDir: "public", Evidence: []string{f},
+			}
+		}
+	}
+	for _, f := range []string{"mkdocs.yml", "mkdocs.yaml"} {
+		if file(f) {
+			ins := []string{"pip install mkdocs"}
+			if file("requirements.txt") {
+				ins = []string{"pip install -r requirements.txt"}
+			}
+			return Plan{
+				Kind: "static", Install: ins, Build: []string{"mkdocs build"},
+				StaticDir: "site", Evidence: []string{f},
+			}
 		}
 	}
 	if file("uv.lock") || file("poetry.lock") || file("pyproject.toml") || file("requirements.txt") {
@@ -337,6 +470,18 @@ func detect(packageJSON string, hasPkg bool, file func(string) bool) Plan {
 	return plan
 }
 
+// firstExt primer archivo con una de las extensiones (insensible a caso).
+func firstExt(names []string, exts ...string) (string, bool) {
+	for _, n := range names {
+		for _, e := range exts {
+			if strings.EqualFold(filepath.Ext(n), e) {
+				return n, true
+			}
+		}
+	}
+	return "", false
+}
+
 // pickStatic elige una salida estática ya presente o el default dist.
 func pickStatic(file func(string) bool) string {
 	for _, d := range []string{".", "public", "dist", "build", "out", ".output/public"} {
@@ -375,6 +520,21 @@ func DevHint(dir, port string) string {
 		return "go run ."
 	case "python":
 		return "python -u app.py"
+	case "php":
+		return "php -S 127.0.0.1:" + port
+	case "ruby":
+		return "bundle exec rails server -b 127.0.0.1 -p " + port
+	case "dotnet":
+		return "dotnet run"
+	case "deno":
+		if len(plan.Start) > 0 {
+			out := append([]string{plan.Start[0]}, plan.Start[1:]...)
+			for i, a := range out {
+				out[i] = strings.ReplaceAll(a, "$PORT", port)
+			}
+			return strings.Join(out, " ")
+		}
+		return ""
 	case "static":
 		return "" // sin proceso: se sirve estático
 	}

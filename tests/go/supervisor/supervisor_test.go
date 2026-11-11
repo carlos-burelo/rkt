@@ -354,6 +354,22 @@ func TestStartCanaryAppInexistente(t *testing.T) {
 	}
 }
 
+func TestStartCanaryExpandePort(t *testing.T) {
+	py := pythonForTest(t)
+	a := app1("exp", py, []string{"-c", "import sys;sys.stdout.write(sys.argv[1])", "$PORT"}, time.Second, time.Second)
+	m := New([]config.App{a}, nil, t.TempDir(), testLog(t))
+	defer m.Stop()
+	var buf strings.Builder
+	cmd, err := m.StartCanary("exp", t.TempDir(), "4321", &buf)
+	if err != nil {
+		t.Fatalf("StartCanary: %v", err)
+	}
+	_ = cmd.Wait()
+	if !strings.Contains(buf.String(), "4321") {
+		t.Fatalf("args sin expandir: %q", buf.String())
+	}
+}
+
 func TestBlueGreenCanarioHTTP(t *testing.T) {
 	py := pythonForTest(t)
 	script := `import http.server,os

@@ -280,3 +280,144 @@ func TestDetectJavaYStaticBuild(t *testing.T) {
 		t.Fatalf("static build = %+v %v", p2, err)
 	}
 }
+
+func TestDetectPHP(t *testing.T) {
+	// Laravel con frontend: artisan manda, pnpm compila assets.
+	dir := t.TempDir()
+	write(t, dir, "composer.json", `{"require":{"laravel/framework":"^11"}}`)
+	write(t, dir, "artisan", "#!/usr/bin/env php")
+	write(t, dir, "package.json", `{"scripts":{"build":"vite build"},"devDependencies":{"vite":"^5"}}`)
+	p, err := DetectDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Kind != "php" {
+		t.Fatalf("plan = %+v, quiero php", p)
+	}
+	if strings.Join(p.Start, " ") != "php artisan serve --host 127.0.0.1 --port $PORT" {
+		t.Fatalf("start = %v", p.Start)
+	}
+	if len(p.Install) != 2 || !strings.Contains(p.Install[0], "composer") {
+		t.Fatalf("install = %v", p.Install)
+	}
+	if len(p.Build) != 1 || p.Build[0] != "pnpm run build" {
+		t.Fatalf("build = %v", p.Build)
+	}
+
+	// PHP plano con index.php en raíz.
+	dir2 := t.TempDir()
+	write(t, dir2, "composer.json", `{}`)
+	write(t, dir2, "index.php", "<?php echo 1;")
+	p2, err := DetectDir(dir2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p2.Kind != "php" || strings.Join(p2.Start, " ") != "php -S 127.0.0.1:$PORT" {
+		t.Fatalf("plano = %+v", p2)
+	}
+}
+
+func TestDetectRuby(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "Gemfile", "source 'https://rubygems.org'\ngem 'rails'\n")
+	write(t, dir, "config.ru", "run Rails.application\n")
+	p, err := DetectDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Kind != "ruby" {
+		t.Fatalf("plan = %+v, quiero ruby", p)
+	}
+	if strings.Join(p.Start, " ") != "bundle exec puma -b tcp://127.0.0.1:$PORT -e production" {
+		t.Fatalf("start = %v", p.Start)
+	}
+
+	// Jekyll es estático aunque tenga Gemfile.
+	dir2 := t.TempDir()
+	write(t, dir2, "Gemfile", "source 'https://rubygems.org'\ngem 'jekyll'\n")
+	write(t, dir2, "_config.yml", "title: t\n")
+	p2, err := DetectDir(dir2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p2.Kind != "static" || p2.StaticDir != "_site" || !p2.IsStatic() {
+		t.Fatalf("jekyll = %+v", p2)
+	}
+}
+
+func TestDetectDotnet(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "tienda.csproj", "<Project/>")
+	p, err := DetectDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Kind != "dotnet" {
+		t.Fatalf("plan = %+v, quiero dotnet", p)
+	}
+	if strings.Join(p.Start, " ") != "dotnet ./publish/app.dll --urls http://127.0.0.1:$PORT" {
+		t.Fatalf("start = %v", p.Start)
+	}
+	if len(p.Build) != 1 || !strings.Contains(p.Build[0], "AssemblyName=app") {
+		t.Fatalf("build = %v", p.Build)
+	}
+
+	// remoto: el nombre del proyecto viene del árbol.
+	p2 := FromRemote("", map[string]bool{"MiApp.csproj": true})
+	if p2.Kind != "dotnet" {
+		t.Fatalf("remoto = %+v, quiero dotnet", p2)
+	}
+}
+
+func TestDetectDeno(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "deno.json", `{"tasks":{"start":"deno serve -A main.ts"}}`)
+	write(t, dir, "main.ts", `Deno.serve(()=>new Response("ok"))`)
+	p, err := DetectDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Kind != "deno" || strings.Join(p.Start, " ") != "deno serve --host 127.0.0.1 --port $PORT main.ts" {
+		t.Fatalf("deno = %+v", p)
+	}
+
+	// Fresh pide comando manual en vez de un plan roto.
+	dir2 := t.TempDir()
+	write(t, dir2, "deno.json", `{}`)
+	write(t, dir2, "fresh.config.ts", `export default {}`)
+	if _, err := DetectDir(dir2); err == nil {
+		t.Fatal("fresh debe fallar con guía, no con plan roto")
+	}
+}
+
+func TestDetectGeneradoresEstaticos(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "hugo.toml", "baseURL='x'\n")
+	p, err := DetectDir(dir)
+	if err != nil || p.Kind != "static" || p.StaticDir != "public" {
+		t.Fatalf("hugo = %+v %v", p, err)
+	}
+
+	dir2 := t.TempDir()
+	write(t, dir2, "mkdocs.yml", "site_name: x\n")
+	write(t, dir2, "requirements.txt", "mkdocs\n")
+	p2, err := DetectDir(dir2)
+	if err != nil || p2.Kind != "static" || p2.StaticDir != "site" {
+		t.Fatalf("mkdocs = %+v %v", p2, err)
+	}
+}
+
+func TestDevHintRuntimesNuevos(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "composer.json", `{}`)
+	write(t, dir, "index.php", "<?php echo 1;")
+	if got := DevHint(dir, "3010"); !strings.Contains(got, "php -S 127.0.0.1:3010") {
+		t.Fatalf("hint php = %q", got)
+	}
+
+	dir2 := t.TempDir()
+	write(t, dir2, "tienda.csproj", "<Project/>")
+	if got := DevHint(dir2, "3011"); got != "dotnet run" {
+		t.Fatalf("hint dotnet = %q", got)
+	}
+}

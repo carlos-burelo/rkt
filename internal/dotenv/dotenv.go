@@ -140,7 +140,26 @@ func EnvironListApp(over map[string]string) []string {
 	return out
 }
 
-// Expand resuelve ${VAR} y $VAR en cada valor contra scope.
+// ExpandValue resuelve ${VAR} y $VAR en un string contra scope.
+// Misma sintaxis que Expand (hogar: expandOne).
+func ExpandValue(s string, scope map[string]string) string {
+	base := map[string]string{}
+	for k, v := range scope {
+		base[k] = v
+	}
+	return expandOne(s, base)
+}
+
+// ExpandArgs expande cada argumento contra scope (arranque de procesos:
+// comandos como `php -S 127.0.0.1:$PORT` resuelven el puerto asignado).
+func ExpandArgs(args []string, scope map[string]string) []string {
+	out := make([]string, len(args))
+	for i, a := range args {
+		out[i] = ExpandValue(a, scope)
+	}
+	return out
+}
+
 // scope previo = OS ∪ file; inline se aplica ordenado (determinista):
 // cada clave ve OS+file+inline-anteriores. $ suelto se deja literal.
 // Indefinida expande a "" (estilo dotenv).

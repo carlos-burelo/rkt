@@ -662,14 +662,14 @@ func (m *Manager) StartCanary(name, dir, port string, out io.Writer) (*exec.Cmd,
 	}
 	m.mu.Unlock()
 
-	cmd := exec.Command(a.cfg.Command, a.cfg.Args...)
-	configureProc(cmd)
-	cmd.Dir = dir
 	env := map[string]string{}
 	for k, v := range a.cfg.Env {
 		env[k] = v
 	}
 	env["PORT"] = port
+	cmd := exec.Command(a.cfg.Command, dotenv.ExpandArgs(a.cfg.Args, env)...)
+	configureProc(cmd)
+	cmd.Dir = dir
 	cmd.Env = dotenv.EnvironListApp(env)
 	cmd.Stdout = out
 	cmd.Stderr = out
@@ -704,7 +704,10 @@ func (a *app) start(job *jobCtx) bool {
 		return false
 	}
 
-	cmd := exec.Command(a.cfg.Command, a.cfg.Args...)
+	// Los args pueden referenciar el entorno ($PORT): se expanden con el
+	// env efectivo para que runtimes sin lectura de env (php -S, puma,
+	// dotnet --urls, deno serve) reciban el puerto asignado.
+	cmd := exec.Command(a.cfg.Command, dotenv.ExpandArgs(a.cfg.Args, a.cfg.Env)...)
 	configureProc(cmd)
 	cmd.Dir = a.cfg.Dir
 	cmd.Env = dotenv.EnvironListApp(a.cfg.Env)
