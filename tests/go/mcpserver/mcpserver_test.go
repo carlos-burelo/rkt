@@ -96,7 +96,7 @@ func TestDoLogs(t *testing.T) {
 }
 
 func TestDoRestartRollback(t *testing.T) {
-	var restarted, rolledback bool
+	var restarted, rolledback, deployed, retried bool
 	s := testServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/restart/"):
@@ -105,6 +105,12 @@ func TestDoRestartRollback(t *testing.T) {
 		case r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/rollback/"):
 			rolledback = true
 			w.Write([]byte(`{"rolledback":"web"}`))
+		case r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/deploy/"):
+			deployed = true
+			w.Write([]byte(`"cafef00d"`))
+		case r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/retry/"):
+			retried = true
+			w.Write([]byte(`"rev9"`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -117,6 +123,21 @@ func TestDoRestartRollback(t *testing.T) {
 	}
 	if out, err := s.doRollback("web"); err != nil || !rolledback {
 		t.Fatalf("rollback: %q %v", out, err)
+	}
+	if _, err := s.doRollback(""); err == nil {
+		t.Fatal("rollback sin app debe fallar")
+	}
+	if out, err := s.doDeploy("web"); err != nil || !deployed || !strings.Contains(out, "cafef00d") {
+		t.Fatalf("deploy: %q %v", out, err)
+	}
+	if _, err := s.doDeploy(""); err == nil {
+		t.Fatal("deploy sin app debe fallar")
+	}
+	if out, err := s.doRetry(7); err != nil || !retried || !strings.Contains(out, "rev9") {
+		t.Fatalf("retry: %q %v", out, err)
+	}
+	if _, err := s.doRetry(0); err == nil {
+		t.Fatal("retry sin id debe fallar")
 	}
 }
 

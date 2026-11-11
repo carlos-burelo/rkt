@@ -1,6 +1,9 @@
 package app
 
 import (
+	"context"
+	"io"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -23,6 +26,42 @@ func TestBeginOpSerializa(t *testing.T) {
 	if err := p.beginOp("a"); err != nil {
 		t.Fatalf("tras terminar debe permitir: %v", err)
 	}
+}
+
+// TestCancelDeploy: cancela un deploy registrado, false si no existe.
+func TestCancelDeploy(t *testing.T) {
+	p := New(t.TempDir()+"/rkt.db", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if p.cancelDeploy(7) {
+		t.Fatal("sin registro debe dar false")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancelMu.Lock()
+	if p.deployCancels == nil {
+		p.deployCancels = map[int64]context.CancelFunc{}
+	}
+	p.deployCancels[7] = cancel
+	p.cancelMu.Unlock()
+	if !p.cancelDeploy(7) {
+		t.Fatal("registrado debe dar true")
+	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Fatal("cancel no propagó al contexto")
+	}
+}
+
+// TestMaybeAutoRollbackGuardas: sin deploy reciente o ya en rollback, no
+// hace nada (ni toca rollingBack ni llama al servicio).
+func TestMaybeAutoRollbackGuardas(t *testing.T) {
+	p := New(t.TempDir()+"/rkt.db", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	p.maybeAutoRollback("nunca-desplegada")
+	p.deployMu.Lock()
+	if len(p.rollingBack) != 0 {
+		p.deployMu.Unlock()
+		t.Fatal("sin deploy no debe marcar rollback")
+	}
+	p.deployMu.Unlock()
 }
 
 // TestBeginOpConcurrenteSoloUnGanador: la carrera real la resuelve el lock.
