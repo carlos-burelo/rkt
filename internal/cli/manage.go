@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -27,6 +26,7 @@ import (
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/discover"
+	"rkt-proxy/internal/doctor"
 	domainx "rkt-proxy/internal/domains"
 	"rkt-proxy/internal/hosts"
 	"rkt-proxy/internal/logx"
@@ -1055,7 +1055,8 @@ func cmdReset(args []string, cfgPath string) {
 }
 
 // cmdDoctor diagnostica sin mutar: config, DB, servicio, git y puertos.
-func cmdDoctor(_ []string, cfgPath string) {
+func cmdDoctor(args []string, cfgPath string) {
+	_, asJSON := wantJSON(args)
 	fail := 0
 	ok := func(label string, err error) {
 		if err != nil {
@@ -1101,11 +1102,33 @@ func cmdDoctor(_ []string, cfgPath string) {
 	} else {
 		ok("base de datos", store.CheckFile(logx.DBPath(cfgPath)))
 	}
-	if _, err := exec.LookPath("git"); err != nil {
-		fail++
-		fmt.Printf("✗ git: %v\n", err)
-	} else {
-		fmt.Println("✓ git")
+	// Entorno: toolchains, binarios configurados y pool con hueco.
+	getSetting := func(string) string { return "" }
+	if db, err := store.Open(logx.DBPath(cfgPath)); err == nil {
+		getSetting = db.GetSetting
+		all := doctor.Run(doctor.SystemEnv(getSetting))
+		if asJSON {
+			b, _ := json.Marshal(all)
+			fmt.Println(string(b))
+		} else {
+			for _, c := range all {
+				switch c.State {
+				case doctor.Fail:
+					fail++
+					fmt.Printf("✗ %s: %s\n", c.Name, c.Detail)
+				case doctor.Warn:
+					fmt.Printf("! %s: %s\n", c.Name, c.Detail)
+				default:
+					fmt.Printf("✓ %s %s\n", c.Name, c.Detail)
+				}
+				if c.Hint != "" && c.State != doctor.OK {
+					fmt.Printf("  → %s\n", c.Hint)
+				}
+			}
+		}
+		_ = db.Close()
+	} else if asJSON {
+		fmt.Println("[]")
 	}
 	if fail > 0 {
 		log.Fatalf("doctor: %d problema(s)", fail)

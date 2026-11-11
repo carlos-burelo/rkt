@@ -240,6 +240,7 @@ Servicio:
 Operate (contra el servicio en marcha):
   status [--json]                        salud + apps + backends
   logs [-n 50] [-f] [-app nombre]        logs (operativo o de app)
+  doctor [--json]                        entorno: toolchains, bins, pool, DB
   restart <app>                          reinicio supervisado inmediato
   deploy <app>                           pull+build+swap+restart+rollback
   rollback <app>                         vuelve a live.prev

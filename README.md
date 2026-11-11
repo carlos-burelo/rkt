@@ -145,6 +145,7 @@ rkt routes list
 rkt deploy app
 rkt rollback app
 rkt logs -f -app app
+rkt doctor
 rkt config export respaldo.json
 ```
 

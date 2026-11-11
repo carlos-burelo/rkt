@@ -85,7 +85,7 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 | `config import <file>` | Restaura flota + settings (valida antes) |
 | `backup [file]` | Copia consistente de SQLite con `VACUUM INTO` |
 | `restore <file>` | Restaura SQLite (servicio detenido) |
-| `doctor` | Diagnóstico de config, DB, servicio, puertos y git |
+| `doctor [--json]` | Entorno: toolchains con versión, node_bin/python_bin, pool con hueco, DB, servicio, puertos y git (warn = aviso, fail = bloqueante) |
 | `github login` | URL para instalar la App en browser |
 | `github init --name --domain [--org]` | URL del form manifest para crear la App |
 | `help` | Esta referencia resumida |
@@ -112,6 +112,13 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 
 `apps list` / `routes list`: arrays de objetos con los campos de la tabla.
 Vacío = `[]` (nunca `null` en listas).
+
+`doctor` / `GET /api/v1/server/doctor`:
+```json
+[{"name":"git","state":"ok|warn|fail","detail":"git version 2.43.0","hint":"..."}]
+```
+`state: fail` bloquea (git, pool, DB, bins mal configurados);
+`warn` avisa (toolchain ausente, *_bin sin fijar).
 
 ## Dashboard (`/` + `/api/v1/`)
 
