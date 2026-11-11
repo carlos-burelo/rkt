@@ -36,15 +36,15 @@ a mano antes de cada beta, en una máquina Windows limpia.
 
 ## Estrategias de enrutado (nuevo en esta beta)
 
-Tres formas de exponer una app, configurables desde Dominios (visual:
-tarjeta por modo con ejemplo vivo):
+Dos formas de exponer una app, configurables desde Dominios (visual:
+tarjeta por modo con ejemplo vivo). El enrutado por puerto dedicado
+(`IP:3000` con listener propio) se descartó a propósito: añade
+superficie operacional (puertos que abrir, TLS por IP, reinicios)
+sin caso de uso real; dominio y path cubren todo.
 
 - [ ] **Host**: `app.midominio.com` → app (comportamiento clásico, sin cambios).
 - [ ] **Path**: `http://IP/app` → app (recorta `/app`; prefijo más largo gana;
   `/app2` no caza `/app`).
-- [ ] **Puerto**: `http://IP:3000` → app (listener propio por puerto;
-  cambiar puertos exige reinicio — el dashboard lo avisa).
-- [ ] Puertos reservados (80/443/dashboard/healthz) se rechazan al guardar.
 - [ ] Host desconocido → 404; path sin match → cae a la ruta del host.
 
 ## Setup por pasos + doctor integrado
@@ -58,10 +58,3 @@ tarjeta por modo con ejemplo vivo):
   scope y por qué); instalar pide todo (orgs + repos) y el usuario
   desmarca conscientemente lo que no quiera (nada queda huérfano en
   silencio: el pre-check avisa antes de crear/desplegar).
-
-## MCP en prod
-
-- [ ] Token con alcance (lectura / deploy / admin) en vez de todo-o-nada.
-- [ ] Allowlist de tools por token; `config_import` y `users_*` fuera del
-  perfil de solo-lectura.
-- [ ] Límite de ritmo en `/mcp` y auditoría por herramienta.

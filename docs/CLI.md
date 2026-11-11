@@ -66,9 +66,9 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 | `apps add [repo] [flags]` | Wizard si faltan flags: infiere nombre, preset, puerto, dominio, comando. Flags = override. Sin `public_ip` el dominio por defecto es `<app>.localhost`; en público exige `base_domain` o `--domain`. Ej: `apps add https://github.com/o/app2.git` |
 | `apps add --external --name dev --dir C:\repo [--domain dev.localhost] [--port 3010]` | Registra app externa: solo proxy (sin build/deploy/supervisor). El dev server lo corrés vos. Sin dominio usa el defecto local/público. |
 | `apps rm <name>` | Elimina app (avisa revisar routes huérfanas) |
-| `routes list [--json]` | `hosts, target` |
-| `routes add --host (repetible) --target <url>` | Agrega ruta (hot). Target `http(s)://` o `ws(s)://`; ws/wss se normalizan y conservan el upgrade |
-| `routes rm <host>` | Quita host (borra la ruta si queda vacía) |
+| `routes list [--json]` | `hosts, target, path?` |
+| `routes add [--host H]... [--path /app] --target <url>` | Agrega ruta (hot). Sin hosts vale para cualquier host/IP; `--path` recorta el prefijo al proxear. Target `http(s)://` o `ws(s)://`; ws/wss se normalizan y conservan el upgrade |
+| `routes rm <host> \| [--host H] [--path P]` | Quita host (borra la ruta si queda vacía) o rutas enteras por selector |
 | `env list <app>` | Vars inline (`KEY=valor` por línea) |
 | `env set <app> CLAVE=valor` | Escribe (+expande `${}`) |
 | `env unset <app> CLAVE` | Borra |
