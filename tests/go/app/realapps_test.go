@@ -417,6 +417,58 @@ func TestRealViteConRed(t *testing.T) {
 	}
 }
 
+// TestRealNodePnpmWrapperSinHuerfanos: arranque vía `pnpm run start` como en
+// prod (launcher con nieto). Con job-desde-el-inicio el corte mata el árbol
+// y no quedan huérfanos sirviendo el puerto viejo. Sin el fix, p1 seguiría
+// abierto y el Stop se colgaría.
+func TestRealNodePnpmWrapperSinHuerfanos(t *testing.T) {
+	nodeOrSkip(t)
+	pnpmOrSkip(t)
+	repo := fixtureRepo(t, "demo-node-server")
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	var cmd string
+	var args []string
+	if runtime.GOOS == "windows" {
+		cmd = "cmd.exe"
+		args = []string{"/c", "pnpm", "run", "start"}
+	} else {
+		cmd = "/bin/sh"
+		args = []string{"-c", "pnpm run start"}
+	}
+	_, live, sup, ctl := realWorld(t, cmd, args, repo, []string{nodeCheckStep()}, nil)
+
+	if _, err := deploy.RunContext(context.Background(), bbAppOf(live), "", ctl, io.Discard, log); err != nil {
+		t.Fatalf("deploy wrapper v1: %v", err)
+	}
+	p1 := bbPortOf(ctl.live)
+	bbWaitServe(t, p1, "v1", 30*time.Second)
+
+	if err := os.WriteFile(filepath.Join(repo, "VERSION"), []byte("v2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, repo, "v2")
+	if _, err := deploy.RunContext(context.Background(), bbAppOf(ctl.live), "", ctl, io.Discard, log); err != nil {
+		t.Fatalf("deploy wrapper v2: %v", err)
+	}
+	p2 := bbPortOf(ctl.live)
+	if p2 == "" || p2 == p1 {
+		t.Fatalf("corte sin puerto nuevo: p1=%q p2=%q", p1, p2)
+	}
+	bbWaitServe(t, p2, "v2", 30*time.Second)
+	if body, err := bbGet(t, p1); err == nil {
+		t.Fatalf("nieto huérfano sirviendo en %s: %q", p1, body)
+	}
+
+	// El Stop debe volver pronto (antes se colgaba con el pipe retenido).
+	done := make(chan struct{})
+	go func() { sup.Stop(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("Stop colgado: nieto del wrapper fuera del job")
+	}
+}
+
 // TestRealBuildRotoConservaViva: syntax error real; el build falla y la v1
 // sigue sirviendo en el mismo puerto (sin corte a medias).
 func TestRealBuildRotoConservaViva(t *testing.T) {

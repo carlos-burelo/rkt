@@ -59,12 +59,17 @@ type app struct {
 	intentional bool
 	// adopt: proceso ya arrancado (canario) que el loop debe tomar en la
 	// siguiente vuelta en vez de start(). Lo setea SwapLive.
-	adopt    *exec.Cmd
-	lastExit string
-	crashes  []time.Time
-	stopCh   chan struct{}
-	restartC chan struct{}
-	resumeC  chan struct{}
+	adopt *exec.Cmd
+	// canaryJob: job creado en StartCanary ANTES de arrancar, pendiente de
+	// adopción por el loop. Los nietos nacen ya dentro: el Kill posterior
+	// arrastra el árbol completo (pnpm/node, go run...). Sin esto, un
+	// nieto nacido antes del Assign tardío escapa y el Stop se cuelga.
+	canaryJob *jobCtx
+	lastExit  string
+	crashes   []time.Time
+	stopCh    chan struct{}
+	restartC  chan struct{}
+	resumeC   chan struct{}
 }
 
 func (a *app) startedAt() time.Time {
@@ -414,35 +419,30 @@ func (a *app) loop() {
 		a.alive = false
 		a.mu.Unlock()
 	}()
-	job, err := newJob(a.cfg.MemoryMB)
-	if err != nil {
-		a.log.Warn("sin job object (sin límites ni kill con padre)", "err", err)
-		job = nil
-	} else if a.cfg.MemoryMB > 0 {
-		a.log.Info("límite RAM", "mb", a.cfg.MemoryMB)
-	}
-	if job != nil {
+	// El job vigente se cierra al salir del loop (con KILL_ON_JOB_CLOSE,
+	// mata lo que quede dentro).
+	defer func() {
 		a.mu.Lock()
-		a.job = job
-		a.mu.Unlock()
-		defer func() {
-			a.mu.Lock()
+		if a.job != nil {
+			a.job.Close()
 			a.job = nil
-			a.mu.Unlock()
-			job.Close()
-		}()
-	}
+		}
+		a.mu.Unlock()
+	}()
 	for {
 		a.mu.Lock()
 		adopt := a.adopt
 		a.adopt = nil
 		a.mu.Unlock()
 		if adopt != nil {
-			// Proceso canario ya arrancado y sano: adoptarlo en vez de start.
-			if !a.attach(job, adopt) {
+			// Proceso canario ya arrancado y sano: adoptarlo en vez de
+			// start. Si trae job propio (asignado al arrancar), se toma:
+			// ya contiene el árbol completo.
+			pre := a.adoptCanaryJob()
+			if !a.attach(a.ensureJob(), adopt, pre) {
 				continue
 			}
-		} else if !a.start(job) {
+		} else if !a.start(a.ensureJob()) {
 			return // parado a propósito o fallo fatal de arranque
 		}
 		startedAt := a.startedAt()
@@ -572,11 +572,89 @@ func backoffFor(base time.Duration, consec int) time.Duration {
 	return d
 }
 
+// ensureJob crea el job vigente si no existe (límites de la spec).
+func (a *app) ensureJob() *jobCtx {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.job != nil {
+		return a.job
+	}
+	job, err := newJob(a.cfg.MemoryMB)
+	if err != nil {
+		a.log.Warn("sin job object (sin límites ni kill con padre)", "err", err)
+		return nil
+	}
+	if a.cfg.MemoryMB > 0 {
+		a.log.Info("límite RAM", "mb", a.cfg.MemoryMB)
+	}
+	a.job = job
+	return job
+}
+
+// currentJob job vigente o nil.
+func (a *app) currentJob() *jobCtx {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.job
+}
+
+// adoptCanaryJob sustituye el job vigente por el del canario (ya contiene
+// el árbol porque se asignó al arrancar, antes de que nacieran nietos).
+// Cierra el anterior: sus miembros ya murieron en killCurrent. True si el
+// canario traía job (attach no debe reasignar).
+func (a *app) adoptCanaryJob() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	cj := a.canaryJob
+	a.canaryJob = nil
+	if cj == nil {
+		return false
+	}
+	if cj != a.job {
+		if a.job != nil {
+			a.job.Close()
+		}
+		a.job = cj
+	}
+	return true
+}
+
+// setCanaryJob guarda el job del canario en curso; cierra el anterior si
+// quedó huérfano (deploy previo sin corte).
+func (a *app) setCanaryJob(job *jobCtx) {
+	if job == nil {
+		return
+	}
+	a.mu.Lock()
+	old := a.canaryJob
+	a.canaryJob = job
+	a.mu.Unlock()
+	if old != nil {
+		old.Close()
+	}
+}
+
+// clearCanaryJob retira el job pendiente si sigue siendo el mismo (fallo
+// de arranque o de assign) y lo cierra. Sin miembros dentro (el proceso
+// no existe o no entró al job), cerrar no mata nada.
+func (a *app) clearCanaryJob(job *jobCtx) {
+	if job == nil {
+		return
+	}
+	a.mu.Lock()
+	if a.canaryJob == job {
+		a.canaryJob = nil
+	}
+	a.mu.Unlock()
+	job.Close()
+}
+
 // attach registra un proceso ya arrancado (canario) como la instancia
-// supervisada: asigna el job y fija estado para que Wait() lo rastree.
+// supervisada y fija estado para que Wait() lo rastree. Con preassigned
+// el proceso ya está en el job (asignado en StartCanary) y no se reasigna.
 // El stdout/stderr ya lo apunta quien arrancó el canario; el reinicio
 // posterior sí abre el log de la app (start()).
-func (a *app) attach(job *jobCtx, cmd *exec.Cmd) bool {
+func (a *app) attach(job *jobCtx, cmd *exec.Cmd, preassigned bool) bool {
 	if cmd == nil || cmd.Process == nil {
 		return false
 	}
@@ -587,7 +665,7 @@ func (a *app) attach(job *jobCtx, cmd *exec.Cmd) bool {
 	a.pid = cmd.Process.Pid
 	a.started = time.Now()
 	a.mu.Unlock()
-	if job != nil {
+	if job != nil && !preassigned {
 		if err := job.Assign(uint32(cmd.Process.Pid)); err != nil {
 			a.log.Warn("sin job assign (canario)", "err", err)
 		}
@@ -644,10 +722,12 @@ func (m *Manager) SwapLive(name string, cmd *exec.Cmd, dir, port string) error {
 	return nil
 }
 
-// StartCanary arranca la app en dir con PORT=port (proceso crudo, sin job
-// object), para el blue-green: la instancia actual sigue viva y sirviendo.
-// El deploy posee el proceso hasta Cutover (SwapLive) o lo mata si el corte
-// no ocurre. out captura stdout/stderr del canario.
+// StartCanary arranca la app en dir con PORT=port dentro de un job object
+// creado ANTES de arrancar: los nietos (pnpm/node, go run, wrappers) nacen
+// ya dentro y el Kill posterior arrastra el árbol completo. La instancia
+// actual sigue viva y sirviendo. El deploy posee el proceso hasta Cutover
+// (SwapLive) o lo mata si el corte no ocurre.
+// out captura stdout/stderr del canario.
 func (m *Manager) StartCanary(name, dir, port string, out io.Writer) (*exec.Cmd, error) {
 	m.mu.Lock()
 	var a *app
@@ -656,11 +736,18 @@ func (m *Manager) StartCanary(name, dir, port string, out io.Writer) (*exec.Cmd,
 			a = x
 		}
 	}
+	m.mu.Unlock()
 	if a == nil {
-		m.mu.Unlock()
 		return nil, fmt.Errorf("app %q inexistente", name)
 	}
-	m.mu.Unlock()
+	// Job antes del Start: sin esto, un nieto nacido antes del Assign
+	// tardío escapa y el Stop se cuelga esperando su pipe.
+	job, err := newJob(a.cfg.MemoryMB)
+	if err != nil {
+		a.log.Warn("canario sin job (sin límites ni kill con padre)", "err", err)
+		job = nil
+	}
+	a.setCanaryJob(job)
 
 	env := map[string]string{}
 	for k, v := range a.cfg.Env {
@@ -674,7 +761,14 @@ func (m *Manager) StartCanary(name, dir, port string, out io.Writer) (*exec.Cmd,
 	cmd.Stdout = out
 	cmd.Stderr = out
 	if err := cmd.Start(); err != nil {
+		a.clearCanaryJob(job)
 		return nil, fmt.Errorf("canario no arrancó: %w", err)
+	}
+	if job != nil {
+		if err := job.Assign(uint32(cmd.Process.Pid)); err != nil {
+			a.log.Warn("canario sin job assign", "err", err)
+			a.clearCanaryJob(job)
+		}
 	}
 	return cmd, nil
 }
@@ -755,7 +849,12 @@ func (a *app) stop() {
 }
 
 // stopGrace ventana para que la app cierre ordenadamente antes del kill.
-var stopGrace = 5 * time.Second
+// killWait tope tras el kill duro: el Wait debe volver aunque un nieto
+// huérfano retenga el pipe (sin esto, el Stop se cuelga para siempre).
+var (
+	stopGrace = 5 * time.Second
+	killWait  = 10 * time.Second
+)
 
 // killCurrent pide cierre ordenado y cae al kill duro si no termina.
 // El Wait único lo hace el loop; aquí solo se espera su señal.
@@ -786,7 +885,11 @@ func (a *app) killCurrent() {
 	}
 	_ = cmd.Process.Kill()
 	if done != nil {
-		<-done
+		select {
+		case <-done:
+		case <-time.After(killWait):
+			a.log.Error("proceso no murió tras kill (pipe retenido?)", "pid", pid)
+		}
 	}
 }
 
