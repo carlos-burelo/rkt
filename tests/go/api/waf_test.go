@@ -1,11 +1,17 @@
 package api
 
 import (
+	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"rkt-proxy/internal/cfgfile"
+	"rkt-proxy/internal/config"
+	"rkt-proxy/internal/proxy"
 	"rkt-proxy/internal/store"
 )
 
@@ -23,11 +29,12 @@ func TestWAFEndpoints(t *testing.T) {
 		t.Fatalf("waf viewer: quiere 403, got %d", rec.Code)
 	}
 
-	// operator ve reglas + bloqueos
+	// operator ve reglas + bloqueos + baneos
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/waf", opTok))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"deny_paths"`) ||
-		!strings.Contains(rec.Body.String(), `"deny_methods"`) || !strings.Contains(rec.Body.String(), `"blocked"`) {
+		!strings.Contains(rec.Body.String(), `"deny_methods"`) || !strings.Contains(rec.Body.String(), `"blocked"`) ||
+		!strings.Contains(rec.Body.String(), `"banned"`) {
 		t.Fatalf("waf get: %d %s", rec.Code, rec.Body.String())
 	}
 
@@ -75,5 +82,82 @@ func TestWAFEndpoints(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("waf put viewer: quiere 403, got %d", rec.Code)
+	}
+}
+
+func TestWAFBansEndpoint(t *testing.T) {
+	d, db, done := testDeps(t)
+	defer done()
+	h := NewHandler(d)
+	opTok := loginAs(t, h, db, "op", store.RoleOperator)
+	visTok := loginAs(t, h, db, "vis", store.RoleViewer)
+
+	// El proxy necesita una regla para denegar (testDeps no trae deny_paths).
+	cp, err := cfgfile.MutateInfra(db, func(cp *config.Config) error {
+		cp.DenyPaths = []string{"/.env"}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Live.Swap(cp)
+
+	// sin ?ip
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/waf/bans", opTok))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unban sin ip: quiere 400, got %d", rec.Code)
+	}
+	// IP no baneada
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/waf/bans?ip=9.9.9.9", opTok))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unban fantasma: quiere 404, got %d", rec.Code)
+	}
+	// viewer no desbanea
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/waf/bans?ip=9.9.9.9", visTok))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("unban viewer: quiere 403, got %d", rec.Code)
+	}
+	// método inválido
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/waf/bans?ip=9.9.9.9", opTok))
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("bans GET: quiere 405, got %d", rec.Code)
+	}
+
+	// 20 golpes al proxy banean 192.0.2.1 (RemoteAddr de httptest)
+	ph := proxy.NewHandler(d.Live, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	for i := 0; i < 20; i++ {
+		r := httptest.NewRequest(http.MethodGet, "http://a.test/.env", nil)
+		ph.ServeHTTP(httptest.NewRecorder(), r)
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/waf", opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "192.0.2.1") {
+		t.Fatalf("baneado debe listarse: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// desbanear lo saca de la lista (el historial de bloqueos se conserva)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/waf/bans?ip=192.0.2.1", opTok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unban: quiere 200, got %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/waf", opTok))
+	var out struct {
+		Banned  []map[string]any `json:"banned"`
+		Blocked []map[string]any `json:"blocked"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Banned) != 0 {
+		t.Fatalf("tras unban no debe haber baneos: %+v", out.Banned)
+	}
+	if len(out.Blocked) == 0 {
+		t.Fatal("el historial de bloqueos debe conservarse")
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -30,11 +31,36 @@ type Block struct {
 	Rule   string `json:"rule"`
 }
 
+// Ban un bloqueo temporal de IP para el panel.
+type Ban struct {
+	IP    string `json:"ip"`
+	Hits  int    `json:"hits"`
+	Until string `json:"until"`
+}
+
 const maxBlocks = 50
+
+// Política de auto-ban: N denegaciones en la ventana dispara un bloqueo
+// de banTTL. En memoria y efímero (un reinicio lo limpia): es fricción
+// contra escaneos, no una lista negra permanente.
+const (
+	banThreshold = 20
+	banWindow    = 5 * time.Minute
+	banTTL       = 10 * time.Minute
+	maxBans      = 4096
+)
+
+type banState struct {
+	hits     []time.Time // denegaciones dentro de la ventana
+	until    time.Time   // baneado hasta (cero = no baneado)
+	lastSeen time.Time
+}
 
 var (
 	ringMu sync.Mutex
 	ring   []Block
+	banMu  sync.Mutex
+	bans   = map[string]*banState{}
 )
 
 // record guarda un bloqueo (anillo: solo los últimos maxBlocks).
@@ -59,6 +85,105 @@ func Recent() []Block {
 		out[len(ring)-1-i] = b
 	}
 	return out
+}
+
+// bannedSince informa si la IP está baneada en now.
+func bannedSince(ip string, now time.Time) bool {
+	banMu.Lock()
+	defer banMu.Unlock()
+	st, ok := bans[ip]
+	if !ok || st.until.IsZero() {
+		return false
+	}
+	if now.After(st.until) {
+		delete(bans, ip)
+		return false
+	}
+	return true
+}
+
+// Banned baneos activos (nuevos primero por vencimiento). Solo lectura.
+// De paso purga registros cuya ventana ya expiró.
+func Banned() []Ban {
+	now := time.Now()
+	banMu.Lock()
+	defer banMu.Unlock()
+	out := []Ban{}
+	for ip, st := range bans {
+		if st.until.IsZero() {
+			if now.Sub(st.lastSeen) > banWindow {
+				delete(bans, ip)
+			}
+			continue
+		}
+		if now.After(st.until) {
+			delete(bans, ip)
+			continue
+		}
+		out = append(out, Ban{IP: ip, Hits: len(st.hits), Until: st.until.UTC().Format(time.RFC3339)})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Until > out[j].Until })
+	return out
+}
+
+// Unban levanta el bloqueo de una IP. False si no estaba baneada.
+func Unban(ip string) bool {
+	banMu.Lock()
+	defer banMu.Unlock()
+	if _, ok := bans[ip]; !ok {
+		return false
+	}
+	delete(bans, ip)
+	return true
+}
+
+// hit registra una denegación y banea si alcanza el umbral en la ventana.
+// Saturado (tope de IPs) suelta el golpe sin banear: fail-open, la
+// disponibilidad manda sobre el bloqueo.
+func hit(ip string, now time.Time) {
+	banMu.Lock()
+	defer banMu.Unlock()
+	st, ok := bans[ip]
+	if !ok {
+		if len(bans) >= maxBans {
+			purgeExpiredLocked(now)
+			if len(bans) >= maxBans {
+				return
+			}
+		}
+		st = &banState{}
+		bans[ip] = st
+	}
+	st.lastSeen = now
+	if !st.until.IsZero() && now.Before(st.until) {
+		return // ya baneado: el TTL es fijo, no se extiende
+	}
+	kept := st.hits[:0]
+	for _, h := range st.hits {
+		if now.Sub(h) < banWindow {
+			kept = append(kept, h)
+		}
+	}
+	st.hits = append(kept, now)
+	if len(st.hits) >= banThreshold {
+		st.until = now.Add(banTTL)
+	}
+}
+
+// purgeExpiredLocked saca baneos vencidos y registros cuya ventana ya no
+// cuenta. Debe llamarse con banMu tomado.
+func purgeExpiredLocked(now time.Time) {
+	for ip, st := range bans {
+		if st.until.IsZero() {
+			if now.Sub(st.lastSeen) > banWindow {
+				delete(bans, ip)
+			}
+			continue
+		}
+		if now.After(st.until) {
+			delete(bans, ip)
+		}
+	}
 }
 
 // blockedRequestHeaders jamás legítimas desde un cliente real.
@@ -91,18 +216,28 @@ func matchRequest(pattern string, r *http.Request) bool {
 	return false
 }
 
-// Middleware niega verbos, paths y cabeceras de la lista viva; resto pasa.
+// Middleware niega baneados, verbos, paths y cabeceras de la lista viva;
+// resto pasa. El ban se chequea primero: un baneado no gasta ni matching.
 func Middleware(live *config.Live, next http.Handler, log *slog.Logger) http.Handler {
-	deny := func(w http.ResponseWriter, r *http.Request, rule string) {
-		ip := r.RemoteAddr
-		if h, _, err := net.SplitHostPort(ip); err == nil {
-			ip = h
+	clientIP := func(r *http.Request) string {
+		if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			return h
 		}
+		return r.RemoteAddr
+	}
+	deny := func(w http.ResponseWriter, r *http.Request, rule string) {
+		ip := clientIP(r)
 		record(ip, r.Host, r.Method, r.URL.Path, rule)
+		hit(ip, time.Now())
 		log.Warn("waf deny", "ip", ip, "host", r.Host, "method", r.Method, "path", r.URL.Path, "rule", rule)
 		http.Error(w, "prohibido", http.StatusForbidden)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if bannedSince(clientIP(r), time.Now()) {
+			log.Warn("waf ban", "ip", clientIP(r), "host", r.Host, "path", r.URL.Path)
+			http.Error(w, "prohibido", http.StatusForbidden)
+			return
+		}
 		for _, m := range live.Get().DenyMethods {
 			if r.Method == m {
 				deny(w, r, "método "+m)

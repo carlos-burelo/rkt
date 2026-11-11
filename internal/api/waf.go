@@ -22,6 +22,7 @@ func (d *Deps) handleWAF(w http.ResponseWriter, r *http.Request) {
 			"deny_paths":   append([]string(nil), cfg.DenyPaths...),
 			"deny_methods": append([]string(nil), cfg.DenyMethods...),
 			"blocked":      waf.Recent(),
+			"banned":       waf.Banned(),
 		})
 	case http.MethodPut:
 		var in struct {
@@ -69,4 +70,25 @@ func (d *Deps) handleWAF(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeErr(w, http.StatusMethodNotAllowed, "GET|PUT")
 	}
+}
+
+// handleWAFBans desbanea una IP (DELETE /api/v1/waf/bans?ip=).
+func (d *Deps) handleWAFBans(w http.ResponseWriter, r *http.Request) {
+	if !requireOperator(w, r) {
+		return
+	}
+	if r.Method != http.MethodDelete {
+		writeErr(w, http.StatusMethodNotAllowed, "solo DELETE")
+		return
+	}
+	ip := strings.TrimSpace(r.URL.Query().Get("ip"))
+	if ip == "" {
+		writeErr(w, http.StatusBadRequest, "falta ?ip=")
+		return
+	}
+	if !waf.Unban(ip) {
+		writeErr(w, http.StatusNotFound, "esa IP no está baneada")
+		return
+	}
+	writeJSON(w, map[string]string{"ok": "true"})
 }

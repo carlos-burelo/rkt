@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"rkt-proxy/internal/config"
 )
@@ -28,6 +29,7 @@ func liveWith(t *testing.T, deny []string) *config.Live {
 }
 
 func TestDeny(t *testing.T) {
+	resetBans()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
@@ -51,6 +53,7 @@ func TestDeny(t *testing.T) {
 }
 
 func TestDenyDepthAndHeaders(t *testing.T) {
+	resetBans()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
@@ -90,6 +93,7 @@ func TestDenyDepthAndHeaders(t *testing.T) {
 }
 
 func TestDefaultsDenyCommon(t *testing.T) {
+	resetBans()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
@@ -108,7 +112,105 @@ func TestValidPattern(t *testing.T) {
 	}
 }
 
+func resetBans() {
+	banMu.Lock()
+	defer banMu.Unlock()
+	bans = map[string]*banState{}
+	ringMu.Lock()
+	defer ringMu.Unlock()
+	ring = nil
+}
+
+func TestAutoBanUmbral(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})
+	resetBans()
+	live := liveWith(t, []string{"/.env"})
+	now := time.Now()
+
+	// 19 golpes: aún pasa el resto (aquí todo es 403 por el path).
+	for i := 0; i < banThreshold-1; i++ {
+		req := httptest.NewRequest("GET", "/.env", nil)
+		req.RemoteAddr = "9.9.9.9:1234"
+		rec := httptest.NewRecorder()
+		Middleware(live, next, log).ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("golpe %d: got %d", i, rec.Code)
+		}
+	}
+	// el golpe 20 banea: hasta una ruta limpia da 403.
+	req := httptest.NewRequest("GET", "/.env", nil)
+	req.RemoteAddr = "9.9.9.9:1234"
+	Middleware(live, next, log).ServeHTTP(httptest.NewRecorder(), req)
+	reqOK := httptest.NewRequest("GET", "/", nil)
+	reqOK.RemoteAddr = "9.9.9.9:1234"
+	rec := httptest.NewRecorder()
+	Middleware(live, next, log).ServeHTTP(rec, reqOK)
+	if rec.Code != http.StatusForbidden {
+		t.Fatal("baneado debe dar 403 hasta en ruta limpia")
+	}
+	// otra IP no afectada.
+	reqOther := httptest.NewRequest("GET", "/", nil)
+	reqOther.RemoteAddr = "9.9.9.8:1234"
+	rec = httptest.NewRecorder()
+	Middleware(live, next, log).ServeHTTP(rec, reqOther)
+	if rec.Code != http.StatusTeapot {
+		t.Fatal("otra IP debe pasar")
+	}
+	_ = now
+}
+
+func TestAutoBanExpiraYNoSeExtiende(t *testing.T) {
+	resetBans()
+	base := time.Now()
+	for i := 0; i < banThreshold; i++ {
+		hit("1.1.1.1", base.Add(time.Duration(i)*time.Second))
+	}
+	if !bannedSince("1.1.1.1", base.Add(time.Minute)) {
+		t.Fatal("debió banear")
+	}
+	// golpes durante el ban no extienden el TTL.
+	hit("1.1.1.1", base.Add(5*time.Minute))
+	if bannedSince("1.1.1.1", base.Add(banTTL).Add(-time.Second)) != true {
+		t.Fatal("TTL fijo: debe seguir baneado hasta el final")
+	}
+	// el ban arranca en el golpe 20 (t=19s), no en t=0.
+	if bannedSince("1.1.1.1", base.Add(banTTL).Add(20*time.Second)) {
+		t.Fatal("TTL vencido: debe expirar")
+	}
+	// hits viejos fuera de ventana no cuentan.
+	resetBans()
+	hit("2.2.2.2", base)
+	if bannedSince("2.2.2.2", base.Add(banWindow).Add(time.Minute)) {
+		t.Fatal("un golpe viejo no debe banear")
+	}
+}
+
+func TestBannedYUnban(t *testing.T) {
+	resetBans()
+	base := time.Now()
+	for i := 0; i < banThreshold; i++ {
+		hit("3.3.3.3", base.Add(time.Duration(i)*time.Second))
+	}
+	got := Banned()
+	if len(got) != 1 || got[0].IP != "3.3.3.3" || got[0].Hits < banThreshold || got[0].Until == "" {
+		t.Fatalf("banned = %+v", got)
+	}
+	if !Unban("3.3.3.3") {
+		t.Fatal("unban debe dar true")
+	}
+	if Unban("3.3.3.3") {
+		t.Fatal("doble unban debe dar false")
+	}
+	if len(Banned()) != 0 {
+		t.Fatal("tras unban no debe haber baneos")
+	}
+}
+
 func TestDenyMethods(t *testing.T) {
+	resetBans()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
@@ -132,6 +234,7 @@ func TestDenyMethods(t *testing.T) {
 }
 
 func TestDenyEscapado(t *testing.T) {
+	resetBans()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
@@ -160,6 +263,7 @@ func TestDenyEscapado(t *testing.T) {
 }
 
 func TestRecentRing(t *testing.T) {
+	resetBans()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
