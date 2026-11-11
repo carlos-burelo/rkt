@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -100,6 +101,8 @@ type fakeCtl struct {
 	cutoverDir  string
 	cutoverPort string
 	noHTTP      bool // si true, StartCanary no arranca el server (canario mudo)
+	failCanary  bool // si true, StartCanary falla
+	failCutover bool // si true, Cutover falla
 	srvs        []*http.Server
 	lns         []net.Listener
 }
@@ -116,6 +119,9 @@ func (f *fakeCtl) Snapshot() []supervisor.Status {
 // StartCanary sirve 200 en el puerto (simula el canario sano) y devuelve un
 // proceso que duerme (para que Kill/Cutover tengan Process no-nil).
 func (f *fakeCtl) StartCanary(name, dir, port string, out io.Writer) (*exec.Cmd, error) {
+	if f.failCanary {
+		return nil, fmt.Errorf("canario no arrancó: simulado")
+	}
 	if !f.noHTTP {
 		ln, err := net.Listen("tcp", "127.0.0.1:"+port)
 		if err != nil {
@@ -141,6 +147,9 @@ func (f *fakeCtl) StartCanary(name, dir, port string, out io.Writer) (*exec.Cmd,
 }
 
 func (f *fakeCtl) Cutover(name string, cmd *exec.Cmd, dir, port string) error {
+	if f.failCutover {
+		return fmt.Errorf("corte fallido: simulado")
+	}
 	f.cutoverDir = dir
 	f.cutoverPort = port
 	return nil

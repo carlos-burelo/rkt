@@ -347,6 +347,13 @@ func TestSwapLiveAdoptaCanario(t *testing.T) {
 	}
 }
 
+func TestStartCanaryAppInexistente(t *testing.T) {
+	m := New(nil, nil, t.TempDir(), testLog(t))
+	if _, err := m.StartCanary("nadie", t.TempDir(), "3999", io.Discard); err == nil {
+		t.Fatal("canario de app inexistente debe fallar")
+	}
+}
+
 func TestBlueGreenCanarioHTTP(t *testing.T) {
 	py := pythonForTest(t)
 	script := `import http.server,os
