@@ -11,6 +11,8 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +25,8 @@ import (
 	"rkt-proxy/internal/cfgfile"
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/deploy"
+	"rkt-proxy/internal/logx"
+	"rkt-proxy/internal/proxy"
 	"rkt-proxy/internal/store"
 	"rkt-proxy/internal/supervisor"
 )
@@ -143,8 +147,16 @@ func commitAll(t *testing.T, repo, msg string) {
 // extraEnv se suma al entorno (ej GOTOOLCHAIN=local para no tocar red).
 func realWorld(t *testing.T, cmd string, args []string, repo string, build []string, extraEnv map[string]string) (*store.DB, *config.Live, *supervisor.Manager, *supCtl) {
 	t.Helper()
-	base := t.TempDir()
-	db, err := store.Open(filepath.Join(base, "rkt.db"))
+	return realWorldAt(t, t.TempDir(), cmd, args, repo, build, extraEnv)
+}
+
+// realWorldAt igual pero sobre un base propio (para reabrirlo tras un
+// "reinicio": mismo disco, proceso nuevo).
+func realWorldAt(t *testing.T, base, cmd string, args []string, repo string, build []string, extraEnv map[string]string) (*store.DB, *config.Live, *supervisor.Manager, *supCtl) {
+	t.Helper()
+	// Mismo layout que prod: cfg en base/, DB en base/logs/rkt.db.
+	cfgPath := filepath.Join(base, "rkt.yaml")
+	db, err := store.Open(logx.DBPath(cfgPath))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -466,6 +478,60 @@ func TestRealNodePnpmWrapperSinHuerfanos(t *testing.T) {
 	case <-done:
 	case <-time.After(30 * time.Second):
 		t.Fatal("Stop colgado: nieto del wrapper fuera del job")
+	}
+}
+
+// TestRestartRecuperaAppsSirviendo: muerte del servicio y rearranque sobre
+// el mismo disco (LoadMerged + NewLive + supervisor nuevo, como Run()).
+// La app vuelve a servir sin redesplegar; rutas e historial intactos.
+func TestRestartRecuperaAppsSirviendo(t *testing.T) {
+	py := pythonOrSkip(t)
+	repo := fixtureRepo(t, "demo-py")
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	base := t.TempDir()
+	cfgPath := filepath.Join(base, "rkt.yaml")
+	db, live, sup, ctl := realWorldAt(t, base, py, []string{"-u", "app.py"}, repo, []string{pyCompileStep(py)}, nil)
+	if _, err := deploy.RunContext(context.Background(), bbAppOf(live), "", ctl, io.Discard, log); err != nil {
+		t.Fatalf("deploy v1: %v", err)
+	}
+	p1 := bbPortOf(ctl.live)
+	bbWaitServe(t, p1, "v1", 30*time.Second)
+
+	// Muerte del servicio: se pierde todo lo vivo, solo queda el disco.
+	sup.Stop()
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// "Reboot": proceso nuevo sobre el mismo disco, mismo camino que Run().
+	cfg, db2, err := cfgfile.LoadMerged(cfgPath)
+	if err != nil {
+		t.Fatalf("boot: %v", err)
+	}
+	defer db2.Close()
+	live2 := config.NewLive(cfg)
+	sup2 := supervisor.New(cfg.Apps, cfg.GlobalEnv, filepath.Join(base, "logs"), log)
+	defer sup2.Stop()
+	sup2.Start()
+	bbWaitServe(t, p1, "v1", 30*time.Second)
+
+	// La ruta sobrevivió: el proxy sirve la app por su host.
+	front := httptest.NewServer(proxy.NewHandler(live2, log))
+	defer front.Close()
+	req, _ := http.NewRequest("GET", front.URL, nil)
+	req.Host = "bb.test"
+	resp, err := bbClient.Do(req)
+	if err != nil {
+		t.Fatalf("proxy tras reboot: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(body) != "v1" {
+		t.Fatalf("proxy sirvió %q, quiere v1", body)
+	}
+	fleet, err := db2.LoadFleet()
+	if err != nil || len(fleet.Apps) != 1 || len(fleet.Routes) != 1 {
+		t.Fatalf("flota tras reboot: %+v %v", fleet, err)
 	}
 }
 
