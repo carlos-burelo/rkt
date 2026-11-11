@@ -12,9 +12,9 @@ func TestGithubInitURL(t *testing.T) {
 	if got != want {
 		t.Fatalf("got %q quiere %q", got, want)
 	}
-	got = githubInitURL("vps.test", "mi app", "")
-	if !strings.HasPrefix(got, "https://vps.test/_rkt/new-app?name=mi+app&domain=vps.test") || strings.Contains(got, "org=") {
-		t.Fatalf("escape/org mal: %q", got)
+	got = githubInitURL("vps.test", "mi app", "", "")
+	if !strings.HasPrefix(got, "https://vps.test/_rkt/new-app?name=mi+app&domain=vps.test") || strings.Contains(got, "org=") || strings.Contains(got, "state=") {
+		t.Fatalf("escape/org/state mal: %q", got)
 	}
 }
 
