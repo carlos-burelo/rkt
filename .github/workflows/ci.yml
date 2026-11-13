@@ -63,8 +63,12 @@ jobs:
         run: go run ./tests/run.go vet ./...
         shell: pwsh
 
-      - name: Tests (sin cache)
-        run: go run ./tests/run.go test ./... -count=1
+      - name: Tests (sin cache + cobertura)
+        run: |
+          go run ./tests/run.go test ./... -count=1 -cover > test.log 2>&1
+          $code = $LASTEXITCODE
+          Get-Content test.log
+          if ($code -ne 0) { exit $code }
         shell: pwsh
 
       - name: Cobertura mínima en paquetes blindados
@@ -79,14 +83,15 @@ jobs:
             proxy = 95
           }
           $locked = @("accesslog","alerts","appview","dotenv","hosts","logx","proxy","ratelimit","server","staticweb","store","weblog")
+          # Sin re-ejecutar: la cobertura sale de la pasada única de arriba
+          # (el gate anterior corría los 12 paquetes otra vez con -count=1).
+          $text = Get-Content test.log -Raw
           $fail = @()
           foreach ($p in $locked) {
             $min = 100
             if ($thresholds.ContainsKey($p)) { $min = $thresholds[$p] }
-            $out = go run ./tests/run.go test "./internal/$p" -count=1 -cover 2>&1
-            $text = $out -join "`n"
-            $m = [regex]::Match($text, 'coverage: ([0-9.]+)%')
-            if ($LASTEXITCODE -ne 0 -or -not $m.Success -or [double]$m.Groups[1].Value -lt $min) {
+            $m = [regex]::Match($text, "(?m)^ok\s+rkt-proxy/internal/$p\s+[\d.]+s\s+coverage: ([0-9.]+)%")
+            if (-not $m.Success -or [double]$m.Groups[1].Value -lt $min) {
               $fail += "$p (mín $min%)"
             }
           }
