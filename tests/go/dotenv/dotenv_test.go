@@ -117,6 +117,12 @@ func TestParseErroresYExportSolo(t *testing.T) {
 
 func TestEnvironListYExpandBordes(t *testing.T) {
 	t.Setenv("RKT_DOTENV_TEST", "base")
+	// Hermético: los defaults solo se prueban si el ambiente no los trae.
+	// Runners CI fijan estas mismas claves (p. ej. npm_config_...=false),
+	// y el test pasaría igual pero la cobertura bailaría (99.1% vs 100%).
+	// Una presente y otra ausente: cubre ambas ramas de restauración.
+	os.Setenv("COREPACK_ENABLE_DOWNLOAD_PROMPT", "heredado")
+	sinGuardar(t, "npm_config_verify_deps_before_run", "COREPACK_ENABLE_DOWNLOAD_PROMPT")
 	if t.Setenv("GITHUB_TOKEN", "no-debe-pasar"); true {
 		list := EnvironListApp(map[string]string{"APP_VAR": "1"})
 		joined := strings.Join(list, "\n")
@@ -185,4 +191,27 @@ func TestParseClavesValidas(t *testing.T) {
 	if !validKey("A1") || !validKey("_B") {
 		t.Fatal("claves con dígito/guion bajo deben ser válidas")
 	}
+}
+
+// sinGuardar quita claves del ambiente y las restaura al final del test.
+// Sin esto, un runner que las fije cambia qué ramas de defaults se
+// ejecutan (cobertura no determinista entre local y CI).
+func sinGuardar(t *testing.T, keys ...string) {
+	t.Helper()
+	saved := make([]string, len(keys))
+	had := make([]bool, len(keys))
+	for i, k := range keys {
+		saved[i], had[i] = os.LookupEnv(k)
+		os.Unsetenv(k)
+	}
+	t.Cleanup(func() {
+		for i, k := range keys {
+			if had[i] {
+				os.Setenv(k, saved[i])
+			}
+			if !had[i] {
+				os.Unsetenv(k)
+			}
+		}
+	})
 }
