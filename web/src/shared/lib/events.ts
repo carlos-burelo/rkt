@@ -96,11 +96,20 @@ function connect() {
   cur.addEventListener("hello", (e) => {
     lastEvent = Date.now();
     try {
-      const m = JSON.parse((e as MessageEvent).data) as { seq: number };
+      const m = JSON.parse((e as MessageEvent).data) as { seq: number; resync?: boolean };
       if (typeof m.seq === "number" && m.seq >= 0) {
         if (m.seq < loadCursor()) {
           // El servidor reinició bajo nuestro cursor: rebobinar a 0 y
           // reconectar para recibir snapshots (si no, vacío eterno).
+          saveCursor(0);
+          connect();
+          return;
+        }
+        if (m.resync === false && !useFleetBus.getState().seen) {
+          // Hello sin resync y sin estado (cursor heredado de una época
+          // en que los snapshots se perdieron): forzar resync. Si no,
+          // hub silencioso + watchdog contento con pings = esqueletos
+          // eternos y el offline nunca llega a apagar loading.
           saveCursor(0);
           connect();
           return;

@@ -32,6 +32,11 @@ func (d *Deps) snapshotFor(topic string) (any, bool) {
 		if d.Apps != nil {
 			apps = d.Apps()
 		}
+		if apps == nil {
+			// sup aún no listo: null tumbaría el snapshot en el cliente
+			// (asStatus exige array) y el shell quedaría en esqueletos.
+			apps = []health.AppStatus{}
+		}
 		cfg := d.Live.Get()
 		httpsPort := ""
 		if cfg.ListenHTTPS != "" {

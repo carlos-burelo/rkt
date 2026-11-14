@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"testing"
 
+	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/hub"
 )
 
@@ -120,5 +121,29 @@ func TestFleetStreamSnapshotYReplay(t *testing.T) {
 	}
 	if got[1].name != "hello" || got[1].data["resync"] != false {
 		t.Fatalf("hello replay = %+v", got[1])
+	}
+}
+
+func TestFleetStreamStatusSinAppsVacio(t *testing.T) {
+	d, _, done := testDeps(t)
+	defer done()
+	d.Hub = hub.New()
+	d.Apps = func() []health.AppStatus { return nil } // sup aún no listo
+	srv := fleetServer(t, d)
+	defer srv.Close()
+	got := fleetEvents(t, srv.URL+"?topics=status", 2)
+	if got[0].name != "snapshot" {
+		t.Fatalf("quiere snapshot, got %q", got[0].name)
+	}
+	s, ok := got[0].data["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("snapshot sin data: %+v", got[0])
+	}
+	apps, ok := s["apps"].([]any)
+	if !ok {
+		t.Fatalf("apps no es array (null tumba el snapshot en el cliente): %+v", s)
+	}
+	if len(apps) != 0 {
+		t.Fatalf("apps = %v, quiere []", apps)
 	}
 }

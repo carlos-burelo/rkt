@@ -148,4 +148,42 @@ describe("fleet bus", () => {
       unsub();
     }
   });
+
+  it("hello sin resync y sin estado fuerza resync (no esqueletos eternos)", async () => {
+    const mem = new Map<string, string>([["rkt.fleet.cursor", "1"]]);
+    vi.stubGlobal("sessionStorage", {
+      getItem: (k: string) => mem.get(k) ?? null,
+      setItem: (k: string, v: string) => void mem.set(k, v),
+    });
+    const unsub = subscribeFleet();
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(FakeES.instances).toHaveLength(1);
+      expect(FakeES.instances[0].url).toContain("cursor=1");
+      // Sin snapshots y sin live: hello con seq == cursor y resync false.
+      FakeES.instances[0].emit("hello", { seq: 1, resync: false });
+      await vi.advanceTimersByTimeAsync(0);
+      // Rebobina a 0 para traer snapshots en vez de quedarse en esqueletos.
+      expect(FakeES.instances).toHaveLength(2);
+      expect(FakeES.instances[1].url).toContain("cursor=0");
+      expect(useFleetBus.getState().loading).toBe(true);
+    } finally {
+      unsub();
+    }
+  });
+
+  it("hello sin resync con estado no reconecta", async () => {
+    const unsub = subscribeFleet();
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      const es = FakeES.instances[0];
+      es.emit("snapshot", { seq: 0, topic: "status", data: STATUS });
+      es.emit("hello", { seq: 5, resync: false });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(FakeES.instances).toHaveLength(1);
+      expect(useFleetBus.getState().loading).toBe(false);
+    } finally {
+      unsub();
+    }
+  });
 });
