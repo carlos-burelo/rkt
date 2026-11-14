@@ -2,7 +2,7 @@
 
 Sintaxis: `rkt [-config <ruta>] [--json] <comando> [args]`.
 
-- `-config` default `rkt.db`: ancla de datos; DB y logs viven en `<dir>/logs`.
+- `-config` default `rkt.db`: ancla del home; data, secrets, logs, apps y certs cuelgan de `<dir>`.
   `dev` usa `rkt.local.db` cuando no se pasa `-config`.
 - `--json` en comandos de lectura: salida JSON en vez de tabla.
 - Códigos de salida: `0` ok · `1` error de runtime · `2` mal uso.

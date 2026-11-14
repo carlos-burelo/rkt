@@ -141,10 +141,26 @@ IP pública, expone el dashboard en `http://IP:8090`, abre ese puerto y crea el
 primer admin con password aleatoria (la imprime una vez). La configuración se
 administra desde el dashboard o el CLI; no se edita YAML.
 
+Todo vive bajo un solo home (`-InstallDir`, por defecto
+`C:\Program Files\rkt-proxy`):
+
+```text
+rkt.exe, VERSION.txt      binario y versión
+data\rkt.db               SQLite (config + flota)
+data\backups\             copias diarias
+secrets\                  github.token, github-app.pem
+logs\                     rkt.log, access.log, control.token, apps\, deploys\
+apps\<name>\              repos, slots .a/.b y datos de cada app
+certs\                    cache ACME
+```
+
 Opciones: `-NoPublicDashboard` deja el dashboard solo en loopback;
 `-AdminUser nombre` cambia el usuario inicial; `-Destructivo` borra la
 instalación anterior antes de instalar (servicio, datos, firewall, env y
-`PATH`).
+`PATH`). El destructivo además mueve restos de layouts viejos (`C:\apps`,
+`C:\ProgramData\rkt-proxy`) a `apps.old`/`certs.old` dentro del home.
+Al actualizar sin destruir, la DB y los backups se mudan solos al primer
+arranque; las apps viejas conservan su carpeta y siguen sirviendo.
 
 ## CLI
 

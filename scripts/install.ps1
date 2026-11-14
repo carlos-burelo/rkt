@@ -4,8 +4,16 @@
   Instala rkt en Windows Server (prod): binario + SQLite + firewall + servicio.
 .DESCRIPTION
   Pensado para: irm <url> | iex. Descarga el .exe del último GitHub release,
-  abre 80/443 y registra/arranca el servicio. La config se siembra sola en
-  SQLite (`<dir>/logs/rkt.db`) y se edita por dashboard/CLI.
+  abre 80/443 y registra/arranca el servicio. Todo vive bajo un solo home
+  (<InstallDir>, por defecto C:\Program Files\rkt-proxy):
+    rkt.exe, VERSION.txt      binario y versión
+    data\rkt.db               SQLite (config + flota)
+    data\backups\             copias diarias
+    secrets\                  github.token, github-app.pem
+    logs\                     rkt.log, access.log, control.token, apps\, deploys\
+    apps\<name>\              repos, slots .a/.b y datos de cada app
+    certs\                    cache ACME
+  La config se edita por dashboard/CLI; no se edita YAML.
 .EXAMPLE
   # Actualizar a último release (idempotente, con backup + rollback auto):
   irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 | iex
@@ -119,18 +127,40 @@ if ($Destructivo) {
     Start-Sleep -Seconds 2
   }
   if (-not $borrado) { throw "No pude borrar $full (un proceso retiene archivos). Reinicia el servidor y reintenta." }
+  New-Item -ItemType Directory -Force $full | Out-Null
+  # Restos de layouts viejos (pre-hogar único): se mueven, no se borran.
+  # apps.old/certs.old quedan a un Remove-Item de desaparecer cuando
+  # confirmes que no hay nada que rescatar.
+  foreach ($legacy in @(
+    @{old = "C:\apps"; nuevo = "apps.old"},
+    @{old = "C:\ProgramData\rkt-proxy"; nuevo = "certs.old"}
+  )) {
+    $src = $legacy.old
+    $dst = Join-Path $full $legacy.nuevo
+    if ($src -ne $full -and (Test-Path $src) -and -not (Test-Path $dst)) {
+      try {
+        Move-Item $src $dst -Force
+        Write-Host "Legado movido: $src -> $dst (revísalo y bórralo cuando quieras)"
+      } catch {
+        Write-Warning "No pude mover ${src}: ${_}"
+      }
+    }
+  }
   Write-Host "Limpieza destructiva OK. Instalando desde cero..."
 }
-New-Item -ItemType Directory -Force $InstallDir | Out-Null
+# Árbol del hogar: se crea idempotente (en reinstalación ya existe).
+foreach ($sub in @("data", "secrets", "logs", "apps", "certs")) {
+  New-Item -ItemType Directory -Force (Join-Path $InstallDir $sub) | Out-Null
+}
 
 # 0b. token deploy en archivo con ACL, nunca en env de máquina (legible
 # por usuarios locales desde el registro). El servicio lee la ruta.
+# La ACL la pone el pase único de 5b (herencia): el fichero nace cubierta.
 if ($GithubToken -ne "") {
   $secretDir = Join-Path $InstallDir "secrets"
   New-Item -ItemType Directory -Force $secretDir | Out-Null
   $tokenFile = Join-Path $secretDir "github.token"
   Set-Content -Path $tokenFile -Value $GithubToken -NoNewline -Encoding ascii
-  icacls $secretDir /inheritance:r /grant:r "SYSTEM:(F)" "Administradores:(F)" | Out-Null
   [Environment]::SetEnvironmentVariable("RKT_GITHUB_TOKEN_FILE", $tokenFile, "Machine")
   Write-Host "GITHUB_TOKEN guardado en $tokenFile (ACL SYSTEM+Admins)."
 }
@@ -204,17 +234,15 @@ Write-Host "Binario en $exe"
 
 # 5. la configuración vive en SQLite: el primer arranque siembra defaults.
 #    Edítala desde el dashboard (loopback) o con `rkt settings/routes/apps`.
-New-Item -ItemType Directory -Force (Join-Path $InstallDir "logs") | Out-Null
 
-# 5b. ACL de datos (DB + logs): solo SYSTEM + Administradores.
+# 5b. ACL del hogar entero (datos, secretos, logs, apps, certs):
+# solo SYSTEM + Administradores, con herencia. Un solo pase en la raíz
+# cubre lo presente y lo futuro (antes eran dos pases por carpeta y los
+# ficheros nuevos heredaban ACLs distintas).
 # (OI)(CI) es imprescindible: sin herencia, rkt.db y -wal nacen sin acceso
 # para el admin y `rkt settings` falla con "readonly database".
 $adminSid = "*S-1-5-32-544"
-icacls (Join-Path $InstallDir "logs") /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "${adminSid}:(OI)(CI)F" /T /C | Out-Null
-$secretsDir = Join-Path $InstallDir "secrets"
-if (Test-Path $secretsDir) {
-  icacls $secretsDir /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "${adminSid}:(OI)(CI)F" /T /C | Out-Null
-}
+icacls $InstallDir /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "${adminSid}:(OI)(CI)F" /T /C | Out-Null
 
 # 6. firewall 80/443
 if (-not $SkipFirewall) {
@@ -356,7 +384,7 @@ if (-not $NoPublicDashboard -and [string]::IsNullOrWhiteSpace($existingListen)) 
         $dashChanged = $true
         $settings["dashboard_listen"] = "0.0.0.0:8090"
       } else {
-        Write-Warning "No pude persistir dashboard_listen. Revisa ACL de C:\Program Files\rkt-proxy\logs."
+        Write-Warning "No pude persistir dashboard_listen. Revisa ACL de $InstallDir\data."
       }
     } catch { Write-Warning "No pude configurar dashboard_listen: $_" }
   } else {

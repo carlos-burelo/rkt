@@ -90,6 +90,11 @@ func TestInstallPs1DestructivoOrdenYPasos(t *testing.T) {
 		"-Recurse -Force",
 		"No pude borrar",
 		"Limpieza destructiva OK",
+		"apps.old",
+		"certs.old",
+		`"C:\apps"`,
+		`"C:\ProgramData\rkt-proxy"`,
+		`"data", "secrets", "logs", "apps", "certs"`,
 	} {
 		if !strings.Contains(body, s) {
 			t.Errorf("install.ps1 sin paso %q", s)

@@ -48,7 +48,7 @@ export const create = {
   "create.commandHint": "Binario absoluto",
   "create.commandPlaceholder": "C:\\apps\\mi-app\\mi-app.exe",
   "create.commandOverride": "Anula la detección",
-  "create.dirDefault": "Por defecto C:\\apps\\<nombre>",
+  "create.dirDefault": "Por defecto apps/<nombre> bajo el home de rkt",
   "create.port": "Puerto",
   "create.portHint": "Opcional",
   "create.portPlaceholder": "3000",
