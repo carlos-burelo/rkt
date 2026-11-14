@@ -298,6 +298,53 @@ func slug(s string) string {
 	return strings.Trim(b.String(), "-")
 }
 
+// manifestFiles ficheros que DetectDir puede necesitar (contenido real:
+// package.json se parsea por scripts; el resto decide por presencia).
+var manifestFiles = []string{
+	"package.json", "package-lock.json", "pnpm-lock.yaml", "bun.lockb", "bun.lock",
+	".nvmrc", "go.mod", "go.sum", "go.work", "Cargo.toml",
+	"requirements.txt", "pyproject.toml", "uv.lock", "poetry.lock",
+	"composer.json", "public/index.php", "Gemfile",
+	"deno.json", "deno.jsonc",
+	"hugo.toml", "hugo.yaml", "hugo.json", "mkdocs.yml", "mkdocs.yaml",
+	"index.html", "public/index.html",
+	"*.csproj", "*.fsproj", "*.sln",
+}
+
+// detectPlanShallow clona solo manifiestos (sparse + blob:none): KBs en vez
+// del repo. Funciona con cualquier host git y sin tokens (repos públicos).
+// Si el servidor no soporta sparse, cae a clone --depth 1 completo.
+func detectPlanShallow(repoURL string) (buildpack.Plan, error) {
+	if _, err := exec.LookPath("git"); err != nil {
+		return buildpack.Plan{}, err
+	}
+	dir, err := os.MkdirTemp("", "rkt-manifest-*")
+	if err != nil {
+		return buildpack.Plan{}, err
+	}
+	defer os.RemoveAll(dir)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	run := func(work string, args ...string) error {
+		cmd := exec.CommandContext(ctx, "git", args...)
+		cmd.Dir = work
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+		}
+		return nil
+	}
+	repo := filepath.Join(dir, "repo")
+	if err := run(dir, "clone", "--depth", "1", "--filter=blob:none", "--sparse", repoURL, "repo"); err != nil {
+		_ = os.RemoveAll(repo)
+		if err := run(dir, "clone", "--depth", "1", repoURL, "repo"); err != nil {
+			return buildpack.Plan{}, err
+		}
+	} else if err := run(repo, append([]string{"sparse-checkout", "set", "--no-cone"}, manifestFiles...)...); err != nil {
+		// Sin sparse (git viejo): vale lo ya traído (raíz).
+	}
+	return buildpack.DetectDir(repo)
+}
+
 // uniqueDomain evita colisión de dominio (dos owners, mismo repo).
 func appExists(db *store.DB, name string) bool {
 	fleet, err := db.LoadFleet()
@@ -433,7 +480,15 @@ func Suggest(db *store.DB, gh *github.Manager, repoURL string) (*Suggestion, err
 				branch = info.DefaultBranch
 				s.Branch = branch
 			}
-			if p, err := detectPlanRemote(gh, owner, repo, branch, tok); err == nil {
+			if p, err := detectPlanRemote(gh, owner, repo, branch, tok); err == nil && p.Kind != "" {
+				s.Plan = p
+				s.Preset = p.Kind
+			}
+		}
+		if s.Preset == "" {
+			// Sin GitHub App o falló la API: manifiestos por git directo
+			// (cualquier host, sin tokens en repos públicos).
+			if p, err := detectPlanShallow(repoURL); err == nil && p.Kind != "" {
 				s.Plan = p
 				s.Preset = p.Kind
 			}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"rkt-proxy/internal/buildpack"
+	"rkt-proxy/internal/discover"
 )
 
 type detectOut struct {
@@ -23,13 +24,36 @@ type detectOut struct {
 	Workspace bool     `json:"workspace,omitempty"`
 }
 
-// handleDetect GET /api/v1/detect?path=<dir> (operator+).
+// handleDetect GET /api/v1/detect?path=<dir> | ?repo=<url> (operator+).
+// path inspecciona un directorio local; repo detecta sin clonar completo
+// (manifiestos por sparse-checkout, cualquier host). Repo sin plan
+// detectable responde 200 con framework vacío: el wizard pide el comando.
 func (d *Deps) handleDetect(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
 		return
 	}
 	if !requireOperator(w, r) {
+		return
+	}
+	if repo := r.URL.Query().Get("repo"); repo != "" {
+		sug, err := discover.Suggest(d.DB, d.githubManager(), repo)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		p := sug.Plan
+		writeJSON(w, detectOut{
+			Framework: p.Kind,
+			PM:        p.PM,
+			Install:   nonNil(p.Install),
+			Build:     nonNil(p.Build),
+			Start:     nonNil(p.Start),
+			StaticDir: p.StaticDir,
+			Evidence:  p.Evidence,
+			Node:      p.NodeVersion,
+			Workspace: p.Workspace,
+		})
 		return
 	}
 	raw := r.URL.Query().Get("path")
