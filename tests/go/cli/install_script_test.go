@@ -75,14 +75,18 @@ func TestInstallPs1DestructivoOrdenYPasos(t *testing.T) {
 		"if ($Destructivo)",
 		"InstallDir no borrable",
 		"Stop-Service Rkt",
+		"Get-Service Rkt",
 		"& $exe -config $cfg uninstall",
 		"sc.exe delete Rkt",
+		"Get-Process",
+		"Stop-Process",
 		`"RKT HTTP/HTTPS"`,
 		`"RKT Dashboard"`,
 		`"RKT Proxy HTTP/HTTPS"`,
 		"RKT_GITHUB_TOKEN_FILE",
 		"Remove-Item",
 		"-Recurse -Force",
+		"No pude borrar",
 		"Limpieza destructiva OK",
 	} {
 		if !strings.Contains(body, s) {

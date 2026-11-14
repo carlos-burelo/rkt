@@ -71,8 +71,25 @@ if ($Destructivo) {
   $full = [System.IO.Path]::GetFullPath($InstallDir)
   Write-Host "Borrado destructivo de $full ..."
   Stop-Service Rkt -Force -ErrorAction SilentlyContinue
+  # Espera al servicio: si Remove-Item corre antes de que muera, sus
+  # handles (logs, db) tumban el borrado con "Access denied".
+  for ($i = 0; $i -lt 30; $i++) {
+    $svc = Get-Service Rkt -ErrorAction SilentlyContinue
+    if (-not $svc -or $svc.Status -eq "Stopped") { break }
+    Start-Sleep 1
+  }
   if (Test-Path $exe) { try { & $exe -config $cfg uninstall } catch {} }
   try { sc.exe delete Rkt | Out-Null } catch {}
+  # Restos del árbol (nieto huérfano fuera del job): solo binarios bajo InstallDir.
+  try {
+    Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+      try {
+        if ($_.Path -and $_.Path.StartsWith($full + "\", [StringComparison]::OrdinalIgnoreCase)) {
+          $_ | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+      } catch {}
+    } | Out-Null
+  } catch {}
   foreach ($rule in @("RKT HTTP/HTTPS", "RKT Dashboard", "RKT Proxy HTTP/HTTPS")) {
     Remove-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Out-Null
   }
@@ -83,7 +100,17 @@ if ($Destructivo) {
       Where-Object { $_ -ne "" -and $_.TrimEnd("\") -ine $full.TrimEnd("\") })
     [Environment]::SetEnvironmentVariable("Path", ($kept -join ";"), "Machine")
   }
-  if (Test-Path $full) { Remove-Item $full -Recurse -Force }
+  # Borrado con reintentos: los handles del árbol recién matado tardan en
+  # soltarse en Windows; sin esto, "Access denied" aborta a mitad y deja
+  # la instalación a medias (ni vieja ni nueva).
+  $borrado = $false
+  for ($i = 0; $i -lt 30; $i++) {
+    if (-not (Test-Path $full)) { $borrado = $true; break }
+    Remove-Item $full -Recurse -Force -ErrorAction SilentlyContinue
+    if (-not (Test-Path $full)) { $borrado = $true; break }
+    Start-Sleep -Seconds 2
+  }
+  if (-not $borrado) { throw "No pude borrar $full (un proceso retiene archivos). Reinicia el servidor y reintenta." }
   Write-Host "Limpieza destructiva OK. Instalando desde cero..."
 }
 New-Item -ItemType Directory -Force $InstallDir | Out-Null
