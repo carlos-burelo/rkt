@@ -70,6 +70,18 @@ func TestGapsFSDetectZones(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"framework":"node"`) {
 		t.Fatalf("detect node: %d %s", rec.Code, rec.Body.String())
 	}
+	// detect por repo: inválido -> 400 sin tocar red.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/detect?repo=notaurl", opTok))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("detect repo inválido: quiere 400, got %d", rec.Code)
+	}
+	// detect por repo local: detecta sin clonar de verdad.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/detect?repo="+dir, opTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"framework":"node"`) {
+		t.Fatalf("detect repo local: %d %s", rec.Code, rec.Body.String())
+	}
 
 	// zones exige operator, devuelve array
 	rec = httptest.NewRecorder()

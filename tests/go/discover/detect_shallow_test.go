@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"rkt-proxy/internal/store"
 )
 
 func gitOK(t *testing.T) {
@@ -96,5 +98,26 @@ func TestDetectPlanShallowRepoInexistente(t *testing.T) {
 	gitOK(t)
 	if _, err := detectPlanShallow(filepath.Join(t.TempDir(), "noexiste")); err == nil {
 		t.Fatal("repo inexistente debe fallar")
+	}
+}
+
+func TestSuggestSinGitHubDegradaSinError(t *testing.T) {
+	gitOK(t)
+	db, err := store.Open(filepath.Join(t.TempDir(), "rkt.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	// Host .invalid (RFC): DNS falla al instante, sin red de verdad.
+	// Sin GitHub App y sin plan detectable: ni error ni crash, plan vacío.
+	s, err := Suggest(db, nil, "https://novalido.invalid/o/r.git")
+	if err != nil {
+		t.Fatalf("debe degradar sin error: %v", err)
+	}
+	if s.Preset != "" || s.Plan.Kind != "" {
+		t.Fatalf("sin plan esperado, got %+v", s.Plan)
+	}
+	if s.Name != "r" {
+		t.Fatalf("slug = %q", s.Name)
 	}
 }
