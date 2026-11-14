@@ -108,6 +108,9 @@ if ($LocalExe -ne "") {
   $tmp = Join-Path $env:TEMP "rkt-install.exe"
   Invoke-WebRequest -Uri "https://github.com/$Repo/releases/download/$Version/$asset" `
     -OutFile $tmp -UseBasicParsing
+  # Sin esto Windows bloquea el ejecutable descargado (Mark of the Web:
+  # "Acceso denegado" al arrancarlo, peor con binario nuevo sin reputación).
+  Unblock-File $tmp -ErrorAction SilentlyContinue
 
   # 3. checksum si el release lo publica
   try {
@@ -119,6 +122,8 @@ if ($LocalExe -ne "") {
       $actual = (Get-FileHash -Path $tmp -Algorithm SHA256).Hash.ToUpper()
       if ($expected -ne $actual) { throw "Checksum mismatch en $asset" }
       Write-Host "Checksum OK."
+    } else {
+      Write-Warning "Sin línea de checksum para $asset (se instala sin verificar)."
     }
   } catch {
     Write-Warning "Sin verificar checksum: $($_.Exception.Message)"
@@ -138,6 +143,7 @@ if (Test-Path $exe) {
   Write-Host "Backup en $bak"
 }
 Copy-Item $tmp $exe -Force
+Unblock-File $exe -ErrorAction SilentlyContinue # la copia puede heredar la marca de zona
 Write-Host "Binario en $exe"
 
 # 5. la configuración vive en SQLite: el primer arranque siembra defaults.

@@ -76,8 +76,11 @@ func TestInstallLimpio(t *testing.T) {
 	for _, s := range []string{
 		"$verFile",
 		"Checksum OK",
+		"Sin línea de checksum",
 		"Binario en $exe",
 		`"data", "secrets", "logs", "apps", "certs"`,
+		"Unblock-File $tmp",
+		"Unblock-File $exe",
 	} {
 		if !strings.Contains(body, s) {
 			t.Errorf("install.ps1 sin %q", s)
