@@ -177,6 +177,22 @@ func TestEnvironListYExpandBordes(t *testing.T) {
 	}
 }
 
+func TestSortStrings(t *testing.T) {
+	// Directo y determinista: Expand ordena claves de un map (orden de
+	// iteración aleatorio) y el swap del insertion sort quedaba a veces
+	// sin ejecutar (99.1% vs 100% según la corrida).
+	in := []string{"B", "A", "C"}
+	sortStrings(in)
+	if in[0] != "A" || in[1] != "B" || in[2] != "C" {
+		t.Fatalf("orden mal: %q", in)
+	}
+	sorted := []string{"A", "B"}
+	sortStrings(sorted)
+	if sorted[0] != "A" || sorted[1] != "B" {
+		t.Fatalf("ya ordenado mal: %q", sorted)
+	}
+}
+
 func TestParseClavesValidas(t *testing.T) {
 	m, err := Parse("A1=x\n_B=2\n")
 	if err != nil || m["A1"] != "x" || m["_B"] != "2" {
