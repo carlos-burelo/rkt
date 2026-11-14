@@ -1,10 +1,11 @@
 package cli
 
-// Instalador Windows (scripts/install.ps1): sintaxis real vía Parser de
-// pwsh, pasos del borrado destructivo en orden (antes de la idempotencia),
-// guardia Test-RktNukeDir ejecutada por tabla y los 2 comandos del README
-// (primera vez + destructivo) con parseo de una línea. Sin pwsh se salta
-// lo que lo exige (CI Linux); el resto es estático.
+// Instalador Windows: install.ps1 instala (limpio, sin borrados) y
+// nuke.ps1 borra todo rastro. Sintaxis real vía Parser de pwsh, pasos del
+// borrado en nuke (servicio, procesos, firewall, env, PATH, ACLs, reintentos,
+// legados a .old), guardia Test-RktNukeDir ejecutada por tabla y los 2
+// comandos del README (nuke + install) con parseo de una línea.
+// Sin pwsh se salta lo que lo exige (CI Linux); el resto es estático.
 
 import (
 	"os"
@@ -24,13 +25,13 @@ func needPwsh(t *testing.T) string {
 	return p
 }
 
-func readInstallPs1(t *testing.T) (root, body string) {
+func readScript(t *testing.T, name string) (root, body string) {
 	t.Helper()
 	r, err := repoRoot()
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(filepath.Join(r, "scripts", "install.ps1"))
+	b, err := os.ReadFile(filepath.Join(r, "scripts", name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,20 +60,46 @@ func pwshParseErrs(t *testing.T, pwsh, target string, isFile bool) []string {
 	return errs
 }
 
-func TestInstallPs1Sintaxis(t *testing.T) {
+func TestScriptsSintaxis(t *testing.T) {
 	pwsh := needPwsh(t)
-	root, _ := readInstallPs1(t)
-	if errs := pwshParseErrs(t, pwsh, filepath.Join(root, "scripts", "install.ps1"), true); len(errs) > 0 {
-		t.Fatalf("install.ps1 con errores de sintaxis:\n%s", strings.Join(errs, "\n"))
+	root, _ := readScript(t, "install.ps1")
+	for _, name := range []string{"install.ps1", "nuke.ps1"} {
+		if errs := pwshParseErrs(t, pwsh, filepath.Join(root, "scripts", name), true); len(errs) > 0 {
+			t.Fatalf("%s con errores de sintaxis:\n%s", name, strings.Join(errs, "\n"))
+		}
 	}
 }
 
-func TestInstallPs1DestructivoOrdenYPasos(t *testing.T) {
-	_, body := readInstallPs1(t)
+func TestInstallLimpio(t *testing.T) {
+	_, body := readScript(t, "install.ps1")
+	// El install instala; el borrado vive en nuke.ps1.
 	for _, s := range []string{
-		"[switch]$Destructivo",
+		"$verFile",
+		"Checksum OK",
+		"Binario en $exe",
+		`"data", "secrets", "logs", "apps", "certs"`,
+	} {
+		if !strings.Contains(body, s) {
+			t.Errorf("install.ps1 sin %q", s)
+		}
+	}
+	for _, s := range []string{
+		"$Destructivo",
+		"Test-RktNukeDir",
+		"No pude borrar",
+		"apps.old",
+		"sc.exe delete",
+	} {
+		if strings.Contains(body, s) {
+			t.Errorf("install.ps1 no debe borrar nada (mover a nuke.ps1): %q", s)
+		}
+	}
+}
+
+func TestNukePasos(t *testing.T) {
+	_, body := readScript(t, "nuke.ps1")
+	for _, s := range []string{
 		"function Test-RktNukeDir",
-		"if ($Destructivo)",
 		"InstallDir no borrable",
 		"Stop-Service Rkt",
 		"Get-Service Rkt",
@@ -89,21 +116,15 @@ func TestInstallPs1DestructivoOrdenYPasos(t *testing.T) {
 		"Remove-Item",
 		"-Recurse -Force",
 		"No pude borrar",
-		"Limpieza destructiva OK",
+		"Limpieza total OK",
 		"apps.old",
 		"certs.old",
 		`"C:\apps"`,
 		`"C:\ProgramData\rkt-proxy"`,
-		`"data", "secrets", "logs", "apps", "certs"`,
 	} {
 		if !strings.Contains(body, s) {
-			t.Errorf("install.ps1 sin paso %q", s)
+			t.Errorf("nuke.ps1 sin paso %q", s)
 		}
-	}
-	wipe := strings.Index(body, "if ($Destructivo)")
-	idem := strings.Index(body, "Ya instalado")
-	if wipe < 0 || idem < 0 || wipe > idem {
-		t.Errorf("el borrado debe ir antes de la idempotencia (wipe=%d idem=%d)", wipe, idem)
 	}
 	for _, b := range []string{`Program Files`, `Program Files (x86)`, `Windows`, `Users`} {
 		if !strings.Contains(body, b) {
@@ -137,12 +158,12 @@ func extractPsFunction(t *testing.T, body, name string) string {
 	return ""
 }
 
-func TestInstallPs1NukeDirGuarda(t *testing.T) {
+func TestNukeDirGuarda(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("instalador Windows-only")
 	}
 	pwsh := needPwsh(t)
-	_, body := readInstallPs1(t)
+	_, body := readScript(t, "nuke.ps1")
 	fn := extractPsFunction(t, body, "Test-RktNukeDir")
 	cases := []struct{ in, want string }{
 		{`C:\`, "False"},        // raíz: nunca
@@ -181,7 +202,7 @@ func TestInstallPs1NukeDirGuarda(t *testing.T) {
 	}
 }
 
-func TestReadmeDosComandosInstalacion(t *testing.T) {
+func TestReadmeNukeEInstala(t *testing.T) {
 	root, err := repoRoot()
 	if err != nil {
 		t.Fatal(err)
@@ -191,24 +212,24 @@ func TestReadmeDosComandosInstalacion(t *testing.T) {
 		t.Fatal(err)
 	}
 	md := string(raw)
+	nuke := "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/nuke.ps1)))"
 	fresh := "irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 | iex"
-	nuke := "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1))) -Destructivo"
-	for _, want := range []string{fresh, nuke} {
+	for _, want := range []string{nuke, fresh} {
 		found := 0
 		for _, ln := range strings.Split(md, "\n") {
 			if strings.TrimSpace(ln) == want {
 				found++
 			}
 		}
-		if found != 1 {
-			t.Errorf("README: comando en 1 línea x%d (quiere x1): %s", found, want)
+		if found < 1 {
+			t.Errorf("README: falta el comando en 1 línea: %s", want)
 		}
 	}
-	if !strings.Contains(md, "Destructiva") || !strings.Contains(md, "borra lo anterior") {
-		t.Error("README: la destructiva debe avisar qué borra")
+	if !strings.Contains(md, "apps.old") || !strings.Contains(md, "certs.old") {
+		t.Error("README: el nuke debe avisar qué conserva en .old")
 	}
 	pwsh := needPwsh(t)
-	for _, one := range []string{fresh, nuke} {
+	for _, one := range []string{nuke, fresh} {
 		if errs := pwshParseErrs(t, pwsh, one, false); len(errs) > 0 {
 			t.Errorf("comando README no parsea:\n%s", strings.Join(errs, "\n"))
 		}

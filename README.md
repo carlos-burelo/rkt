@@ -127,12 +127,13 @@ Primera vez (un comando):
 irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 | iex
 ```
 
-Destructiva: borra lo anterior (servicio, `C:\Program Files\rkt-proxy` con
-base de datos y logs, reglas de firewall, variable `RKT_GITHUB_TOKEN_FILE` y
-`PATH`) e instala desde cero (un comando, sin confirmación):
+Destructiva (servicio, datos, firewall, variables): primero borra todo
+rastro con el script dedicado (lo de usuario va a `apps.old`/`certs.old`),
+luego instala limpio (dos comandos, cada uno de una línea):
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1))) -Destructivo
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/nuke.ps1)))
+irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 | iex
 ```
 
 El instalador descarga el release, verifica checksum, registra el servicio
@@ -155,10 +156,9 @@ certs\                    cache ACME
 ```
 
 Opciones: `-NoPublicDashboard` deja el dashboard solo en loopback;
-`-AdminUser nombre` cambia el usuario inicial; `-Destructivo` borra la
-instalación anterior antes de instalar (servicio, datos, firewall, env y
-`PATH`). El destructivo además mueve restos de layouts viejos (`C:\apps`,
-`C:\ProgramData\rkt-proxy`) a `apps.old`/`certs.old` dentro del home.
+`-AdminUser nombre` cambia el usuario inicial. Para borrar antes de
+instalar usa `nuke.ps1` (mueve restos de layouts viejos a
+`apps.old`/`certs.old` dentro del home).
 Al actualizar sin destruir, la DB y los backups se mudan solos al primer
 arranque; las apps viejas conservan su carpeta y siguen sirviendo.
 
