@@ -53,9 +53,12 @@ func TestDetectPlanShallowNode(t *testing.T) {
 		// señuelo pesado: el sparse no debe traerlo (y ni haría falta).
 		"dist/bundle.js": "x",
 	})
-	p, err := detectPlanShallow(repo)
+	p, reason, err := detectPlanShallow(repo)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if reason != "" {
+		t.Fatalf("reason con plan válido = %q", reason)
 	}
 	if p.Kind == "" {
 		t.Fatal("sin plan en repo node")
@@ -68,9 +71,12 @@ func TestDetectPlanShallowNode(t *testing.T) {
 func TestDetectPlanShallowStatic(t *testing.T) {
 	gitOK(t)
 	repo := mkRepo(t, map[string]string{"public/index.html": "<p>hola</p>"})
-	p, err := detectPlanShallow(repo)
+	p, reason, err := detectPlanShallow(repo)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if reason != "" {
+		t.Fatalf("reason con plan válido = %q", reason)
 	}
 	if p.Kind != "static" {
 		t.Fatalf("quiere static, got %+v", p)
@@ -80,8 +86,10 @@ func TestDetectPlanShallowStatic(t *testing.T) {
 func TestDetectPlanShallowSinManifiesto(t *testing.T) {
 	gitOK(t)
 	repo := mkRepo(t, map[string]string{"README.md": "nada que detectar"})
-	if _, err := detectPlanShallow(repo); err == nil {
+	if _, reason, err := detectPlanShallow(repo); err == nil {
 		t.Fatal("repo sin manifiestos debe fallar")
+	} else if reason != ReasonNoPlan {
+		t.Fatalf("reason = %q, quiere noplan", reason)
 	}
 }
 
@@ -89,15 +97,19 @@ func TestDetectPlanShallowSinGit(t *testing.T) {
 	if _, err := exec.LookPath("git"); err == nil {
 		t.Skip("hay git; este caso es para PATH sin git")
 	}
-	if _, err := detectPlanShallow("/no/existe"); err == nil {
+	if _, reason, err := detectPlanShallow("/no/existe"); err == nil {
 		t.Fatal("sin git debe fallar")
+	} else if reason != ReasonNoGit {
+		t.Fatalf("reason = %q, quiere nogit", reason)
 	}
 }
 
 func TestDetectPlanShallowRepoInexistente(t *testing.T) {
 	gitOK(t)
-	if _, err := detectPlanShallow(filepath.Join(t.TempDir(), "noexiste")); err == nil {
+	if _, reason, err := detectPlanShallow(filepath.Join(t.TempDir(), "noexiste")); err == nil {
 		t.Fatal("repo inexistente debe fallar")
+	} else if reason != ReasonNoClone {
+		t.Fatalf("reason = %q, quiere noclone", reason)
 	}
 }
 
@@ -109,7 +121,8 @@ func TestSuggestSinGitHubDegradaSinError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	// Host .invalid (RFC): DNS falla al instante, sin red de verdad.
-	// Sin GitHub App y sin plan detectable: ni error ni crash, plan vacío.
+	// Sin GitHub App y sin plan detectable: ni error ni crash, plan vacío
+	// con motivo noclone para que el wizard no adivine.
 	s, err := Suggest(db, nil, "https://novalido.invalid/o/r.git")
 	if err != nil {
 		t.Fatalf("debe degradar sin error: %v", err)
@@ -117,7 +130,44 @@ func TestSuggestSinGitHubDegradaSinError(t *testing.T) {
 	if s.Preset != "" || s.Plan.Kind != "" {
 		t.Fatalf("sin plan esperado, got %+v", s.Plan)
 	}
+	if s.Reason != ReasonNoClone {
+		t.Fatalf("reason = %q, quiere noclone", s.Reason)
+	}
+	if s.Detail == "" {
+		t.Fatal("sin detail del fallo de clone")
+	}
 	if s.Name != "r" {
 		t.Fatalf("slug = %q", s.Name)
+	}
+}
+
+func TestSuggestStackSinPlanDaMotivo(t *testing.T) {
+	gitOK(t)
+	db, err := store.Open(filepath.Join(t.TempDir(), "rkt.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	// Fresh: clona bien pero el stack pide comando manual (Plan vacío
+	// sin error). El motivo debe ser noplan, no silencio.
+	repo := mkRepo(t, map[string]string{
+		"deno.json":       `{}`,
+		"fresh.config.ts": `export default {}`,
+	})
+	s, err := Suggest(db, nil, repo)
+	if err != nil {
+		t.Fatalf("debe degradar sin error: %v", err)
+	}
+	if s.Preset != "" || s.Plan.Kind != "" {
+		t.Fatalf("sin plan esperado, got %+v", s.Plan)
+	}
+	if s.Reason != ReasonNoPlan {
+		t.Fatalf("reason = %q, quiere noplan", s.Reason)
+	}
+}
+
+func TestGitOK(t *testing.T) {
+	if _, err := exec.LookPath("git"); err == nil && !GitOK() {
+		t.Fatal("hay git pero GitOK dice que no")
 	}
 }

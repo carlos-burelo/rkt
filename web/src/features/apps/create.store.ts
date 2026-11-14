@@ -24,11 +24,12 @@ interface CreateState {
   tried: boolean;
   plan: DetectOut | null;
   planBusy: boolean;
-  // manualRequired: git sin plan detectable (repo privado o sin acceso):
-  // hay que indicar el comando antes de continuar. manualFor recuerda para
+  // manualRequired: git sin plan (el motivo real va en detectError, sin
+  // adivinar: nogit/noclone/noplan/noresponse). manualFor recuerda para
   // qué repo se pidió (sin reintentos automáticos al insistir en Next).
   manualRequired: boolean;
   manualFor: string | null;
+  detectError: { reason: string; detail?: string } | null;
   buildNow: boolean;
   track: { id: number; app: string; kind: "build" | "deploy" } | null;
   trackLog: string;
@@ -38,6 +39,7 @@ interface CreateState {
   toggleRepos: (fail: (e: unknown) => void) => void;
   suggested: () => string;
   next: () => void;
+  retryDetect: () => void;
   submit: (cbs: { onCreated: (n: string) => void; onOpen: (n: string) => void; fail: (e: unknown) => void }) => void;
   closeTrack: (onOpen: (n: string) => void) => void;
 }
@@ -74,6 +76,7 @@ const initial = {
   planBusy: false,
   manualRequired: false,
   manualFor: null as string | null,
+  detectError: null as { reason: string; detail?: string } | null,
   buildNow: true,
   track: null as { id: number; app: string; kind: "build" | "deploy" } | null,
   trackLog: "",
@@ -107,29 +110,17 @@ export const useCreate = create<CreateState>()((set, get) => ({
       set({ tried: false });
     }
     if (s.step < 3) {
-      // Git sin comando: intentar detectar el tipo en el repo antes de
-      // avanzar. Si no hay plan (privado, sin acceso), pedirlo a mano en
-      // vez de chocar contra el backend en el paso 3. Sin reintentos
-      // automáticos: si ya se pidió para este repo, quedarse quieto.
+      // Sin git en el servidor nada git-based avanza, ni con comando
+      // manual (el deploy tampoco podría clonar). Instalar git + Reintentar.
+      if (s.step === 2 && s.origin === "git" && s.detectError?.reason === "nogit" && s.manualFor === s.repo.trim()) return;
+      // Git sin comando: detectar el tipo en el repo antes de avanzar.
+      // Sin plan no se adivina: se enseña el motivo real con reintento.
+      // Sin reintentos automáticos: si ya se pidió para este repo,
+      // quedarse quieto.
       if (s.step === 2 && s.origin === "git" && s.command.trim() === "") {
         const repo = s.repo.trim();
         if (s.manualRequired && s.manualFor === repo) return;
-        set({ planBusy: true, manualRequired: false, manualFor: null });
-        detectRepo(repo)
-          .then((plan) => {
-            // El usuario pudo cambiar de repo mientras detectaba: descartar.
-            if (get().repo.trim() !== repo || get().step !== 2) {
-              set({ planBusy: false });
-              return;
-            }
-            if (plan) {
-              set({ plan, planBusy: false, manualRequired: false, manualFor: null, step: 3 as Step });
-            } else {
-              // Sin plan: quedarse en el paso 2 y mostrar el campo manual.
-              set({ plan: null, planBusy: false, manualRequired: true, manualFor: repo, advanced: true });
-            }
-          })
-          .catch(() => set({ plan: null, planBusy: false, manualRequired: true, manualFor: repo, advanced: true }));
+        get().retryDetect();
         return;
       }
       if (s.step === 2 && s.origin === "git") {
@@ -145,6 +136,38 @@ export const useCreate = create<CreateState>()((set, get) => ({
           .finally(() => set({ planBusy: false }));
       }
     }
+  },
+  // retryDetect vuelve a detectar el repo del paso 2 (tras instalar git,
+  // arreglar la URL o la red). Sin plan enseña el motivo, sin adivinar.
+  retryDetect: () => {
+    const s = get();
+    if (s.step !== 2 || s.origin !== "git" || s.planBusy) return;
+    const repo = s.repo.trim();
+    if (!repo) return;
+    set({ planBusy: true, manualRequired: false, manualFor: null, detectError: null });
+    detectRepo(repo)
+      .then((out) => {
+        // El usuario pudo cambiar de repo mientras detectaba: descartar.
+        if (get().repo.trim() !== repo || get().step !== 2) {
+          set({ planBusy: false });
+          return;
+        }
+        if (out && out.framework) {
+          set({ plan: out, planBusy: false, manualRequired: false, manualFor: null, detectError: null, step: 3 as Step });
+          return;
+        }
+        // Sin plan: quedarse en el paso 2 con el motivo real. null = ni
+        // se pudo preguntar (red/timeout): noresponse, no noplan.
+        const reason = out ? out.reason || "noplan" : "noresponse";
+        set({ plan: null, planBusy: false, manualRequired: true, manualFor: repo, detectError: { reason, detail: out?.detail } });
+      })
+      .catch(() => {
+        if (get().repo.trim() !== repo || get().step !== 2) {
+          set({ planBusy: false });
+          return;
+        }
+        set({ plan: null, planBusy: false, manualRequired: true, manualFor: repo, detectError: { reason: "noresponse" } });
+      });
   },
   submit: ({ onCreated, onOpen, fail }) => {
     const s = get();

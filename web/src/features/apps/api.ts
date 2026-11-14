@@ -89,14 +89,23 @@ export interface DetectOut {
   evidence?: string[];
   node_version?: string;
   workspace?: boolean;
+  // reason por qué no hay plan (nogit/noclone/noplan); "" si hay plan.
+  reason?: string;
+  detail?: string;
 }
 
+// detectRepo detecta el tipo en el repo: 200 siempre (sin plan viene
+// reason nogit/noclone/noplan). null solo si ni se pudo preguntar
+// (red caída, timeout). Timeout largo: el clone tarda más que un api normal.
 export async function detectRepo(repo: string): Promise<DetectOut | null> {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 60000);
   try {
-    const r = await api<DetectOut>(`/api/v1/detect?repo=${encodeURIComponent(repo)}`);
-    return r && r.framework ? r : null;
+    return await api<DetectOut>(`/api/v1/detect?repo=${encodeURIComponent(repo)}`, { signal: ctl.signal });
   } catch {
-    return null; // sin red, repo privado o no detectable: toca comando manual
+    return null;
+  } finally {
+    clearTimeout(t);
   }
 }
 

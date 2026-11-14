@@ -54,16 +54,17 @@ describe("create git sin GitHub App", () => {
     expect(s.planBusy).toBe(false);
   });
 
-  it("sin plan se queda y pide comando manual", async () => {
+  it("sin plan enseña el motivo y no abre avanzado solo", async () => {
     gitState();
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ framework: "" })));
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ framework: "", reason: "noplan" })));
     useCreate.getState().next();
     await flush();
     const s = useCreate.getState();
     expect(s.step).toBe(2);
     expect(s.manualRequired).toBe(true);
-    expect(s.advanced).toBe(true);
+    expect(s.advanced).toBe(false); // sin duplicar campos: el bloque manual vale
     expect(s.plan).toBeNull();
+    expect(s.detectError?.reason).toBe("noplan");
     // con comando ya pasa al 3 sin volver a detectar
     const fetchMock = vi.fn(async () => jsonResponse({ framework: "node" }));
     vi.stubGlobal("fetch", fetchMock);
@@ -85,7 +86,7 @@ describe("create git sin GitHub App", () => {
     expect(useCreate.getState().manualRequired).toBe(false);
   });
 
-  it("error de red cae al manual en vez de romper", async () => {
+  it("error de red cae al manual con motivo noresponse", async () => {
     gitState();
     vi.stubGlobal(
       "fetch",
@@ -98,6 +99,7 @@ describe("create git sin GitHub App", () => {
     const s = useCreate.getState();
     expect(s.step).toBe(2);
     expect(s.manualRequired).toBe(true);
+    expect(s.detectError?.reason).toBe("noresponse");
   });
 
   it("si cambia el repo mid-detección, descarta", async () => {
@@ -133,5 +135,52 @@ describe("create git sin GitHub App", () => {
     await flush();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(useCreate.getState().step).toBe(2);
+  });
+
+  it("sin git bloquea el avance y el reintento rescata tras instalarlo", async () => {
+    gitState();
+    const fetchMock = vi.fn(async () => jsonResponse({ framework: "", reason: "nogit", detail: "sin git en el servidor" }));
+    vi.stubGlobal("fetch", fetchMock);
+    useCreate.getState().next();
+    await flush();
+    let s = useCreate.getState();
+    expect(s.step).toBe(2);
+    expect(s.manualRequired).toBe(true);
+    expect(s.detectError?.reason).toBe("nogit");
+    // Ni con comando se avanza: el deploy tampoco podría clonar.
+    useCreate.setState({ command: "node server.js" });
+    useCreate.getState().next();
+    await flush();
+    expect(useCreate.getState().step).toBe(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Tras instalar git, Reintentar detecta y avanza.
+    fetchMock.mockResolvedValue(jsonResponse({ framework: "node", start: ["node", "s.js"], install: [], build: [] }));
+    useCreate.getState().retryDetect();
+    expect(useCreate.getState().planBusy).toBe(true);
+    await flush();
+    s = useCreate.getState();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(s.step).toBe(3);
+    expect(s.plan?.framework).toBe("node");
+    expect(s.detectError).toBeNull();
+  });
+
+  it("noclone enseña el detalle y deja continuar manual", async () => {
+    gitState();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ framework: "", reason: "noclone", detail: "git clone: exit status 128" })),
+    );
+    useCreate.getState().next();
+    await flush();
+    const s = useCreate.getState();
+    expect(s.step).toBe(2);
+    expect(s.manualRequired).toBe(true);
+    expect(s.detectError?.reason).toBe("noclone");
+    expect(s.detectError?.detail).toContain("128");
+    useCreate.setState({ command: "node server.js" });
+    useCreate.getState().next();
+    await flush();
+    expect(useCreate.getState().step).toBe(3);
   });
 });

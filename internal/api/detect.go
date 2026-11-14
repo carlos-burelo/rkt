@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"rkt-proxy/internal/buildpack"
 	"rkt-proxy/internal/discover"
@@ -22,6 +23,24 @@ type detectOut struct {
 	Evidence  []string `json:"evidence,omitempty"`
 	Node      string   `json:"node_version,omitempty"`
 	Workspace bool     `json:"workspace,omitempty"`
+	// Reason por qué no hay plan (nogit/noclone/noplan); "" si hay plan.
+	Reason string `json:"reason,omitempty"`
+	// Detail causa corta (primera línea del error de git, acotada).
+	Detail string `json:"detail,omitempty"`
+}
+
+// shortErr primera línea del error, acotada: el stderr de git puede ser
+// largo y el wizard solo enseña la causa.
+func shortErrStr(s string, max int) string {
+	s = strings.TrimSpace(s)
+	if i := strings.Index(s, "\n"); i >= 0 {
+		s = strings.TrimSpace(s[:i])
+	}
+	r := []rune(s)
+	if len(r) > max {
+		return string(r[:max]) + "…"
+	}
+	return s
 }
 
 // handleDetect GET /api/v1/detect?path=<dir> | ?repo=<url> (operator+).
@@ -43,7 +62,7 @@ func (d *Deps) handleDetect(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p := sug.Plan
-		writeJSON(w, detectOut{
+		out := detectOut{
 			Framework: p.Kind,
 			PM:        p.PM,
 			Install:   nonNil(p.Install),
@@ -53,7 +72,13 @@ func (d *Deps) handleDetect(w http.ResponseWriter, r *http.Request) {
 			Evidence:  p.Evidence,
 			Node:      p.NodeVersion,
 			Workspace: p.Workspace,
-		})
+		}
+		// Sin plan el wizard no adivina: motivo + causa para el mensaje.
+		if p.Kind == "" && sug.Reason != "" {
+			out.Reason = sug.Reason
+			out.Detail = shortErrStr(sug.Detail, 200)
+		}
+		writeJSON(w, out)
 		return
 	}
 	raw := r.URL.Query().Get("path")

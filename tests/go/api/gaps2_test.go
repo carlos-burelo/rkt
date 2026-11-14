@@ -82,6 +82,17 @@ func TestGapsFSDetectZones(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"framework":"node"`) {
 		t.Fatalf("detect repo local: %d %s", rec.Code, rec.Body.String())
 	}
+	// detect por repo inclonable (.invalid: sin red): 200 con framework
+	// vacío Y motivo (el wizard no adivina: nogit si no hay git).
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/detect?repo=https://novalido.invalid/o/r.git", opTok))
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(body, `"framework":""`) {
+		t.Fatalf("detect noclone: %d %s", rec.Code, body)
+	}
+	if !strings.Contains(body, `"reason":"noclone"`) && !strings.Contains(body, `"reason":"nogit"`) {
+		t.Fatalf("detect sin motivo: %s", body)
+	}
 
 	// zones exige operator, devuelve array
 	rec = httptest.NewRecorder()

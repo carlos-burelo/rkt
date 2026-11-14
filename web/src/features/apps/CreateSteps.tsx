@@ -59,6 +59,16 @@ export function OriginStep({
   );
 }
 
+// Reintentar detección: tras instalar git, arreglar la URL o la red.
+function RetryButton({ busy, onRetry }: { busy: boolean; onRetry: () => void }) {
+  const { t } = useI18n();
+  return (
+    <Button type="button" size="sm" variant="outline" onClick={onRetry} disabled={busy}>
+      {busy ? t("create.detecting") : t("create.retry")}
+    </Button>
+  );
+}
+
 // Paso 2: detalles editables.
 export function DetailsStep({
   origin,
@@ -89,6 +99,9 @@ export function DetailsStep({
   errs,
   tried,
   manualRequired,
+  detectError,
+  planBusy,
+  onRetry,
   next,
 }: {
   origin: Origin;
@@ -119,6 +132,9 @@ export function DetailsStep({
   errs: StepErrors;
   tried: boolean;
   manualRequired: boolean;
+  detectError: { reason: string; detail?: string } | null;
+  planBusy: boolean;
+  onRetry: () => void;
   next: () => void;
 }) {
   const { t } = useI18n();
@@ -186,9 +202,25 @@ export function DetailsStep({
           )}
         </Field>
       )}
-      {origin === "git" && manualRequired && (
+      {origin === "git" && manualRequired && detectError?.reason === "nogit" && (
+        <div className="border border-bad/40 bg-card/40 px-3 py-2.5">
+          <p className="font-mono text-[10px] leading-relaxed text-bad">{t("create.nogit")}</p>
+          <p className="mt-1 font-mono text-[10px] leading-relaxed text-muted-foreground">{t("create.nogitHint")}</p>
+          <div className="mt-2">
+            <RetryButton busy={planBusy} onRetry={onRetry} />
+          </div>
+        </div>
+      )}
+      {origin === "git" && manualRequired && detectError?.reason !== "nogit" && (
         <div className="border border-warn/40 bg-card/40 px-3 py-2.5">
-          <p className="font-mono text-[10px] leading-relaxed text-warn">{t("create.noRemotePlan")}</p>
+          <p className="font-mono text-[10px] leading-relaxed text-warn">
+            {t(detectError?.reason === "noclone" ? "create.noclone" : "create.noplan")}
+          </p>
+          {detectError?.detail && (
+            <p className="mt-1 truncate font-mono text-[9px] text-muted-foreground" title={detectError.detail}>
+              {detectError.detail}
+            </p>
+          )}
           <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label={t("create.command")} hint={t("create.commandOverride")} error={tried ? errs.command : ""}>
               <PathInput
@@ -208,6 +240,9 @@ export function DetailsStep({
                 ariaLabel={t("create.dir")}
               />
             </Field>
+          </div>
+          <div className="mt-2">
+            <RetryButton busy={planBusy} onRetry={onRetry} />
           </div>
         </div>
       )}

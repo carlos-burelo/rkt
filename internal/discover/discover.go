@@ -311,16 +311,32 @@ var manifestFiles = []string{
 	"*.csproj", "*.fsproj", "*.sln",
 }
 
+// Motivos de Suggest sin plan (el wizard los enseña tal cual, sin
+// adivinar: nogit = instalar git en el servidor; noclone = revisar
+// URL/acceso; noplan = repo clonado pero stack no reconocido).
+const (
+	ReasonNoGit   = "nogit"
+	ReasonNoClone = "noclone"
+	ReasonNoPlan  = "noplan"
+)
+
+// GitOK dice si hay git en el servidor (detectar y desplegar lo exigen).
+func GitOK() bool {
+	_, err := exec.LookPath("git")
+	return err == nil
+}
+
 // detectPlanShallow clona solo manifiestos (sparse + blob:none): KBs en vez
 // del repo. Funciona con cualquier host git y sin tokens (repos públicos).
 // Si el servidor no soporta sparse, cae a clone --depth 1 completo.
-func detectPlanShallow(repoURL string) (buildpack.Plan, error) {
-	if _, err := exec.LookPath("git"); err != nil {
-		return buildpack.Plan{}, err
+// Devuelve el motivo cuando no hay plan (nogit/noclone/noplan).
+func detectPlanShallow(repoURL string) (buildpack.Plan, string, error) {
+	if !GitOK() {
+		return buildpack.Plan{}, ReasonNoGit, fmt.Errorf("sin git en el servidor")
 	}
 	dir, err := os.MkdirTemp("", "rkt-manifest-*")
 	if err != nil {
-		return buildpack.Plan{}, err
+		return buildpack.Plan{}, ReasonNoClone, err
 	}
 	defer os.RemoveAll(dir)
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
@@ -337,12 +353,16 @@ func detectPlanShallow(repoURL string) (buildpack.Plan, error) {
 	if err := run(dir, "clone", "--depth", "1", "--filter=blob:none", "--sparse", repoURL, "repo"); err != nil {
 		_ = os.RemoveAll(repo)
 		if err := run(dir, "clone", "--depth", "1", repoURL, "repo"); err != nil {
-			return buildpack.Plan{}, err
+			return buildpack.Plan{}, ReasonNoClone, err
 		}
 	} else if err := run(repo, append([]string{"sparse-checkout", "set", "--no-cone"}, manifestFiles...)...); err != nil {
 		// Sin sparse (git viejo): vale lo ya traído (raíz).
 	}
-	return buildpack.DetectDir(repo)
+	plan, err := buildpack.DetectDir(repo)
+	if err != nil {
+		return buildpack.Plan{}, ReasonNoPlan, err
+	}
+	return plan, "", nil
 }
 
 // uniqueDomain evita colisión de dominio (dos owners, mismo repo).
@@ -448,6 +468,10 @@ type Suggestion struct {
 	Branch string
 	// Plan build canónico (buildpack) para este proyecto.
 	Plan buildpack.Plan
+	// Reason por qué no hay plan (nogit/noclone/noplan); "" si hay plan.
+	Reason string
+	// Detail causa del fallo (stderr de git); "" si hay plan.
+	Detail string
 }
 
 // Suggest infiere desde repo local (disco) o URL https (API pública).
@@ -458,9 +482,12 @@ func Suggest(db *store.DB, gh *github.Manager, repoURL string) (*Suggestion, err
 		abs, _ := filepath.Abs(repoURL)
 		s.Dir = abs
 		s.Name = slug(filepath.Base(abs))
-		if plan, err := buildpack.DetectDir(abs); err == nil {
+		if plan, err := buildpack.DetectDir(abs); err == nil && plan.Kind != "" {
 			s.Plan = plan
 			s.Preset = plan.Kind
+		} else {
+			// Dir sin stack reconocible: motivo en vez de silencio.
+			s.Reason = ReasonNoPlan
 		}
 		if out, err := exec.Command("git", "-C", abs, "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
 			if b := strings.TrimSpace(string(out)); b != "" && b != "HEAD" {
@@ -487,10 +514,17 @@ func Suggest(db *store.DB, gh *github.Manager, repoURL string) (*Suggestion, err
 		}
 		if s.Preset == "" {
 			// Sin GitHub App o falló la API: manifiestos por git directo
-			// (cualquier host, sin tokens en repos públicos).
-			if p, err := detectPlanShallow(repoURL); err == nil && p.Kind != "" {
+			// (cualquier host, sin tokens en repos públicos). Con motivo
+			// para que el wizard no adivine (nogit/noclone/noplan).
+			if p, reason, err := detectPlanShallow(repoURL); err == nil && p.Kind != "" {
 				s.Plan = p
 				s.Preset = p.Kind
+			} else if err != nil {
+				s.Reason = reason
+				s.Detail = err.Error()
+			} else {
+				// Clonó pero el stack pide comando manual (Plan vacío).
+				s.Reason = ReasonNoPlan
 			}
 		}
 	}

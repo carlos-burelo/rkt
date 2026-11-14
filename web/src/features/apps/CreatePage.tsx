@@ -126,6 +126,9 @@ export function CreatePage() {
               errs={errs}
               tried={s.tried}
               manualRequired={s.manualRequired}
+              detectError={s.detectError}
+              planBusy={s.planBusy}
+              onRetry={() => s.retryDetect()}
               next={() => s.next()}
             />
           )}
