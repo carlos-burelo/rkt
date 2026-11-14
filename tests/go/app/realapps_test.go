@@ -610,6 +610,22 @@ func TestRealMultiAppAislamiento(t *testing.T) {
 // prod (launcher con nieto). Con job-desde-el-inicio el corte mata el árbol
 // y no quedan huérfanos sirviendo el puerto viejo. Sin el fix, p1 seguiría
 // abierto y el Stop se colgaría.
+// esperaYBorra reintenta RemoveAll con backoff: en Windows los handles del
+// árbol recién matado tardan en soltarse y el cleanup de t.TempDir falla
+// ("being used by another process") aunque no haya huérfanos. Si tras los
+// reintentos sigue bloqueado, falla igual (huérfano real reteniendo).
+func esperaYBorra(t *testing.T, dir string) {
+	t.Helper()
+	var err error
+	for i := 0; i < 30; i++ {
+		if err = os.RemoveAll(dir); err == nil {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("borrar %s: %v", dir, err)
+}
+
 func TestRealNodePnpmWrapperSinHuerfanos(t *testing.T) {
 	nodeOrSkip(t)
 	pnpmOrSkip(t)
@@ -624,7 +640,7 @@ func TestRealNodePnpmWrapperSinHuerfanos(t *testing.T) {
 		cmd = "/bin/sh"
 		args = []string{"-c", "pnpm run start"}
 	}
-	_, live, sup, ctl := realWorld(t, cmd, args, repo, []string{nodeCheckStep()}, nil)
+	db, live, sup, ctl := realWorld(t, cmd, args, repo, []string{nodeCheckStep()}, nil)
 
 	if _, err := deploy.RunContext(context.Background(), bbAppOf(live), "", ctl, io.Discard, log); err != nil {
 		t.Fatalf("deploy wrapper v1: %v", err)
@@ -656,6 +672,11 @@ func TestRealNodePnpmWrapperSinHuerfanos(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("Stop colgado: nieto del wrapper fuera del job")
 	}
+	// El árbol ya cayó (puerto muerto + Stop ok): cierra la DB propia y, si
+	// Windows aún no soltó los handles del árbol, reintenta el borrado
+	// antes de que el cleanup de t.TempDir falle.
+	_ = db.Close()
+	esperaYBorra(t, filepath.Dir(bbAppOf(live).Dir))
 }
 
 // TestRestartRecuperaAppsSirviendo: muerte del servicio y rearranque sobre
