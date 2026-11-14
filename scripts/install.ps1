@@ -85,9 +85,14 @@ if ($LocalExe -ne "") {
   $tmp = $LocalExe
 } else {
   if ($Version -eq "latest") {
-    Write-Host "Resolviendo último release de $Repo..."
-    $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" `
+    # /releases/latest excluye betas (este proyecto aún no tiene estables
+    # recientes: latest = v0.6.6 con otro nombre de asset -> 404). Se toma
+    # el publicado más nuevo, betas incluidas; -Version lo fija a mano.
+    Write-Host "Resolviendo último release de $Repo (incluye betas)..."
+    $rels = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases?per_page=100" `
       -Headers @{ Accept = "application/vnd.github+json" }
+    $rel = @($rels | Where-Object { -not $_.draft } | Sort-Object created_at -Descending | Select-Object -First 1)
+    if (-not $rel) { throw "Sin releases publicados en $Repo" }
     $Version = $rel.tag_name
   }
   Write-Host "Descargando $Repo $Version..."
