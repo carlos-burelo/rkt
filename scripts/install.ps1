@@ -103,8 +103,9 @@ if ($Destructivo) {
   # ACLs previas (instaladores viejos, chmod de Go sobre la DB) pueden dejar
   # a Admins sin DELETE: tomar posesión y heredar de Program Files antes
   # de borrar. Sin esto, ni siquiera elevado se puede limpiar todo.
+  # (icacls y no takeown: el /D de takeown pide el "sí" localizado.)
   try {
-    & takeown /F $full /R /D Y 2>$null | Out-Null
+    & icacls $full /setowner "*S-1-5-32-544" /T /C 2>$null | Out-Null
     & icacls $full /reset /T /C 2>$null | Out-Null
   } catch {}
   # Borrado con reintentos: los handles del árbol recién matado tardan en
