@@ -220,7 +220,9 @@ const main = async () => {
     await page.goto(`${BASE}/${route}`, { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
     if ((await page.locator("h1").count()) === 0) errors.push(`[smoke] ${name}: sin h1`);
-    await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: opts.fullPage ?? true });
+    // Viewport fijo (1600x900): todas las capturas del mismo tamaño para
+    // que la cuadrícula del README quede proporcionada.
+    await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: opts.fullPage ?? false });
     console.log("ok", name);
   };
 
@@ -306,13 +308,13 @@ const main = async () => {
   await page.getByPlaceholder("C:\\proyectos\\mi-app").fill("C:\\rkt\\apps\\tienda");
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.waitForTimeout(800);
-  await page.screenshot({ path: join(OUT, "app-create-review.png"), fullPage: true });
+  await page.screenshot({ path: join(OUT, "app-create-review.png"), fullPage: false });
   console.log("ok app-create-review");
 
   // seguimiento en vivo tras crear (checklist + log del build)
   await page.getByRole("button", { name: "Crear aplicación" }).click();
   await page.waitForTimeout(2500);
-  await page.screenshot({ path: join(OUT, "app-create-track.png"), fullPage: true });
+  await page.screenshot({ path: join(OUT, "app-create-track.png"), fullPage: false });
   console.log("ok app-create-track");
 
   await page.goto(`${BASE}/overview`, { waitUntil: "networkidle" });
@@ -342,7 +344,7 @@ const main = async () => {
   ]) {
     await mpage.goto(`${BASE}/${route}`, { waitUntil: "networkidle" });
     await mpage.waitForTimeout(500);
-    await mpage.screenshot({ path: join(OUT, `${name}.png`), fullPage: true });
+    await mpage.screenshot({ path: join(OUT, `${name}.png`), fullPage: false });
     console.log("ok", name);
   }
   await mctx.close();
@@ -353,7 +355,7 @@ const main = async () => {
   await mockApi(lpage, { authed: false });
   await lpage.goto(`${BASE}/login`, { waitUntil: "networkidle" });
   await lpage.waitForTimeout(400);
-  await lpage.screenshot({ path: join(OUT, "login.png"), fullPage: true });
+  await lpage.screenshot({ path: join(OUT, "login.png"), fullPage: false });
   console.log("ok login");
   await lctx.close();
 
@@ -362,7 +364,7 @@ const main = async () => {
   await mockApi(spage, { authed: false, setupRequired: true });
   await spage.goto(`${BASE}/setup`, { waitUntil: "networkidle" });
   await spage.waitForTimeout(400);
-  await spage.screenshot({ path: join(OUT, "setup.png"), fullPage: true });
+  await spage.screenshot({ path: join(OUT, "setup.png"), fullPage: false });
   console.log("ok setup");
   await sctx.close();
 
@@ -375,7 +377,7 @@ const main = async () => {
   wpage.on("response", (r) => { if (r.status() >= 400) errors.push(`[light http ${r.status()}] ${r.url()}`); });
   await wpage.goto(`${BASE}/overview`, { waitUntil: "networkidle" });
   await wpage.waitForTimeout(500);
-  await wpage.screenshot({ path: join(OUT, "overview-light.png"), fullPage: true });
+  await wpage.screenshot({ path: join(OUT, "overview-light.png"), fullPage: false });
   console.log("ok overview-light");
   for (const [name, route] of [
     ["deployments", "deployments"],
@@ -392,7 +394,7 @@ const main = async () => {
   ]) {
     await wpage.goto(`${BASE}/${route}`, { waitUntil: "networkidle" });
     await wpage.waitForTimeout(400);
-    await wpage.screenshot({ path: join(OUT, `${name}-light.png`), fullPage: true });
+    await wpage.screenshot({ path: join(OUT, `${name}-light.png`), fullPage: false });
     console.log("ok", `${name}-light`);
   }
   await wctx.close();
@@ -402,7 +404,7 @@ const main = async () => {
   await mockApi(wlpage, { authed: false });
   await wlpage.goto(`${BASE}/login`, { waitUntil: "networkidle" });
   await wlpage.waitForTimeout(400);
-  await wlpage.screenshot({ path: join(OUT, "login-light.png"), fullPage: true });
+  await wlpage.screenshot({ path: join(OUT, "login-light.png"), fullPage: false });
   console.log("ok login-light");
   await wlctx.close();
 

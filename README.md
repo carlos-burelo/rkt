@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="web/public/icons/mark.svg" width="128" alt="rkt">
+  <img src="web/public/icons/mark.svg" width="128" alt="RKT">
 </p>
 
-# rkt
+# RKT
 
 [![release](https://img.shields.io/github/v/release/carlos-burelo/rkt)](https://github.com/carlos-burelo/rkt/releases/latest)
 [![platform](https://img.shields.io/badge/platform-windows--amd64-blue)](https://github.com/carlos-burelo/rkt)
