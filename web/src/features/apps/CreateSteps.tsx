@@ -88,6 +88,7 @@ export function DetailsStep({
   setPort,
   errs,
   tried,
+  manualRequired,
   next,
 }: {
   origin: Origin;
@@ -117,6 +118,7 @@ export function DetailsStep({
   setPort: (v: string) => void;
   errs: StepErrors;
   tried: boolean;
+  manualRequired: boolean;
   next: () => void;
 }) {
   const { t } = useI18n();
@@ -183,6 +185,31 @@ export function DetailsStep({
             </div>
           )}
         </Field>
+      )}
+      {origin === "git" && manualRequired && (
+        <div className="border border-warn/40 bg-card/40 px-3 py-2.5">
+          <p className="font-mono text-[10px] leading-relaxed text-warn">{t("create.noRemotePlan")}</p>
+          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label={t("create.command")} hint={t("create.commandOverride")} error={tried ? errs.command : ""}>
+              <PathInput
+                value={command}
+                onChange={setCommand}
+                mode="file"
+                placeholder={t("create.commandPlaceholder")}
+                ariaLabel={t("create.command")}
+              />
+            </Field>
+            <Field label={t("create.dir")} hint={t("create.dirHint")}>
+              <PathInput
+                value={dir}
+                onChange={setDir}
+                mode="dir"
+                placeholder={t("create.dirPlaceholder")}
+                ariaLabel={t("create.dir")}
+              />
+            </Field>
+          </div>
+        </div>
       )}
       {origin === "local" && (
         <Field label={t("create.dir")} hint={t("create.dirHint")} error={tried ? errs.dir : ""}>
@@ -406,6 +433,7 @@ export function ReviewStep({
           [t("create.review.origin"), ORIGINS.find((o) => o.id === origin) ? t(ORIGINS.find((o) => o.id === origin)!.labelKey) : origin],
           [t("create.review.name"), name],
           ...(repo.trim() ? [[t("create.review.repo"), repo.trim()]] : []),
+          ...(origin === "git" && plan?.framework ? [[t("create.review.detected"), plan.framework]] : []),
           ...(dir.trim() ? [[t("create.review.dir"), dir.trim()]] : []),
           [
             t("create.review.command"),

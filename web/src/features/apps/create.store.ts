@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { buildApp, createApp, deployAppAsync, detectApp, listGithubRepos, type CreateAppIn, type DetectOut, type GithubRepo } from "./api";
+import { buildApp, createApp, deployAppAsync, detectApp, detectRepo, listGithubRepos, type CreateAppIn, type DetectOut, type GithubRepo } from "./api";
 import { deploymentLog, getDeployment } from "../deployments/api";
 import { looksGit, SLUG, slugOf, type Origin, type Step } from "./createDialog.model";
 
@@ -24,6 +24,11 @@ interface CreateState {
   tried: boolean;
   plan: DetectOut | null;
   planBusy: boolean;
+  // manualRequired: git sin plan detectable (repo privado o sin acceso):
+  // hay que indicar el comando antes de continuar. manualFor recuerda para
+  // qué repo se pidió (sin reintentos automáticos al insistir en Next).
+  manualRequired: boolean;
+  manualFor: string | null;
   buildNow: boolean;
   track: { id: number; app: string; kind: "build" | "deploy" } | null;
   trackLog: string;
@@ -67,6 +72,8 @@ const initial = {
   tried: false,
   plan: null as DetectOut | null,
   planBusy: false,
+  manualRequired: false,
+  manualFor: null as string | null,
   buildNow: true,
   track: null as { id: number; app: string; kind: "build" | "deploy" } | null,
   trackLog: "",
@@ -93,14 +100,43 @@ export const useCreate = create<CreateState>()((set, get) => ({
   },
   next: () => {
     const s = get();
+    if (s.planBusy) return; // detección en curso: el segundo click espera
     if (s.step === 2) {
       set({ tried: true });
       if (!step2ok(s)) return;
       set({ tried: false });
     }
     if (s.step < 3) {
+      // Git sin comando: intentar detectar el tipo en el repo antes de
+      // avanzar. Si no hay plan (privado, sin acceso), pedirlo a mano en
+      // vez de chocar contra el backend en el paso 3. Sin reintentos
+      // automáticos: si ya se pidió para este repo, quedarse quieto.
+      if (s.step === 2 && s.origin === "git" && s.command.trim() === "") {
+        const repo = s.repo.trim();
+        if (s.manualRequired && s.manualFor === repo) return;
+        set({ planBusy: true, manualRequired: false, manualFor: null });
+        detectRepo(repo)
+          .then((plan) => {
+            // El usuario pudo cambiar de repo mientras detectaba: descartar.
+            if (get().repo.trim() !== repo || get().step !== 2) {
+              set({ planBusy: false });
+              return;
+            }
+            if (plan) {
+              set({ plan, planBusy: false, manualRequired: false, manualFor: null, step: 3 as Step });
+            } else {
+              // Sin plan: quedarse en el paso 2 y mostrar el campo manual.
+              set({ plan: null, planBusy: false, manualRequired: true, manualFor: repo, advanced: true });
+            }
+          })
+          .catch(() => set({ plan: null, planBusy: false, manualRequired: true, manualFor: repo, advanced: true }));
+        return;
+      }
+      if (s.step === 2 && s.origin === "git") {
+        set({ manualRequired: false, manualFor: null });
+      }
       const target = (s.step + 1) as Step;
-      set({ step: target, plan: null });
+      set({ step: target, plan: s.origin === "git" ? s.plan : null });
       if (target === 3 && s.origin === "local" && s.dir.trim() !== "") {
         set({ planBusy: true });
         detectApp(s.dir.trim())

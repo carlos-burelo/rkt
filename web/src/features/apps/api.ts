@@ -91,6 +91,15 @@ export interface DetectOut {
   workspace?: boolean;
 }
 
+export async function detectRepo(repo: string): Promise<DetectOut | null> {
+  try {
+    const r = await api<DetectOut>(`/api/v1/detect?repo=${encodeURIComponent(repo)}`);
+    return r && r.framework ? r : null;
+  } catch {
+    return null; // sin red, repo privado o no detectable: toca comando manual
+  }
+}
+
 export function detectApp(path: string): Promise<DetectOut> {
   return api<DetectOut>(`/api/v1/detect?path=${encodeURIComponent(path)}`);
 }
