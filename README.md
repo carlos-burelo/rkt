@@ -1,53 +1,44 @@
+<p align="center">
+  <img src="web/public/icons/mark.svg" width="128" alt="rkt">
+</p>
+
 # rkt
 
 [![release](https://img.shields.io/github/v/release/carlos-burelo/rkt)](https://github.com/carlos-burelo/rkt/releases/latest)
-[![go](https://img.shields.io/badge/go-1.26-blue)](https://go.dev)
 [![platform](https://img.shields.io/badge/platform-windows--amd64-blue)](https://github.com/carlos-burelo/rkt)
 [![license](https://img.shields.io/github/license/carlos-burelo/rkt)](LICENSE)
 
-PaaS para **Windows Server** en un solo binario Go. Proxy inverso con TLS
-automático, supervisor de procesos, deploys desde Git, dashboard y servidor MCP.
-La configuración vive en **SQLite**; no hay YAML ni archivos de estado paralelos.
+Un solo binario para servir apps web en Windows Server: proxy inverso con
+TLS automático, supervisor de procesos, deploys desde Git, tareas
+programadas, dashboard y acceso para agentes (MCP). Todo vive en SQLite y
+bajo un solo directorio; nada que editar a mano.
 
-```text
-Internet ──:80/:443──▶ rkt ──HTTP──▶ 127.0.0.1:3001  app gestionada
-                              ├────▶ 127.0.0.1:3010  dev server externo
-                              └────▶ 127.0.0.1:8090  dashboard + API (loopback)
+```mermaid
+flowchart LR
+    I[Internet<br>:80 / :443] --> R[rkt]
+    R --> A[app gestionada]
+    R --> E[dev server externo]
+    R --> D[dashboard + API]
 ```
 
-![Resumen](docs/shots/overview.png)
+## Qué hace
 
-## Capacidades
+- **Dominios hacia tus apps**: `app.tudominio.com`, `*.tudominio.com` o `IP/app`. Sin ruta: 404.
+- **HTTPS automático**: Let's Encrypt en producción; CA local en desarrollo.
+- **Tareas programadas**: un comando o una petición HTTP por app, con historial y sin solapes.
+- **Procesos supervisados**: reinicio con backoff, límite de memoria y parada limpia del árbol completo.
+- **Dev servers externos**: expone `pnpm dev`, Vite o similar bajo el mismo proxy sin gestionarlos.
+- **Deploys desde Git**: compila aparte, prueba un canario y corta el tráfico sin caídas; si algo falla, vuelve solo.
 
-- **Routing por Host**: coincidencia exacta y comodín `*.dominio`, con
-  prioridad exacta. Sin ruta → `404`; backend caído → `502`.
-- **TLS automático**: Let's Encrypt (`tls-alpn-01` + `http-01`) en producción;
-  CA local y `.localhost` en desarrollo. Renovación y cache separada
-  staging/producción. Sin `public_ip` el dominio por defecto es local; en
-  servidor público se exige `base_domain` o un dominio con acceso.
-- **Tareas programadas por app**: cron local con dos tipos, comando en el
-  directorio de la app o petición HTTP a su puerto local. Historial, log,
-  ejecución manual, timeout y bloqueo de solapes.
-- **Apps gestionadas**: supervisor con reinicio, backoff, límite de RAM,
-  Job Objects (mata el árbol completo en Windows), logs por app y health checks.
-- **Apps externas**: registro de host/puerto para un dev server que corre el
-  humano. Solo usan proxy, TLS, access log y dashboard; no hay build, deploy ni
-  supervisor.
-- **Deploy desde Git**: clone, build en el slot inactivo, canario en puerto
-  efímero, corte de ruta y rollback automático. Zero downtime: la app nunca
-  deja de servir.
-- **GitHub App**: instalación desde el dashboard, repos personales y de
-  organizaciones, auto-deploy por webhook (producción) o polling (local).
-- **Buildpacks propios**: Next, Vite, Astro, SvelteKit, Nuxt, Remix, Node, Go,
-  Python y sitios estáticos. Node siempre con **pnpm**.
-- **Observabilidad**: logs de app y build en vivo por SSE, access log,
-  analítica, métricas, alertas y backends reales.
-- **Dashboard SPA** embebida, PWA, autenticación por cookie httpOnly y roles
-  `viewer < operator < admin`.
-- **CLI y MCP** sobre la misma API y el mismo modelo de datos. Las tareas cron
-  se operan desde el dashboard o la API. El MCP también se expone por
-  **Streamable HTTP** en `/mcp` con API keys `rkt_` (admin), generadas desde
-  Ajustes → MCP remoto.
+```mermaid
+flowchart LR
+    P[git push] --> C[clona] --> B[compila] --> K[prueba canario] --> X[corta tráfico]
+```
+
+- **GitHub App**: conecta tu cuenta y despliega solo al hacer push (webhook en producción, polling en local).
+- **Detecta el stack**: Node, Go, Python, estáticos y más; Node siempre con pnpm.
+- **Dashboard con roles**: ver, operar y administrar, desde el navegador.
+- **CLI y MCP**: todo lo del panel, también por terminal y por API para agentes.
 
 ## Dashboard
 
@@ -64,38 +55,16 @@ Internet ──:80/:443──▶ rkt ──HTTP──▶ 127.0.0.1:3001  app ges
   <img src="docs/shots/app-create-track.png" alt="Seguimiento de creación" width="49%">
 </p>
 
-## Modelo de aplicaciones
+## Dos tipos de app
 
-### Gestionada (`managed`)
+**Gestionada**: rkt arranca el proceso, lo supervisa y lo despliega.
 
-rkt arranca el proceso, lo supervisa y aplica el pipeline de deploy.
-
-```text
-Git push ─▶ clone ─▶ build (slot inactivo) ─▶ canario sano ─▶ corte de ruta ─▶ rollback si falla
-```
-
-### Externa (`external`)
-
-rkt **no ejecuta nada**. Registra la carpeta, el host y el puerto para que el
-dev server (`pnpm dev`, Vite, Next dev, etc.) sea accesible bajo la misma
-arquitectura de proxy.
-
-```text
-rkt: host ─▶ 127.0.0.1:3010
-humano: pnpm exec vite --host 127.0.0.1 --port 3010 --strictPort
-```
-
-La ficha de la app muestra el comando sugerido y su estado real (TCP/HTTP).
-No aparecen acciones de deploy, restart ni rollback.
+**Externa**: rkt no ejecuta nada; solo le da dominio y puerto a un dev server que corres tú (`pnpm dev`, Vite, Next dev…). La ficha muestra el comando sugerido y si responde o no.
 
 ## Plataformas
 
-Windows Server es la plataforma soportada en producción. El backend ya separa
-las diferencias de sistema en `internal/platform` y wrappers con build tags:
-Linux/Unix compila y funciona con process groups, métricas `/proc`, shell
-`sh -c` y `/etc/hosts`. CI ejecuta build+vet+tests en Ubuntu. Limitaciones
-conscientes en Linux: sin tope de RAM (Job Objects) y CA de desarrollo manual
-(`SSL_CERT_FILE`).
+Windows Server es la plataforma soportada en producción. El backend también
+compila y corre en Linux (sin tope de RAM y sin CA automática).
 
 ## Inicio rápido (desarrollo)
 
@@ -110,10 +79,8 @@ bin\rkt.exe -config rkt.local.db dev
 
 - Dashboard: `http://127.0.0.1:8090`
 - HTTP/HTTPS: `127.0.0.1:80` y `127.0.0.1:443`
-- Dominios locales: `*.localhost` (resuelven solos) o `rkt hosts add <host>`
-- Sin `public_ip`, las apps nuevas usan `<app>.localhost`
-- En servidor público define `public_ip` y `base_domain`; sin dominio el alta
-  pide uno con acceso
+- Dominios locales: `*.localhost` (resuelven solos)
+- Sin `public_ip`, las apps nuevas usan `<app>.localhost`; en servidor público define `public_ip` y `base_domain`
 - CA local: `logs/devca/ca.crt`, instalada en el almacén del usuario
 
 ## Instalación en producción
@@ -127,20 +94,18 @@ Primera vez (un comando):
 irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 | iex
 ```
 
-Destructiva (servicio, datos, firewall, variables): primero borra todo
-rastro con el script dedicado (lo de usuario va a `apps.old`/`certs.old`),
-luego instala limpio (dos comandos, cada uno de una línea):
+Para borrar todo rastro antes de instalar (servicio, datos, firewall,
+variables; lo de usuario va a `apps.old`/`certs.old`), script dedicado:
 
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/nuke.ps1)))
-irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 | iex
 ```
 
 El instalador descarga el release, verifica checksum, registra el servicio
-Windows, abre firewall y deja `rkt` en el `PATH`. También autoconfigura la
-IP pública, expone el dashboard en `http://IP:8090`, abre ese puerto y crea el
-primer admin con password aleatoria (la imprime una vez). La configuración se
-administra desde el dashboard o el CLI; no se edita YAML.
+Windows, abre firewall y deja `rkt` en el `PATH`. También detecta la IP
+pública, expone el dashboard en `http://IP:8090` y crea el primer admin con
+password aleatoria (la imprime una vez). Sin YAML: todo se administra desde
+el dashboard o el CLI.
 
 Todo vive bajo un solo home (`-InstallDir`, por defecto
 `C:\Program Files\rkt-proxy`):
@@ -156,9 +121,7 @@ certs\                    cache ACME
 ```
 
 Opciones: `-NoPublicDashboard` deja el dashboard solo en loopback;
-`-AdminUser nombre` cambia el usuario inicial. Para borrar antes de
-instalar usa `nuke.ps1` (mueve restos de layouts viejos a
-`apps.old`/`certs.old` dentro del home).
+`-AdminUser nombre` cambia el usuario inicial.
 Al actualizar sin destruir, la DB y los backups se mudan solos al primer
 arranque; las apps viejas conservan su carpeta y siguen sirviendo.
 
@@ -182,23 +145,15 @@ Referencia completa: [docs/CLI.md](docs/CLI.md).
 ## GitHub App
 
 1. Dashboard → **Ajustes → GitHub App → crear GitHub App**.
-2. Crear la App en GitHub y elegir **All repositories** (incluidas las
-   organizaciones donde el usuario sea admin).
-3. Instalar y volver al dashboard. El selector de repositorios de “nueva app”
-   lista los repos accesibles a todas las instalaciones.
-
-En producción los pushes llegan por webhook. En local, GitHub no puede entregar
-webhooks a `localhost`: rkt usa polling cada 10 s y compara el `HEAD` local con
-el remoto.
+2. Crear la App en GitHub y elegir **All repositories**.
+3. Instalar y volver al dashboard: el selector de “nueva app” ya lista tus repos.
 
 ## Operación
 
 - **Health**: `GET http://127.0.0.1:8090/healthz` (solo loopback).
-- **Logs**: `rkt logs -f` o dashboard; los logs de build se transmiten por SSE.
-- **Deploy**: historial en SQLite, build log por deployment y rollback
-  automático ante fallo de salud o crashloop reciente.
-- **Seguridad**: sesiones httpOnly, CSRF por `Origin`, secretos solo en
-  Entorno, healthz nunca expuesto en LAN y apps externas sin pipeline.
+- **Logs**: `rkt logs -f` o dashboard; los de build llegan en vivo.
+- **Deploy**: historial en SQLite con su build log; rollback automático si falla la salud.
+- **Seguridad**: sesiones httpOnly, CSRF por `Origin` y secretos fuera del código.
 
 ## Desarrollo y pruebas
 
@@ -207,15 +162,14 @@ gofmt -l .
 go run ./tests/run.go vet ./...
 go run ./tests/run.go test ./... -count=1
 pnpm --dir web exec tsc --noEmit
-  pnpm --dir web test
+pnpm --dir web test
 pnpm --dir web build
 ```
 
-  Suite de navegador y organización de pruebas: [tests/README.md](tests/README.md).
+Suite de navegador y organización de pruebas: [tests/README.md](tests/README.md).
 
-Las capturas del dashboard se generan con datos ficticios (sin datos reales)
-desde `scripts/shots`: `pnpm --dir scripts/shots mock` con `web` en `:5173`.
-Para capturar un entorno real: `pnpm --dir scripts/shots shots`.
+Las capturas se generan con datos ficticios desde `scripts/shots`:
+`pnpm --dir scripts/shots mock` con `web` en `:5173`.
 
 ## Estructura
 
@@ -234,6 +188,7 @@ internal/store         SQLite
 internal/dashboard     SPA embebida
 web/                   React + Vite + Tailwind
 docs/                  CLI, especificación y capturas
+scripts/               install.ps1 (instala) y nuke.ps1 (borra todo rastro)
 ```
 
 ## Documentación
