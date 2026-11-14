@@ -997,7 +997,9 @@ func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, 
 }
 
 // appToken resuelve token para el repo: GitHub App (instalación que cubre
-// el repo) si hay manager y es github.com; si no, PAT de token_env.
+// appToken resuelve credencial para clonar: GitHub App instalada en el repo,
+// o PAT de token_env (el deploy lo exige solo si git falla por acceso:
+// repos públicos clonan anónimo sin nada).
 func (p *Program) appToken(app *config.App) (string, error) {
 	if !deploy.NeedsAuth(app.Deploy.Repo) {
 		return "", nil
@@ -1027,7 +1029,9 @@ func (p *Program) appToken(app *config.App) (string, error) {
 	if token := os.Getenv(app.Deploy.TokenEnv); token != "" {
 		return token, nil
 	}
-	return "", fmt.Errorf("falta token en env %s o archivo RKT_GITHUB_TOKEN_FILE (secreto de máquina para el servicio)", app.Deploy.TokenEnv)
+	// Sin token configurado se intenta anónimo (repos públicos); si el repo
+	// es privado, el clone falla con el aviso accionable.
+	return "", nil
 }
 
 // tlsStatus interroga la cache ACME (existe/expira). Sin manager/TLS: off.

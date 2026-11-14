@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -15,11 +16,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"rkt-proxy/internal/config"
 )
 
 func mustLog() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
-// TestNeedsAuthTabla: solo http/https exigen token. file/ssh/local no.
+// TestNeedsAuthTabla: http/https pueden necesitar token (repos privados);
+// file/ssh/local nunca (llave o disco).
 func TestNeedsAuthTabla(t *testing.T) {
 	si := []string{
 		"https://github.com/o/r.git",
@@ -47,7 +51,57 @@ func TestNeedsAuthTabla(t *testing.T) {
 	}
 }
 
-// TestIsSHATabla: 7-40 hex; bordes y mayúsculas.
+// TestNeedsAuthErrTabla: el fallo de git se clasifica por su stderr:
+// acceso (privado, login mal, 401/403/404 de GitHub) pide token;
+// red o URL se enseña tal cual.
+func TestNeedsAuthErrTabla(t *testing.T) {
+	si := []string{
+		"remote: Invalid username or password.",
+		"fatal: Authentication failed for 'https://github.com/o/r.git/'",
+		"fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+		"remote: Permission to o/r.git denied to u.",
+		"remote: Permission denied (publickey).",
+		"error: RPC failed; HTTP 401 curl error",
+		"fatal: unable to access 'https://github.com/o/r.git/': The requested URL returned error: 403",
+		"remote: Repository not found.",
+		"fatal: repository 'https://github.com/o/noexiste.git/' not found",
+	}
+	for _, s := range si {
+		if !needsAuthErr(s) {
+			t.Fatalf("needsAuthErr(%q) = false, quiere true", s)
+		}
+	}
+	no := []string{
+		"",
+		"fatal: unable to connect to novalido.invalid",
+		"Could not resolve host: novalido.invalid",
+		"fatal: unable to access 'https://novalido.invalid/o/r.git/': Failed to connect",
+		"warning: redirecting to https://otro/",
+		"Cloning into 'r'...",
+	}
+	for _, s := range no {
+		if needsAuthErr(s) {
+			t.Fatalf("needsAuthErr(%q) = true, quiere false", s)
+		}
+	}
+}
+
+// TestCloneAnonimoSinCredencial: sin token git intenta anónimo; si el host
+// no existe (.invalid: sin red de verdad) el error es de red, nunca de token.
+func TestCloneAnonimoSinCredencial(t *testing.T) {
+	gitOK(t)
+	d := &config.Deploy{Repo: "https://novalido.invalid/o/r.git", Ref: "main", TokenEnv: "GITHUB_TOKEN"}
+	err := gitClone(context.Background(), d, "", filepath.Join(t.TempDir(), "staging"), mustLog())
+	if err == nil {
+		t.Fatal("clonar .invalid debe fallar")
+	}
+	if strings.Contains(err.Error(), "sin acceso al repo") {
+		t.Fatalf("error de red disfrazado de token: %v", err)
+	}
+	if !strings.Contains(err.Error(), "clone:") {
+		t.Fatalf("quiere el error de git tal cual: %v", err)
+	}
+}
 func TestIsSHATabla(t *testing.T) {
 	ok := []string{
 		"3cb6176", // 7, mínimo
@@ -158,16 +212,20 @@ func TestGitAusente(t *testing.T) {
 	}
 }
 
-// TestRunHTTPsinToken: http exige token y falla sin tocar red.
-func TestRunHTTPsinToken(t *testing.T) {
+// TestRunHTTPsinTokenIntentaAnonimo: http sin token intenta anónimo
+// (repos públicos); git.local no resuelve: error de red, nunca de token.
+func TestRunHTTPsinTokenIntentaAnonimo(t *testing.T) {
 	gitOK(t)
 	live := filepath.Join(t.TempDir(), "live.a")
 	if err := os.MkdirAll(live, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	_, err := Run(testApp(live, "http://git.local/o/r.git", nil), "", &fakeCtl{}, io.Discard, mustLog())
-	if err == nil || !strings.Contains(err.Error(), "falta token") {
-		t.Fatalf("http sin token: quiere 'falta token', got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "clone:") {
+		t.Fatalf("http sin token: quiere 'clone:' (anónimo), got %v", err)
+	}
+	if strings.Contains(err.Error(), "falta token") || strings.Contains(err.Error(), "sin acceso al repo") {
+		t.Fatalf("fallo de red disfrazado de token: %v", err)
 	}
 }
 

@@ -82,12 +82,15 @@ func RunContext(ctx context.Context, app config.App, token string, ctl Controlle
 	if _, err := exec.LookPath("git"); err != nil {
 		return "", fmt.Errorf("git no instalado en PATH")
 	}
-	if NeedsAuth(d.Repo) && token == "" {
-		return "", fmt.Errorf("falta token en env %s", d.TokenEnv)
-	}
 
 	_ = os.RemoveAll(inactive)
 	if err := gitClone(ctx, d, token, inactive, log); err != nil {
+		// Sin token git ya intentó anónimo (vale para repos públicos):
+		// si el fallo es de acceso, el repo es privado (o no existe) y
+		// toca token; si no, es red o URL y el error de git ya lo dice.
+		if token == "" && NeedsAuth(d.Repo) && needsAuthErr(err.Error()) {
+			return "", fmt.Errorf("sin acceso al repo (privado o no existe): pon token en env %s o archivo RKT_GITHUB_TOKEN_FILE (secreto de máquina para el servicio): %v", d.TokenEnv, err)
+		}
 		return "", err
 	}
 	rev := gitRev(ctx, inactive)
@@ -234,6 +237,36 @@ func Rollback(app config.App, ctl Controller, log *slog.Logger) error {
 
 func NeedsAuth(repo string) bool {
 	return strings.HasPrefix(repo, "http://") || strings.HasPrefix(repo, "https://")
+}
+
+// authSubs firmas de fallo por acceso en stderr de git: privado sin
+// credencial (GitHub responde 404 para no delatar existencia), login mal
+// o denegado. Lo demás es red o URL y se enseña tal cual.
+var authSubs = []string{
+	"authentication failed",
+	"could not read username",
+	"invalid username or password",
+	"permission denied",
+	"denied to",
+	"access denied",
+	"repository not found",
+	"not found",
+	" 401",
+	" 403",
+	"401 ",
+	"403 ",
+}
+
+// needsAuthErr dice si el fallo de git fue por acceso (toca token) en vez
+// de red o URL mal escrita.
+func needsAuthErr(out string) bool {
+	s := " " + strings.ToLower(out) + " "
+	for _, sub := range authSubs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
 }
 
 // isSHA acepta 7–40 hex: los deployments guardan el rev corto y retry
