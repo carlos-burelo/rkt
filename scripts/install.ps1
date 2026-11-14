@@ -38,7 +38,10 @@ param(
   [string]$AdminUser = "admin",
   [string]$PublicIP = ""
 )
+$__rktEAP = $ErrorActionPreference
 $ErrorActionPreference = "Stop"
+# No fugar Stop a la sesión que hace irm|iex: trap restaura y propaga.
+trap { $ErrorActionPreference = $__rktEAP; break }
 
 if ([string]::IsNullOrWhiteSpace($Repo)) { $Repo = "carlos-burelo/rkt" }
 
@@ -75,6 +78,7 @@ if ($Rollback) {
   Copy-Item $bak $exe -Force
   sc.exe start Rkt
   Write-Host "Rollback OK."
+  $ErrorActionPreference = $__rktEAP
   return
 }
 
@@ -103,6 +107,7 @@ if ($LocalExe -ne "") {
   if (Test-Path $verFile) { $current = (Get-Content $verFile -Raw).Trim() }
   if ($current -eq $Version -and -not $Force -and $LocalExe -eq "") {
     Write-Host "Ya instalado $Version en $InstallDir. Nada que hacer."
+    $ErrorActionPreference = $__rktEAP
     return
   }
   $tmp = Join-Path $env:TEMP "rkt-install.exe"
@@ -138,35 +143,76 @@ Remove-NetFirewallRule -DisplayName "RKT Proxy HTTP/HTTPS" -ErrorAction Silently
 
 # Copy-ConReintentos copia con reintentos: un antivirus o un handle
 # tardío pueden retener el binario recién descargado en Windows.
+# Guarda el último error y lo avisa: sin esto el throw posterior
+# no dice si fue lock, ACL o Defender.
 function Copy-ConReintentos([string]$origen, [string]$destino, [int]$intentos = 5) {
+  $ultimo = $null
   for ($i = 0; $i -lt $intentos; $i++) {
     try {
       Copy-Item $origen $destino -Force -ErrorAction Stop
       return $true
     } catch {
+      $ultimo = $_
       Start-Sleep -Seconds 2
     }
+  }
+  if ($ultimo) {
+    Write-Warning ("Copy-ConReintentos falló ${origen} -> ${destino}: $($ultimo.Exception.Message)")
   }
   return $false
 }
 
 # 4. parar servicio previo para liberar el .exe + backup para rollback
 $svc = Get-Service Rkt -ErrorAction SilentlyContinue
-if ($svc -and $svc.Status -eq "Running") {
+if ($svc -and $svc.Status -ne "Stopped") {
   Write-Host "Parando servicio previo..."
-  Stop-Service Rkt -Force
+  Stop-Service Rkt -Force -ErrorAction SilentlyContinue
+  # Espera al servicio: sin esto el backup corre con el .exe aún
+  # retenido (Stopping) y aborta con "No pude respaldar".
+  for ($i = 0; $i -lt 30; $i++) {
+    $s = Get-Service Rkt -ErrorAction SilentlyContinue
+    if (-not $s -or $s.Status -eq "Stopped") { break }
+    Start-Sleep 1
+  }
+  # Resto bajo el home (handle tardío): solo binarios del home.
+  try {
+    Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+      try {
+        if ($_.Path -and $_.Path.StartsWith($InstallDir.TrimEnd("\") + "\", [StringComparison]::OrdinalIgnoreCase)) {
+          $_ | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+      } catch {}
+    } | Out-Null
+  } catch {}
+  # Espera a que el .exe se libere antes del backup/copia.
+  if (Test-Path $exe) {
+    for ($i = 0; $i -lt 15; $i++) {
+      try { [IO.File]::OpenRead($exe).Close(); break } catch { Start-Sleep 1 }
+    }
+  }
 }
 if (Test-Path $exe) {
-  if (Copy-ConReintentos $exe $bak) {
+  # El destino del backup puede quedar con ACL rota (solo lectura de
+  # otro admin) aunque el origen abra bien: se intenta ceder antes.
+  if (Test-Path $bak) {
+    try { & takeown /F $bak 2>$null | Out-Null } catch {}
+    try { & icacls $bak /grant:r "*S-1-5-32-544:(F)" 2>$null | Out-Null } catch {}
+  }
+  if (Copy-ConReintentos $exe $bak 15) {
     Write-Host "Backup en $bak"
   } elseif (Test-Path $verFile) {
-    throw "No pude respaldar $exe (¿rkt.exe en ejecución? revisa con: Get-Process rkt*). Sin backup no sigo en una actualización."
+    $detalle = ""
+    try { Copy-Item $exe $bak -Force -ErrorAction Stop } catch { $detalle = " Detalle: $($_.Exception.Message)" }
+    try { $aclBak = ((& icacls $bak 2>&1) -join " ").Trim() } catch { $aclBak = "sin ACL legible" }
+    throw "No pude respaldar $exe (¿rkt.exe en ejecución? revisa con: Get-Process rkt*).$detalle ACL destino: $aclBak. Sin backup no sigo en una actualización."
   } else {
     Write-Warning "Sin backup del binario previo (instalación fresca; sigo sin red de seguridad)."
   }
 }
-if (-not (Copy-ConReintentos $tmp $exe)) {
-  throw "No pude instalar $exe (proceso reteniéndolo o ACL). Revisa con Get-Process rkt* y reintenta."
+if (-not (Copy-ConReintentos $tmp $exe 15)) {
+  $detalle = ""
+  try { Copy-Item $tmp $exe -Force -ErrorAction Stop } catch { $detalle = " Detalle: $($_.Exception.Message)" }
+  throw "No pude instalar $exe (proceso reteniéndolo o ACL). Revisa con Get-Process rkt* y reintenta.$detalle"
 }
 Unblock-File $exe -ErrorAction SilentlyContinue # la copia puede heredar la marca de zona
 # 4b. el binario tiene que ser legible: DACLs rotas de instalaciones viejas
@@ -191,13 +237,14 @@ Write-Host "Binario en $exe"
 #    Edítala desde el dashboard (loopback) o con `rkt settings/routes/apps`.
 
 # 5b. ACL del hogar entero (datos, secretos, logs, apps, certs):
-# solo SYSTEM + Administradores, con herencia. Un solo pase en la raíz
-# cubre lo presente y lo futuro (antes eran dos pases por carpeta y los
-# ficheros nuevos heredaban ACLs distintas).
-# (OI)(CI) es imprescindible: sin herencia, rkt.db y -wal nacen sin acceso
-# para el admin y `rkt settings` falla con "readonly database".
+# solo SYSTEM + Administradores, con herencia. Solo SUMA (sin
+# /inheritance:r ni :r): probado que quitar la herencia con un grant
+# (OI)(CI)-only deja los ficheros con DACL vacía (ni SYSTEM arranca
+# el servicio: 1053) porque en ficheros ese flag no da acceso efectivo.
+# Primer pase: efectivo en cada objeto presente. Segundo: herencia futura.
 $adminSid = "*S-1-5-32-544"
-icacls $InstallDir /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "${adminSid}:(OI)(CI)F" /T /C | Out-Null
+icacls $InstallDir /grant "*S-1-5-18:F" "${adminSid}:F" /T /C | Out-Null
+icacls $InstallDir /grant "*S-1-5-18:(OI)(CI)F" "${adminSid}:(OI)(CI)F" /T /C | Out-Null
 
 # 6. firewall 80/443
 if (-not $SkipFirewall) {
@@ -239,6 +286,14 @@ Start-Sleep 3
 $st = (Get-Service Rkt).Status
 if ($st -ne "Running") {
   Write-Warning "Servicio no arrancó tras update. Rollback..."
+  try {
+    $det = Get-MpThreatDetection -ErrorAction SilentlyContinue |
+      Where-Object { ($_.Resources -join " ") -match [regex]::Escape($InstallDir) } |
+      Select-Object -First 1
+    if ($det) {
+      Write-Warning "Defender marca algo bajo $InstallDir (heurístico habitual en exe sin firmar). Revisa con Get-MpThreatDetection; exclusión: Add-MpPreference -ExclusionPath '$InstallDir'."
+    }
+  } catch {}
   if (Test-Path $bak) {
     Copy-Item $bak $exe -Force
     sc.exe start Rkt
@@ -395,3 +450,4 @@ if ($ready) {
   Write-Warning "Servicio arriba pero healthz no responde. Revisa logs y luego abre $dashLocal"
 }
 Write-Host "DNS de apps: crea A <app>.<tu-dominio> -> $publicIp y define base_domain en Ajustes."
+$ErrorActionPreference = $__rktEAP
