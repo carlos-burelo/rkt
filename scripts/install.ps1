@@ -169,6 +169,22 @@ if (-not (Copy-ConReintentos $tmp $exe)) {
   throw "No pude instalar $exe (proceso reteniéndolo o ACL). Revisa con Get-Process rkt* y reintenta."
 }
 Unblock-File $exe -ErrorAction SilentlyContinue # la copia puede heredar la marca de zona
+# 4b. el binario tiene que ser legible: DACLs rotas de instalaciones viejas
+# lo dejan ilegible y todo lo posterior muere. Se intenta reparar
+# (takeown+grant); si no cede, se aborta con causa clara en vez de fallar
+# en seco más adelante.
+try {
+  [IO.File]::OpenRead($exe).Close()
+} catch {
+  & takeown /F $exe 2>$null | Out-Null
+  & icacls $exe /grant:r "*S-1-5-32-544:(F)" 2>$null | Out-Null
+  try {
+    [IO.File]::OpenRead($exe).Close()
+  } catch {
+    throw "No puedo leer $exe ni tras reparar ACL (¿antivirus retiniéndolo? ¿disco?). Revisa con Get-Process rkt* y reintenta."
+  }
+  Write-Host "ACL del binario reparada."
+}
 Write-Host "Binario en $exe"
 
 # 5. la configuración vive en SQLite: el primer arranque siembra defaults.

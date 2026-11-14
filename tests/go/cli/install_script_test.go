@@ -83,6 +83,8 @@ func TestInstallLimpio(t *testing.T) {
 		"Unblock-File $exe",
 		"Copy-ConReintentos",
 		"Sin backup",
+		"ACL del binario reparada",
+		"No puedo leer",
 	} {
 		if !strings.Contains(body, s) {
 			t.Errorf("install.ps1 sin %q", s)
