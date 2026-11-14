@@ -449,5 +449,27 @@ if ($ready) {
 } else {
   Write-Warning "Servicio arriba pero healthz no responde. Revisa logs y luego abre $dashLocal"
 }
+
+# 10. doctor: lo que falta se avisa aquí, no en el wizard. Solo fallos y
+# avisos (git bloquea detección y deploys); el parte ok no hace ruido.
+# El --json del doctor mezcla texto humano: se toma la línea del array.
+try {
+  $docLines = & $exe -config $cfg doctor --json 2>$null
+  $docJson = @($docLines | Where-Object { $_ -match '^\s*\[' }) | Select-Object -First 1
+  if ($docJson) {
+    $bad = @($docJson | ConvertFrom-Json | Where-Object { $_.state -ne "ok" })
+    foreach ($b in $bad) {
+      $mark = if ($b.state -eq "fail") { "FALTA" } else { "AVISO" }
+      $hint = if ($b.hint) { " $($b.hint)" } else { "" }
+      Write-Warning "doctor [$mark] $($b.name): $($b.detail).$hint"
+    }
+  } elseif ($null -eq (Get-Command git -ErrorAction SilentlyContinue)) {
+    Write-Warning "doctor [FALTA] git: no instalado. instala git (https://git-scm.com): sin git no hay deploys"
+  }
+} catch {
+  if ($null -eq (Get-Command git -ErrorAction SilentlyContinue)) {
+    Write-Warning "doctor [FALTA] git: no instalado. instala git (https://git-scm.com): sin git no hay deploys"
+  }
+}
 Write-Host "DNS de apps: crea A <app>.<tu-dominio> -> $publicIp y define base_domain en Ajustes."
 $ErrorActionPreference = $__rktEAP

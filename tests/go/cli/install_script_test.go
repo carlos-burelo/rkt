@@ -85,6 +85,9 @@ func TestInstallLimpio(t *testing.T) {
 		"Sin backup",
 		"ACL del binario reparada",
 		"No puedo leer",
+		"doctor --json",
+		"Get-Command git",
+		"sin git no hay deploys",
 	} {
 		if !strings.Contains(body, s) {
 			t.Errorf("install.ps1 sin %q", s)
