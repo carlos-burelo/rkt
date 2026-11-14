@@ -80,6 +80,8 @@ func TestInstallPs1DestructivoOrdenYPasos(t *testing.T) {
 		"sc.exe delete Rkt",
 		"Get-Process",
 		"Stop-Process",
+		"takeown",
+		"/reset",
 		`"RKT HTTP/HTTPS"`,
 		`"RKT Dashboard"`,
 		`"RKT Proxy HTTP/HTTPS"`,

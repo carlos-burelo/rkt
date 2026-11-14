@@ -100,6 +100,13 @@ if ($Destructivo) {
       Where-Object { $_ -ne "" -and $_.TrimEnd("\") -ine $full.TrimEnd("\") })
     [Environment]::SetEnvironmentVariable("Path", ($kept -join ";"), "Machine")
   }
+  # ACLs previas (instaladores viejos, chmod de Go sobre la DB) pueden dejar
+  # a Admins sin DELETE: tomar posesión y heredar de Program Files antes
+  # de borrar. Sin esto, ni siquiera elevado se puede limpiar todo.
+  try {
+    & takeown /F $full /R /D Y 2>$null | Out-Null
+    & icacls $full /reset /T /C 2>$null | Out-Null
+  } catch {}
   # Borrado con reintentos: los handles del árbol recién matado tardan en
   # soltarse en Windows; sin esto, "Access denied" aborta a mitad y deja
   # la instalación a medias (ni vieja ni nueva).
