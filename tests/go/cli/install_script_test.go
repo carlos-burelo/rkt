@@ -81,6 +81,8 @@ func TestInstallLimpio(t *testing.T) {
 		`"data", "secrets", "logs", "apps", "certs"`,
 		"Unblock-File $tmp",
 		"Unblock-File $exe",
+		"Copy-ConReintentos",
+		"Sin backup",
 	} {
 		if !strings.Contains(body, s) {
 			t.Errorf("install.ps1 sin %q", s)

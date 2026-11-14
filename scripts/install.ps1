@@ -132,6 +132,20 @@ if ($LocalExe -ne "") {
 
 Remove-NetFirewallRule -DisplayName "RKT Proxy HTTP/HTTPS" -ErrorAction SilentlyContinue | Out-Null
 
+# Copy-ConReintentos copia con reintentos: un antivirus o un handle
+# tardío pueden retener el binario recién descargado en Windows.
+function Copy-ConReintentos([string]$origen, [string]$destino, [int]$intentos = 5) {
+  for ($i = 0; $i -lt $intentos; $i++) {
+    try {
+      Copy-Item $origen $destino -Force -ErrorAction Stop
+      return $true
+    } catch {
+      Start-Sleep -Seconds 2
+    }
+  }
+  return $false
+}
+
 # 4. parar servicio previo para liberar el .exe + backup para rollback
 $svc = Get-Service Rkt -ErrorAction SilentlyContinue
 if ($svc -and $svc.Status -eq "Running") {
@@ -139,10 +153,17 @@ if ($svc -and $svc.Status -eq "Running") {
   Stop-Service Rkt -Force
 }
 if (Test-Path $exe) {
-  Copy-Item $exe $bak -Force
-  Write-Host "Backup en $bak"
+  if (Copy-ConReintentos $exe $bak) {
+    Write-Host "Backup en $bak"
+  } elseif (Test-Path $verFile) {
+    throw "No pude respaldar $exe (¿rkt.exe en ejecución? revisa con: Get-Process rkt*). Sin backup no sigo en una actualización."
+  } else {
+    Write-Warning "Sin backup del binario previo (instalación fresca; sigo sin red de seguridad)."
+  }
 }
-Copy-Item $tmp $exe -Force
+if (-not (Copy-ConReintentos $tmp $exe)) {
+  throw "No pude instalar $exe (proceso reteniéndolo o ACL). Revisa con Get-Process rkt* y reintenta."
+}
 Unblock-File $exe -ErrorAction SilentlyContinue # la copia puede heredar la marca de zona
 Write-Host "Binario en $exe"
 
