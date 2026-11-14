@@ -67,7 +67,7 @@ func TestCreateAppDirectorioLocalInfiere(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app, _, _, err := CreateApp(db, nil, "", "", "", 0, "", dir, false)
+	app, _, _, err := CreateApp(db, nil, "", "", "", 0, "", dir, false, "")
 	if err != nil {
 		t.Fatalf("CreateApp local: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestCreateAppAstroServidoEstatico(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app, _, _, err := CreateApp(db, nil, "", "coatl-in", "", 0, "", dir, false)
+	app, _, _, err := CreateApp(db, nil, "", "coatl-in", "", 0, "", dir, false, "")
 	if err != nil {
 		t.Fatalf("CreateApp astro: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestCreateAppAstroServidoEstatico(t *testing.T) {
 
 func TestCreateAppDirectorioInexistente(t *testing.T) {
 	db := newTestDB(t)
-	_, _, _, err := CreateApp(db, nil, "", "x", "", 0, "", filepath.Join(t.TempDir(), "no-existe"), false)
+	_, _, _, err := CreateApp(db, nil, "", "x", "", 0, "", filepath.Join(t.TempDir(), "no-existe"), false, "")
 	if err == nil || !strings.Contains(err.Error(), "directorio no existe") {
 		t.Fatalf("err = %v, quiero error de directorio inexistente", err)
 	}
@@ -129,7 +129,7 @@ func TestCreateAppDominioPorDefectoSegunModo(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Sin IP pública manda el dominio local, aunque haya base_domain.
-	if _, hosts, _, err := CreateApp(db, nil, "", "sitio", "", 0, "", site, false); err != nil {
+	if _, hosts, _, err := CreateApp(db, nil, "", "sitio", "", 0, "", site, false, ""); err != nil {
 		t.Fatal(err)
 	} else if len(hosts) != 1 || hosts[0] != "sitio.localhost" {
 		t.Fatalf("local = %v", hosts)
@@ -138,7 +138,7 @@ func TestCreateAppDominioPorDefectoSegunModo(t *testing.T) {
 	if err := db.SetSetting(store.KeyPublicIP, "203.0.113.7"); err != nil {
 		t.Fatal(err)
 	}
-	if _, hosts, _, err := CreateApp(db, nil, "", "sitio", "", 0, "", site, false); err != nil {
+	if _, hosts, _, err := CreateApp(db, nil, "", "sitio", "", 0, "", site, false, ""); err != nil {
 		t.Fatal(err)
 	} else if len(hosts) != 1 || hosts[0] != "sitio.ejemplo.com" {
 		t.Fatalf("público = %v", hosts)
@@ -147,7 +147,7 @@ func TestCreateAppDominioPorDefectoSegunModo(t *testing.T) {
 	if err := db.SetSetting(store.KeyBaseDomain, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := CreateApp(db, nil, "", "sitio", "", 0, "", site, false); err == nil ||
+	if _, _, _, err := CreateApp(db, nil, "", "sitio", "", 0, "", site, false, ""); err == nil ||
 		!strings.Contains(err.Error(), "IP pública") {
 		t.Fatalf("err = %v, quiero solicitud de dominio", err)
 	}
@@ -156,8 +156,26 @@ func TestCreateAppDominioPorDefectoSegunModo(t *testing.T) {
 func TestCreateAppSinPlanFalla(t *testing.T) {
 	db := newTestDB(t)
 	dir := t.TempDir() // sin package.json ni requirements
-	_, _, _, err := CreateApp(db, nil, "", "x", "", 0, "", dir, false)
+	_, _, _, err := CreateApp(db, nil, "", "x", "", 0, "", dir, false, "")
 	if err == nil || !strings.Contains(err.Error(), "sin plan de build") {
 		t.Fatalf("err = %v, quiero error de plan no detectado", err)
+	}
+}
+
+// Sin dir, la app cae bajo appsBase (home/apps); con "" cae al default
+// de plataforma. Es el anclaje al home único.
+func TestCreateAppRespetaAppsBase(t *testing.T) {
+	db := newTestDB(t)
+	home := t.TempDir()
+	app, _, _, err := CreateApp(db, nil, "", "hogar", "", 0, "node", "", false, filepath.Join(home, "apps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(home, "apps", "hogar")
+	if app.Dir != want {
+		t.Fatalf("dir = %q, quiere %q", app.Dir, want)
+	}
+	if st, err := os.Stat(want); err != nil || !st.IsDir() {
+		t.Fatalf("dir no creado: %v", want)
 	}
 }

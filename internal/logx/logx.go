@@ -53,9 +53,27 @@ func fileExists(p string) bool {
 	return err == nil && !st.IsDir()
 }
 
-// DirFor devuelve <dir-config>/logs para cualquier config path.
+// HomeDir raíz única de rkt: el dir del config path.
+// Convención: -config apunta a <home>/rkt.db (ancla; el fichero puede no
+// existir). Todo —binario aparte— cuelga de aquí: data, secrets, logs,
+// apps y certs.
+func HomeDir(configPath string) string {
+	return filepath.Dir(Abs(configPath))
+}
+
+// DataDir estado SQLite + backups.
+func DataDir(configPath string) string {
+	return filepath.Join(HomeDir(configPath), "data")
+}
+
+// SecretsDir secretos de máquina (nunca salen por API).
+func SecretsDir(configPath string) string {
+	return filepath.Join(HomeDir(configPath), "secrets")
+}
+
+// DirFor devuelve <home>/logs para cualquier config path.
 func DirFor(configPath string) string {
-	return filepath.Join(filepath.Dir(Abs(configPath)), "logs")
+	return filepath.Join(HomeDir(configPath), "logs")
 }
 
 // Path ruta del log para el subcomando `logs`.
@@ -70,12 +88,12 @@ func AccessPath(configPath string) string {
 
 // DBPath ruta de rkt.db (historial SQLite).
 func DBPath(configPath string) string {
-	return filepath.Join(DirFor(configPath), "rkt.db")
+	return filepath.Join(DataDir(configPath), "rkt.db")
 }
 
 // AppKeyPath ruta del PEM de la GitHub App (lo escribe el setup).
 func AppKeyPath(configPath string) string {
-	return filepath.Join(DirFor(configPath), "github-app.pem")
+	return filepath.Join(SecretsDir(configPath), "github-app.pem")
 }
 
 // ControlTokenPath ruta del token de control loopback (acciones admin).

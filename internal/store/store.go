@@ -1,4 +1,4 @@
-// Package store: persistencia SQLite (rkt.db junto a la config).
+// Package store: persistencia SQLite (data/rkt.db bajo el home).
 // Única fuente de flota e infraestructura, además del historial
 // consultable (deployments + events).
 package store

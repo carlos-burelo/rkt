@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // DefaultAppsDir directorio padre de apps gestionadas. En Unix usa el home
@@ -22,12 +23,29 @@ func DefaultAppsDir() string {
 	return "/srv/rkt/apps"
 }
 
+// AppsDir padre de apps bajo el home de rkt (vacío = default por plataforma,
+// para tests y `rkt dev` sin home).
+func AppsDir(home string) string {
+	if strings.TrimSpace(home) == "" {
+		return DefaultAppsDir()
+	}
+	return filepath.Join(home, "apps")
+}
+
 // DefaultCertsDir cache ACME por defecto.
 func DefaultCertsDir() string {
 	if runtime.GOOS == "windows" {
 		return `C:\ProgramData\rkt-proxy\certs`
 	}
 	return "/var/lib/rkt/certs"
+}
+
+// CertsDir cache ACME bajo el home de rkt (vacío = default por plataforma).
+func CertsDir(home string) string {
+	if strings.TrimSpace(home) == "" {
+		return DefaultCertsDir()
+	}
+	return filepath.Join(home, "certs")
 }
 
 // Shell devuelve el comando para ejecutar un paso de build.

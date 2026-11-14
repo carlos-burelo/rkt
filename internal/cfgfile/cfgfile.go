@@ -5,10 +5,13 @@ package cfgfile
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"rkt-proxy/internal/config"
 	"rkt-proxy/internal/logx"
+	"rkt-proxy/internal/platform"
 	"rkt-proxy/internal/store"
 )
 
@@ -24,6 +27,9 @@ func Load(path string) (*config.Config, error) {
 
 // LoadMerged abre DB, carga infra + flota y la devuelve lista.
 func LoadMerged(cfgPath string) (*config.Config, *store.DB, error) {
+	if err := MigrateLegacyHome(cfgPath); err != nil {
+		return nil, nil, err
+	}
 	db, err := store.Open(logx.DBPath(cfgPath))
 	if err != nil {
 		return nil, nil, err
@@ -45,7 +51,101 @@ func LoadMerged(cfgPath string) (*config.Config, *store.DB, error) {
 	return merged, db, nil
 }
 
-// LoadBase infra desde DB. Si no hay fila, siembra defaults y los persiste.
+// MigrateLegacyHome mueve DB/backups/certs del layout anterior al hogar
+// único. Solo cuando hay DB legacy (upgrade real): en fresco no toca nada
+// ajeno (ni ProgramData de otra instalación ni TempDirs de tests).
+// Idempotente por destino: nunca pisa. Las apps conservan sus Dir
+// absolutos, así que no se tocan. Falla en voz alta antes que arrancar
+// con una DB vacía teniendo datos viejos (el servicio debe estar detenido;
+// un CLI concurrente también bloquea el move en Windows).
+func MigrateLegacyHome(cfgPath string) error {
+	legacyDB := filepath.Join(logx.DirFor(cfgPath), "rkt.db")
+	if _, err := os.Stat(legacyDB); err != nil {
+		return nil
+	}
+	home := logx.HomeDir(cfgPath)
+	data := logx.DataDir(cfgPath)
+	// DB + journal/wal (shm es caché: se reconstruye solo, no se migra).
+	newDB := filepath.Join(data, "rkt.db")
+	for _, s := range []string{"", "-wal", "-journal"} {
+		if err := moveFileIfAbsent(legacyDB+s, newDB+s); err != nil {
+			return err
+		}
+	}
+	// Backups diarios.
+	if _, err := os.Stat(filepath.Join(data, "backups")); os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(logx.DirFor(cfgPath), "backups")); err == nil {
+			if err := moveDir(filepath.Join(logx.DirFor(cfgPath), "backups"),
+				filepath.Join(data, "backups")); err != nil {
+				return err
+			}
+		}
+	}
+	// Certs: el default viejo (ProgramData) al home. Mover, no re-emitir:
+	// re-emitir todo de golpe puede chocar con rate limits de Let's Encrypt.
+	if dst := platform.CertsDir(home); dst != platform.DefaultCertsDir() {
+		if _, err := os.Stat(dst); os.IsNotExist(err) {
+			if _, err := os.Stat(platform.DefaultCertsDir()); err == nil {
+				if err := moveDir(platform.DefaultCertsDir(), dst); err != nil {
+					return fmt.Errorf("mueve certs a %s a mano: %w", dst, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// moveFileIfAbsent renombra un fichero solo si el destino no existe y el
+// origen sí. Falla en voz alta (nunca arrancar vacío por un move a medias).
+func moveFileIfAbsent(old, new string) error {
+	if _, err := os.Stat(new); err == nil {
+		return nil
+	}
+	if _, err := os.Stat(old); err != nil {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(new), 0o755); err != nil {
+		return err
+	}
+	if err := os.Rename(old, new); err != nil {
+		return fmt.Errorf("mueve %s a %s a mano (detén rkt antes): %w", old, new, err)
+	}
+	return nil
+}
+
+// moveDir mueve un árbol; si Rename falla (otro volumen), copia y borra.
+func moveDir(old, new string) error {
+	if err := os.MkdirAll(filepath.Dir(new), 0o755); err != nil {
+		return err
+	}
+	if err := os.Rename(old, new); err == nil {
+		return nil
+	}
+	if err := copyDir(old, new); err != nil {
+		return err
+	}
+	return os.RemoveAll(old)
+}
+
+// copyDir replica un árbol (ficheros a 0o600: secretos y backups).
+func copyDir(old, new string) error {
+	return filepath.WalkDir(old, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(old, p)
+		dst := filepath.Join(new, rel)
+		if d.IsDir() {
+			return os.MkdirAll(dst, 0o755)
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(dst, b, 0o600)
+	})
+}
+
 // No hay archivo de configuración: SQLite es la única fuente.
 func LoadBase(db *store.DB, cfgPath string) (*config.Config, error) {
 	raw, err := db.LoadInfra()

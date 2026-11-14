@@ -46,7 +46,7 @@ func (d *Deps) handleApps(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		d.mu.Lock()
-		name, err := createAppFromRepo(d.DB, d.Live, d.githubManager(), in.Runtime, in.Repo, in.Name, in.Domains, in.Port, in.Command, in.Dir, in.Auto)
+		name, err := createAppFromRepo(d.DB, d.Live, d.githubManager(), in.Runtime, in.Repo, in.Name, in.Domains, in.Port, in.Command, in.Dir, in.Auto, d.AppsBase)
 		d.mu.Unlock()
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
@@ -268,8 +268,8 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 
 // createAppFromRepo alta con inferencia vía cfgfile.CreateAndAdd (hogar
 // único, también usado por MCP). Refresca la config viva.
-func createAppFromRepo(db *store.DB, live *config.Live, gh *github.Manager, runtime, repo, name string, domains []string, port int, command, dir string, auto bool) (string, error) {
-	app, _, _, err := cfgfile.CreateAndAdd(db, gh, runtime, repo, name, domains, port, command, dir, auto)
+func createAppFromRepo(db *store.DB, live *config.Live, gh *github.Manager, runtime, repo, name string, domains []string, port int, command, dir string, auto bool, appsBase string) (string, error) {
+	app, _, _, err := cfgfile.CreateAndAdd(db, gh, runtime, repo, name, domains, port, command, dir, auto, appsBase)
 	if err != nil {
 		return "", err
 	}

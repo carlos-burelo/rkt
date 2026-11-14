@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "rkt.db", "ruta ancla de datos (DB y logs en <dir>/logs)")
+	configPath := flag.String("config", "rkt.db", "ancla del home: todo cuelga de <dir> (data, secrets, logs, apps, certs)")
 	flag.Parse()
 	cli.Run(*configPath)
 }

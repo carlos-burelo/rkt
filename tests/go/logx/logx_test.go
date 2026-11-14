@@ -122,25 +122,31 @@ func TestControlTokenPersistente(t *testing.T) {
 	}
 }
 
-// TestRutasCanonicas: db, log operativo y access log viven bajo logs/.
+// TestRutasCanonicas: un solo hogar. DB+backups en data/, secretos en
+// secrets/, logs operativos en logs/, apps y certs bajo el home.
 func TestRutasCanonicas(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "rkt.local.yaml")
-	dir := DirFor(cfg)
-	if filepath.Base(dir) != "logs" {
+	home := HomeDir(cfg)
+	if dir := DirFor(cfg); dir != filepath.Join(home, "logs") {
 		t.Fatalf("DirFor = %q", dir)
 	}
+	if got := DBPath(cfg); got != filepath.Join(home, "data", "rkt.db") {
+		t.Fatalf("db = %q", got)
+	}
+	if got := DataDir(cfg); got != filepath.Join(home, "data") {
+		t.Fatalf("data = %q", got)
+	}
+	if got := SecretsDir(cfg); got != filepath.Join(home, "secrets") {
+		t.Fatalf("secrets = %q", got)
+	}
 	cases := map[string]string{
-		"db":     DBPath(cfg),
 		"log":    Path(cfg),
 		"access": AccessPath(cfg),
 	}
 	for name, got := range cases {
-		if filepath.Dir(got) != dir {
+		if filepath.Dir(got) != filepath.Join(home, "logs") {
 			t.Fatalf("%s fuera de logs: %q", name, got)
 		}
-	}
-	if DBPath(cfg) != filepath.Join(dir, "rkt.db") {
-		t.Fatalf("db = %q", DBPath(cfg))
 	}
 	if !strings.HasSuffix(AccessPath(cfg), "access.log") {
 		t.Fatalf("access = %q", AccessPath(cfg))
@@ -171,7 +177,7 @@ func TestAbsYFileExists(t *testing.T) {
 	if rel != filepath.Join(wd, "no-existe-xyz.yaml") {
 		t.Fatalf("Abs(relativo) = %q", rel)
 	}
-	if AppKeyPath(filepath.Join(dir, "config.yaml")) != filepath.Join(dir, "logs", "github-app.pem") {
+	if AppKeyPath(filepath.Join(dir, "config.yaml")) != filepath.Join(dir, "secrets", "github-app.pem") {
 		t.Fatalf("AppKeyPath = %q", AppKeyPath(filepath.Join(dir, "config.yaml")))
 	}
 }

@@ -399,7 +399,7 @@ func appsAdd(args []string, cfgPath string) {
 		if sug != nil && sug.Dir != "" {
 			dd = sug.Dir
 		} else {
-			dd = filepath.Join(platform.DefaultAppsDir(), nm)
+			dd = filepath.Join(platform.AppsDir(logx.HomeDir(cfgPath)), nm)
 		}
 		dd = prompt("dir app", dd)
 	}
@@ -979,7 +979,7 @@ func cmdBackup(args []string, cfgPath string) {
 	if len(args) > 1 {
 		log.Fatal("uso: backup [destino]")
 	}
-	dest := filepath.Join(logx.DirFor(cfgPath), "backups", "rkt-"+time.Now().UTC().Format("20060102-150405")+".db")
+	dest := filepath.Join(logx.DataDir(cfgPath), "backups", "rkt-"+time.Now().UTC().Format("20060102-150405")+".db")
 	if len(args) == 1 {
 		dest = args[0]
 	}

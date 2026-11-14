@@ -24,6 +24,7 @@ import (
 	"rkt-proxy/internal/hub"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/netutil"
+	"rkt-proxy/internal/platform"
 	"rkt-proxy/internal/procstat"
 	"rkt-proxy/internal/servermetrics"
 	"rkt-proxy/internal/store"
@@ -345,7 +346,7 @@ func pruneFiles(dir string, cutoff time.Time) int {
 
 // backupDaily crea una copia por día y poda las antiguas.
 func (p *Program) backupDaily(db *store.DB, now time.Time) {
-	dir := filepath.Join(logx.DirFor(p.cfgPath), "backups")
+	dir := filepath.Join(logx.DataDir(p.cfgPath), "backups")
 	dest := filepath.Join(dir, "rkt-"+now.UTC().Format("20060102")+".db")
 	if _, err := os.Stat(dest); err == nil {
 		return
@@ -369,6 +370,7 @@ func (p *Program) runDiscovery() {
 	}
 	if _, err := discover.Run(discover.Deps{
 		GH: p.gh(), DB: p.db, Log: p.log,
+		DirBase:  platform.AppsDir(logx.HomeDir(p.cfgPath)),
 		DeployFn: func(name, actor string) (string, error) { return p.deployApp(name, actor) },
 	}); err != nil {
 		p.log.Warn("discovery fallida", "err", err)

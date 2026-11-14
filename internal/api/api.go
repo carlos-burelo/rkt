@@ -62,6 +62,9 @@ type Deps struct {
 	GithubManager func() *github.Manager
 	// Hub bus de eventos para /fleet/stream (nil = stream deshabilitado).
 	Hub *hub.Bus
+	// AppsBase padre de apps en altas sin dir (home/apps).
+	// Vacío = default por plataforma.
+	AppsBase string
 
 	// cache agregados costosos (access.log). Lo inicializa NewHandler.
 	cache *memo

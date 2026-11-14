@@ -42,6 +42,7 @@ import (
 	"rkt-proxy/internal/hub"
 	"rkt-proxy/internal/logx"
 	"rkt-proxy/internal/mcpserver"
+	"rkt-proxy/internal/platform"
 	"rkt-proxy/internal/proxy"
 	"rkt-proxy/internal/ratelimit"
 	"rkt-proxy/internal/server"
@@ -211,6 +212,12 @@ func (p *Program) Run() {
 		p.log.Error("config inválida", "err", err)
 		os.Exit(1)
 	}
+	// Certs bajo el home (antes: dir de plataforma). Solo cuando no hay
+	// valor propio: instalaciones viejas con ruta explícita no se tocan.
+	// En memoria (sin persistir): el default efectivo, no un setting.
+	if cfg.ACMECacheDir == "" || cfg.ACMECacheDir == platform.DefaultCertsDir() {
+		cfg.ACMECacheDir = platform.CertsDir(logx.HomeDir(p.cfgPath))
+	}
 	// Migrar apps con layout antiguo (Dir sin sufijo .a/.b) al layout de
 	// slots del blue-green: renombra <name> → <name>.a y persiste el Dir.
 	if migrated, merr := migrateSlots(db, cfg); merr != nil {
@@ -242,7 +249,7 @@ func (p *Program) Run() {
 	sup.Start()
 	cronRunner.Start()
 
-	apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
+	apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), AppsBase: platform.AppsDir(logx.HomeDir(p.cfgPath)), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
 		p.sup.Apply(apps, global)
 		if p.cron != nil {
 			p.cron.Apply()

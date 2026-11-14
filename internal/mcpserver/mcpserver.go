@@ -29,6 +29,7 @@ import (
 	"rkt-proxy/internal/github"
 	"rkt-proxy/internal/health"
 	"rkt-proxy/internal/logx"
+	"rkt-proxy/internal/platform"
 	"rkt-proxy/internal/store"
 )
 
@@ -359,7 +360,7 @@ func (s *Server) doAppsAdd(a appsAddArg) (string, error) {
 	}
 	defer db.Close()
 	gh, _ := githubNew(cfg)
-	app, domains, port, err := cfgfile.CreateAndAdd(db, gh, a.Runtime, a.Repo, a.Name, a.Domains, a.Port, a.Command, a.Dir, a.Auto)
+	app, domains, port, err := cfgfile.CreateAndAdd(db, gh, a.Runtime, a.Repo, a.Name, a.Domains, a.Port, a.Command, a.Dir, a.Auto, platform.AppsDir(logx.HomeDir(s.cfgPath)))
 	if err != nil {
 		return "", err
 	}
@@ -438,6 +439,7 @@ func (s *Server) doDiscover() (string, error) {
 	}
 	registered, err := discover.Run(discover.Deps{
 		GH: gh, DB: db, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		DirBase: platform.AppsDir(logx.HomeDir(s.cfgPath)),
 		DeployFn: func(name, actor string) (string, error) {
 			return postDeploy(base, name)
 		},

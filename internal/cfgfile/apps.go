@@ -21,7 +21,8 @@ import (
 // CreateAndAdd es el alta canónica: infiere (repo/dir) o registra externa,
 // valida y persiste app+rutas. API, MCP y CLI no reimplementan el flujo.
 // domains vacío deja que la inferencia elija el dominio inicial.
-func CreateAndAdd(db *store.DB, gh *github.Manager, runtime, repo, name string, domains []string, port int, command, dir string, auto bool) (config.App, []string, string, error) {
+// appsBase: padre de apps (home/apps); vacío = default por plataforma.
+func CreateAndAdd(db *store.DB, gh *github.Manager, runtime, repo, name string, domains []string, port int, command, dir string, auto bool, appsBase string) (config.App, []string, string, error) {
 	var (
 		app     config.App
 		initial []string
@@ -35,7 +36,7 @@ func CreateAndAdd(db *store.DB, gh *github.Manager, runtime, repo, name string, 
 	if runtime == config.RuntimeExternal {
 		app, initial, portS, err = CreateExternalApp(db, name, primary, dir, port)
 	} else {
-		app, initial, portS, err = CreateApp(db, gh, repo, name, primary, port, command, dir, auto)
+		app, initial, portS, err = CreateApp(db, gh, repo, name, primary, port, command, dir, auto, appsBase)
 	}
 	if err != nil {
 		return config.App{}, nil, "", err
@@ -284,7 +285,7 @@ var execOwn = os.Executable
 // CreateApp arma App+domains+port con inferencia (Suggest+PresetBuild).
 // Unico hogar (CLI wizard pregunta aparte; MCP y API la usan).
 // Crea el dir. No escribe en DB (eso es AddApp).
-func CreateApp(db *store.DB, gh *github.Manager, repo, name, domain string, port int, command, dir string, auto bool) (config.App, []string, string, error) {
+func CreateApp(db *store.DB, gh *github.Manager, repo, name, domain string, port int, command, dir string, auto bool, appsBase string) (config.App, []string, string, error) {
 	var sug *discover.Suggestion
 	if repo != "" {
 		var err error
@@ -315,7 +316,10 @@ func CreateApp(db *store.DB, gh *github.Manager, repo, name, domain string, port
 		dir = sug.Dir
 	}
 	if dir == "" {
-		dir = filepath.Join(platform.DefaultAppsDir(), name)
+		if appsBase == "" {
+			appsBase = platform.DefaultAppsDir()
+		}
+		dir = filepath.Join(appsBase, name)
 	}
 	portS := ""
 	if port > 0 {

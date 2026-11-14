@@ -165,7 +165,7 @@ func TestDoEvents(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
 	seedConfig(t, cfgPath, "x")
-	db, err := store.Open(filepath.Join(dir, "logs", "rkt.db"))
+	db, err := store.Open(logx.DBPath(cfgPath))
 	if err != nil {
 		t.Fatal(err)
 	}

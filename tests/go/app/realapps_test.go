@@ -156,7 +156,7 @@ func realWorld(t *testing.T, cmd string, args []string, repo string, build []str
 // "reinicio": mismo disco, proceso nuevo).
 func realWorldAt(t *testing.T, base, cmd string, args []string, repo string, build []string, extraEnv map[string]string) (*store.DB, *config.Live, *supervisor.Manager, *supCtl) {
 	t.Helper()
-	// Mismo layout que prod: cfg en base/, DB en base/logs/rkt.db.
+	// Mismo layout que prod: cfg en base/, DB en base/data/rkt.db.
 	cfgPath := filepath.Join(base, "rkt.yaml")
 	db, err := store.Open(logx.DBPath(cfgPath))
 	if err != nil {
