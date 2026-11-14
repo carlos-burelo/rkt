@@ -112,11 +112,15 @@ if ($LocalExe -ne "") {
   # "Acceso denegado" al arrancarlo, peor con binario nuevo sin reputación).
   Unblock-File $tmp -ErrorAction SilentlyContinue
 
-  # 3. checksum si el release lo publica
+  # 3. checksum si el release lo publica. Se baja a fichero y se lee como
+  # texto: el .Content crudo de Invoke-WebRequest puede venir en bytes
+  # (octet-stream) y entonces el match nunca acierta (verificación muda).
   try {
-    $sums = (Invoke-WebRequest -Uri "https://github.com/$Repo/releases/download/$Version/checksums.txt" `
-      -UseBasicParsing).Content
-    $line = ($sums -split "`n") | Where-Object { $_ -match [regex]::Escape($asset) } | Select-Object -First 1
+    $sumFile = Join-Path $env:TEMP "rkt-checksums.txt"
+    Invoke-WebRequest -Uri "https://github.com/$Repo/releases/download/$Version/checksums.txt" `
+      -OutFile $sumFile -UseBasicParsing
+    $sums = (Get-Content $sumFile -Raw).ToString()
+    $line = ($sums -split "`r?`n") | Where-Object { $_ -match [regex]::Escape($asset) } | Select-Object -First 1
     if ($line) {
       $expected = ($line -split "\s+")[0].Trim().ToUpper()
       $actual = (Get-FileHash -Path $tmp -Algorithm SHA256).Hash.ToUpper()
