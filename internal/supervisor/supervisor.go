@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -754,7 +755,16 @@ func (m *Manager) StartCanary(name, dir, port string, out io.Writer) (*exec.Cmd,
 		env[k] = v
 	}
 	env["PORT"] = port
-	cmd := exec.Command(a.cfg.Command, dotenv.ExpandArgs(a.cfg.Args, env)...)
+	args := dotenv.ExpandArgs(a.cfg.Args, env)
+	if len(args) >= 2 && args[0] == "__static" {
+		// El path estático guardado es absoluto del slot live; el canario
+		// sirve el inactivo: remapear o sirve el slot viejo (en el primer
+		// deploy, inexistente y el canario muere).
+		if rebased, ok := RebaseStatic(a.cfg.Dir, args[1], dir); ok {
+			args = append([]string{args[0], rebased}, args[2:]...)
+		}
+	}
+	cmd := exec.Command(a.cfg.Command, args...)
 	configureProc(cmd)
 	cmd.Dir = dir
 	cmd.Env = dotenv.EnvironListApp(env)
@@ -771,6 +781,23 @@ func (m *Manager) StartCanary(name, dir, port string, out io.Writer) (*exec.Cmd,
 		}
 	}
 	return cmd, nil
+}
+
+// RebaseStatic remapea un path estático absoluto del slot live al slot que
+// lo sirve (canario en inactivo, corte a nuevo live). Devuelve false y deja
+// el path tal cual si no cuelga del live (estático externo: no va por slot).
+func RebaseStatic(liveDir, staticPath, serveDir string) (string, bool) {
+	if liveDir == "" || staticPath == "" || serveDir == "" {
+		return staticPath, false
+	}
+	if !filepath.IsAbs(staticPath) || !filepath.IsAbs(liveDir) {
+		return staticPath, false
+	}
+	rel, err := filepath.Rel(liveDir, staticPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return staticPath, false
+	}
+	return filepath.Join(serveDir, rel), true
 }
 
 // start lanza el proceso una vez y lo mete al job. False = no reintentar.

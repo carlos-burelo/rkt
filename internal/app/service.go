@@ -614,7 +614,27 @@ func (c *supCtl) Cutover(name string, cmd *exec.Cmd, dir, port string) error {
 		return fmt.Errorf("puerto canario inválido %q: %w", port, err)
 	}
 	cp, err := cfgfile.MutateFleet(c.db, func(cp *config.Config) error {
-		return cfgfile.UpdateApp(cp, name, cfgfile.AppPatch{Dir: &dir, Port: &portInt})
+		// El path estático guardado apunta al slot que era live: rebasarlo
+		// al que pasa a serlo o el próximo canario serviría el slot viejo.
+		var oldDir, oldStatic string
+		var oldArgs []string
+		for i := range cp.Apps {
+			if cp.Apps[i].Name == name {
+				oldDir, oldStatic, oldArgs = cp.Apps[i].Dir, cp.Apps[i].Static, cp.Apps[i].Args
+				break
+			}
+		}
+		p := cfgfile.AppPatch{Dir: &dir, Port: &portInt}
+		if ns, ok := supervisor.RebaseStatic(oldDir, oldStatic, dir); ok {
+			p.Static = &ns
+		}
+		if len(oldArgs) >= 2 && oldArgs[0] == "__static" {
+			if na, ok := supervisor.RebaseStatic(oldDir, oldArgs[1], dir); ok {
+				args := append([]string{oldArgs[0], na}, oldArgs[2:]...)
+				p.Args = &args
+			}
+		}
+		return cfgfile.UpdateApp(cp, name, p)
 	})
 	if err != nil {
 		return err
