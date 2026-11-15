@@ -35,10 +35,10 @@ import (
 	"strings"
 	"time"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/dotenv"
-	"rkt-proxy/internal/platform"
-	"rkt-proxy/internal/supervisor"
+	"rkt/internal/config"
+	"rkt/internal/dotenv"
+	"rkt/internal/platform"
+	"rkt/internal/supervisor"
 )
 
 // maxDeploy acota clone+build+corte: un repo colgado no bloquea la cola.

@@ -17,8 +17,8 @@ import (
 	"net/url"
 	"strings"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/github"
+	"rkt/internal/config"
+	"rkt/internal/github"
 )
 
 // Deps cablea el webhook.

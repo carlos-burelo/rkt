@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/crypto/acme"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 // NewHTTP sirve el challenge ACME en HTTP y redirige el resto a

@@ -3,7 +3,7 @@ package supervisor
 import (
 	"testing"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 // TestGlobalEnvSeFusionaSinMutarManifiesto: las globales entran en el env

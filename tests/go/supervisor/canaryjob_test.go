@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 // pythonRealForTest binario python de verdad, sin alias de WindowsApps.

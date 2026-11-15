@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"rkt-proxy/internal/store"
+	"rkt/internal/store"
 )
 
 func TestDomainSuggestSegunModo(t *testing.T) {

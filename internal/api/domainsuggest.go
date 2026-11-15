@@ -4,10 +4,11 @@ package api
 import (
 	"net/http"
 	"regexp"
+	"rkt/internal/authz"
 	"strings"
 
-	"rkt-proxy/internal/domains"
-	"rkt-proxy/internal/store"
+	"rkt/internal/domains"
+	"rkt/internal/store"
 )
 
 type suggestOut struct {
@@ -28,7 +29,7 @@ func (d *Deps) handleDomainsSuggest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
 		return
 	}
-	if !requireOperator(w, r) {
+	if !requireOp(w, r, authz.OpDomainsRead) {
 		return
 	}
 	name := strings.TrimSpace(r.URL.Query().Get("name"))

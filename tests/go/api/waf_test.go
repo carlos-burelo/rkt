@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/proxy"
-	"rkt-proxy/internal/store"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/proxy"
+	"rkt/internal/store"
 )
 
 func TestWAFEndpoints(t *testing.T) {

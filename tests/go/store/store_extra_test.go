@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func newDB(t *testing.T) *DB {

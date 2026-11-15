@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func liveWithRoutes(t *testing.T) *config.Live {

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"rkt-proxy/internal/store"
+	"rkt/internal/store"
 )
 
 func gitOK(t *testing.T) {

@@ -3,7 +3,7 @@ package cfgfile
 import (
 	"testing"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func fleetWithApp(port string) *config.Config {

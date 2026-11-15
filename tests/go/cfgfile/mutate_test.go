@@ -3,7 +3,7 @@ package cfgfile
 import (
 	"testing"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func mutateCfg(t *testing.T) *config.Config {

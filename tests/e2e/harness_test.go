@@ -11,14 +11,14 @@ import (
 	"testing"
 
 	"github.com/mxschmitt/playwright-go"
-	"rkt-proxy/internal/api"
-	"rkt-proxy/internal/appview"
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/dashboard"
-	"rkt-proxy/internal/health"
-	"rkt-proxy/internal/hub"
-	"rkt-proxy/internal/store"
+	"rkt/internal/api"
+	"rkt/internal/appview"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/dashboard"
+	"rkt/internal/health"
+	"rkt/internal/hub"
+	"rkt/internal/store"
 )
 
 const adminPassword = "password-larga-1"

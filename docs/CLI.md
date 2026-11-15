@@ -17,6 +17,7 @@ Sintaxis: `rkt [-config <ruta>] [--json] <comando> [args]`.
 | `run` | Foreground con Ctrl+C limpio (apaga servidores + apps) |
 | `dev [--http a:80] [--https a:443]` | Foreground local con puertos de prod y TLS de CA propia (`.localhost` funciona sin hosts); `--https ""` desactiva TLS |
 | `version` | Versión del binario (`dev` en builds locales) |
+| `upgrade [--version X|--local exe] [--rollback] [--force] [--check]` | Upgrade por slots: publica `versions/<ver>` al costado, flip de binpath + gate + rollback auto. Nunca escribe un exe en uso |
 | `mcp` | Servidor MCP stdio para agentes (ver abajo) |
 | `hosts list\|add\|rm <host>` | DNS local en el archivo hosts (admin) |
 | `help` | Esta referencia resumida |
@@ -36,7 +37,7 @@ el backend se reconstruye y reinicia a mano.
 pnpm --dir web dev
 ```
 
-Cambios web: recarga sola. Cambios Go: `go build -o bin/rkt.exe ./cmd/rkt-proxy`
+Cambios web: recarga sola. Cambios Go: `go build -o bin/rkt.exe ./cmd/rkt`
 y reinicia el proceso del paso 1.
 
 ## Operación (contra el servicio en marcha)
@@ -156,24 +157,28 @@ externa solo sirve SPA + `/api/v1` + `/mcp`.
 
 `POST /mcp` habla MCP Streamable HTTP. Requiere una API key Bearer
 (`rkt_...`, se generan en Ajustes → MCP remoto, se muestran una sola
-vez). Las sesiones de navegador no valen para MCP.
+vez) o sesión de navegador con Origin propio (misma defensa CSRF que la API).
 
-**Alcances por rol** (se elige al crear la key; cada herramienta exige
-el suyo y las mutaciones quedan en auditoría):
+**Alcances por rol** (se elige al crear la key; tabla única en
+`internal/authz`: vale igual para API, MCP-HTTP, MCP-stdio y healthz):
 
 | Alcance | Puede |
 |---|---|
-| lectura (viewer) | consultar estado, logs, deployments, métricas, zonas, dominios, detectar planes, long-polls |
-| operar (operator) | lo anterior + deploy, rollback, retry, restart, stop/start, build, apps, env, rutas, alertas, discover |
-| admin | todo + usuarios, `config_import`, `prune`, `hosts_*` |
+| lectura (viewer) | consultar estado, logs, deployments, métricas, zonas, dominios, detectar planes, diff, env-keys, long-polls |
+| operar (operator) | lo anterior + deploy, rollback, retry, restart, stop/start, build, apps, env (valores), rutas, alertas, discover, settings |
+| admin | lo anterior + usuarios, tokens, `config_import`, `prune`, `hosts_*`, auditoría |
 
 Herramientas sin entrada en la tabla exigen `admin` (fail-closed).
 `/mcp` lleva rate-limit (8 rps, burst 32) contra agotamiento.
+`rkt mcp` (stdio, canal local) aplica la misma tabla: sin `control.token`
+legible es viewer; con él, operator. Nunca admin por stdio.
+Los streams SSE aceptan `?ticket=` (POST `/api/v1/stream/ticket`, un uso,
+60s) para clientes sin cookie como `EventSource`.
 
 Endpoints principales (todos salvo login exigen sesión):
 `GET status|deployments|events|logs|apps|routes|settings|users|alerts|env|audit|cron`,
 `GET apps/:name|deployments/:id/log|domains/:host|domains/preflight|domains/suggest|usage|analytics|observability|server`,
-`POST auth/login|auth/logout|users|routes|apps|apps/:n/restart|apps/:n/start|apps/:n/stop|deploy|rollback|deployments/:id/retry|deployments/:id/cancel|alerts|alerts/:id/test|cron/:app/:job/run`,
+`POST auth/login|auth/logout|users|routes|apps|apps/:n/restart|apps/:n/start|apps/:n/stop|deploy|rollback|deployments/:id/retry|deployments/:id/cancel|alerts|alerts/:id/test|cron/:app/:job/run|stream/ticket`,
 `PUT apps/:name|settings|users/:n/password|users/:n/sessions/:id|cron/:app/:job`,
 `DELETE users/:n|users/:n/sessions/:id|routes?host|apps/:n|alerts/:id|alert-channels/:id|cron/:app/:job`.
 Errores: JSON `{error}` (401 sin sesión, 403 sin rol).
@@ -189,6 +194,9 @@ Settings, Users, CI, Alerts, Tareas (cron command/http).
 ## MCP (`rkt mcp`)
 
 Servidor [Model Context Protocol](https://modelcontextprotocol.io) por stdio.
+Mismo gate que el remoto (`internal/authz`): sin `control.token` legible
+es viewer; con él, operator. Nunca admin por stdio (usuarios, tokens,
+`config_import`, `prune` y `hosts_*` exigen dashboard/API).
 Monitoreo: `status`, `logs` (`n`, `app`), `deployments_list` (`n`, `app`),
 `events_list` (`n`, `kind`, `app`), `version`.
 Flota: `apps_list` (dominio, puerto, estático, deploy, `dns_ok`),
@@ -225,7 +233,7 @@ en caliente en ≤10s (supervisor.Apply).
 ```jsonc
 // opencode.json (V2)
 {"mcp": {"servers": {"rkt": {"type": "local",
-  "command": ["C:\\Program Files\\rkt-proxy\\rkt.exe", "-config",
-              "C:\\Program Files\\rkt-proxy\\rkt.db", "mcp"]}}},
+  "command": ["C:\\Program Files\\rkt\\rkt.exe", "-config",
+              "C:\\Program Files\\rkt\\rkt.db", "mcp"]}}},
  "plugins": []}
 ```

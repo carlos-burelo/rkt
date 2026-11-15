@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/health"
-	"rkt-proxy/internal/procstat"
-	"rkt-proxy/internal/weblog"
+	"rkt/internal/config"
+	"rkt/internal/health"
+	"rkt/internal/procstat"
+	"rkt/internal/weblog"
 )
 
 // Traffic resumen de la ventana pedida (del access log real).

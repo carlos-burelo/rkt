@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"rkt-proxy/internal/health"
-	"rkt-proxy/internal/netutil"
+	"rkt/internal/health"
+	"rkt/internal/netutil"
 )
 
 // handleStatus salud resumida + puertos públicos + apps.

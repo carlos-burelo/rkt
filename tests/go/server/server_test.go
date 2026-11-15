@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func testLive(t *testing.T, redirect bool) *config.Live {

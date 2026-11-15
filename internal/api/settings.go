@@ -3,9 +3,10 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"rkt/internal/authz"
 
-	"rkt-proxy/internal/settings"
-	"rkt-proxy/internal/store"
+	"rkt/internal/settings"
+	"rkt/internal/store"
 )
 
 // handleSettings lectura viewer, escritura operator (solo conocidas).
@@ -18,7 +19,7 @@ func (d *Deps) handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, out)
 	case http.MethodPut:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpSettingsWrite) {
 			return
 		}
 		var in struct {

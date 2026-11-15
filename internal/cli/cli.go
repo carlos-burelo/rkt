@@ -18,13 +18,13 @@ import (
 
 	"github.com/kardianos/service"
 
-	"rkt-proxy/internal/app"
-	"rkt-proxy/internal/build"
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/mcpserver"
-	"rkt-proxy/internal/staticweb"
-	"rkt-proxy/internal/store"
+	"rkt/internal/app"
+	"rkt/internal/build"
+	"rkt/internal/cfgfile"
+	"rkt/internal/logx"
+	"rkt/internal/mcpserver"
+	"rkt/internal/staticweb"
+	"rkt/internal/store"
 )
 
 // JSON salida máquina para comandos de lectura (--json).
@@ -190,6 +190,9 @@ func Run(cfgPath string) {
 		case "hosts":
 			cmdHosts(flag.Args()[1:])
 			return
+		case "upgrade":
+			cmdUpgrade(flag.Args()[1:], cfgPath)
+			return
 		case "help", "-h", "--help":
 			usage(0)
 			return
@@ -235,6 +238,8 @@ Servicio:
                                          y TLS de CA propia (CA en logs/devca)
   mcp                                    servidor MCP stdio (para agentes)
   hosts list|add|rm <host>               DNS local (hosts del sistema, admin)
+  upgrade [--version X|--local exe]       binario del servicio por slots
+    [--rollback] [--force] [--check]        (flip binpath + gate + rollback auto)
   version                                versión del binario
 
 Operate (contra el servicio en marcha):
@@ -333,7 +338,7 @@ func RunForeground(cfgPath string) {
 }
 
 // cmdRestart pide al servicio (vía healthz loopback) reinicio sin cortes:
-// rkt-proxy restart <app>
+// rkt restart <app>
 func cmdRestart(args []string, cfgPath string) {
 	if len(args) != 1 || args[0] == "" {
 		log.Fatal("uso: restart <app>")
@@ -360,7 +365,7 @@ func cmdRestart(args []string, cfgPath string) {
 	fmt.Printf("app %s reiniciando (sin cortes hasta restart_grace)\n", args[0])
 }
 
-// cmdDeploy publica una app desde git: rkt-proxy deploy <app>
+// cmdDeploy publica una app desde git: rkt deploy <app>
 // Dispara el deploy EN el servicio (vía healthz loopback) y espera el
 // resultado (tarda minutos: clone+build). Token en env del servicio.
 func cmdDeploy(args []string, cfgPath string) {

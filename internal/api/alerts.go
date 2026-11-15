@@ -6,11 +6,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"rkt/internal/authz"
 	"strconv"
 	"strings"
 
-	"rkt-proxy/internal/alerts"
-	"rkt-proxy/internal/cfgfile"
+	"rkt/internal/alerts"
+	"rkt/internal/cfgfile"
 )
 
 // handleAlerts lista (viewer) o crea (operator).
@@ -24,7 +25,7 @@ func (d *Deps) handleAlerts(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, rules)
 	case http.MethodPost:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpAlertsWrite) {
 			return
 		}
 		var in alertIn
@@ -94,7 +95,7 @@ func (d *Deps) handleAlert(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case action == "" && r.Method == http.MethodPut:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpAlertsWrite) {
 			return
 		}
 		var in alertIn
@@ -112,7 +113,7 @@ func (d *Deps) handleAlert(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]string{"ok": "true"})
 	case action == "" && r.Method == http.MethodDelete:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpAlertsWrite) {
 			return
 		}
 		if err := d.DB.DeleteRule(id); err != nil {
@@ -121,7 +122,7 @@ func (d *Deps) handleAlert(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]string{"ok": "true"})
 	case action == "test" && r.Method == http.MethodPost:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpAlertsWrite) {
 			return
 		}
 		rules, err := d.DB.ListRules()
@@ -150,7 +151,7 @@ func (d *Deps) handleAlert(w http.ResponseWriter, r *http.Request) {
 
 // handleAlertChannels CRUD de canales webhook.
 func (d *Deps) handleAlertChannels(w http.ResponseWriter, r *http.Request) {
-	if !requireOperator(w, r) {
+	if !requireOp(w, r, authz.OpAlertsWrite) {
 		return
 	}
 	switch r.Method {
@@ -189,7 +190,7 @@ func (d *Deps) handleAlertChannels(w http.ResponseWriter, r *http.Request) {
 
 // handleAlertChannel edita o borra un canal por id.
 func (d *Deps) handleAlertChannel(w http.ResponseWriter, r *http.Request) {
-	if !requireOperator(w, r) {
+	if !requireOp(w, r, authz.OpAlertsWrite) {
 		return
 	}
 	id, err := strconv.ParseInt(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/alert-channels/"), "/"), 10, 64)

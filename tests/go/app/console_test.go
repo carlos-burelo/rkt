@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/store"
+	"rkt/internal/config"
+	"rkt/internal/store"
 )
 
 func TestDashboardGate(t *testing.T) {

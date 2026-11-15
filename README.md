@@ -73,7 +73,7 @@ Requisitos: Windows, Go 1.26+, Node 22+ y pnpm.
 ```powershell
 pnpm --dir web install
 pnpm --dir web build
-go build -o bin/rkt.exe ./cmd/rkt-proxy
+go build -o bin/rkt.exe ./cmd/rkt
 bin\rkt.exe -config rkt.local.db dev
 ```
 
@@ -95,23 +95,35 @@ irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1
 ```
 
 Para borrar todo rastro antes de instalar (servicio, datos, firewall,
-variables; lo de usuario va a `apps.old`/`certs.old`), script dedicado:
+variables, grupo `rkt-operators`; lo de usuario va a `apps.old`/`certs.old`),
+script dedicado:
 
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/nuke.ps1)))
 ```
 
-El instalador descarga el release, verifica checksum, registra el servicio
-Windows, abre firewall y deja `rkt` en el `PATH`. También detecta la IP
+El instalador descarga el release, verifica checksum, publica el slot
+`versions/<ver>/rkt.exe`, registra el servicio apuntando al slot
+(auto-arranque con recovery ante crash), abre firewall y deja `rkt` en el
+`PATH` (lanzador = copia del slot activo). Crea el grupo local
+`rkt-operators` con lectura de logs (agrega miembros con
+`Add-LocalGroupMember rkt-operators <usuario>`): gestionan por
+dashboard/API sin ser admins. También detecta la IP
 pública, expone el dashboard en `http://IP:8090` y crea el primer admin con
 password aleatoria (la imprime una vez). Sin YAML: todo se administra desde
 el dashboard o el CLI.
 
+Actualizar = `rkt upgrade` (mismo layout: flip de binpath + gate de salud
++ rollback auto al slot previo; `rkt upgrade --rollback` revierte a mano).
+Nunca se escribe el exe en uso: el slot viejo queda intacto.
+
 Todo vive bajo un solo home (`-InstallDir`, por defecto
-`C:\Program Files\rkt-proxy`):
+`C:\Program Files\rkt`):
 
 ```text
-rkt.exe, VERSION.txt      binario y versión
+rkt.exe, VERSION.txt      lanzador (PATH) y versión activa
+current.txt, previous.txt  slot activo y previo (flip/rollback)
+versions\<ver>\rkt.exe    slots inmutables (el servicio corre desde aquí)
 data\rkt.db               SQLite (config + flota)
 data\backups\             copias diarias
 secrets\                  github.token, github-app.pem
@@ -174,7 +186,7 @@ Las capturas se generan con datos ficticios desde `scripts/shots`:
 ## Estructura
 
 ```text
-cmd/rkt-proxy          entrada CLI
+cmd/rkt          entrada CLI
 internal/api           API REST / SSE
 internal/app           orquestación, deploy y runtime
 internal/supervisor    procesos, reinicios, Job Objects

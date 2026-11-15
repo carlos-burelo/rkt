@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "raíz:", err)
 		os.Exit(1)
 	}
-	cmd := exec.Command("go", "build", "-o", exe, "./cmd/rkt-proxy")
+	cmd := exec.Command("go", "build", "-o", exe, "./cmd/rkt")
 	cmd.Dir = root
 	if out, err := cmd.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "build rkt: %v\n%s", err, out)

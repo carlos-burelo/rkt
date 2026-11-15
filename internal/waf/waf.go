@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 // Block un bloqueo para el panel.

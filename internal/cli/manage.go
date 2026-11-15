@@ -22,17 +22,17 @@ import (
 
 	"golang.org/x/term"
 
-	"rkt-proxy/internal/buildpack"
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/discover"
-	"rkt-proxy/internal/doctor"
-	domainx "rkt-proxy/internal/domains"
-	"rkt-proxy/internal/hosts"
-	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/platform"
-	"rkt-proxy/internal/settings"
-	"rkt-proxy/internal/store"
+	"rkt/internal/buildpack"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/discover"
+	"rkt/internal/doctor"
+	domainx "rkt/internal/domains"
+	"rkt/internal/hosts"
+	"rkt/internal/logx"
+	"rkt/internal/platform"
+	"rkt/internal/settings"
+	"rkt/internal/store"
 )
 
 func jsonDecode(resp *http.Response, v any) error {
@@ -1294,7 +1294,7 @@ func cmdGithubLogin(cfgPath string) {
 
 // cmdGithubInit guía crear la App vía manifest oficial:
 //
-//	rkt-proxy github init --name rkt-deployer --domain tu-dominio.coatl.in [--org dacyti-gsi]
+//	rkt github init --name rkt-deployer --domain tu-dominio.coatl.in [--org dacyti-gsi]
 //
 // Imprime (y abre) la URL del form que crea la App en GitHub; al aprobar,
 // GitHub vuelve a /_rkt/setup y rkt se autoconfigura (PEM + settings).

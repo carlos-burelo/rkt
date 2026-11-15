@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/store"
+	"rkt/internal/config"
+	"rkt/internal/store"
 )
 
 func TestRunNowYHistorial(t *testing.T) {

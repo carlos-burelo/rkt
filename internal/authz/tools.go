@@ -1,0 +1,82 @@
+package authz
+
+// ToolOp herramienta MCP -> operación canónica. Sin entrada = Op("") cuyo
+// MinRole es admin (fail-closed, igual que antes).
+var toolOp = map[string]Op{
+	// lectura
+	"status":           OpStatusRead,
+	"logs":             OpLogsRead,
+	"deployments_list": OpDeploymentsRead,
+	"events_list":      OpEventsRead,
+	"version":          OpStatusRead,
+	"metrics_now":      OpMetricsRead,
+	"traffic_rate":     OpMetricsRead,
+	"proxy_map":        OpRoutesRead,
+	"backends_probe":   OpRoutesRead,
+	"usage_summary":    OpMetricsRead,
+	"zones_list":       OpZonesRead,
+	"alerts_list":      OpAlertsRead,
+	"discover_status":  OpDomainsRead,
+	"app_get":          OpAppsRead,
+	"app_env_keys":     OpEnvKeysRead,
+	"deployment_get":   OpDeploymentsRead,
+	"deployment_logs":  OpLogsRead,
+	"log_search":       OpLogsRead,
+	"tail_follow":      OpLogsRead,
+	"git_status":       OpDeploymentsRead,
+	"diff_rev":         OpAppsRead,
+	"disk_usage":       OpAppsRead,
+	"detect_plan":      OpDetectRead,
+	"domains_suggest":  OpDomainsRead,
+	"verify_domain":    OpDomainsRead,
+	"watch_status":     OpAppsRead,
+	"watch_events":     OpEventsRead,
+	"watch_deploy":     OpDeploymentsRead,
+	"deploy_wait":      OpDeploymentsRead,
+	"wait_healthy":     OpDeploymentsRead,
+	"env_global_list":  OpEnvKeysRead,
+	"process_stats":    OpMetricsRead,
+	"app_usage":        OpMetricsRead,
+	"apps_list":        OpAppsRead,
+	"routes_list":      OpRoutesRead,
+	// mutación
+	"deploy":            OpDeployRun,
+	"retry":             OpDeployRun,
+	"rollback":          OpDeployRun,
+	"restart":           OpAppsWrite,
+	"stop":              OpAppsWrite,
+	"start":             OpAppsWrite,
+	"build":             OpDeployRun,
+	"apps_add":          OpAppsWrite,
+	"apps_remove":       OpAppsWrite,
+	"app_update":        OpAppsWrite,
+	"env_set":           OpEnvWrite,
+	"env_delete":        OpEnvWrite,
+	"env_import":        OpEnvWrite,
+	"env_global_set":    OpEnvWrite,
+	"env_global_delete": OpEnvWrite,
+	"routes_add":        OpRoutesWrite,
+	"routes_update":     OpRoutesWrite,
+	"routes_remove":     OpRoutesWrite,
+	"alerts_add":        OpAlertsWrite,
+	"alerts_update":     OpAlertsWrite,
+	"alerts_remove":     OpAlertsWrite,
+	"alerts_test":       OpAlertsWrite,
+	"config_export":     OpConfigExport,
+	"discover":          OpDiscoverRun,
+	"deploy_check":      OpDeployRun,
+	// administración y sistema
+	"users_add":     OpUsersAdmin,
+	"users_passwd":  OpUsersAdmin,
+	"users_remove":  OpUsersAdmin,
+	"config_import": OpConfigImport,
+	"prune":         OpPrune,
+	"hosts_add":     OpHostsWrite,
+	"hosts_remove":  OpHostsWrite,
+}
+
+// ToolOp devuelve la operación canónica de una tool (ok=false si no existe).
+func ToolOp(tool string) (Op, bool) {
+	op, ok := toolOp[tool]
+	return op, ok
+}

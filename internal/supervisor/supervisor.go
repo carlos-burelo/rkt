@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/dotenv"
-	"rkt-proxy/internal/logx"
+	"rkt/internal/config"
+	"rkt/internal/dotenv"
+	"rkt/internal/logx"
 )
 
 // crashWindow / maxCrashes: tope anti-crashloop.

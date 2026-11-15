@@ -3,12 +3,13 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"rkt/internal/authz"
 	"sort"
 	"strings"
 
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/dotenv"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/dotenv"
 )
 
 // handleEnvIndex GET /api/v1/env: claves globales y por app, sin valores.
@@ -17,7 +18,7 @@ func (d *Deps) handleEnvIndex(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
 		return
 	}
-	if !requireOperator(w, r) {
+	if !requireOp(w, r, authz.OpEnvKeysRead) {
 		return
 	}
 	cfg := d.Live.Get()
@@ -43,7 +44,7 @@ func (d *Deps) handleEnvIndex(w http.ResponseWriter, r *http.Request) {
 
 // handleEnvSub enruta /env/global, /env/global/import y /env/global/{key}.
 func (d *Deps) handleEnvSub(w http.ResponseWriter, r *http.Request) {
-	if !requireOperator(w, r) {
+	if !requireOp(w, r, authz.OpEnvWrite) {
 		return
 	}
 	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/env/"), "/")

@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"rkt/internal/authz"
 	"strings"
 	"sync"
 	"time"
 
-	"rkt-proxy/internal/netutil"
-	"rkt-proxy/internal/store"
+	"rkt/internal/netutil"
+	"rkt/internal/store"
 )
 
 // ctxUser/ctxRole usuario autenticado en el request.
@@ -26,49 +27,6 @@ func UserOf(r *http.Request) (string, string) {
 	u, _ := r.Context().Value(ctxUser).(string)
 	role, _ := r.Context().Value(ctxRole).(string)
 	return u, role
-}
-
-func roleLevel(r string) int {
-	switch r {
-	case store.RoleAdmin:
-		return 3
-	case store.RoleOperator:
-		return 2
-	case store.RoleViewer:
-		return 1
-	}
-	return 0
-}
-
-// sameOrigin compara el Origin con el Host del request. En producción la
-// comparación es exacta (host + puerto): un origen en otro puerto del mismo
-// host loopback no puede mutar (SameSite=Lax no distingue puertos). En dev
-// (LocalCA) localhost/127.0.0.1/::1 con cualquier puerto cuentan como el
-// mismo origen: el proxy Vite (5173) reenvía Origin localhost mientras el
-// backend ve 127.0.0.1:8090.
-func sameOrigin(originHost, reqHost string, dev bool) bool {
-	if strings.EqualFold(originHost, reqHost) {
-		return true
-	}
-	if dev {
-		return isLoopbackHost(hostOnly(originHost)) && isLoopbackHost(hostOnly(reqHost))
-	}
-	return false
-}
-
-func hostOnly(h string) string {
-	if i := strings.LastIndex(h, ":"); i >= 0 {
-		if strings.HasSuffix(h, "]") {
-			return h
-		}
-		return h[:i]
-	}
-	return h
-}
-
-func isLoopbackHost(h string) bool {
-	h = strings.ToLower(strings.Trim(h, "[]"))
-	return h == "localhost" || h == "127.0.0.1" || h == "::1"
 }
 
 // llegó por TLS: el dashboard local usa HTTP en loopback.
@@ -101,7 +59,7 @@ func RequireAuth(db *store.DB, dev func() bool, next http.Handler) http.Handler 
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
 			if origin := r.Header.Get("Origin"); origin != "" {
 				u, err := url.Parse(origin)
-				if err != nil || !sameOrigin(u.Host, r.Host, dev()) {
+				if err != nil || !authz.SameOrigin(u.Host, r.Host, dev()) {
 					writeErr(w, http.StatusForbidden, "origen no permitido")
 					return
 				}
@@ -308,7 +266,7 @@ func (d *Deps) handleMe(w http.ResponseWriter, r *http.Request) {
 
 // handleUsers lista o crea usuarios (solo admin).
 func (d *Deps) handleUsers(w http.ResponseWriter, r *http.Request) {
-	if !requireAdmin(w, r) {
+	if !requireOp(w, r, authz.OpUsersAdmin) {
 		return
 	}
 	switch r.Method {
@@ -360,7 +318,7 @@ func (d *Deps) handleUser(w http.ResponseWriter, r *http.Request) {
 		name = me
 	}
 	self := name == me
-	admin := roleLevel(role) >= roleLevel(store.RoleAdmin)
+	admin := authz.Check(authz.Role(role), authz.OpUsersAdmin)
 
 	switch {
 	case action == "" && r.Method == http.MethodPut:
@@ -475,7 +433,7 @@ func (d *Deps) handleUser(w http.ResponseWriter, r *http.Request) {
 
 // handleAudit lista la auditoría (admin).
 func (d *Deps) handleAudit(w http.ResponseWriter, r *http.Request) {
-	if !requireAdmin(w, r) {
+	if !requireOp(w, r, authz.OpAuditRead) {
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -490,27 +448,24 @@ func (d *Deps) handleAudit(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, rows)
 }
 
-// mustUser usuario autenticado (ruta ya pasó RequireAuth).
+// mustUser usuario autenticado (ruta ya pasó RequireAuth o ticket de stream).
 func mustUser(r *http.Request) string {
 	u, _ := UserOf(r)
 	return u
 }
 
-// requireOperator exige rol operator+ (escribe 403 si no).
-func requireOperator(w http.ResponseWriter, r *http.Request) bool {
-	_, role := UserOf(r)
-	if roleLevel(role) < roleLevel(store.RoleOperator) {
-		writeErr(w, http.StatusForbidden, "requiere rol operator")
-		return false
-	}
-	return true
+// contextWithUser inyecta (usuario, rol) como RequireAuth (lo usa el ticket SSE).
+func contextWithUser(ctx context.Context, u, role string) context.Context {
+	ctx = context.WithValue(ctx, ctxUser, u)
+	return context.WithValue(ctx, ctxRole, role)
 }
 
-// requireAdmin exige rol admin (gestión de usuarios).
-func requireAdmin(w http.ResponseWriter, r *http.Request) bool {
+// requireOp exige el rol mínimo del op canónico (tabla única en authz).
+// Sustituye a requireOperator/requireAdmin: cada handler nombra su op.
+func requireOp(w http.ResponseWriter, r *http.Request, op authz.Op) bool {
 	_, role := UserOf(r)
-	if roleLevel(role) < roleLevel(store.RoleAdmin) {
-		writeErr(w, http.StatusForbidden, "requiere rol admin")
+	if !authz.Check(authz.Role(role), op) {
+		writeErr(w, http.StatusForbidden, "requiere rol "+string(authz.MinRole(op)))
 		return false
 	}
 	return true

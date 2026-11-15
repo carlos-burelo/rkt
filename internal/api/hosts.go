@@ -5,8 +5,9 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"rkt/internal/authz"
 
-	"rkt-proxy/internal/hosts"
+	"rkt/internal/hosts"
 )
 
 // handleHosts GET lista, POST {host} añade, DELETE ?host= quita.
@@ -20,7 +21,7 @@ func (d *Deps) handleHosts(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]any{"hosts": list, "path": hosts.Path()})
 	case http.MethodPost:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpHostsWrite) {
 			return
 		}
 		var in struct {
@@ -41,7 +42,7 @@ func (d *Deps) handleHosts(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]string{"ok": "true", "host": in.Host})
 	case http.MethodDelete:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpHostsWrite) {
 			return
 		}
 		host := r.URL.Query().Get("host")

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/store"
+	"rkt/internal/logx"
+	"rkt/internal/store"
 )
 
 func TestMigrateLegacyHomeMueveDB(t *testing.T) {

@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/mxschmitt/playwright-go"
-	"rkt-proxy/internal/api"
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/store"
+	"rkt/internal/api"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/store"
 )
 
 // Caminos de deploy de punta a punta contra el servidor real (misma API que

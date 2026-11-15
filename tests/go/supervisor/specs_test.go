@@ -3,7 +3,7 @@ package supervisor
 import (
 	"testing"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func TestSpecsEqualDetectaCambiosDeProceso(t *testing.T) {

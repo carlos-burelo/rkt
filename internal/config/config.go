@@ -14,9 +14,9 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"rkt-proxy/internal/dotenv"
-	"rkt-proxy/internal/github"
-	"rkt-proxy/internal/platform"
+	"rkt/internal/dotenv"
+	"rkt/internal/github"
+	"rkt/internal/platform"
 )
 
 // Route mapea una o varias formas de llegar al mismo backend:

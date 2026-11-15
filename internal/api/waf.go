@@ -3,16 +3,22 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"rkt/internal/authz"
 	"strings"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/waf"
+	"rkt/internal/config"
+	"rkt/internal/waf"
 )
 
-// handleWAF reglas y bloqueos recientes (operator: expone IPs atacantes).
-// GET lista; PUT reemplaza deny_paths y/o deny_methods (validado).
+// handleWAF reglas y bloqueos recientes (lectura operator: expone IPs
+// atacantes; escritura operator). GET lista; PUT reemplaza deny_paths
+// y/o deny_methods (validado).
 func (d *Deps) handleWAF(w http.ResponseWriter, r *http.Request) {
-	if !requireOperator(w, r) {
+	if r.Method == http.MethodGet {
+		if !requireOp(w, r, authz.OpWAFRead) {
+			return
+		}
+	} else if !requireOp(w, r, authz.OpWAFWrite) {
 		return
 	}
 	switch r.Method {
@@ -74,7 +80,7 @@ func (d *Deps) handleWAF(w http.ResponseWriter, r *http.Request) {
 
 // handleWAFBans desbanea una IP (DELETE /api/v1/waf/bans?ip=).
 func (d *Deps) handleWAFBans(w http.ResponseWriter, r *http.Request) {
-	if !requireOperator(w, r) {
+	if !requireOp(w, r, authz.OpWAFWrite) {
 		return
 	}
 	if r.Method != http.MethodDelete {

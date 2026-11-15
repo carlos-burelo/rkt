@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func mustLog() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"rkt-proxy/internal/store"
+	"rkt/internal/store"
 )
 
 // Metrics valores medidos para la ventana de una regla.

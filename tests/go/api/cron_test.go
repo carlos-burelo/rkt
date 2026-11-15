@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/cronjobs"
-	"rkt-proxy/internal/store"
+	"rkt/internal/cronjobs"
+	"rkt/internal/store"
 )
 
 func TestCronAPI(t *testing.T) {

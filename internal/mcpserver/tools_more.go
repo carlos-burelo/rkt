@@ -19,16 +19,16 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"rkt-proxy/internal/alerts"
-	"rkt-proxy/internal/appview"
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/deploy"
-	"rkt-proxy/internal/health"
-	"rkt-proxy/internal/hosts"
-	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/store"
-	"rkt-proxy/internal/weblog"
+	"rkt/internal/alerts"
+	"rkt/internal/appview"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/deploy"
+	"rkt/internal/health"
+	"rkt/internal/hosts"
+	"rkt/internal/logx"
+	"rkt/internal/store"
+	"rkt/internal/weblog"
 )
 
 type nameArg struct {
@@ -965,86 +965,86 @@ func (s *Server) doPrune(a pruneArg) (string, error) {
 // registerMore añade el catálogo extendido al servidor MCP.
 func (s *Server) registerMore(srv *mcp.Server) {
 	add := func(name, desc string, fn func() (string, error)) {
-		mcp.AddTool(srv, &mcp.Tool{Name: name, Description: desc},
+		addTool(s, srv, &mcp.Tool{Name: name, Description: desc},
 			func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
 				return text(fn())
 			})
 	}
 	// tool con argumento app
-	mcp.AddTool(srv, &mcp.Tool{Name: "app_get", Description: "Detalle de una app (dominio, puerto, estático, deploy, dns_ok)."},
+	addTool(s, srv, &mcp.Tool{Name: "app_get", Description: "Detalle de una app (dominio, puerto, estático, deploy, dns_ok)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a nameArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppGet(a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "app_env_keys", Description: "Nombres de variables de entorno (nunca valores)."},
+	addTool(s, srv, &mcp.Tool{Name: "app_env_keys", Description: "Nombres de variables de entorno (nunca valores)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a nameArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppEnvKeys(a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "env_delete", Description: "Borra una variable de entorno de una app."},
+	addTool(s, srv, &mcp.Tool{Name: "env_delete", Description: "Borra una variable de entorno de una app."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a envDelArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEnvDelete(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "env_global_list", Description: "Variables globales de todas las apps (claves; valores solo con include_secrets)."},
+	addTool(s, srv, &mcp.Tool{Name: "env_global_list", Description: "Variables globales de todas las apps (claves; valores solo con include_secrets)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a envGlobalListArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEnvGlobalList(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "env_global_set", Description: "Crea/actualiza una variable global; todas las apps la heredan al reiniciar."},
+	addTool(s, srv, &mcp.Tool{Name: "env_global_set", Description: "Crea/actualiza una variable global; todas las apps la heredan al reiniciar."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a envGlobalArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEnvGlobalSet(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "env_global_delete", Description: "Elimina una variable global de todas las apps."},
+	addTool(s, srv, &mcp.Tool{Name: "env_global_delete", Description: "Elimina una variable global de todas las apps."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a envGlobalArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEnvGlobalDelete(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "routes_add", Description: "Crea una ruta: hosts (dominio) y/o path (/app) → target."},
+	addTool(s, srv, &mcp.Tool{Name: "routes_add", Description: "Crea una ruta: hosts (dominio) y/o path (/app) → target."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a routesAddArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doRoutesAdd(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "routes_update", Description: "Cambia el target de la ruta que contiene host."},
+	addTool(s, srv, &mcp.Tool{Name: "routes_update", Description: "Cambia el target de la ruta que contiene host."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a routesUpdateArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doRoutesUpdate(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "routes_remove", Description: "Quita un host de sus rutas, o rutas enteras por path (sin host)."},
+	addTool(s, srv, &mcp.Tool{Name: "routes_remove", Description: "Quita un host de sus rutas, o rutas enteras por path (sin host)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a hostArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doRoutesRemove(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "domains_suggest", Description: "Dominios libres para un nombre (localhost/test/base)."},
+	addTool(s, srv, &mcp.Tool{Name: "domains_suggest", Description: "Dominios libres para un nombre (localhost/test/base)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a nameArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doDomainsSuggest(a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "verify_domain", Description: "Verifica DNS local y respuesta HTTP del proxy para un host."},
+	addTool(s, srv, &mcp.Tool{Name: "verify_domain", Description: "Verifica DNS local y respuesta HTTP del proxy para un host."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a verifyArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doVerifyDomain(a.Host))
 		})
 	add("hosts_list", "Hosts gestionados por rkt en el archivo hosts.", s.doHostsList)
-	mcp.AddTool(srv, &mcp.Tool{Name: "hosts_add", Description: "Añade host → 127.0.0.1 al archivo hosts (admin)."},
+	addTool(s, srv, &mcp.Tool{Name: "hosts_add", Description: "Añade host → 127.0.0.1 al archivo hosts (admin)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a hostArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doHostsAdd(a.Host))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "hosts_remove", Description: "Quita un host del bloque de rkt en hosts (admin)."},
+	addTool(s, srv, &mcp.Tool{Name: "hosts_remove", Description: "Quita un host del bloque de rkt en hosts (admin)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a hostArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doHostsRemove(a.Host))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "deployment_get", Description: "Estado de un deployment por id."},
+	addTool(s, srv, &mcp.Tool{Name: "deployment_get", Description: "Estado de un deployment por id."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a deployWaitArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doDeploymentGet(a.ID))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "deploy_wait", Description: "Espera a que un deployment termine (running → ok/failed)."},
+	addTool(s, srv, &mcp.Tool{Name: "deploy_wait", Description: "Espera a que un deployment termine (running → ok/failed)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a deployWaitArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doDeployWait(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "git_status", Description: "HEAD, rama, remote y suciedad del dir live de una app."},
+	addTool(s, srv, &mcp.Tool{Name: "git_status", Description: "HEAD, rama, remote y suciedad del dir live de una app."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a nameArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doGitStatus(a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "diff_rev", Description: "Archivos cambiados entre live.prev y live."},
+	addTool(s, srv, &mcp.Tool{Name: "diff_rev", Description: "Archivos cambiados entre live.prev y live."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a nameArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doDiffRev(a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "disk_usage", Description: "Bytes de live/prev/staging de una app."},
+	addTool(s, srv, &mcp.Tool{Name: "disk_usage", Description: "Bytes de live/prev/staging de una app."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a nameArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doDiskUsage(a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "log_search", Description: "Busca regex en logs (app u operativo), últimas coincidencias."},
+	addTool(s, srv, &mcp.Tool{Name: "log_search", Description: "Busca regex en logs (app u operativo), últimas coincidencias."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a logSearchArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doLogSearch(a))
 		})
@@ -1052,51 +1052,51 @@ func (s *Server) registerMore(srv *mcp.Server) {
 	add("proxy_map", "Rutas con backend ok y dns_ok (vista /proxy).", s.doProxyMap)
 	add("backends_probe", "Dial TCP a cada backend único de las rutas.", s.doBackendsProbe)
 	add("settings_list", "Claves de configuración y sus valores.", s.doSettingsList)
-	mcp.AddTool(srv, &mcp.Tool{Name: "settings_set", Description: "Cambia una clave de configuración (base_domain, node_bin, quotas…)."},
+	addTool(s, srv, &mcp.Tool{Name: "settings_set", Description: "Cambia una clave de configuración (base_domain, node_bin, quotas…)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a settingsSetArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doSettingsSet(a))
 		})
 	add("alerts_list", "Reglas de alerta configuradas.", s.doAlertsList)
-	mcp.AddTool(srv, &mcp.Tool{Name: "alerts_add", Description: "Crea regla de alerta (failed|error_rate)."},
+	addTool(s, srv, &mcp.Tool{Name: "alerts_add", Description: "Crea regla de alerta (failed|error_rate)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a alertAddArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAlertsAdd(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "alerts_remove", Description: "Borra una regla de alerta por id."},
+	addTool(s, srv, &mcp.Tool{Name: "alerts_remove", Description: "Borra una regla de alerta por id."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a alertDelArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAlertsRemove(a.ID))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "alerts_update", Description: "Edita una regla de alerta (app, kind, umbral, ventana, enabled, canal)."},
+	addTool(s, srv, &mcp.Tool{Name: "alerts_update", Description: "Edita una regla de alerta (app, kind, umbral, ventana, enabled, canal)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a alertUpdateArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAlertsUpdate(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "alerts_test", Description: "Describe el disparo de una regla sin ejecutarlo."},
+	addTool(s, srv, &mcp.Tool{Name: "alerts_test", Description: "Describe el disparo de una regla sin ejecutarlo."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a alertDelArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAlertsTest(a.ID))
 		})
 	add("alert_channels_list", "Canales webhook configurados.", s.doAlertChannelsList)
 	add("discover_status", "Estado de GitHub App/base_domain para auto-registro.", s.doDiscoverStatus)
 	add("users_list", "Usuarios (sin hashes) y roles.", s.doUsersList)
-	mcp.AddTool(srv, &mcp.Tool{Name: "users_add", Description: "Crea usuario local (password ≥12). Queda en el historial del agente."},
+	addTool(s, srv, &mcp.Tool{Name: "users_add", Description: "Crea usuario local (password ≥12). Queda en el historial del agente."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a userAddArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doUsersAdd(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "users_remove", Description: "Borra un usuario local."},
+	addTool(s, srv, &mcp.Tool{Name: "users_remove", Description: "Borra un usuario local."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a userArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doUsersRemove(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "users_passwd", Description: "Cambia password de un usuario (password ≥12)."},
+	addTool(s, srv, &mcp.Tool{Name: "users_passwd", Description: "Cambia password de un usuario (password ≥12)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a userPassArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doUsersPasswd(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "config_export", Description: "Exporta configuración y apps en JSON (secretos solo con include_secrets)."},
+	addTool(s, srv, &mcp.Tool{Name: "config_export", Description: "Exporta configuración y apps en JSON (secretos solo con include_secrets)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a exportArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doConfigExport(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "config_import", Description: "Reemplaza configuración y apps desde JSON (confirm=replace). Destructivo."},
+	addTool(s, srv, &mcp.Tool{Name: "config_import", Description: "Reemplaza configuración y apps desde JSON (confirm=replace). Destructivo."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a importArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doConfigImport(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "prune", Description: "Poda deployments/events viejos (confirm=prune)."},
+	addTool(s, srv, &mcp.Tool{Name: "prune", Description: "Poda deployments/events viejos (confirm=prune)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a pruneArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doPrune(a))
 		})

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"rkt-proxy/internal/store"
+	"rkt/internal/store"
 )
 
 func TestSetAppDomainsCanonico(t *testing.T) {

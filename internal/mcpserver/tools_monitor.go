@@ -16,12 +16,12 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"rkt-proxy/internal/appusage"
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/health"
-	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/procstat"
-	"rkt-proxy/internal/weblog"
+	"rkt/internal/appusage"
+	"rkt/internal/cfgfile"
+	"rkt/internal/health"
+	"rkt/internal/logx"
+	"rkt/internal/procstat"
+	"rkt/internal/weblog"
 )
 
 type watchStatusArg struct {
@@ -458,35 +458,35 @@ func (s *Server) doAppUsage(a appUsageArg) (string, error) {
 
 // registerMonitor añade tools de monitoreo en vivo.
 func (s *Server) registerMonitor(srv *mcp.Server) {
-	mcp.AddTool(srv, &mcp.Tool{Name: "metrics_now", Description: "Foto actual: estado/pid/RSS por app + tráfico de 5 min (req, errores, p50/p95/p99)."},
+	addTool(s, srv, &mcp.Tool{Name: "metrics_now", Description: "Foto actual: estado/pid/RSS por app + tráfico de 5 min (req, errores, p50/p95/p99)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
 			return text(s.doMetricsNow())
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "process_stats", Description: "RSS y %CPU (muestra 500ms) de una app."},
+	addTool(s, srv, &mcp.Tool{Name: "process_stats", Description: "RSS y %CPU (muestra 500ms) de una app."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a nameArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doProcessStats(a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "traffic_rate", Description: "Requests/s, errores, bytes y percentiles en una ventana de segundos."},
+	addTool(s, srv, &mcp.Tool{Name: "traffic_rate", Description: "Requests/s, errores, bytes y percentiles en una ventana de segundos."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a trafficArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doTrafficRate(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "watch_status", Description: "Long-poll: bloquea hasta que la app (o cualquier cambio) cumpla healthy/unhealthy/running/stopped/failed."},
+	addTool(s, srv, &mcp.Tool{Name: "watch_status", Description: "Long-poll: bloquea hasta que la app (o cualquier cambio) cumpla healthy/unhealthy/running/stopped/failed."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a watchStatusArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doWatchStatus(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "watch_events", Description: "Long-poll: devuelve eventos nuevos (died/failed/alert/deploy) en cuanto aparecen."},
+	addTool(s, srv, &mcp.Tool{Name: "watch_events", Description: "Long-poll: devuelve eventos nuevos (died/failed/alert/deploy) en cuanto aparecen."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a watchEventsArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doWatchEvents(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "watch_deployment", Description: "Long-poll: espera a que un deployment nuevo (o after_id) termine ok/failed."},
+	addTool(s, srv, &mcp.Tool{Name: "watch_deployment", Description: "Long-poll: espera a que un deployment nuevo (o after_id) termine ok/failed."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a watchDeployArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doWatchDeployment(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "tail_follow", Description: "Sigue un log desde el final: devuelve líneas nuevas, o espera hasta que una regex aparezca."},
+	addTool(s, srv, &mcp.Tool{Name: "tail_follow", Description: "Sigue un log desde el final: devuelve líneas nuevas, o espera hasta que una regex aparezca."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a tailFollowArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doTailFollow(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "app_usage", Description: "Consumo real de una app: CPU%, RSS/pico/virtual, I/O, handles/hilos, disco del proyecto, log y tráfico de la ventana."},
+	addTool(s, srv, &mcp.Tool{Name: "app_usage", Description: "Consumo real de una app: CPU%, RSS/pico/virtual, I/O, handles/hilos, disco del proyecto, log y tráfico de la ventana."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appUsageArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppUsage(a))
 		})

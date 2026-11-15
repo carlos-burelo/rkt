@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"rkt-proxy/internal/appview"
-	"rkt-proxy/internal/health"
-	"rkt-proxy/internal/weblog"
+	"rkt/internal/appview"
+	"rkt/internal/health"
+	"rkt/internal/weblog"
 )
 
 // entries lee access.log filtrado por ventana (cero = todo).

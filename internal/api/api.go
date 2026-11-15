@@ -12,16 +12,16 @@ import (
 	"sync"
 	"time"
 
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/cronjobs"
-	"rkt-proxy/internal/dnscheck"
-	"rkt-proxy/internal/github"
-	"rkt-proxy/internal/health"
-	"rkt-proxy/internal/hub"
-	"rkt-proxy/internal/netutil"
-	"rkt-proxy/internal/servermetrics"
-	"rkt-proxy/internal/store"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/cronjobs"
+	"rkt/internal/dnscheck"
+	"rkt/internal/github"
+	"rkt/internal/health"
+	"rkt/internal/hub"
+	"rkt/internal/netutil"
+	"rkt/internal/servermetrics"
+	"rkt/internal/store"
 )
 
 // Deps dependencias inyectables. LogsDir = logx.DirFor(cfgPath).
@@ -170,6 +170,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("/api/v1/auth/login", d.handleLogin)
 	mux.HandleFunc("/api/v1/auth/logout", d.handleLogout)
 	mux.HandleFunc("/api/v1/auth/me", d.handleMe)
+	mux.HandleFunc("/api/v1/stream/ticket", d.handleStreamTicket)
 	mux.HandleFunc("/api/v1/users", d.handleUsers)
 	mux.HandleFunc("/api/v1/users/", d.handleUser)
 	mux.HandleFunc("/api/v1/tokens", d.handleTokens)
@@ -273,6 +274,10 @@ func NewHandler(d Deps) http.Handler {
 		switch r.URL.Path {
 		case "/api/v1/auth/login", "/api/v1/auth/status", "/api/v1/auth/setup":
 			mux.ServeHTTP(w, r)
+			return
+		}
+		if rr, ok := streamTicketAuth(r); ok {
+			audited.ServeHTTP(w, rr)
 			return
 		}
 		authed.ServeHTTP(w, r)

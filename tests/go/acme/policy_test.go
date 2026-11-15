@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/crypto/acme/autocert"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func TestDNSPolicy(t *testing.T) {

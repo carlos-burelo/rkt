@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 // appTarget devuelve el target del proxy para el puerto de la app.

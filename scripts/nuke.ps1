@@ -13,7 +13,7 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$InstallDir = "C:\Program Files\rkt-proxy"
+  [string]$InstallDir = "C:\Program Files\rkt"
 )
 $ErrorActionPreference = "Stop"
 
@@ -66,6 +66,7 @@ try {
 foreach ($rule in @("RKT HTTP/HTTPS", "RKT Dashboard", "RKT Proxy HTTP/HTTPS")) {
   Remove-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Out-Null
 }
+Remove-LocalGroup -Name "rkt-operators" -ErrorAction SilentlyContinue
 [Environment]::SetEnvironmentVariable("RKT_GITHUB_TOKEN_FILE", $null, "Machine")
 $mp = [Environment]::GetEnvironmentVariable("Path", "Machine")
 if ($mp) {
@@ -97,7 +98,7 @@ New-Item -ItemType Directory -Force $full | Out-Null
 # confirmes que no hay nada que rescatar.
 foreach ($legacy in @(
   @{old = "C:\apps"; nuevo = "apps.old"},
-  @{old = "C:\ProgramData\rkt-proxy"; nuevo = "certs.old"}
+  @{old = "C:\ProgramData\rkt"; nuevo = "certs.old"}
 )) {
   $src = $legacy.old
   $dst = Join-Path $full $legacy.nuevo

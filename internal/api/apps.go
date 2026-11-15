@@ -3,17 +3,18 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"rkt/internal/authz"
 	"strings"
 	"time"
 
-	"rkt-proxy/internal/appusage"
-	"rkt-proxy/internal/appview"
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/deploy"
-	"rkt-proxy/internal/github"
-	"rkt-proxy/internal/health"
-	"rkt-proxy/internal/store"
+	"rkt/internal/appusage"
+	"rkt/internal/appview"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/deploy"
+	"rkt/internal/github"
+	"rkt/internal/health"
+	"rkt/internal/store"
 )
 
 // handleApps lista la flota o crea una app (GET/POST).
@@ -28,7 +29,7 @@ func (d *Deps) handleApps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPost {
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpAppsWrite) {
 			return
 		}
 		var in struct {
@@ -83,7 +84,7 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case action == "diff" && r.Method == http.MethodGet:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpAppsRead) {
 			return
 		}
 		from, to := r.URL.Query().Get("from"), r.URL.Query().Get("to")
@@ -122,7 +123,7 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, rep)
 	case action == "" && r.Method == http.MethodPut:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpAppsWrite) {
 			return
 		}
 		var in cfgfile.AppPatch
@@ -138,7 +139,7 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]string{"ok": "true"})
 	case action == "" && r.Method == http.MethodDelete:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpAppsWrite) {
 			return
 		}
 		dropped := 0
@@ -155,7 +156,7 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 			"hint": "rutas de la app retiradas; revisa huérfanas: routes list",
 		})
 	case action == "build" && r.Method == http.MethodPost:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpDeployRun) {
 			return
 		}
 		if d.Build == nil {
@@ -169,7 +170,7 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]any{"deployment": id})
 	case action == "restart" && r.Method == http.MethodPost:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpAppsWrite) {
 			return
 		}
 		if d.Restart == nil || !d.Restart(name) {
@@ -178,7 +179,7 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]string{"ok": "true"})
 	case (action == "start" || action == "stop") && r.Method == http.MethodPost:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpAppsWrite) {
 			return
 		}
 		disabled := action == "stop"
@@ -190,7 +191,7 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]any{"ok": true, "disabled": disabled})
 	case action == "deploy" && r.Method == http.MethodPost:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpDeployRun) {
 			return
 		}
 		// App local (sin repo): "redesplegar" significa rebuild.
@@ -229,7 +230,7 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]string{"rev": rev})
 	case action == "rollback" && r.Method == http.MethodPost:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpDeployRun) {
 			return
 		}
 		if d.Rollback == nil {
@@ -242,22 +243,22 @@ func (d *Deps) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]string{"ok": "true"})
 	case action == "env" && r.Method == http.MethodGet:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpEnvKeysRead) {
 			return
 		}
 		writeJSON(w, envKeys(a.Env))
 	case action == "env" && r.Method == http.MethodPut:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpEnvWrite) {
 			return
 		}
 		d.patchAppEnv(w, r, name)
 	case action == "env/import" && r.Method == http.MethodPost:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpEnvWrite) {
 			return
 		}
 		d.handleEnvImport(w, r, name)
 	case strings.HasPrefix(action, "env/") && r.Method == http.MethodGet:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpEnvRead) {
 			return
 		}
 		d.handleEnvValue(w, r, strings.TrimPrefix(action, "env/"), name)

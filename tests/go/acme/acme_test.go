@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func writeTemp(t *testing.T, content string) string {

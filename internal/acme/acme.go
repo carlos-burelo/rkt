@@ -17,7 +17,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/time/rate"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 // StagingDirectory evita rate-limit de prod en pruebas.

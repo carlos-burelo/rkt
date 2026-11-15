@@ -35,7 +35,7 @@ func AppsDir(home string) string {
 // DefaultCertsDir cache ACME por defecto.
 func DefaultCertsDir() string {
 	if runtime.GOOS == "windows" {
-		return `C:\ProgramData\rkt-proxy\certs`
+		return `C:\ProgramData\rkt\certs`
 	}
 	return "/var/lib/rkt/certs"
 }

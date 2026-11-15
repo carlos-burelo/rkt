@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"rkt-proxy/internal/procstat"
+	"rkt/internal/procstat"
 )
 
 // Snapshot foto completa del servidor.

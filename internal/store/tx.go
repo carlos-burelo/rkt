@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 // Tx vista de una transacción activa. Todas las lecturas y escrituras de un

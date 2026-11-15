@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func TestWithTxCoversTxView(t *testing.T) {

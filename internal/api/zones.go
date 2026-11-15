@@ -4,10 +4,11 @@ package api
 
 import (
 	"net/http"
+	"rkt/internal/authz"
 	"strings"
 
-	"rkt-proxy/internal/appview"
-	"rkt-proxy/internal/store"
+	"rkt/internal/appview"
+	"rkt/internal/store"
 )
 
 // handleZones GET /api/v1/domains/zones (operator+).
@@ -16,7 +17,7 @@ func (d *Deps) handleZones(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
 		return
 	}
-	if !requireOperator(w, r) {
+	if !requireOp(w, r, authz.OpZonesRead) {
 		return
 	}
 	base := strings.TrimSpace(d.DB.GetSetting(store.KeyBaseDomain))

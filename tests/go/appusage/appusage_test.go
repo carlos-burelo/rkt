@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/health"
+	"rkt/internal/config"
+	"rkt/internal/health"
 )
 
 func TestHostsForMapeaPorPuerto(t *testing.T) {

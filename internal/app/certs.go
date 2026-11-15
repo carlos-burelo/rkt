@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 // customCerts certificados propios cargados al arrancar. Exacto gana a

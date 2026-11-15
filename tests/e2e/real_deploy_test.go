@@ -22,13 +22,13 @@ import (
 	"testing"
 
 	"github.com/mxschmitt/playwright-go"
-	"rkt-proxy/internal/api"
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/deploy"
-	"rkt-proxy/internal/proxy"
-	"rkt-proxy/internal/store"
-	"rkt-proxy/internal/supervisor"
+	"rkt/internal/api"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/deploy"
+	"rkt/internal/proxy"
+	"rkt/internal/store"
+	"rkt/internal/supervisor"
 )
 
 func e2ePython(t *testing.T) string {

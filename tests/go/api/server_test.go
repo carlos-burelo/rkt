@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"rkt-proxy/internal/servermetrics"
-	"rkt-proxy/internal/store"
+	"rkt/internal/servermetrics"
+	"rkt/internal/store"
 )
 
 func TestServerSnapshot(t *testing.T) {

@@ -19,7 +19,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/net/websocket"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func liveFrom(t *testing.T, body string) *config.Live {

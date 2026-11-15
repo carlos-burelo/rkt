@@ -18,11 +18,11 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/dotenv"
-	"rkt-proxy/internal/platform"
-	"rkt-proxy/internal/store"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/dotenv"
+	"rkt/internal/platform"
+	"rkt/internal/store"
 )
 
 // Runner mantiene el cron vivo y ejecuta tareas.

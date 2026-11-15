@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/mxschmitt/playwright-go"
-	"rkt-proxy/internal/store"
+	"rkt/internal/store"
 )
 
 // Smoke de navegación: cada ruta principal carga sin el fallback de error

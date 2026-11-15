@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"rkt-proxy/internal/store"
+	"rkt/internal/store"
 )
 
 func TestUserPasswordSessionsAudit(t *testing.T) {

@@ -82,9 +82,14 @@ func TestInstallLimpio(t *testing.T) {
 		"Unblock-File $tmp",
 		"Unblock-File $exe",
 		"Copy-ConReintentos",
-		"Sin backup",
-		"ACL del binario reparada",
-		"No puedo leer",
+		"current.txt",
+		"previous.txt",
+		`versions\`,
+		"binPath=",
+		"Flip ",
+		"Rollback a ",
+		"sc.exe failure",
+		"rkt-operators",
 		"doctor --json",
 		"Get-Command git",
 		"sin git no hay deploys",
@@ -125,12 +130,14 @@ func TestNukePasos(t *testing.T) {
 		"RKT_GITHUB_TOKEN_FILE",
 		"Remove-Item",
 		"-Recurse -Force",
+		"Remove-LocalGroup",
+		"rkt-operators",
 		"No pude borrar",
 		"Limpieza total OK",
 		"apps.old",
 		"certs.old",
 		`"C:\apps"`,
-		`"C:\ProgramData\rkt-proxy"`,
+		`"C:\ProgramData\rkt"`,
 	} {
 		if !strings.Contains(body, s) {
 			t.Errorf("nuke.ps1 sin paso %q", s)
@@ -182,10 +189,10 @@ func TestNukeDirGuarda(t *testing.T) {
 		{`C:\Program Files`, "False"},
 		{`C:\Program Files (x86)`, "False"},
 		{`C:\Users`, "False"},
-		{``, "False"},                          // vacío
-		{`C:\Program Files\rkt-proxy`, "True"}, // defecto
-		{`C:\rkt\datos`, "True"},               // corto pero válido
-		{`D:\apps\rkt`, "True"},                // otra unidad
+		{``, "False"},                    // vacío
+		{`C:\Program Files\rkt`, "True"}, // defecto
+		{`C:\rkt\datos`, "True"},         // corto pero válido
+		{`D:\apps\rkt`, "True"},          // otra unidad
 	}
 	var sb strings.Builder
 	sb.WriteString(fn + "\n")

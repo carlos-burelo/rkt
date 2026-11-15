@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 // DeployPatch campos editables del bloque deploy (token_env no se expone).

@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"time"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/settings"
+	"rkt/internal/config"
+	"rkt/internal/settings"
 )
 
 // execer lo cumplen *sql.DB, *sql.Tx y *Tx.

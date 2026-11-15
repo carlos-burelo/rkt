@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"rkt-proxy/internal/build"
-	"rkt-proxy/internal/health"
+	"rkt/internal/build"
+	"rkt/internal/health"
 )
 
 // metricsText expone métricas Prometheus mínimas con datos reales:

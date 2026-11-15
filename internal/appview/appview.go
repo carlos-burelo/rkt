@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"rkt-proxy/internal/buildpack"
-	"rkt-proxy/internal/config"
+	"rkt/internal/buildpack"
+	"rkt/internal/config"
 )
 
 // Port devuelve el puerto local declarado en Env.

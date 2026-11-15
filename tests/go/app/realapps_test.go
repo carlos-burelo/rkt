@@ -23,14 +23,14 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/buildpack"
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/deploy"
-	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/proxy"
-	"rkt-proxy/internal/store"
-	"rkt-proxy/internal/supervisor"
+	"rkt/internal/buildpack"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/deploy"
+	"rkt/internal/logx"
+	"rkt/internal/proxy"
+	"rkt/internal/store"
+	"rkt/internal/supervisor"
 )
 
 // fixtureRoot localiza tests/apps/: override por env (CI) o relativo al
@@ -273,7 +273,7 @@ func rktBin(t *testing.T) string {
 			exe += ".exe"
 		}
 		root := repoRoot(t)
-		cmd := exec.Command("go", "build", "-o", exe, "./cmd/rkt-proxy")
+		cmd := exec.Command("go", "build", "-o", exe, "./cmd/rkt")
 		cmd.Dir = root
 		if out, err := cmd.CombinedOutput(); err != nil {
 			rktBinErr = fmt.Errorf("build rkt: %v: %s", err, out)

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"rkt-proxy/internal/store"
+	"rkt/internal/store"
 )
 
 // Gaps API parte 1: auth/me, tokens, events, deployments lista/detalle,
@@ -149,11 +149,11 @@ func TestGapsAppDiffBuildEnvImport(t *testing.T) {
 	opTok := loginAs(t, h, db, "op", store.RoleOperator)
 	visTok := loginAs(t, h, db, "vis", store.RoleViewer)
 
-	// diff exige operator y from/to
+	// diff es metadata: viewer pasa el gate; from/to inválidos dan 422
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w/diff?from=a&to=b", visTok))
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("diff viewer: quiere 403, got %d", rec.Code)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("diff viewer: quiere 422, got %d", rec.Code)
 	}
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w/diff", opTok))

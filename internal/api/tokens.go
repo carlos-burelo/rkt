@@ -3,16 +3,17 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"rkt/internal/authz"
 	"strconv"
 	"strings"
 	"time"
 
-	"rkt-proxy/internal/netutil"
+	"rkt/internal/netutil"
 )
 
 // handleTokens lista o crea tokens de API (admin).
 func (d *Deps) handleTokens(w http.ResponseWriter, r *http.Request) {
-	if !requireAdmin(w, r) {
+	if !requireOp(w, r, authz.OpTokensAdmin) {
 		return
 	}
 	switch r.Method {
@@ -51,7 +52,7 @@ func (d *Deps) handleTokens(w http.ResponseWriter, r *http.Request) {
 
 // handleToken revoca /tokens/{id}.
 func (d *Deps) handleToken(w http.ResponseWriter, r *http.Request) {
-	if !requireAdmin(w, r) {
+	if !requireOp(w, r, authz.OpTokensAdmin) {
 		return
 	}
 	raw := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/tokens/"), "/")

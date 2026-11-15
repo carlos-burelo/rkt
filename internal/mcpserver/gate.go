@@ -7,103 +7,33 @@ package mcpserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 
-	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/store"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"rkt/internal/authz"
+	"rkt/internal/logx"
+	"rkt/internal/store"
 )
 
-// toolMinRole herramienta -> rol mínimo.
-var toolMinRole = map[string]string{
-	// lectura
-	"status":           store.RoleViewer,
-	"logs":             store.RoleViewer,
-	"deployments_list": store.RoleViewer,
-	"events_list":      store.RoleViewer,
-	"version":          store.RoleViewer,
-	"metrics_now":      store.RoleViewer,
-	"traffic_rate":     store.RoleViewer,
-	"proxy_map":        store.RoleViewer,
-	"backends_probe":   store.RoleViewer,
-	"usage_summary":    store.RoleViewer,
-	"zones_list":       store.RoleViewer,
-	"alerts_list":      store.RoleViewer,
-	"discover_status":  store.RoleViewer,
-	"app_get":          store.RoleViewer,
-	"app_env_keys":     store.RoleViewer,
-	"deployment_get":   store.RoleViewer,
-	"deployment_logs":  store.RoleViewer,
-	"log_search":       store.RoleViewer,
-	"tail_follow":      store.RoleViewer,
-	"git_status":       store.RoleViewer,
-	"diff_rev":         store.RoleViewer,
-	"disk_usage":       store.RoleViewer,
-	"detect_plan":      store.RoleViewer,
-	"domains_suggest":  store.RoleViewer,
-	"verify_domain":    store.RoleViewer,
-	"watch_status":     store.RoleViewer,
-	"watch_events":     store.RoleViewer,
-	"watch_deploy":     store.RoleViewer,
-	"deploy_wait":      store.RoleViewer,
-	"wait_healthy":     store.RoleViewer,
-	"env_global_list":  store.RoleViewer,
-	"process_stats":    store.RoleViewer,
-	"app_usage":        store.RoleViewer,
-	"apps_list":        store.RoleViewer,
-	"routes_list":      store.RoleViewer,
-	// mutación
-	"deploy":            store.RoleOperator,
-	"retry":             store.RoleOperator,
-	"rollback":          store.RoleOperator,
-	"restart":           store.RoleOperator,
-	"stop":              store.RoleOperator,
-	"start":             store.RoleOperator,
-	"build":             store.RoleOperator,
-	"apps_add":          store.RoleOperator,
-	"apps_remove":       store.RoleOperator,
-	"app_update":        store.RoleOperator,
-	"env_set":           store.RoleOperator,
-	"env_delete":        store.RoleOperator,
-	"env_import":        store.RoleOperator,
-	"env_global_set":    store.RoleOperator,
-	"env_global_delete": store.RoleOperator,
-	"routes_add":        store.RoleOperator,
-	"routes_update":     store.RoleOperator,
-	"routes_remove":     store.RoleOperator,
-	"alerts_add":        store.RoleOperator,
-	"alerts_update":     store.RoleOperator,
-	"alerts_remove":     store.RoleOperator,
-	"alerts_test":       store.RoleOperator,
-	"config_export":     store.RoleOperator,
-	"discover":          store.RoleOperator,
-	"deploy_check":      store.RoleOperator,
-	// administración y sistema
-	"users_add":     store.RoleAdmin,
-	"users_passwd":  store.RoleAdmin,
-	"users_remove":  store.RoleAdmin,
-	"config_import": store.RoleAdmin,
-	"prune":         store.RoleAdmin,
-	"hosts_add":     store.RoleAdmin,
-	"hosts_remove":  store.RoleAdmin,
-}
-
-// minRoleFor rol mínimo; desconocida = admin (fail-closed).
+// minRoleFor rol mínimo de una tool; desconocida = admin (fail-closed).
+// Tabla única en authz.ToolOp.
 func minRoleFor(tool string) string {
-	if r, ok := toolMinRole[tool]; ok {
-		return r
+	op, ok := authz.ToolOp(tool)
+	if !ok {
+		return string(authz.RoleAdmin)
 	}
-	return store.RoleAdmin
+	return string(authz.MinRole(op))
 }
 
 func roleAtLeast(have, want string) bool {
-	level := map[string]int{store.RoleViewer: 0, store.RoleOperator: 1, store.RoleAdmin: 2}
-	h, okH := level[have]
-	w, okW := level[want]
-	return okH && okW && h >= w
+	return authz.AtLeast(authz.Role(have), authz.Role(want))
 }
 
 func bearerToken(r *http.Request) string {
@@ -114,18 +44,32 @@ func bearerToken(r *http.Request) string {
 	return strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
 }
 
-// tokenRole resuelve (rol, actor) del Bearer; vacío si no hay o no vale.
-// Abre la DB por llamada, igual que cada handler (s.load).
+// tokenRole resuelve (rol, actor) del Bearer o de la cookie de sesión.
+// Con cookie en mutación con Origin de otro host se deniega (CSRF).
 func (s *Server) tokenRole(r *http.Request) (string, string) {
 	tok := bearerToken(r)
+	viaCookie := false
+	if tok == "" {
+		if c, err := r.Cookie("rkt_token"); err == nil {
+			tok, viaCookie = c.Value, true
+		}
+	}
 	if tok == "" {
 		return "", ""
+	}
+	if viaCookie && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+		if origin := authz.OriginOf(r); origin != "" && !authz.SameOrigin(origin, r.Host, false) {
+			return "", ""
+		}
 	}
 	db, err := store.Open(logx.DBPath(s.cfgPath))
 	if err != nil {
 		return "", ""
 	}
 	defer db.Close()
+	if name, role, ok := db.SessionUser(tok); ok {
+		return role, name
+	}
 	name, role, ok := db.TokenUser(tok)
 	if !ok {
 		return "", ""
@@ -194,12 +138,56 @@ func (s *Server) gateHTTP(next http.Handler) http.Handler {
 			writeRPCError(w, id, "herramienta "+tool+" requiere rol "+want)
 			return
 		}
-		if want != store.RoleViewer && actor != "" {
+		if want != string(authz.RoleViewer) && actor != "" {
 			if db, err := store.Open(logx.DBPath(s.cfgPath)); err == nil {
 				_ = db.AddAudit(actor, "mcp "+tool, "", clientIP(r))
 				db.Close()
 			}
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+// stdioRole rol del canal stdio: local si lee control.token, viewer si no.
+// Sin gate no hay stdio: toda tool pasa por Check con este rol.
+func (s *Server) stdioRole() authz.Role {
+	b, err := os.ReadFile(logx.ControlTokenPath(s.cfgPath))
+	if err != nil || len(bytes.TrimSpace(b)) == 0 {
+		return authz.RoleViewer
+	}
+	return authz.RoleLocal
+}
+
+// stdioCheck autoriza una tool en stdio; nil = pasa (audita mutaciones).
+// Op desconocida exige admin (fail-closed): por stdio siempre denegada.
+func (s *Server) stdioCheck(tool string) *mcp.CallToolResult {
+	op, _ := authz.ToolOp(tool)
+	if !authz.Check(s.stdioRole(), op) {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "herramienta " + tool + " requiere rol " + string(authz.MinRole(op))}},
+			IsError: true,
+		}
+	}
+	if authz.MinRole(op) != authz.RoleViewer {
+		if db, err := store.Open(logx.DBPath(s.cfgPath)); err == nil {
+			_ = db.AddAudit("stdio", "mcp "+tool, "", "-")
+			db.Close()
+		}
+	}
+	return nil
+}
+
+// addTool registra una tool; en server stdio la envuelve con el gate.
+func addTool[In, Out any](s *Server, srv *mcp.Server, t *mcp.Tool, h mcp.ToolHandlerFor[In, Out]) {
+	if !s.stdioGate {
+		mcp.AddTool(srv, t, h)
+		return
+	}
+	mcp.AddTool(srv, t, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
+		if deny := s.stdioCheck(t.Name); deny != nil {
+			var zero Out
+			return deny, zero, nil
+		}
+		return h(ctx, req, in)
 	})
 }

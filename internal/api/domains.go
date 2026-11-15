@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"rkt-proxy/internal/appview"
-	"rkt-proxy/internal/dnscheck"
-	"rkt-proxy/internal/store"
+	"rkt/internal/appview"
+	"rkt/internal/dnscheck"
+	"rkt/internal/store"
 )
 
 type domainTLS struct {

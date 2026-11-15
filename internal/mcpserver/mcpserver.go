@@ -18,19 +18,19 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"rkt-proxy/internal/appview"
-	"rkt-proxy/internal/build"
-	"rkt-proxy/internal/buildpack"
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/deploy"
-	"rkt-proxy/internal/discover"
-	"rkt-proxy/internal/dotenv"
-	"rkt-proxy/internal/github"
-	"rkt-proxy/internal/health"
-	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/platform"
-	"rkt-proxy/internal/store"
+	"rkt/internal/appview"
+	"rkt/internal/build"
+	"rkt/internal/buildpack"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/deploy"
+	"rkt/internal/discover"
+	"rkt/internal/dotenv"
+	"rkt/internal/github"
+	"rkt/internal/health"
+	"rkt/internal/logx"
+	"rkt/internal/platform"
+	"rkt/internal/store"
 )
 
 // githubNew abre manager App desde config efectiva (nil si no hay).
@@ -68,6 +68,9 @@ func postDeploy(base, name string) (string, error) {
 type Server struct {
 	cfgPath string
 	client  *http.Client
+	// stdioGate envuelve handlers con el gate stdio (proceso `rkt mcp`).
+	// El servicio HTTP deja false: ahí manda gateHTTP por request.
+	stdioGate bool
 }
 
 // New crea el servidor MCP.
@@ -691,103 +694,103 @@ func (s *Server) doWaitHealthy(app string, timeoutS int) (string, error) {
 // newMCP registra todas las tools y devuelve el servidor MCP.
 func (s *Server) newMCP() *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{Name: "rkt", Title: "rkt PaaS"}, nil)
-	mcp.AddTool(srv, &mcp.Tool{Name: "status", Description: "Salud: versión, backends y apps (JSON). Requiere servicio en marcha."},
+	addTool(s, srv, &mcp.Tool{Name: "status", Description: "Salud: versión, backends y apps (JSON). Requiere servicio en marcha."},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
 			return text(s.doStatus())
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "logs", Description: "Tail del log operativo o de una app."},
+	addTool(s, srv, &mcp.Tool{Name: "logs", Description: "Tail del log operativo o de una app."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a logsArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doLogs(a.N, a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "deployments_list", Description: "Historial de deploys en SQLite."},
+	addTool(s, srv, &mcp.Tool{Name: "deployments_list", Description: "Historial de deploys en SQLite."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a deploymentsArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doDeployments(a.N, a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "events_list", Description: "Auditoría de crashes del supervisor (died/failed)."},
+	addTool(s, srv, &mcp.Tool{Name: "events_list", Description: "Auditoría de crashes del supervisor (died/failed)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a eventsArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEvents(a.N, a.Kind, a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "version", Description: "Versión del binario rkt."},
+	addTool(s, srv, &mcp.Tool{Name: "version", Description: "Versión del binario rkt."},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
 			return text(build.Version, nil)
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "restart", Description: "Reinicia una app al instante (sin cortes por restart_grace)."},
+	addTool(s, srv, &mcp.Tool{Name: "restart", Description: "Reinicia una app al instante (sin cortes por restart_grace)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doRestart(a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "rollback", Description: "Vuelve una app a live.prev (tarda: swap+restart+health)."},
+	addTool(s, srv, &mcp.Tool{Name: "rollback", Description: "Vuelve una app a live.prev (tarda: swap+restart+health)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doRollback(a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "stop", Description: "Detiene una app de forma persistente (no arranca hasta start)."},
+	addTool(s, srv, &mcp.Tool{Name: "stop", Description: "Detiene una app de forma persistente (no arranca hasta start)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppSetDisabled(a.App, true))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "start", Description: "Arranca una app detenida y limpia disabled."},
+	addTool(s, srv, &mcp.Tool{Name: "start", Description: "Arranca una app detenida y limpia disabled."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppSetDisabled(a.App, false))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "deploy", Description: "Publica una app desde git (tarda minutos: clone+build+swap). Vigila con deployments_list."},
+	addTool(s, srv, &mcp.Tool{Name: "deploy", Description: "Publica una app desde git (tarda minutos: clone+build+swap). Vigila con deployments_list."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doDeploy(a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "retry", Description: "Repite un deployment por ID con su mismo rev (tarda minutos)."},
+	addTool(s, srv, &mcp.Tool{Name: "retry", Description: "Repite un deployment por ID con su mismo rev (tarda minutos)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a retryArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doRetry(a.ID))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "apps_add", Description: "Registra app con inferencia (repo local o URL): detecta build/arranque, nombre, puerto y dominio. Luego deploy."},
+	addTool(s, srv, &mcp.Tool{Name: "apps_add", Description: "Registra app con inferencia (repo local o URL): detecta build/arranque, nombre, puerto y dominio. Luego deploy."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appsAddArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppsAdd(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "env_set", Description: "Escribe var de entorno (restart requerido). Solo escritura: no lee secretos."},
+	addTool(s, srv, &mcp.Tool{Name: "env_set", Description: "Escribe var de entorno (restart requerido). Solo escritura: no lee secretos."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a envSetArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEnvSet(a.App, a.Key, a.Value))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "env_import", Description: "Importa un .env (global o de una app) con el parser canónico."},
+	addTool(s, srv, &mcp.Tool{Name: "env_import", Description: "Importa un .env (global o de una app) con el parser canónico."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a envImportArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doEnvImport(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "discover", Description: "Auto-registro inmediato desde GitHub App (sin esperar el poll)."},
+	addTool(s, srv, &mcp.Tool{Name: "discover", Description: "Auto-registro inmediato desde GitHub App (sin esperar el poll)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
 			return text(s.doDiscover())
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "deploy_check", Description: "Preflight sin efectos: app, deploy, git, dir, servicio (JSON)."},
+	addTool(s, srv, &mcp.Tool{Name: "deploy_check", Description: "Preflight sin efectos: app, deploy, git, dir, servicio (JSON)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doDeployCheck(a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "deployment_logs", Description: "Tail del log del último deploy de la app."},
+	addTool(s, srv, &mcp.Tool{Name: "deployment_logs", Description: "Tail del log del último deploy de la app."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a deploymentLogsArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doDeploymentLogs(a.App, a.N))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "wait_healthy", Description: "Espera app sana hasta timeout_s (default 60, máx 300). Para gates post-deploy."},
+	addTool(s, srv, &mcp.Tool{Name: "wait_healthy", Description: "Espera app sana hasta timeout_s (default 60, máx 300). Para gates post-deploy."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a waitHealthyArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doWaitHealthy(a.App, a.TimeoutS))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "apps_list", Description: "Apps con dominio, puerto, estático, deploy y dns_ok (JSON)."},
+	addTool(s, srv, &mcp.Tool{Name: "apps_list", Description: "Apps con dominio, puerto, estático, deploy y dns_ok (JSON)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppsList())
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "routes_list", Description: "Rutas host→target con dns_ok por host (JSON)."},
+	addTool(s, srv, &mcp.Tool{Name: "routes_list", Description: "Rutas host→target con dns_ok por host (JSON)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
 			return text(s.doRoutesList())
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "zones_list", Description: "Zonas locales (localhost/test/base) con apex y subdominios (JSON)."},
+	addTool(s, srv, &mcp.Tool{Name: "zones_list", Description: "Zonas locales (localhost/test/base) con apex y subdominios (JSON)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
 			return text(s.doZonesList())
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "detect_plan", Description: "Plan de build inferido para un directorio (framework, install/build/start o estático)."},
+	addTool(s, srv, &mcp.Tool{Name: "detect_plan", Description: "Plan de build inferido para un directorio (framework, install/build/start o estático)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a dirArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doDetectPlan(a.Dir))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "build", Description: "Compila una app de directorio local con su plan (tarda; sigue con deployments_list)."},
+	addTool(s, srv, &mcp.Tool{Name: "build", Description: "Compila una app de directorio local con su plan (tarda; sigue con deployments_list)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doBuild(a.App))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "app_update", Description: "Cambia dominio, puerto, comando, args, dir, estático, env_file o memoria de una app (aplica en ≤10s)."},
+	addTool(s, srv, &mcp.Tool{Name: "app_update", Description: "Cambia dominio, puerto, comando, args, dir, estático, env_file o memoria de una app (aplica en ≤10s)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a appUpdateArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppUpdate(a))
 		})
-	mcp.AddTool(srv, &mcp.Tool{Name: "apps_remove", Description: "Borra una app registrada (detiene el proceso al aplicar, ≤10s). Por defecto borra sus rutas."},
+	addTool(s, srv, &mcp.Tool{Name: "apps_remove", Description: "Borra una app registrada (detiene el proceso al aplicar, ≤10s). Por defecto borra sus rutas."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a removeAppArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppsRemove(a))
 		})
@@ -795,8 +798,10 @@ func (s *Server) newMCP() *mcp.Server {
 	return srv
 }
 
-// Run sirve el MCP por stdio (bloquea).
+// Run sirve el MCP por stdio (bloquea). Sin gate no hay stdio: las tools
+// pasan por stdioCheck (local=operator si lee control.token).
 func (s *Server) Run(ctx context.Context) error {
+	s.stdioGate = true
 	return s.newMCP().Run(ctx, &mcp.StdioTransport{})
 }
 

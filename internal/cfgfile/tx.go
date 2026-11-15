@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/store"
+	"rkt/internal/config"
+	"rkt/internal/store"
 )
 
 // MutateFleet ejecuta un read-modify-write de flota en una sola transacción

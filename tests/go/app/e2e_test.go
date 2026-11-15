@@ -15,10 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/store"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/logx"
+	"rkt/internal/store"
 )
 
 func freeAddr(t *testing.T) string {

@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/store"
+	"rkt/internal/config"
+	"rkt/internal/store"
 )
 
 // Dos handles distintos (como dos procesos) mutan campos distintos a la vez.

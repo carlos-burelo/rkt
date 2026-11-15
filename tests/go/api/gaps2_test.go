@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"rkt-proxy/internal/store"
+	"rkt/internal/store"
 )
 
 // Gaps API parte 2: rutas sin cobertura HTTP (fs, detect, zones, hosts,
@@ -46,11 +46,11 @@ func TestGapsFSDetectZones(t *testing.T) {
 		t.Fatalf("fs fantasma: quiere 404, got %d", rec.Code)
 	}
 
-	// detect exige operator y path
+	// detect: metadata para viewer; sin path/repo da 400 a todos
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/detect", visTok))
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("detect viewer: quiere 403, got %d", rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("detect viewer: quiere 400, got %d", rec.Code)
 	}
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/detect", opTok))
@@ -94,11 +94,11 @@ func TestGapsFSDetectZones(t *testing.T) {
 		t.Fatalf("detect sin motivo: %s", body)
 	}
 
-	// zones exige operator, devuelve array
+	// zones es metadata: viewer la lee, devuelve array
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/domains/zones", visTok))
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("zones viewer: quiere 403, got %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("zones viewer: quiere 200, got %d", rec.Code)
 	}
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/domains/zones", opTok))

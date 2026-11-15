@@ -3,11 +3,12 @@ package api
 import (
 	"net/http"
 	"path/filepath"
+	"rkt/internal/authz"
 	"strconv"
 	"strings"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/logx"
+	"rkt/internal/config"
+	"rkt/internal/logx"
 )
 
 // handleDeployments lista el historial (GET).
@@ -90,7 +91,7 @@ func (d *Deps) handleDeploymentDetail(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(r.URL.Path, "/api/v1/deployments/")
 	parts := strings.Split(rest, "/")
 	if len(parts) == 2 && parts[1] == "retry" && r.Method == http.MethodPost {
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpDeployRun) {
 			return
 		}
 		id, err := strconv.ParseInt(parts[0], 10, 64)
@@ -107,7 +108,7 @@ func (d *Deps) handleDeploymentDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(parts) == 2 && parts[1] == "cancel" && r.Method == http.MethodPost {
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpDeployRun) {
 			return
 		}
 		id, err := strconv.ParseInt(parts[0], 10, 64)

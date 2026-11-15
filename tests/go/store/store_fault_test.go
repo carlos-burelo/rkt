@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 // faultDB abre una DB y aplica SQL de prueba (triggers/vistas) para forzar

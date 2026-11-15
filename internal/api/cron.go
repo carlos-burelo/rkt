@@ -3,14 +3,15 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"rkt/internal/authz"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/logx"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/logx"
 )
 
 type cronView struct {
@@ -107,7 +108,7 @@ func (d *Deps) handleCronDetail(w http.ResponseWriter, r *http.Request) {
 	case action == "" && r.Method == http.MethodPut:
 		d.putCron(w, r, app, job)
 	case action == "" && r.Method == http.MethodDelete:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpCronWrite) {
 			return
 		}
 		if err := d.mutateFleet(true, func(cp *config.Config) error {
@@ -118,7 +119,7 @@ func (d *Deps) handleCronDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]string{"ok": "true"})
 	case action == "run" && r.Method == http.MethodPost:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpCronWrite) {
 			return
 		}
 		if d.Cron == nil {
@@ -139,7 +140,7 @@ func (d *Deps) handleCronDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Deps) putCron(w http.ResponseWriter, r *http.Request, app, job string) {
-	if !requireOperator(w, r) {
+	if !requireOp(w, r, authz.OpCronWrite) {
 		return
 	}
 	var in struct {

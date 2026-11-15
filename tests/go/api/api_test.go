@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/dnscheck"
-	"rkt-proxy/internal/github"
-	"rkt-proxy/internal/health"
-	"rkt-proxy/internal/store"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/dnscheck"
+	"rkt/internal/github"
+	"rkt/internal/health"
+	"rkt/internal/store"
 )
 
 func testDeps(t *testing.T) (Deps, *store.DB, func()) {
@@ -453,11 +453,11 @@ func TestEnvCRUD(t *testing.T) {
 	opTok := loginAs(t, h, db, "op", store.RoleOperator)
 	visTok := loginAs(t, h, db, "vis", store.RoleViewer)
 
-	// viewer no lee secretos
+	// viewer sí lee nombres de claves (no son secretos; valores siguen 403)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(http.MethodGet, "/api/v1/apps/w/env", visTok))
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("viewer env: quiere 403, got %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("viewer env keys: quiere 200, got %d", rec.Code)
 	}
 	// viewer no lee el valor de una clave (fuga de secreto)
 	rec = httptest.NewRecorder()

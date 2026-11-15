@@ -1,4 +1,4 @@
-module rkt-proxy
+module rkt
 
 go 1.26.0
 

@@ -3,9 +3,10 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"rkt/internal/authz"
 
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
 )
 
 // handleRoutes CRUD de rutas host→target. Misma semántica que el CLI:
@@ -24,7 +25,7 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, out)
 	case http.MethodPost:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpRoutesWrite) {
 			return
 		}
 		var in struct {
@@ -45,7 +46,7 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, map[string]string{"ok": "true"})
 	case http.MethodDelete:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpRoutesWrite) {
 			return
 		}
 		host := r.URL.Query().Get("host")
@@ -93,7 +94,7 @@ func (d *Deps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]any{"ok": "true", "dropped": dropped})
 	case http.MethodPut:
-		if !requireOperator(w, r) {
+		if !requireOp(w, r, authz.OpRoutesWrite) {
 			return
 		}
 		var pin struct {

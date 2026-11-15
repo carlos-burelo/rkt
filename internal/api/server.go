@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"rkt-proxy/internal/doctor"
+	"rkt/internal/doctor"
 )
 
 // handleServer snapshot local de la instancia.

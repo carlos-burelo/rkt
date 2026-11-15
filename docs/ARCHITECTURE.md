@@ -6,7 +6,7 @@ otra, se mueve al hogar correcto; no se duplica.
 ## Capas y dirección de dependencias
 
 ```text
-cmd/rkt-proxy
+cmd/rkt
   ├─ internal/cli          comandos, servicio Windows y salida de operador
   └─ internal/app          composición del runtime (Program)
        ├─ internal/api      transporte HTTP /api/v1
@@ -48,6 +48,29 @@ cmd/rkt-proxy
 | Procesos y reinicios | `internal/supervisor` |
 | Tareas programadas por app | `internal/cronjobs` |
 | Historial y eventos | `internal/store` |
+| Autorización: roles, ops y tabla única | `internal/authz` (API, MCP-HTTP, MCP-stdio y healthz deciden aquí) |
+| Layout del home (slots, current/previous, lanzador, DB, logs) | `internal/logx` (canónico; `install.ps1` lo espeja) |
+
+## Base inmutable (contratos on-disk y de servicio)
+
+Lo que sigue no se cambia sin migración explícita. El server en limpio
+parte de aquí:
+
+1. **Un solo hogar**: `<InstallDir>` (defecto `C:\Program Files\rkt`).
+   `rkt.db` (ancla), `data/rkt.db` (SQLite real), `versions/<ver>/rkt.exe`
+   (slots inmutables), `rkt.exe` (lanzador = copia del slot activo, PATH),
+   `current.txt`/`previous.txt`/`VERSION.txt`, `logs/`, `secrets/`,
+   `apps/`, `certs/`, `data/backups/`. Canónico en `internal/logx`.
+2. **Servicio `Rkt` (LocalSystem, auto) con binpath al slot**:
+   `"<slot>\rkt.exe" -config "<home>\rkt.db"`. Nunca se escribe el exe en
+   uso: upgrade = publicar al costado + flip + gate + rollback auto.
+   Recovery: 3 reinicios ante crash (`sc.exe failure`).
+3. **SQLite aditiva**: esquema solo crece (`migrations[]`, `user_version`);
+   tablas nuevas con `IF NOT EXISTS`. Destructivo = `backup`/`restore`.
+4. **Datos sobreviven** a upgrade y a desinstala (el MSI/script solo quita
+   lo que instaló; `nuke.ps1` es el único borrado total).
+5. **Identidad del producto**: módulo `rkt`, binario `rkt.exe`,
+   repo `carlos-burelo/rkt`, servicio `Rkt`.
 
 ## Plataformas
 
@@ -63,10 +86,8 @@ tags.| Pieza | Windows | Linux/Unix |
 | CA de desarrollo | Root del usuario | manual (`SSL_CERT_FILE`) |
 | Abrir navegador | `rundll32` | `xdg-open` / `open` |
 
-Estado: Windows es la plataforma soportada. Linux compila, pasa la suite
-completa en Ubuntu/WSL y CI ejecuta build+vet+tests más un job con `-race`.
-Limitaciones conscientes en Linux: sin tope de RAM (Job Objects) y CA de
-desarrollo manual.
+Estado: Windows es la única plataforma objetivo (hasta nuevo aviso).
+Quedan rutas Linux/Unix como best-effort sin validar; CI no las corre.
 
 ## Protocolos
 
@@ -124,6 +145,13 @@ Hecho:
   (GET/POST al puerto local). Historial en SQLite y log por ejecución.
 - Marca canónica en `web/public/icons/mark.svg`; favicon e iconos PWA se
   generan desde ese SVG con `scripts/shots/icons.mjs`.
+- Un solo verificador: `internal/authz` con tabla única op→rol; API, MCP-HTTP,
+  MCP-stdio y healthz deciden ahí. Sesiones valen en `/mcp`, streams con
+  `?ticket=` de un uso, stdio con gate (local=operator, nunca admin).
+- Grupo `rkt-operators` (RX en hogar/logs, nunca secrets/data): operadores leen
+  logs sin ser admins; la gestión va por dashboard/API.
+- Upgrade por slots: `versions/<ver>` inmutables + `rkt upgrade` (flip de
+  binpath + gate + rollback auto); `install.ps1` instala al slot.
 
 ## Deuda pendiente (orden sugerido)
 

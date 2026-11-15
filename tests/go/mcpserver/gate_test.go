@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/store"
+	"rkt/internal/logx"
+	"rkt/internal/store"
 )
 
 func gateServer(t *testing.T) (*Server, map[string]string) {

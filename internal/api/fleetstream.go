@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"rkt-proxy/internal/appview"
-	"rkt-proxy/internal/health"
-	"rkt-proxy/internal/hub"
-	"rkt-proxy/internal/netutil"
+	"rkt/internal/appview"
+	"rkt/internal/health"
+	"rkt/internal/hub"
+	"rkt/internal/netutil"
 )
 
 // Ventanas iguales que el polling al que reemplaza.

@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/authz"
+	"rkt/internal/config"
 )
 
 type backendCheck struct {
@@ -58,13 +59,20 @@ type Deps struct {
 
 // NewHandler responde GET /healthz, POST /restart/<name>,
 // POST /deploy/<name>, /rollback/<name>, /retry/<id> y /build/<name>;
-// resto 404/405. Las acciones exigen token de control.
+// resto 404/405. Las acciones exigen token de control (rol local =
+// operator) y además pasan por la tabla única de authz.
 func NewHandler(d Deps) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isControlAction(r.URL.Path) && !controlOK(r, d.Token) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "token de control requerido"})
+			return
+		}
+		if op, ok := controlOp(r.URL.Path); ok && !authz.Check(authz.RoleLocal, op) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "requiere rol " + string(authz.MinRole(op))})
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/restart/") {
@@ -126,6 +134,23 @@ func isControlAction(path string) bool {
 		}
 	}
 	return false
+}
+
+// controlOp mapea acción healthz a op canónica (misma tabla que API y MCP).
+func controlOp(path string) (authz.Op, bool) {
+	switch {
+	case strings.HasPrefix(path, "/restart/"):
+		return authz.OpAppsWrite, true
+	case strings.HasPrefix(path, "/build/"):
+		return authz.OpDeployRun, true
+	case strings.HasPrefix(path, "/deploy/"):
+		return authz.OpDeployRun, true
+	case strings.HasPrefix(path, "/rollback/"):
+		return authz.OpDeployRun, true
+	case strings.HasPrefix(path, "/retry/"):
+		return authz.OpDeployRun, true
+	}
+	return "", false
 }
 
 // controlOK compara Bearer o X-Rkt-Control en tiempo constante.

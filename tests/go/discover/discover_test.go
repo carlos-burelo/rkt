@@ -20,9 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/github"
-	"rkt-proxy/internal/store"
+	"rkt/internal/config"
+	"rkt/internal/github"
+	"rkt/internal/store"
 )
 
 func testKey(t *testing.T) string {

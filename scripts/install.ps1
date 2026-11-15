@@ -5,8 +5,12 @@
 .DESCRIPTION
   Pensado para: irm <url> | iex. Descarga el .exe del último GitHub release,
   abre 80/443 y registra/arranca el servicio. Todo vive bajo un solo home
-  (<InstallDir>, por defecto C:\Program Files\rkt-proxy):
-    rkt.exe, VERSION.txt      binario y versión
+  (<InstallDir>, por defecto C:\Program Files\rkt). Layout canónico en
+  internal/logx; este script lo espeja, no lo define:
+    rkt.exe                   lanzador = copia del slot activo (para el PATH)
+    VERSION.txt, current.txt  versión activa (previous.txt tras un upgrade)
+    versions\<ver>\rkt.exe    slots inmutables: el servicio corre desde aquí,
+                              nunca se escribe un exe en uso
     data\rkt.db               SQLite (config + flota)
     data\backups\             copias diarias
     secrets\                  github.token, github-app.pem
@@ -15,7 +19,7 @@
     certs\                    cache ACME
   La config se edita por dashboard/CLI; no se edita YAML.
 .EXAMPLE
-  # Actualizar a último release (idempotente, con backup + rollback auto):
+  # Actualizar a último release (idempotente, por slots + rollback auto):
   irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 | iex
 .EXAMPLE
   # Pin de versión, rollback o token deploy:
@@ -28,7 +32,7 @@
 param(
   [string]$Repo = $env:RKT_REPO,
   [string]$Version = "latest",
-  [string]$InstallDir = "C:\Program Files\rkt-proxy",
+  [string]$InstallDir = "C:\Program Files\rkt",
   [string]$LocalExe = "",
   [switch]$SkipFirewall,
   [switch]$Force,
@@ -50,10 +54,11 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
   ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) { throw "Ejecuta como Administrador." }
 
-$exe = Join-Path $InstallDir "rkt.exe"
+$launcher = Join-Path $InstallDir "rkt.exe"
 $cfg = Join-Path $InstallDir "rkt.db"
-$bak = "$exe.bak"
 $verFile = Join-Path $InstallDir "VERSION.txt"
+$currentFile = Join-Path $InstallDir "current.txt"
+$previousFile = Join-Path $InstallDir "previous.txt"
 # Árbol del hogar: se crea idempotente (en reinstalación ya existe).
 foreach ($sub in @("data", "secrets", "logs", "apps", "certs")) {
   New-Item -ItemType Directory -Force (Join-Path $InstallDir $sub) | Out-Null
@@ -71,13 +76,22 @@ if ($GithubToken -ne "") {
   Write-Host "GITHUB_TOKEN guardado en $tokenFile (ACL SYSTEM+Admins)."
 }
 
-# 0. rollback a versión anterior
+# 0. rollback al slot previo (previous.txt): flip de binpath + restart.
+# Sin reintentos de copia: el slot viejo sigue intacto.
 if ($Rollback) {
-  if (-not (Test-Path $bak)) { throw "Sin backup en $bak" }
+  $prev = ""
+  if (Test-Path $previousFile) { $prev = (Get-Content $previousFile -Raw).Trim() }
+  if ([string]::IsNullOrWhiteSpace($prev)) { throw "Sin previous.txt, nada a lo que volver" }
+  $slotExe = Join-Path $InstallDir "versions\$prev\rkt.exe"
+  if (-not (Test-Path $slotExe)) { throw "Falta slot $prev" }
   Stop-Service Rkt -Force -ErrorAction SilentlyContinue
-  Copy-Item $bak $exe -Force
+  & sc.exe config Rkt binPath= "`"$slotExe`" -config `"$cfg`""
+  if (Copy-ConReintentos $slotExe $launcher 5) { Unblock-File $launcher -ErrorAction SilentlyContinue }
   sc.exe start Rkt
-  Write-Host "Rollback OK."
+  Start-Sleep 3
+  $prev | Out-File $verFile -Encoding ascii -NoNewline
+  $prev | Out-File $currentFile -Encoding ascii -NoNewline
+  Write-Host "Rollback a $prev OK."
   $ErrorActionPreference = $__rktEAP
   return
 }
@@ -86,6 +100,8 @@ if ($Rollback) {
 if ($LocalExe -ne "") {
   if (-not (Test-Path $LocalExe)) { throw "No existe $LocalExe" }
   Write-Host "Usando binario local $LocalExe"
+  try { $Version = (& $LocalExe version).Trim() } catch { $Version = "" }
+  if ([string]::IsNullOrWhiteSpace($Version)) { $Version = "dev-local" }
   $tmp = $LocalExe
 } else {
   if ($Version -eq "latest") {
@@ -104,7 +120,8 @@ if ($LocalExe -ne "") {
 
   # 2b. idempotencia: si ya corre esa versión, nada que hacer (salvo -Force)
   $current = ""
-  if (Test-Path $verFile) { $current = (Get-Content $verFile -Raw).Trim() }
+  if (Test-Path $currentFile) { $current = (Get-Content $currentFile -Raw).Trim() }
+  elseif (Test-Path $verFile) { $current = (Get-Content $verFile -Raw).Trim() }
   if ($current -eq $Version -and -not $Force -and $LocalExe -eq "") {
     Write-Host "Ya instalado $Version en $InstallDir. Nada que hacer."
     $ErrorActionPreference = $__rktEAP
@@ -139,6 +156,12 @@ if ($LocalExe -ne "") {
   }
 }
 
+# 2c. slot versionado: el servicio corre desde versions\<ver>\rkt.exe
+# (inmutable; nunca se escribe un exe en uso). $exe apunta al slot.
+$slotDir = Join-Path $InstallDir "versions\$Version"
+$exe = Join-Path $slotDir "rkt.exe"
+New-Item -ItemType Directory -Force $slotDir | Out-Null
+
 Remove-NetFirewallRule -DisplayName "RKT Proxy HTTP/HTTPS" -ErrorAction SilentlyContinue | Out-Null
 
 # Copy-ConReintentos copia con reintentos: un antivirus o un handle
@@ -162,13 +185,14 @@ function Copy-ConReintentos([string]$origen, [string]$destino, [int]$intentos = 
   return $false
 }
 
-# 4. parar servicio previo para liberar el .exe + backup para rollback
+# 4. parar servicio previo. Sin backup del exe en uso: el slot nuevo se
+# publica al costado y el flip es solo binpath (sección 7).
 $svc = Get-Service Rkt -ErrorAction SilentlyContinue
 if ($svc -and $svc.Status -ne "Stopped") {
   Write-Host "Parando servicio previo..."
   Stop-Service Rkt -Force -ErrorAction SilentlyContinue
-  # Espera al servicio: sin esto el backup corre con el .exe aún
-  # retenido (Stopping) y aborta con "No pude respaldar".
+  # Espera al servicio: sin esto el start posterior corre con el
+  # proceso viejo aún en Stopping y el flip parece no surtir efecto.
   for ($i = 0; $i -lt 30; $i++) {
     $s = Get-Service Rkt -ErrorAction SilentlyContinue
     if (-not $s -or $s.Status -eq "Stopped") { break }
@@ -184,52 +208,16 @@ if ($svc -and $svc.Status -ne "Stopped") {
       } catch {}
     } | Out-Null
   } catch {}
-  # Espera a que el .exe se libere antes del backup/copia.
-  if (Test-Path $exe) {
-    for ($i = 0; $i -lt 15; $i++) {
-      try { [IO.File]::OpenRead($exe).Close(); break } catch { Start-Sleep 1 }
-    }
-  }
 }
-if (Test-Path $exe) {
-  # El destino del backup puede quedar con ACL rota (solo lectura de
-  # otro admin) aunque el origen abra bien: se intenta ceder antes.
-  if (Test-Path $bak) {
-    try { & takeown /F $bak 2>$null | Out-Null } catch {}
-    try { & icacls $bak /grant:r "*S-1-5-32-544:(F)" 2>$null | Out-Null } catch {}
-  }
-  if (Copy-ConReintentos $exe $bak 15) {
-    Write-Host "Backup en $bak"
-  } elseif (Test-Path $verFile) {
-    $detalle = ""
-    try { Copy-Item $exe $bak -Force -ErrorAction Stop } catch { $detalle = " Detalle: $($_.Exception.Message)" }
-    try { $aclBak = ((& icacls $bak 2>&1) -join " ").Trim() } catch { $aclBak = "sin ACL legible" }
-    throw "No pude respaldar $exe (¿rkt.exe en ejecución? revisa con: Get-Process rkt*).$detalle ACL destino: $aclBak. Sin backup no sigo en una actualización."
-  } else {
-    Write-Warning "Sin backup del binario previo (instalación fresca; sigo sin red de seguridad)."
-  }
+# 4b. publicar slot (fichero fresco, nunca bloqueado) + verificar versión.
+if (-not (Copy-ConReintentos $tmp $exe 5)) {
+  throw "No pude publicar $exe. Revisa con Get-Process rkt* y reintenta."
 }
-if (-not (Copy-ConReintentos $tmp $exe 15)) {
-  $detalle = ""
-  try { Copy-Item $tmp $exe -Force -ErrorAction Stop } catch { $detalle = " Detalle: $($_.Exception.Message)" }
-  throw "No pude instalar $exe (proceso reteniéndolo o ACL). Revisa con Get-Process rkt* y reintenta.$detalle"
-}
-Unblock-File $exe -ErrorAction SilentlyContinue # la copia puede heredar la marca de zona
-# 4b. el binario tiene que ser legible: DACLs rotas de instalaciones viejas
-# lo dejan ilegible y todo lo posterior muere. Se intenta reparar
-# (takeown+grant); si no cede, se aborta con causa clara en vez de fallar
-# en seco más adelante.
-try {
-  [IO.File]::OpenRead($exe).Close()
-} catch {
-  & takeown /F $exe 2>$null | Out-Null
-  & icacls $exe /grant:r "*S-1-5-32-544:(F)" 2>$null | Out-Null
-  try {
-    [IO.File]::OpenRead($exe).Close()
-  } catch {
-    throw "No puedo leer $exe ni tras reparar ACL (¿antivirus retiniéndolo? ¿disco?). Revisa con Get-Process rkt* y reintenta."
-  }
-  Write-Host "ACL del binario reparada."
+Unblock-File $exe -ErrorAction SilentlyContinue
+$got = ""
+try { $got = (& $exe version).Trim() } catch { $got = "" }
+if ($LocalExe -eq "" -and $got -ne $Version) {
+  throw "El slot no reporta $Version (dio '$got')."
 }
 Write-Host "Binario en $exe"
 
@@ -246,6 +234,19 @@ $adminSid = "*S-1-5-32-544"
 icacls $InstallDir /grant "*S-1-5-18:F" "${adminSid}:F" /T /C | Out-Null
 icacls $InstallDir /grant "*S-1-5-18:(OI)(CI)F" "${adminSid}:(OI)(CI)F" /T /C | Out-Null
 
+# 5c. grupo de operadores: leer logs sin ser admin. RX en el hogar
+# (atravesar) + RX con herencia en logs/ (futuros .log incluidos).
+# secrets/ y data/ quedan SYSTEM+Admins: la gestión va por dashboard/API,
+# nunca por SQLite directa.
+$opGroup = "rkt-operators"
+if (-not (Get-LocalGroup -Name $opGroup -ErrorAction SilentlyContinue)) {
+  New-LocalGroup -Name $opGroup -Description "Lee logs de rkt; gestiona por dashboard/API" | Out-Null
+  Write-Host "Grupo local $opGroup creado (agrega miembros: Add-LocalGroupMember $opGroup <usuario>)."
+}
+icacls $InstallDir /grant "${opGroup}:RX" /C | Out-Null
+$logsDir = Join-Path $InstallDir "logs"
+icacls $logsDir /grant "${opGroup}:(OI)(CI)RX" /T /C | Out-Null
+
 # 6. firewall 80/443
 if (-not $SkipFirewall) {
   if (-not (Get-NetFirewallRule -DisplayName "RKT HTTP/HTTPS" -ErrorAction SilentlyContinue)) {
@@ -255,7 +256,7 @@ if (-not $SkipFirewall) {
   }
 }
 
-# 6c. PATH máquina para usar rkt-proxy desde cualquier terminal
+# 6c. PATH máquina para usar rkt desde cualquier terminal
 $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
 $clean = $machinePath -split ";" | ForEach-Object { $_.Trim().TrimEnd("\") }
 if ($clean -notcontains $InstallDir.TrimEnd("\")) {
@@ -275,17 +276,29 @@ foreach ($p in 80, 443) {
   }
 }
 
-# 7. servicio: instala solo si falta (misma ruta, sin churn), luego arranca
-if (-not (Get-Service Rkt -ErrorAction SilentlyContinue)) {
+# 7. servicio: se registra desde el slot (binpath = slot, nunca el lanzador).
+# En update, flip de binpath al slot nuevo (el viejo queda para rollback).
+$fresh = -not (Get-Service Rkt -ErrorAction SilentlyContinue)
+$oldVer = ""
+if (Test-Path $currentFile) { $oldVer = (Get-Content $currentFile -Raw).Trim() }
+if ($fresh) {
   & $exe -config $cfg install
+} else {
+  if ($oldVer -ne "" -and $oldVer -ne $Version) {
+    $oldVer | Out-File $previousFile -Encoding ascii -NoNewline
+    Write-Host "Flip $($oldVer) -> $($Version)"
+  }
+  & sc.exe config Rkt binPath= "`"$exe`" -config `"$cfg`""
 }
 sc.exe start Rkt
 Start-Sleep 3
 
-# 8. health check: servicio arriba o rollback automático
+# 8. health gate: servicio arriba y respondiendo, o flip atrás automático.
 $st = (Get-Service Rkt).Status
-if ($st -ne "Running") {
-  Write-Warning "Servicio no arrancó tras update. Rollback..."
+$ready = $false
+if ($st -eq "Running") { $ready = Wait-RktHealth }
+if (-not $ready) {
+  Write-Warning "Servicio no sano tras update. Rollback..."
   try {
     $det = Get-MpThreatDetection -ErrorAction SilentlyContinue |
       Where-Object { ($_.Resources -join " ") -match [regex]::Escape($InstallDir) } |
@@ -294,13 +307,30 @@ if ($st -ne "Running") {
       Write-Warning "Defender marca algo bajo $InstallDir (heurístico habitual en exe sin firmar). Revisa con Get-MpThreatDetection; exclusión: Add-MpPreference -ExclusionPath '$InstallDir'."
     }
   } catch {}
-  if (Test-Path $bak) {
-    Copy-Item $bak $exe -Force
+  $prev = ""
+  if (Test-Path $previousFile) { $prev = (Get-Content $previousFile -Raw).Trim() }
+  $prevExe = Join-Path $InstallDir "versions\$prev\rkt.exe"
+  if ($prev -ne "" -and (Test-Path $prevExe)) {
+    & sc.exe config Rkt binPath= "`"$prevExe`" -config `"$cfg`""
     sc.exe start Rkt
+    Start-Sleep 3
+    if ((Get-Service Rkt).Status -eq "Running" -and (Wait-RktHealth)) {
+      $prev | Out-File $verFile -Encoding ascii -NoNewline
+      $prev | Out-File $currentFile -Encoding ascii -NoNewline
+      if (Copy-ConReintentos $prevExe $launcher 5) { Unblock-File $launcher -ErrorAction SilentlyContinue }
+      throw "Update fallido, rollback a $prev aplicado. Revisa config y logs."
+    }
   }
-  throw "Update fallido, rollback aplicado. Revisa config y logs."
+  throw "Update fallido y rollback imposible. Revisa config y logs."
 }
 $Version | Out-File $verFile -Encoding ascii -NoNewline
+$Version | Out-File $currentFile -Encoding ascii -NoNewline
+# Lanzador (PATH): copia del slot activo. No corre como servicio, se pisa libre.
+if (Copy-ConReintentos $exe $launcher 5) { Unblock-File $launcher -ErrorAction SilentlyContinue }
+else { Write-Warning "No pude refrescar el lanzador $launcher (¿CLI en uso? se actualiza en la próxima corrida)." }
+# Recovery: reinicia solo ante crash (3 intentos), sin loop infinito.
+& sc.exe failure Rkt reset= 86400 actions= restart/60000/restart/60000// 2>$null
+if ($LASTEXITCODE -ne 0) { Write-Warning "No pude programar recovery del servicio." }
 sc.exe query Rkt
 
 # 9. autoconfiguración: IP pública, dashboard externo, firewall y admin.

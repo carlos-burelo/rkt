@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"rkt/internal/authz"
 	"runtime"
 	"sort"
 	"strings"
@@ -36,7 +37,7 @@ func (d *Deps) handleFS(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
 		return
 	}
-	if !requireOperator(w, r) {
+	if !requireOp(w, r, authz.OpFsRead) {
 		return
 	}
 	raw := strings.TrimSpace(r.URL.Query().Get("path"))

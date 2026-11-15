@@ -5,10 +5,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"rkt/internal/authz"
 	"strings"
 
-	"rkt-proxy/internal/buildpack"
-	"rkt-proxy/internal/discover"
+	"rkt/internal/buildpack"
+	"rkt/internal/discover"
 )
 
 type detectOut struct {
@@ -52,7 +53,7 @@ func (d *Deps) handleDetect(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
 		return
 	}
-	if !requireOperator(w, r) {
+	if !requireOp(w, r, authz.OpDetectRead) {
 		return
 	}
 	if repo := r.URL.Query().Get("repo"); repo != "" {

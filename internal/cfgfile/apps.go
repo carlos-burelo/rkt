@@ -9,13 +9,13 @@ import (
 	"sort"
 	"strconv"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/discover"
-	"rkt-proxy/internal/domains"
-	"rkt-proxy/internal/dotenv"
-	"rkt-proxy/internal/github"
-	"rkt-proxy/internal/platform"
-	"rkt-proxy/internal/store"
+	"rkt/internal/config"
+	"rkt/internal/discover"
+	"rkt/internal/domains"
+	"rkt/internal/dotenv"
+	"rkt/internal/github"
+	"rkt/internal/platform"
+	"rkt/internal/store"
 )
 
 // CreateAndAdd es el alta canónica: infiere (repo/dir) o registra externa,

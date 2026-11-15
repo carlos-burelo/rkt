@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/github"
+	"rkt/internal/config"
+	"rkt/internal/github"
 )
 
 func sign(t *testing.T, body, secret string) string {

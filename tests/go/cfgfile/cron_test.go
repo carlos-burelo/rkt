@@ -3,7 +3,7 @@ package cfgfile
 import (
 	"testing"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func TestSetCronJobHTTPNormaliza(t *testing.T) {

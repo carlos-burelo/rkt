@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/store"
+	"rkt/internal/config"
+	"rkt/internal/logx"
+	"rkt/internal/store"
 )
 
 func TestSnapshotDashboardSettings(t *testing.T) {

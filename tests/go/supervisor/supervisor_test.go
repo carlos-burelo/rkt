@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func testLog(t *testing.T) *slog.Logger {

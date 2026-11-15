@@ -15,12 +15,12 @@ import (
 	"strings"
 	"time"
 
-	"rkt-proxy/internal/buildpack"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/domains"
-	"rkt-proxy/internal/github"
-	"rkt-proxy/internal/platform"
-	"rkt-proxy/internal/store"
+	"rkt/internal/buildpack"
+	"rkt/internal/config"
+	"rkt/internal/domains"
+	"rkt/internal/github"
+	"rkt/internal/platform"
+	"rkt/internal/store"
 )
 
 // presetBinKey qué setting de binario usa cada preset.

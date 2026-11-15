@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"testing"
 
-	"rkt-proxy/internal/health"
-	"rkt-proxy/internal/hub"
+	"rkt/internal/health"
+	"rkt/internal/hub"
 )
 
 func fleetServer(t *testing.T, d Deps) *httptest.Server {

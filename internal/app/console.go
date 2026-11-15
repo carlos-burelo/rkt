@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/store"
+	"rkt/internal/config"
+	"rkt/internal/store"
 )
 
 // mcpAuth exige un API token rkt_ (cualquier rol): el gate por

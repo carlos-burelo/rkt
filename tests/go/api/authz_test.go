@@ -1,13 +1,15 @@
 package api
 
-// Matriz authZ: cada endpoint × rol con el código esperado.
+// Matriz authZ: cada endpoint × rol con el código esperado. Verificador
+// único en internal/authz (tabla op->rol); este test fija el contrato.
 //
 // Dos convenciones del código que el test fija:
 //   - lookup primero: con ID/app inexistente el 404 llega antes que el
 //     guard (mismo 404 para todos los roles; el guard se pisa con el
 //     recurso existente).
-//   - env/github/waf/fs/zones/suggest son operator+ aunque lean:
-//     exponen superficie (repos, vars, IPs, rutas del disco).
+//   - metadata (zones, suggest, env-keys, detect, diff) es viewer;
+//     superficie sensible (github, waf, fs, valores de env) es operator+;
+//     hosts del sistema es admin (escribe fuera del home).
 //
 // Sin token todo da 401 (misma vuelta).
 
@@ -17,8 +19,8 @@ import (
 	"strings"
 	"testing"
 
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/store"
+	"rkt/internal/cfgfile"
+	"rkt/internal/store"
 )
 
 type authzRow struct {
@@ -81,14 +83,16 @@ func TestMatrizAuthZ(t *testing.T) {
 		{"GET", "/api/v1/github", "", 403, 200, 200},
 		{"GET", "/api/v1/github/repos", "", 403, 200, 200},
 		{"GET", "/api/v1/alert-channels", "", 403, 200, 200},
-		{"GET", "/api/v1/domains/zones", "", 403, 200, 200},
-		{"GET", "/api/v1/domains/suggest?name=tienda", "", 403, 200, 200},
-		{"GET", "/api/v1/env", "", 403, 200, 200},
-		{"GET", "/api/v1/env/w", "", 403, 404, 404}, // sin ruta por app
+		{"GET", "/api/v1/domains/zones", "", 200, 200, 200},
+		{"GET", "/api/v1/domains/suggest?name=tienda", "", 200, 200, 200},
+		{"GET", "/api/v1/env", "", 200, 200, 200},
+		{"GET", "/api/v1/env/w", "", 403, 404, 404}, // valor: operator; sin ruta por app
 		{"GET", "/api/v1/fs?path=/", "", 403, 200, 200},
 		{"GET", "/api/v1/waf", "", 403, 200, 200},
-		{"GET", "/api/v1/detect", "", 403, 400, 400},
-		{"GET", "/api/v1/apps/w/diff", "", 403, 400, 400},
+		{"GET", "/api/v1/detect", "", 400, 400, 400},
+		{"GET", "/api/v1/apps/w/diff", "", 400, 400, 400},
+		{"POST", "/api/v1/stream/ticket", "", 200, 200, 200},
+		{"POST", "/api/v1/domains/hosts", `{"host":""}`, 403, 403, 403}, // host inválido: gate o validación
 		// mutaciones sobre inexistente: 404 antes que el guard
 		{"PUT", "/api/v1/apps/no-existe", `{}`, 404, 404, 404},
 		{"DELETE", "/api/v1/apps/no-existe", "", 404, 404, 404},

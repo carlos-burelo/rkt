@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"rkt-proxy/internal/store"
+	"rkt/internal/store"
 )
 
 func postJSON(t *testing.T, h http.Handler, tok, path, body string) (int, string) {

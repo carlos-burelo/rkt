@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 // SetCronJob crea o reemplaza una tarea por nombre. No persiste: valida sobre

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"rkt-proxy/internal/cfgfile"
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/store"
+	"rkt/internal/cfgfile"
+	"rkt/internal/config"
+	"rkt/internal/store"
 )
 
 // migrateSlots corre en cada arranque: convierte Dir sin sufijo a <name>.a.

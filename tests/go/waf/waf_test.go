@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func liveWith(t *testing.T, deny []string) *config.Live {

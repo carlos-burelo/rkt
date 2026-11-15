@@ -14,8 +14,8 @@ import (
 	"strings"
 	"testing"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/supervisor"
+	"rkt/internal/config"
+	"rkt/internal/supervisor"
 )
 
 func TestPreservePersist(t *testing.T) {

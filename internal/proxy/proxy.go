@@ -14,10 +14,10 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/netutil"
-	"rkt-proxy/internal/ratelimit"
-	"rkt-proxy/internal/waf"
+	"rkt/internal/config"
+	"rkt/internal/netutil"
+	"rkt/internal/ratelimit"
+	"rkt/internal/waf"
 )
 
 // NewHandler devuelve handler único: match por Host -> ReverseProxy,

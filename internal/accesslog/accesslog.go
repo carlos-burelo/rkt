@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"rkt-proxy/internal/logx"
+	"rkt/internal/logx"
 )
 
 const maxBytes = 10 << 20 // 10MB, luego rota a .1

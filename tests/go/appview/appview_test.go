@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"rkt-proxy/internal/config"
+	"rkt/internal/config"
 )
 
 func TestBuildZonesAgrupaBaseYSubdominios(t *testing.T) {

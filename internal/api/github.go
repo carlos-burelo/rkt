@@ -3,9 +3,10 @@ package api
 import (
 	"net/http"
 	"net/url"
+	"rkt/internal/authz"
 	"strings"
 
-	"rkt-proxy/internal/github"
+	"rkt/internal/github"
 )
 
 // handleGithub estado vivo de la GitHub App.
@@ -14,7 +15,7 @@ func (d *Deps) handleGithub(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
 		return
 	}
-	if !requireOperator(w, r) {
+	if !requireOp(w, r, authz.OpGitHubWrite) {
 		return
 	}
 	if d.Github == nil {
@@ -45,7 +46,7 @@ func (d *Deps) handleGithubRepos(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "solo GET")
 		return
 	}
-	if !requireOperator(w, r) {
+	if !requireOp(w, r, authz.OpGitHubWrite) {
 		return
 	}
 	if d.GithubRepos == nil {

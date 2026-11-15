@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"rkt-proxy/internal/logx"
+	"rkt/internal/logx"
 )
 
 // streamLog sirve text/event-stream desde path. done, si no nil, se

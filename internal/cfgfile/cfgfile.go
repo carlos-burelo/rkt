@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"rkt-proxy/internal/config"
-	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/platform"
-	"rkt-proxy/internal/store"
+	"rkt/internal/config"
+	"rkt/internal/logx"
+	"rkt/internal/platform"
+	"rkt/internal/store"
 )
 
 // Load infra desde DB (sin flota). Para CLI que solo necesita healthz.

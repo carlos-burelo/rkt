@@ -101,6 +101,33 @@ func ControlTokenPath(configPath string) string {
 	return filepath.Join(DirFor(configPath), "control.token")
 }
 
+// Layout de slots del binario (base inmutable, ver docs/ARCHITECTURE.md).
+// El servicio corre desde versions/<ver>/rkt.exe (inmutable; nunca se
+// escribe un exe en uso). <home>/rkt.exe es el lanzador = copia del slot
+// activo (para el PATH). install.ps1 espeja estos nombres; el canónico
+// vive aquí.
+
+// VersionsDir slots versionados del servicio.
+func VersionsDir(home string) string { return filepath.Join(home, "versions") }
+
+// SlotDir slot de una versión (nombre ya saneado).
+func SlotDir(home, ver string) string { return filepath.Join(VersionsDir(home), ver) }
+
+// SlotExe binario dentro de un slot.
+func SlotExe(home, ver string) string { return filepath.Join(SlotDir(home, ver), "rkt.exe") }
+
+// CurrentFile slot activo (lo lee el flip y el gate).
+func CurrentFile(home string) string { return filepath.Join(home, "current.txt") }
+
+// PreviousFile slot previo (rollback).
+func PreviousFile(home string) string { return filepath.Join(home, "previous.txt") }
+
+// VersionFile versión activa legible (la muestra `rkt version` del slot).
+func VersionFile(home string) string { return filepath.Join(home, "VERSION.txt") }
+
+// LauncherPath copia del slot activo para el PATH (no corre como servicio).
+func LauncherPath(home string) string { return filepath.Join(home, "rkt.exe") }
+
 // EnsureControlToken lee o crea el token de control con ACL del directorio
 // de logs. Nunca se sirve por API: CLI y servicio comparten el archivo.
 func EnsureControlToken(configPath string) (string, error) {

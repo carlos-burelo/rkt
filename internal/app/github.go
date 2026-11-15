@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"rkt-proxy/internal/github"
-	"rkt-proxy/internal/logx"
-	"rkt-proxy/internal/netutil"
-	"rkt-proxy/internal/store"
+	"rkt/internal/github"
+	"rkt/internal/logx"
+	"rkt/internal/netutil"
+	"rkt/internal/store"
 )
 
 func boolStr(b bool) string {

@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"rkt-proxy/internal/netutil"
+	"rkt/internal/netutil"
 )
 
 // idleTTL echa buckets sin uso; sweep cada minuto (var para tests).
