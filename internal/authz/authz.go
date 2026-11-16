@@ -61,6 +61,8 @@ const (
 	OpGitHubWrite   Op = "github.write"
 	OpFsRead        Op = "fs.read"
 	OpConfigExport  Op = "config.export"
+	OpPgRead        Op = "pg.read"
+	OpPgWrite       Op = "pg.write"
 
 	OpUsersAdmin   Op = "users.admin"
 	OpTokensAdmin  Op = "tokens.admin"
@@ -96,6 +98,8 @@ var opMinRole = map[Op]Role{
 	OpGitHubWrite:   RoleOperator,
 	OpFsRead:        RoleOperator,
 	OpConfigExport:  RoleOperator,
+	OpPgRead:        RoleViewer,
+	OpPgWrite:       RoleOperator,
 	OpEnvRead:       RoleOperator,
 	OpSettingsRead:  RoleOperator,
 	OpWAFRead:       RoleOperator,

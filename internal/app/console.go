@@ -9,11 +9,16 @@ import (
 	"rkt/internal/store"
 )
 
-// mcpAuth exige un API token rkt_ (cualquier rol): el gate por
-// herramienta (rol mínimo + auditoría) decide cada llamada. Las sesiones
-// de navegador no valen: el MCP remoto es para agentes/automatización.
+// mcpAuth exige un API token rkt_ (cualquier rol), salvo loopback: la
+// máquina local entra sin token y el gate por herramienta le da rol local
+// (operator, nunca admin). Las sesiones de navegador no valen: el MCP
+// remoto es para agentes/automatización.
 func mcpAuth(db *store.DB, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isLoopbackRemote(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		h := r.Header.Get("Authorization")
 		if !strings.HasPrefix(h, "Bearer ") {
 			w.Header().Set("WWW-Authenticate", "Bearer")

@@ -10,13 +10,12 @@ import {
   SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu,
   SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { BrandMark, Dot, Err, Kbd, stateOf } from "../shared/components/ui";
+import { BrandMark, Dot, Kbd, stateOf } from "../shared/components/ui";
 import { InstallButton } from "../shared/components/InstallButton";
 import { CommandPalette } from "../shared/components/CommandPalette";
 import { useAuth } from "../features/auth/store";
 import { useUI } from "./ui";
 import { useFleet } from "../features/overview/hooks";
-import { DeployDrawer } from "../features/deployments/DeployDrawer";
 import { AppSidebar, APP_TABS } from "../features/apps/AppSidebar";
 import { UserMenu } from "../shared/components/UserMenu";
 import { useI18n } from "../shared/i18n";
@@ -31,7 +30,6 @@ export function ShellLayout() {
   const setPalette = useUI((u) => u.setPalette);
   const appFilter = useUI((u) => u.appFilter);
   const setAppFilter = useUI((u) => u.setAppFilter);
-  const err = useUI((u) => u.err);
   const { status, deps, metas, loading } = useFleet();
   const location = useLocation();
   const navigate = useNavigate();
@@ -295,7 +293,6 @@ export function ShellLayout() {
         </header>
         <main className="min-w-0 flex-1 px-3 py-5 md:px-5 md:py-6">
           <div className="mx-auto max-w-[1480px]">
-            <Err msg={err} />
             {loading ? (
               <div className="space-y-px border border-border" aria-busy="true" aria-label={t("shell.loadingFleet")}>
                 <span className="sr-only">{t("shell.loadingFleet")}</span>
@@ -316,7 +313,6 @@ export function ShellLayout() {
         </main>
       </SidebarInset>
 
-      <DeployDrawer />
       <CommandPaletteShell navigate={navigate} openApp={openApp} />
     </SidebarProvider>
   );
@@ -325,7 +321,6 @@ export function ShellLayout() {
 function CommandPaletteShell({ navigate, openApp }: { navigate: (p: string) => void; openApp: (n: string) => void }) {
   const palette = useUI((u) => u.palette);
   const setPalette = useUI((u) => u.setPalette);
-  const setSel = useUI((u) => u.setSel);
   const act = useUI((u) => u.act);
   const { status, deps, metas } = useFleet();
   return (
@@ -337,7 +332,7 @@ function CommandPaletteShell({ navigate, openApp }: { navigate: (p: string) => v
       deps={deps}
       goPage={(p) => navigate(`/${p}`)}
       openApp={openApp}
-      openDeploy={setSel}
+      openDeploy={(id) => navigate(`/deployments/${id}`)}
       onAction={act}
       onNewApp={() => navigate("/apps/new")}
     />

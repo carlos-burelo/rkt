@@ -21,6 +21,8 @@ export interface Status {
   http_port?: string;
   /** puerto público HTTPS (vacío = TLS off) */
   https_port?: string;
+  /** cambios que exigen reinicio (deriva aplicada vs deseada) */
+  pending_restart?: string[];
 }
 
 export interface Deployment {

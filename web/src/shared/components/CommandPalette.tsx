@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
-import { Deployment, AppMeta } from "../../shared/lib/types";
+import type { AppMeta, Deployment } from "../../shared/lib/types";
 import { Dot, Kbd } from "../../shared/components/ui";
 import { stateLabel } from "../lib/labels";
 import { useI18n } from "../i18n";
@@ -39,7 +39,7 @@ export function CommandPalette({
   deps: Deployment[];
   goPage: (p: "overview" | "proxy" | "deployments" | "logs" | "routes" | "settings" | "users" | "analytics" | "observability" | "environment" | "ci" | "alerts" | "server" | "cron") => void;
   openApp: (name: string) => void;
-  openDeploy: (d: Deployment) => void;
+  openDeploy: (id: number) => void;
   onAction: (app: string, a: "restart" | "deploy" | "rollback") => void;
   onNewApp?: () => void;
 }) {
@@ -87,7 +87,7 @@ export function CommandPalette({
         kind: "deployment",
         label: `#${d.id} ${d.app} ${d.rev.slice(0, 8)}`,
         hint: d.status,
-        run: () => openDeploy(d),
+        run: () => openDeploy(d.id),
       });
     }
     const ACT: Record<"restart" | "deploy" | "rollback", string> = {

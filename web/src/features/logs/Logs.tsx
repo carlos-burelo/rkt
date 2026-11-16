@@ -1,10 +1,14 @@
 import { useEffect } from "react";
+import { toast } from "sonner";
 import { PageHeader } from "../../shared/components/patterns";
 import { Dot } from "../../shared/components/ui";
+import { ConfirmButton } from "../../shared/components/ConfirmButton";
 import { useUI } from "../../app/ui";
+import { useAuth } from "../auth/store";
 import { useI18n } from "../../shared/i18n";
 import { useLogs } from "./logs.store";
 import { useLogLines } from "./useLogLines";
+import { clearLogs } from "./api";
 import { LogToolbar } from "./LogToolbar";
 import { LogOptions } from "./LogOptions";
 import { LogConsole } from "./LogConsole";
@@ -15,6 +19,8 @@ export function Logs() {
   const { t } = useI18n();
   const appFilter = useUI((s) => s.appFilter);
   const online = useUI((s) => s.online);
+  const fail = useUI((s) => s.fail);
+  const isAdmin = useAuth((a) => a.isAdmin);
   const tab = useLogs((s) => s.tab);
   const live = useLogs((s) => s.live);
   const streamState = useLogs((s) => s.streamState);
@@ -40,6 +46,23 @@ export function Logs() {
       <PageHeader
         title={t("ops.logs.title")}
         description={t("ops.logs.description")}
+        actions={
+          isAdmin ? (
+            <ConfirmButton
+              size="sm"
+              label={t("ops.logs.clear")}
+              confirmLabel={t("ops.logs.clearConfirm")}
+              onConfirm={() => {
+                clearLogs()
+                  .then((n) => {
+                    toast.success(t("ops.logs.cleared", { n }));
+                    useLogs.getState().load();
+                  })
+                  .catch((e) => fail(e));
+              }}
+            />
+          ) : undefined
+        }
         meta={
           <span className="tnum inline-flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
             <Dot status={tab === "runtime" && live ? (streamState === "retrying" ? "degraded" : "running") : "stopped"} pulse={tab === "runtime" && live} />

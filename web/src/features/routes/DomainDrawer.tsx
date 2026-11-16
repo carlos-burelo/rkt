@@ -58,8 +58,19 @@ export function DomainDrawer({ host, onClose }: { host: string | null; onClose: 
             </Close>
           </header>
           <div className="space-y-4 p-4">
-            {err !== "" && <p className="border border-bad/35 bg-bad/5 px-3 py-2 font-mono text-[10px] text-bad">{err}</p>}
             {!data && err === "" && <p className="font-mono text-[10px] text-muted-foreground">{t("common.loading")}</p>}
+            {!data && err !== "" && (
+              <div className="border border-border bg-card/40 px-3 py-2">
+                <p className="font-mono text-[10px] text-muted-foreground">{t("serve.domain.retryHint")}</p>
+                <button
+                  type="button"
+                  onClick={() => host && useRoutes.getState().detail(host)}
+                  className="mt-2 border border-border px-2 py-1 font-mono text-[10px] text-foreground hover:border-input"
+                >
+                  {t("common.retry")}
+                </button>
+              </div>
+            )}
             {data && (
               <>
                 <section className="border border-border">

@@ -4,6 +4,7 @@ export const apps = {
   "apps.tabs.noApp": "(sin app)",
   "apps.tabs.external": "externa",
   "apps.header.meta": "app · puerto {port} · {destinations}",
+  "apps.header.metaSimple": "app · {destinations}",
   "apps.header.portUnassigned": "sin asignar",
   "apps.header.noDestination": "sin destino",
   "apps.header.destinations.one": "{n} destino",

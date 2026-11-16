@@ -17,6 +17,7 @@ import (
 	"rkt/internal/config"
 	"rkt/internal/dashboard"
 	"rkt/internal/health"
+	"rkt/internal/hook"
 	"rkt/internal/hub"
 	"rkt/internal/store"
 )
@@ -78,6 +79,10 @@ func newBrowserAppWith(t *testing.T, mut func(*api.Deps)) *browserApp {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/v1/") {
 			apiHandler.ServeHTTP(w, r)
+			return
+		}
+		if r.URL.Path == "/_rkt/new-app" {
+			hook.NewAppFormHandler().ServeHTTP(w, r)
 			return
 		}
 		webHandler.ServeHTTP(w, r)

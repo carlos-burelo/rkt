@@ -48,7 +48,7 @@ export const useRoutes = create<RoutesState>()((set, get) => ({
     await get().load();
   },
   detail: (host) => {
-    if (get().details[host] !== undefined || inflight.has(host)) {
+    if (get().details[host]?.data || inflight.has(host)) {
       return inflight.get(host) ?? Promise.resolve();
     }
     const p = domainDetail(host)
@@ -56,6 +56,9 @@ export const useRoutes = create<RoutesState>()((set, get) => ({
         useRoutes.setState((s) => ({ details: { ...s.details, [host]: { data: d, error: "" } } }));
       })
       .catch((e) => {
+        // El texto queda en el store solo como estado (badge TLS "?");
+        // al usuario le llega por sonner con botón de copiar.
+        useUI.getState().fail(e);
         useRoutes.setState((s) => ({
           details: { ...s.details, [host]: { data: null, error: e instanceof Error ? e.message : String(e) } },
         }));

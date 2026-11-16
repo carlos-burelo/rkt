@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { Bars } from "../../shared/components/feedback";
 import { PageHeader, Stat, StatGrid, Section } from "../../shared/components/patterns";
 import { SingleFilter } from "../../shared/components/filters";
-import { Err } from "../../shared/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { useI18n } from "../../shared/i18n";
 import { useAnalyticsPage } from "./analytics.store";
@@ -15,7 +14,6 @@ export function AnalyticsPage() {
   const hosts = useAnalyticsPage((s) => s.hosts);
   const days = useAnalyticsPage((s) => s.days);
   const data = useAnalyticsPage((s) => s.data);
-  const err = useAnalyticsPage((s) => s.err);
 
   useEffect(() => {
     useAnalyticsPage.getState().load();
@@ -57,8 +55,7 @@ export function AnalyticsPage() {
         <span className="flex-1" />
         <span className="folio">access.log local</span>
       </div>
-      {err !== "" && <Err msg={err} />}
-      {!data && err === "" && <p className="font-mono text-[10px] text-muted-foreground">{t("overview.loadingSeries")}</p>}
+      {!data && <p className="font-mono text-[10px] text-muted-foreground">{t("overview.loadingSeries")}</p>}
       {data && (
         <>
           <StatGrid>

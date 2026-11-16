@@ -142,7 +142,7 @@ func (c *e2eCtl) Cutover(name string, cmd *exec.Cmd, dir, port string) error {
 		return err
 	}
 	c.live.Swap(cp)
-	return c.sup.SwapLive(name, cmd, dir, port)
+	return c.sup.SwapLive(name, cmd, dir, port, "", nil)
 }
 
 func TestBrowserDeployReal(t *testing.T) {

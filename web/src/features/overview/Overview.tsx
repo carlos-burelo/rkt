@@ -8,7 +8,7 @@ import { fetchProxy } from "../proxy/api";
 import { Metrics } from "./Metrics";
 import { FirstRun } from "./FirstRun";
 import { Activity } from "./Departures";
-import { AttentionBanner, TlsBanner } from "./Banners";
+import { AttentionBanner, RestartBanner, TlsBanner } from "./Banners";
 import { UnitsTable, OverviewSide } from "./UnitsTable";
 
 // Resumen: composición. Datos del bus, piezas autocontenidas.
@@ -73,6 +73,7 @@ export function Overview() {
       />
 
       <AttentionBanner apps={apps} />
+      <RestartBanner fields={status?.pending_restart ?? []} />
       <TlsBanner items={tlsSoon} />
 
       {apps.length === 0 && <FirstRun apps={apps} metas={metas} deps={deps} />}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { ArrowRight, ExternalLink } from "lucide-react";
 import { dur, rel } from "../../shared/lib/time";
 import { CopyButton } from "../../shared/components/feedback";
@@ -12,7 +12,6 @@ import { useEnvCount } from "./hooks";
 import { publicUrl, publicHost } from "../../shared/lib/url";
 import { AppPreview } from "./AppPreview";
 import { useI18n } from "../../shared/i18n";
-import { useUI } from "../../app/ui";
 
 function Check({ ok, label, hint }: { ok: boolean; label: string; hint: string }) {
   const { t } = useI18n();
@@ -46,7 +45,7 @@ export function AppOverview() {
   const { t } = useI18n();
   const { name = "" } = useParams();
   const { metas, deps, evs, status } = useFleet();
-  const setSel = useUI((u) => u.setSel);
+  const navigate = useNavigate();
   const [stats, setStats] = useState<Analytics | null>(null);
 
   const meta = metas.find((m) => m.name === name);
@@ -210,7 +209,7 @@ export function AppOverview() {
               <button
                 key={d.id}
                 type="button"
-                onClick={() => setSel(d)}
+                onClick={() => navigate(`/deployments/${d.id}`)}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-accent/40"
               >
                 <Dot status={d.status} />

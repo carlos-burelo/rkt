@@ -203,6 +203,31 @@ var migrations = []string{
 	ALTER TABLE routes ADD COLUMN port INTEGER NOT NULL DEFAULT 0;`,
 	// v22: se retira la estrategia por puerto (solo dominio y path).
 	`ALTER TABLE routes DROP COLUMN port;`,
+	// v23: journal de cortes deploy/rollback (intent antes de persistir el
+	// corte; el arranque marca aborted lo que no se confirmó).
+	`CREATE TABLE IF NOT EXISTS cutovers (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		app TEXT NOT NULL,
+		from_dir TEXT NOT NULL DEFAULT '',
+		to_dir TEXT NOT NULL DEFAULT '',
+		port TEXT NOT NULL DEFAULT '',
+		rev TEXT NOT NULL DEFAULT '',
+		actor TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'started',
+		started_at TEXT NOT NULL DEFAULT '',
+		finished_at TEXT NOT NULL DEFAULT ''
+	);
+	CREATE INDEX IF NOT EXISTS idx_cutovers_app ON cutovers(app, id DESC);`,
+	// v24: bases por app en el Postgres gestionado (una DB compartida,
+	// un esquema por app; role propio o compartido según modo).
+	`CREATE TABLE IF NOT EXISTS pg_apps (
+		app TEXT PRIMARY KEY,
+		schema_name TEXT NOT NULL DEFAULT '',
+		role TEXT NOT NULL DEFAULT '',
+		mode TEXT NOT NULL DEFAULT 'dedicated',
+		db TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL DEFAULT ''
+	);`,
 }
 
 // DB wrapper.

@@ -1,6 +1,6 @@
 import {
   LayoutGrid, Rocket, Hammer, Terminal, BarChart3, Activity,
-  Bell, Globe, FlaskConical, Settings, Users, Server, CalendarClock, Shield,
+  Bell, Globe, FlaskConical, Settings, Users, Server, CalendarClock, Shield, Database,
 } from "lucide-react";
 
 // Navegación del shell. `labelKey` se traduce en el componente; `admin`
@@ -20,6 +20,7 @@ export const GROUPS = [
     labelKey: "nav.group.serve",
     items: [
       { to: "/routes", labelKey: "nav.routes", icon: Globe },
+      { to: "/databases", labelKey: "nav.databases", icon: Database },
       { to: "/waf", labelKey: "nav.waf", icon: Shield, write: true },
       { to: "/environment", labelKey: "nav.environment", icon: FlaskConical },
     ],
@@ -50,6 +51,7 @@ export const PAGE_LABEL: Record<string, string> = {
   logs: "nav.logs",
   cron: "nav.cron",
   routes: "nav.routes",
+  databases: "nav.databases",
   waf: "nav.waf",
   server: "nav.server",
   environment: "nav.environment",

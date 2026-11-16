@@ -8,16 +8,11 @@ import { useI18n } from "../../shared/i18n";
 
 // Vista previa en miniatura 16:9: el sitio se renderiza en un viewport
 // virtual 1280x720 y se escala completo al ancho del marco. No recorta.
-const PREVIEW_WIDTHS = { s: 360, m: 560, l: 800 } as const;
-type PreviewSize = keyof typeof PREVIEW_WIDTHS;
+// Ancho fijo M (560): sin selector de tamaños.
+const PREVIEW_WIDTH = 560;
 
 const FRAME_W = 1280;
 const FRAME_H = 720;
-
-function initialSize(): PreviewSize {
-  const saved = localStorage.getItem("rkt.preview.size");
-  return saved === "m" || saved === "l" ? saved : "s";
-}
 
 // MiniFrame escala el iframe 1280x720 al ancho disponible manteniendo 16:9.
 function MiniFrame({
@@ -71,14 +66,8 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
   const { status } = useFleet();
   const src = publicUrl(domain, status);
   const [nonce, setNonce] = useState(0);
-  const [size, setSize] = useState<PreviewSize>(initialSize);
   const [state, setState] = useState<"loading" | "ok" | "blocked">("loading");
   const timer = useRef<number | null>(null);
-
-  const changeSize = (s: PreviewSize) => {
-    setSize(s);
-    localStorage.setItem("rkt.preview.size", s);
-  };
 
   useEffect(() => {
     if (!running) return;
@@ -102,22 +91,6 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
           <span className="truncate">{publicHost(domain, status)}</span>
         </span>
         <span className="flex-1" />
-        <div className="flex items-center gap-0.5" role="group" aria-label={t("apps.preview.sizeAria")}>
-          {(["s", "m", "l"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => changeSize(s)}
-              title={t(`apps.preview.size.${s}`)}
-              className={
-                size === s
-                  ? "border border-signal/60 bg-signal/10 px-1.5 font-mono text-[9px] uppercase text-signal"
-                  : "border border-transparent px-1.5 font-mono text-[9px] uppercase text-muted-foreground/60 hover:text-foreground"
-              }
-            >
-              {s}
-            </button>
-          ))}
-        </div>
         <Button
           variant="ghost"
           size="xs"
@@ -140,7 +113,7 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
       )}
 
       {running && state !== "blocked" && (
-        <div className="relative p-2" style={{ maxWidth: PREVIEW_WIDTHS[size] }}>
+        <div className="relative p-2" style={{ maxWidth: PREVIEW_WIDTH }}>
           <div className="relative">
             <MiniFrame src={src} nonce={nonce} domain={domain} onLoad={() => setState("ok")} />
             {state === "ok" && (

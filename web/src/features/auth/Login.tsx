@@ -1,26 +1,26 @@
 import { useState } from "react";
+import { CornerDownLeft } from "lucide-react";
 import { login } from "./api";
 import { Me } from "../../shared/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Err } from "../../shared/components/ui";
 import { AccessShell } from "./AccessShell";
 import { useI18n } from "../../shared/i18n";
+import { useUI } from "../../app/ui";
 
 export function Login({ onOk }: { onOk: (me: Me) => void }) {
   const { t } = useI18n();
+  const fail = useUI((u) => u.fail);
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
-  const [err, setErr] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setErr("");
     try {
       const me = await login(user.trim(), pass);
       onOk(me);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : t("common.error"));
+      fail(e);
     }
   }
 
@@ -41,7 +41,6 @@ export function Login({ onOk }: { onOk: (me: Me) => void }) {
       }
     >
       <form onSubmit={submit} className="space-y-3">
-        <Err msg={err} />
         <label className="field-label">
           {t("system.auth.user")}
           <Input
@@ -65,7 +64,7 @@ export function Login({ onOk }: { onOk: (me: Me) => void }) {
         </label>
         <Button type="submit" className="mt-1 h-8 w-full justify-between">
           <span>{t("system.auth.signIn")}</span>
-          <span aria-hidden className="font-mono text-[9px] tracking-[0.08em] opacity-60">↵</span>
+          <CornerDownLeft aria-hidden className="h-3 w-3 opacity-60" />
         </Button>
       </form>
     </AccessShell>

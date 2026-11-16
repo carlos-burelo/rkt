@@ -2,20 +2,20 @@ import { Dot } from "../../shared/components/ui";
 import { dur, rel } from "../../shared/lib/time";
 import { eventKindLabel } from "../../shared/lib/labels";
 import { useI18n } from "../../shared/i18n";
+import { useNavigate } from "react-router";
 import type { Deployment, RktEvent } from "../../shared/lib/types";
-import { useUI } from "../../app/ui";
 
-// Últimos despliegues (click abre detalle). Solo lectura del bus.
+// Últimos despliegues (click abre la página de detalle). Solo lectura del bus.
 export function Departures({ deps }: { deps: Deployment[] }) {
   const { t } = useI18n();
-  const setSel = useUI((s) => s.setSel);
+  const navigate = useNavigate();
   const recent = deps.slice(0, 6);
   return (
     <div className="divide-y divide-border/70">
       {recent.map((d) => (
         <button
           key={d.id}
-          onClick={() => setSel(d)}
+          onClick={() => navigate(`/deployments/${d.id}`)}
           className="group flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-accent/45"
         >
           <Dot status={d.status} />

@@ -577,6 +577,7 @@ func flipUpgradeSlot(home, target, curCfg string, timeout time.Duration) {
 	refreshLauncher(home, target)
 	pruneSlots(home, target, old)
 	fmt.Printf("upgrade a %s completo\n", target)
+	auditLocal(curCfg, "upgrade", target)
 }
 
 // upgradeRollback vuelve al slot de previous.txt.
@@ -607,6 +608,7 @@ func upgradeRollback(cfgPath string, timeout time.Duration) {
 	bestEffortRecovery(upgradeService)
 	refreshLauncher(home, prev)
 	fmt.Printf("rollback a %s completo\n", prev)
+	auditLocal(curCfg, "upgrade rollback", prev)
 }
 
 // refreshLauncher copia el slot activo al lanzador (PATH). Avisa, no falla.

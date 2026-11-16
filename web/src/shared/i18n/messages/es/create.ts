@@ -53,7 +53,7 @@ export const create = {
   "create.portHint": "Opcional",
   "create.portPlaceholder": "3000",
   "create.autoDeploy": "Desplegar en cada push a main",
-  "create.advanced": "avanzado · comando, directorio y puerto",
+  "create.advanced": "avanzado",
   "create.hideAdvanced": "ocultar avanzado",
   "create.analysis": "detección",
   "create.analyzing": "analizando…",
@@ -106,6 +106,8 @@ export const create = {
   "create.track.waiting": "esperando salida del proceso…",
   "create.track.closeRunning": "cerrar (sigue)",
   "create.track.openApp": "abrir app",
+  "create.track.fullPage": "pantalla completa",
+  "create.track.details": "datos del despliegue",
 
   "create.error.repoUrl": "usa https:// o git@…",
   "create.error.name": "minúsculas, números y guiones",

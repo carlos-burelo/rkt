@@ -205,3 +205,64 @@ func TestCLIDoctorSinConfig(t *testing.T) {
 		t.Fatalf("doctor sin config: code=%d out=%q", code, out)
 	}
 }
+
+func TestCLILogsClear(t *testing.T) {
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "rkt.db")
+	logs := filepath.Join(dir, "logs")
+	mk := func(p, body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk(filepath.Join(logs, "access.log"), "a\n")
+	mk(filepath.Join(logs, "apps", "w.log"), "b\n")
+	// Sin confirmar no borra.
+	if code, out := runCLI(t, cfg, "no\n", "logs", "clear"); code != 0 || !strings.Contains(out, "cancelado") {
+		t.Fatalf("cancel: code=%d out=%q", code, out)
+	}
+	if b, _ := os.ReadFile(filepath.Join(logs, "access.log")); string(b) != "a\n" {
+		t.Fatalf("sin confirm debió conservar: %q", b)
+	}
+	// Con --yes vacía todo.
+	code, out := runCLI(t, cfg, "", "logs", "clear", "--yes")
+	if code != 0 || !strings.Contains(out, "logs limpios") {
+		t.Fatalf("clear: code=%d out=%q", code, out)
+	}
+	for _, p := range []string{filepath.Join(logs, "access.log"), filepath.Join(logs, "apps", "w.log")} {
+		if st, err := os.Stat(p); err != nil || st.Size() != 0 {
+			t.Fatalf("%s no quedó vacío", p)
+		}
+	}
+}
+
+func TestCLIPgOffline(t *testing.T) {
+	cfg := freshCfg(t)
+	// Sin args: uso.
+	if code, out := runCLI(t, cfg, "", "pg"); code == 0 || !strings.Contains(out, "uso: pg") {
+		t.Fatalf("uso: code=%d out=%q", code, out)
+	}
+	// Sin pg_mode: status informa desactivado, no falla duro.
+	if code, out := runCLI(t, cfg, "", "pg", "status"); code != 0 || !strings.Contains(out, "desactivado") {
+		t.Fatalf("status sin pg: code=%d out=%q", code, out)
+	}
+	// Drop pide confirmación.
+	if code, out := runCLI(t, cfg, "no\n", "pg", "drop", "x"); code != 0 || !strings.Contains(out, "cancelado") {
+		t.Fatalf("cancel: code=%d out=%q", code, out)
+	}
+	// settings set pg_pass + list enmascara.
+	if code, out := runCLI(t, cfg, "s3creto-largo\n", "users", "add", "adm", "--role", "admin", "--password-stdin"); code != 0 {
+		t.Fatalf("add adm: code=%d out=%q", code, out)
+	}
+	if code, _ := runCLI(t, cfg, "", "settings", "set", "pg_pass=s3creto"); code != 0 {
+		t.Fatalf("set pg_pass: code=%d", code)
+	}
+	_, out := runCLI(t, cfg, "", "settings", "list")
+	if strings.Contains(out, "s3creto") || !strings.Contains(out, "__RKT_REDACTED__") {
+		t.Fatalf("pg_pass debe salir enmascarado: %q", out)
+	}
+}

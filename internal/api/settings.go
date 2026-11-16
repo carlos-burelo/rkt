@@ -15,7 +15,7 @@ func (d *Deps) handleSettings(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		out := map[string]string{}
 		for _, k := range store.KnownSettings() {
-			out[k] = d.DB.GetSetting(k)
+			out[k] = settings.DisplayValue(k, d.DB.GetSetting(k))
 		}
 		writeJSON(w, out)
 	case http.MethodPut:
@@ -39,6 +39,12 @@ func (d *Deps) handleSettings(w http.ResponseWriter, r *http.Request) {
 		if !known {
 			writeErr(w, http.StatusBadRequest, "setting desconocido")
 			return
+		}
+		if eff, ok := settings.AcceptValue(in.Key, in.Value); !ok {
+			writeJSON(w, map[string]any{"ok": "sin cambios"})
+			return
+		} else {
+			in.Value = eff
 		}
 		if err := settings.Validate(in.Key, in.Value); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())

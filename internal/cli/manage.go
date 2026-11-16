@@ -87,7 +87,7 @@ func prompt(label, def string) string {
 	return def
 }
 
-// promptPassword lee sin eco (mín 12, pide dos veces). Sin consola
+// promptPassword lee sin eco (mín 8, pide dos veces). Sin consola
 // (pipe/tests), cae a lectura visible con un solo reader (dos
 // readers se roban el buffer y ciclan).
 // oneLineStdin lee una línea (para --password-stdin del instalador).
@@ -112,14 +112,14 @@ func promptPassword() string {
 		return strings.TrimSpace(line)
 	}
 	for {
-		b1 := read("password (mín 12): ")
+		b1 := read("password (mín 8): ")
 		b2 := read("repite password: ")
 		if b1 != b2 {
 			fmt.Println("no coinciden, de nuevo")
 			continue
 		}
-		if len(b1) < 12 {
-			fmt.Println("mínimo 12 caracteres")
+		if len(b1) < 8 {
+			fmt.Println("mínimo 8 caracteres")
 			continue
 		}
 		return b1
@@ -176,8 +176,8 @@ func cmdUsers(args []string, cfgPath string) {
 		pass := ""
 		if stdinPass {
 			pass = oneLineStdin()
-			if len(pass) < 12 {
-				log.Fatal("users add: password de stdin demasiado corto (mín 12)")
+			if len(pass) < 8 {
+				log.Fatal("users add: password de stdin demasiado corto (mín 8)")
 			}
 		} else {
 			pass = promptPassword()
@@ -186,6 +186,7 @@ func cmdUsers(args []string, cfgPath string) {
 			log.Fatalf("users add: %v", err)
 		}
 		fmt.Printf("usuario %s (%s) creado\n", name, role)
+		auditLocal(cfgPath, "users add", name)
 	case "del":
 		if len(args) != 2 {
 			log.Fatal("uso: users del <nombre>")
@@ -194,6 +195,7 @@ func cmdUsers(args []string, cfgPath string) {
 			log.Fatalf("users del: %v", err)
 		}
 		fmt.Printf("usuario %s borrado\n", args[1])
+		auditLocal(cfgPath, "users del", args[1])
 	case "passwd":
 		rest, stdinPass := []string{}, false
 		for _, a := range args[1:] {
@@ -209,8 +211,8 @@ func cmdUsers(args []string, cfgPath string) {
 		pass := ""
 		if stdinPass {
 			pass = oneLineStdin()
-			if len(pass) < 12 {
-				log.Fatal("users passwd: password de stdin demasiado corto (mín 12)")
+			if len(pass) < 8 {
+				log.Fatal("users passwd: password de stdin demasiado corto (mín 8)")
 			}
 		} else {
 			pass = promptPassword()
@@ -219,13 +221,14 @@ func cmdUsers(args []string, cfgPath string) {
 			log.Fatalf("users passwd: %v", err)
 		}
 		fmt.Printf("password de %s actualizado (sesiones invalidadas)\n", rest[0])
+		auditLocal(cfgPath, "users passwd", rest[0])
 	default:
 		log.Fatalf("users: subcomando %q (list|add|del|passwd)", args[0])
 	}
 }
 
 // cmdHosts gestiona el bloque de rkt en el archivo hosts (DNS local).
-func cmdHosts(args []string) {
+func cmdHosts(args []string, cfgPath string) {
 	if len(args) == 0 {
 		log.Fatal("uso: hosts list|add|rm <host>")
 	}
@@ -250,6 +253,7 @@ func cmdHosts(args []string) {
 			log.Fatalf("hosts add: %v (ejecuta como administrador)", err)
 		}
 		fmt.Printf("%s → 127.0.0.1\n", args[1])
+		auditLocal(cfgPath, "hosts add", args[1])
 	case "rm":
 		if len(args) != 2 {
 			log.Fatal("uso: hosts rm <host>")
@@ -258,6 +262,7 @@ func cmdHosts(args []string) {
 			log.Fatalf("hosts rm: %v (ejecuta como administrador)", err)
 		}
 		fmt.Printf("%s quitado\n", args[1])
+		auditLocal(cfgPath, "hosts rm", args[1])
 	default:
 		log.Fatalf("hosts: subcomando %q (list|add|rm)", args[0])
 	}
@@ -312,6 +317,7 @@ func cmdApps(args []string, cfgPath string) {
 			log.Fatalf("apps: %v", err)
 		}
 		fmt.Printf("app %s eliminada de DB (restart requerido), %d rutas retiradas\n", args[1], dropped)
+		auditLocal(cfgPath, "apps rm", args[1])
 	default:
 		log.Fatalf("apps: subcomando %q (list|add|rm)", args[0])
 	}
@@ -369,6 +375,7 @@ func appsAdd(args []string, cfgPath string) {
 			log.Fatalf("apps add: %v", err)
 		}
 		fmt.Printf("app externa %s → %s puerto %s (sin proceso; corre: pnpm dev)\n", app.Name, strings.Join(domains, ","), portS)
+		auditLocal(cfgPath, "apps add", app.Name)
 		return
 	}
 	var sug *discover.Suggestion
@@ -507,6 +514,7 @@ func appsAdd(args []string, cfgPath string) {
 		log.Fatalf("apps add: %v", err)
 	}
 	fmt.Printf("app %s en DB.", nm)
+	auditLocal(cfgPath, "apps add", nm)
 	if len(domains) > 0 {
 		fmt.Printf(" route %s -> :%s (hot-reload).", domains, pt)
 	}
@@ -585,6 +593,7 @@ func cmdRoutes(args []string, cfgPath string) {
 			log.Fatalf("routes add: %v", err)
 		}
 		fmt.Printf("route %s -> %s (hot-reload la aplica)\n", hosts, *target)
+		auditLocal(cfgPath, "routes add", *target)
 	case "rm":
 		fs := flag.NewFlagSet("routes rm", flag.ContinueOnError)
 		host := fs.String("host", "", "host a quitar")
@@ -613,6 +622,7 @@ func cmdRoutes(args []string, cfgPath string) {
 				log.Fatalf("routes: host %q no encontrado", *host)
 			}
 			fmt.Printf("host %s eliminado (hot-reload)\n", *host)
+			auditLocal(cfgPath, "routes rm", *host)
 			return
 		}
 		dropped := 0
@@ -627,6 +637,7 @@ func cmdRoutes(args []string, cfgPath string) {
 			log.Fatal("routes: ninguna ruta coincide")
 		}
 		fmt.Printf("%d ruta(s) eliminada(s) (hot-reload)\n", dropped)
+		auditLocal(cfgPath, "routes rm", *path)
 	default:
 		log.Fatalf("routes: subcomando %q (list|add|rm)", args[0])
 	}
@@ -665,6 +676,7 @@ func cmdEnv(args []string, cfgPath string) {
 			log.Fatalf("env set: %v", err)
 		}
 		fmt.Printf("%s=%s (restart requerido)\n", strings.TrimSpace(k), v)
+		auditLocal(cfgPath, "env set", args[1]+"/"+strings.TrimSpace(k))
 	case "unset":
 		if len(args) != 3 {
 			log.Fatal("uso: env unset <app> CLAVE")
@@ -677,6 +689,7 @@ func cmdEnv(args []string, cfgPath string) {
 			log.Fatalf("env unset: %v", err)
 		}
 		fmt.Printf("%s eliminada (restart requerido)\n", args[2])
+		auditLocal(cfgPath, "env unset", args[1]+"/"+args[2])
 	case "global":
 		cfg, db := merged(cfgPath)
 		defer db.Close()
@@ -708,6 +721,7 @@ func cmdEnv(args []string, cfgPath string) {
 				log.Fatalf("env global set: %v", err)
 			}
 			fmt.Printf("%s=%s global (las apps la heredan al reiniciar)\n", strings.TrimSpace(k), v)
+			auditLocal(cfgPath, "env global set", strings.TrimSpace(k))
 		case "unset":
 			if len(args) != 3 {
 				log.Fatal("uso: env global unset CLAVE")
@@ -716,6 +730,7 @@ func cmdEnv(args []string, cfgPath string) {
 				log.Fatalf("env global unset: %v", err)
 			}
 			fmt.Printf("%s global eliminada\n", args[2])
+			auditLocal(cfgPath, "env global unset", args[2])
 		default:
 			log.Fatalf("env global: subcomando %q (set|unset)", args[1])
 		}
@@ -741,7 +756,7 @@ func cmdSettings(args []string, cfgPath string) {
 	switch args[0] {
 	case "list":
 		for _, k := range store.KnownSettings() {
-			fmt.Printf("%s=%s\n", k, db.GetSetting(k))
+			fmt.Printf("%s=%s\n", k, settings.DisplayValue(k, db.GetSetting(k)))
 		}
 	case "set":
 		if len(args) != 2 {
@@ -762,6 +777,7 @@ func cmdSettings(args []string, cfgPath string) {
 			log.Fatalf("settings: %v", err)
 		}
 		fmt.Printf("%s=%s\n", k, v)
+		auditLocal(cfgPath, "settings set", k)
 	default:
 		log.Fatalf("settings: subcomando %q (list|set)", args[0])
 	}
@@ -844,6 +860,7 @@ func cmdImport(args []string, cfgPath string) {
 		log.Fatalf("import: %v", err)
 	}
 	fmt.Println("configuración importada (reinicio requerido para apps)")
+	auditLocal(cfgPath, "config import", args[0])
 }
 
 func cmdAudit(args []string, cfgPath string) {
@@ -1038,6 +1055,7 @@ func cmdRestore(args []string, cfgPath string) {
 		log.Fatalf("restore: %v", err)
 	}
 	fmt.Printf("restore ok: %s (arranca el servicio)\n", dst)
+	auditLocal(cfgPath, "restore", src)
 }
 
 // cmdReset borra la DB y la recrea de cero preservando solo users.
@@ -1088,6 +1106,7 @@ func cmdReset(args []string, cfgPath string) {
 		log.Fatalf("reset: %v (restaura %s con restore)", err, dest)
 	}
 	fmt.Printf("reset ok: %d users preservados, backup en %s (sesiones y API tokens revocados)\n", len(users), dest)
+	auditLocal(cfgPath, "reset", dest)
 }
 
 // cmdDoctor diagnostica sin mutar: config, DB, servicio, git y puertos.
@@ -1260,6 +1279,7 @@ func cmdRollback(args []string, cfgPath string) {
 		log.Fatalf("rollback: %s", out.Error)
 	}
 	fmt.Printf("rollback ok: %s (versión previa sirviendo)\n", out.Rolledback)
+	auditLocal(cfgPath, "rollback", args[0])
 }
 
 func cmdGithub(args []string, cfgPath string) {
@@ -1322,6 +1342,7 @@ func cmdGithubInit(cfgPath string, args []string) {
 		log.Fatalf("github init: %v", err)
 	}
 	link := githubInitURL(*domain, *name, *org, state)
+	auditLocal(cfgPath, "github init", *domain)
 	fmt.Println("Crea la GitHub App (permisos mínimos ya rellenados):")
 	fmt.Println("  " + link)
 	fmt.Println("Pulsa Create en GitHub; rkt se configura solo y te da el link de instalación.")

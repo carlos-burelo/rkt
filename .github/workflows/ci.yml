@@ -119,6 +119,25 @@ jobs:
         run: go test -tags=e2e ./tests/e2e -count=1
         shell: pwsh
 
+  race-win:
+    # TODO(linux-ci): el job race en ubuntu sigue omitido (misma causa).
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Instalar gcc (race detector)
+        run: choco install mingw --no-progress -y
+        shell: pwsh
+
+      - name: Race detector (paquetes concurrentes)
+        run: go run ./tests/run.go test -race rkt/internal/supervisor rkt/internal/proxy rkt/internal/store rkt/internal/hub rkt/internal/api -count=1 -p 1
+        shell: pwsh
+
   linux:
     # TODO(linux-ci): omitido por ahora — bluegreen (ZeroDowntime, BuildLocalReal)
     # y DeployCancelMidBuild fallan sistemáticamente en runners ubuntu

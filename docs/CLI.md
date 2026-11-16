@@ -48,6 +48,7 @@ Requieren `healthz` activado (default `127.0.0.1:8090`, solo loopback).
 |---|---|
 | `status [--json]` | Salud: versión, backends (ok/fallo), apps (running/pid/restarts/failed) |
 | `logs [-n 50] [-f] [-app nombre]` | Últimas N líneas; `-f` sigue; `-app` lee `logs/apps/<nombre>.log` |
+| `logs clear [--yes]` | Vacía rkt.log, access.log, apps/*.log y deploys/*.log (+ .1). Sin `--yes` pide `si` |
 | `restart <app>` | Mata y arranca al instante (salta delay, resetea crashloop, revive `failed`) |
 | `deploy <app>` | Clone + build en slot inactivo + canario + corte de ruta (zero downtime) + rollback auto |
 | `rollback <app>` | Corta al slot inactivo (versión anterior) con blue-green + health |
@@ -86,6 +87,15 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 | `config import <file>` | Restaura flota + settings (valida antes) |
 | `backup [file]` | Copia consistente de SQLite con `VACUUM INTO` |
 | `restore <file>` | Restaura SQLite (servicio detenido) |
+| `pg status` | Postgres gestionado: versión y base (sin secretos) |
+| `pg list` | Bases por app: esquema, rol, modo |
+| `pg provision <app> [--mode dedicated\|shared]` | Crea esquema+rol e inyecta `DATABASE_URL` (sin password) en el env |
+| `pg tables <app>` | Tablas del esquema |
+| `pg rows <app> <tabla> [--n 100] [--page 1]` | Filas paginadas con total |
+| `pg query <app> <sql> [--yes]` | Una sentencia SQL en el esquema (pide confirmar) |
+| `pg backup <app>` | Vuelca el esquema a `data/backups/pg-<app>-<ts>.dump` (-Fc) |
+| `pg restore <app> <dump> [--yes]` | Restaura el dump sobre la app (pide confirmar, sobrescribe) |
+| `pg drop <app> [--yes]` | Borra esquema+rol (pide confirmar, los datos se pierden) |
 | `doctor [--json]` | Entorno: toolchains con versión, node_bin/python_bin, pool con hueco, DB, servicio, puertos y git (warn = aviso, fail = bloqueante) |
 | `github login` | URL para instalar la App en browser |
 | `github init --name --domain [--org]` | URL del form manifest para crear la App |
@@ -209,6 +219,9 @@ local y registra deployment), `env_set` (solo escritura),
 `deployment_logs` (tail del build), `wait_healthy` (gate post-deploy),
 `restart`, `rollback`, `deploy`, `retry`, `apps_remove` (baja con rutas),
 `start`, `stop` (detención persistente).
+Postgres: `pg_status|list|tables|rows` (lectura), `pg_provision|backup`
+(escritura), `pg_query` (exige `confirm=query`), `pg_restore`
+(exige `confirm=restore`), `pg_drop` (exige `confirm=drop`).
 
 Catálogo extendido (control total): `app_get`, `app_env_keys`, `env_delete`,
 `env_global_list|set|delete` (variables de toda la flota; la app las anula),

@@ -13,7 +13,6 @@ import { useUI } from "../../app/ui";
 import { useFleet } from "../overview/hooks";
 import { PageHeader, Stat, StatGrid } from "../../shared/components/patterns";
 import { useI18n } from "../../shared/i18n";
-
 export type DepStatus = "all" | "ok" | "running" | "failed";
 
 // Deployments: tablero de salidas. Columnas fijas (estado · salida ·
@@ -23,7 +22,6 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
   const { t, tn } = useI18n();
   const { deps } = useFleet();
   const appFilter = useUI((u) => u.appFilter);
-  const setSel = useUI((u) => u.setSel);
   const navigate = useNavigate();
   const [st, setSt] = useState<DepStatus>(status ?? "all");
   const [q, setQ] = useState("");
@@ -133,12 +131,12 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
         {vis.map((d) => (
           <div
             key={d.id}
-            onClick={() => setSel(d)}
+            onClick={() => navigate(`/deployments/${d.id}`)}
             onKeyDown={(e) => {
               if (e.target !== e.currentTarget) return;
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                setSel(d);
+                navigate(`/deployments/${d.id}`);
               }
             }}
             tabIndex={0}

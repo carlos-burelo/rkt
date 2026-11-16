@@ -9,6 +9,7 @@ import { Setup } from "../features/auth/Setup";
 import { Overview } from "../features/overview/Overview";
 import { useI18n } from "../shared/i18n";
 import { Deployments } from "../features/deployments/Deployments";
+import { DeployPage } from "../features/deployments/DeployPage";
 import { CI } from "../features/ci/CI";
 import { Logs } from "../features/logs/Logs";
 import { Cron } from "../features/cron/Cron";
@@ -24,6 +25,7 @@ import { AppUsage } from "../features/apps/AppUsage";
 import { AppEnv } from "../features/apps/AppEnv";
 import { AppSettings } from "../features/apps/AppSettings";
 import { Routes } from "../features/routes/Routes";
+import { Databases } from "../features/databases/Databases";
 import { Waf } from "../features/waf/Waf";
 import { Settings } from "../features/settings/Settings";
 import { Users } from "../features/users/Users";
@@ -56,18 +58,23 @@ function LoginRoute() {
 }
 
 function SetupRoute() {
-  const { ready, setupRequired, setWho } = useAuth();
+  const { ready, setupRequired, authed, isAdmin, setWho } = useAuth();
   const navigate = useNavigate();
   if (!ready) return null;
-  if (setupRequired === false) return <Navigate to="/login" replace />;
-  return (
-    <Setup
-      onOk={(m) => {
-        setWho(m);
-        navigate("/overview", { replace: true });
-      }}
-    />
-  );
+  // Sin usuarios: setup fresco. Con admin + sesión (reload a mitad del
+  // wizard): se reanuda donde iba en vez de botar a /overview.
+  if (setupRequired || (authed && isAdmin)) {
+    return (
+      <Setup
+        onOk={(m) => {
+          setWho(m);
+          navigate("/overview", { replace: true });
+        }}
+      />
+    );
+  }
+  if (!authed) return <Navigate to="/login" replace />;
+  return <Navigate to="/overview" replace />;
 }
 
 // Polling: useFleet (montado en layout + página) sondea cada 5s;
@@ -134,6 +141,7 @@ export const router = createBrowserRouter(
             { path: "overview", element: <Overview /> },
             { path: "proxy", element: <Navigate to="/routes?tab=diagnostico" replace /> },
             { path: "deployments", element: <Deployments /> },
+            { path: "deployments/:id", element: <DeployPage /> },
             { path: "apps/new", element: <CreatePage /> },
             { path: "ci", element: <CI /> },
             { path: "logs", element: <Logs /> },
@@ -158,6 +166,7 @@ export const router = createBrowserRouter(
               ],
             },
             { path: "routes", element: <Routes /> },
+            { path: "databases", element: <Databases /> },
             { path: "waf", element: <WafRoute /> },
             { path: "settings", element: <Settings /> },
             { path: "users", element: <UsersRoute /> },

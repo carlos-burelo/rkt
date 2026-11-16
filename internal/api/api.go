@@ -62,9 +62,14 @@ type Deps struct {
 	GithubManager func() *github.Manager
 	// Hub bus de eventos para /fleet/stream (nil = stream deshabilitado).
 	Hub *hub.Bus
+	// Pending campos que exigen restart (deriva aplicada vs deseada).
+	Pending func() []string
 	// AppsBase padre de apps en altas sin dir (home/apps).
 	// Vacío = default por plataforma.
 	AppsBase string
+	// DevMode rkt dev en marcha: relaja CSRF loopback<->loopback para el
+	// proxy Vite (puertos distintos), haya o no TLS con CA local.
+	DevMode bool
 
 	// cache agregados costosos (access.log). Lo inicializa NewHandler.
 	cache *memo
@@ -183,10 +188,20 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("/api/v1/events", d.handleEvents)
 	// Apps: lista/detalle sin env (los secretos solo vía /env, operator).
 	mux.HandleFunc("/api/v1/logs", d.handleLogs)
+	// Vaciar logs operativos (admin con confirmación en UI/CLI/MCP).
+	mux.HandleFunc("/api/v1/logs/clear", d.handleLogsClear)
 	// Mismo log, pero en vivo (SSE): init + chunks mientras el cliente escuche.
 	mux.HandleFunc("/api/v1/logs/stream", d.handleLogStream)
 	mux.HandleFunc("/api/v1/apps", d.handleApps)
 	mux.HandleFunc("/api/v1/apps/", d.handleAppDetail)
+
+	// Base de datos gestionada: una DB compartida, un esquema por app.
+	mux.HandleFunc("/api/v1/pg", d.handlePg)
+	mux.HandleFunc("/api/v1/pg/", d.handlePgSub)
+	mux.HandleFunc("/api/v1/pg/tables", d.handlePgTables)
+	mux.HandleFunc("/api/v1/pg/rows", d.handlePgRows)
+	mux.HandleFunc("/api/v1/pg/query", d.handlePgQuery)
+	mux.HandleFunc("/api/v1/pg/restore", d.handlePgRestore)
 
 	// Env global y por app: listas solo con claves; valores por clave.
 	mux.HandleFunc("/api/v1/env", d.handleEnvIndex)
@@ -269,7 +284,7 @@ func NewHandler(d Deps) http.Handler {
 	// setup se validan aparte por ruta para no romper el bootstrap
 	// sin usuarios).
 	audited := auditMutations(d, mux)
-	authed := RequireAuth(d.DB, func() bool { return d.Live.Get().LocalCA }, audited)
+	authed := RequireAuth(d.DB, func() bool { return d.DevMode || d.Live.Get().LocalCA }, audited)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/auth/login", "/api/v1/auth/status", "/api/v1/auth/setup":

@@ -1,11 +1,11 @@
 import { create } from "zustand";
 import { fetchProxy, type ProxyRoute } from "./api";
+import { useUI } from "../../app/ui";
 
 // Diagnóstico proxy: filas + filtros compartidos (Dominios y Diagnóstico
 // leen lo mismo). Una sola lectura con caché 5s.
 interface ProxyState {
   rows: ProxyRoute[] | null;
-  err: string;
   fState: "all" | "ok" | "down";
   fTls: "all" | "tls" | "off";
   selected: string | null;
@@ -35,16 +35,15 @@ async function read(force = false): Promise<ProxyRoute[]> {
 
 export const useProxy = create<ProxyState>()((set) => ({
   rows: null,
-  err: "",
   fState: "all",
   fTls: "all",
   selected: null,
   load: async (force = true) => {
-    set({ err: "" });
     try {
       set({ rows: await read(force) });
     } catch (e) {
-      set({ err: e instanceof Error ? e.message : String(e), rows: [] });
+      useUI.getState().fail(e);
+      set({ rows: [] });
     }
   },
   setFState: (fState) => set({ fState }),
@@ -57,9 +56,8 @@ import { useEffect } from "react";
 
 export function useProxyStatus() {
   const rows = useProxy((s) => s.rows);
-  const err = useProxy((s) => s.err);
   useEffect(() => {
     useProxy.getState().load(false);
   }, []);
-  return { rows, err, reload: (force = true) => useProxy.getState().load(force) };
+  return { rows, reload: (force = true) => useProxy.getState().load(force) };
 }

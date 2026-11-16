@@ -133,11 +133,13 @@ func TestNukePasos(t *testing.T) {
 		"Remove-LocalGroup",
 		"rkt-operators",
 		"No pude borrar",
+		"homeHasCerts",
 		"Limpieza total OK",
 		"apps.old",
 		"certs.old",
 		`"C:\apps"`,
 		`"C:\ProgramData\rkt"`,
+		"homeHasCerts",
 	} {
 		if !strings.Contains(body, s) {
 			t.Errorf("nuke.ps1 sin paso %q", s)

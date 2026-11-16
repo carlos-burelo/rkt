@@ -15,7 +15,6 @@ import { useI18n } from "../../shared/i18n";
 export function Proxy({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
   const rows = useProxy((s) => s.rows);
-  const err = useProxy((s) => s.err);
   const fState = useProxy((s) => s.fState);
   const fTls = useProxy((s) => s.fTls);
   const selected = useProxy((s) => s.selected);
@@ -63,7 +62,6 @@ export function Proxy({ embedded = false }: { embedded?: boolean }) {
           <ProxyFilters ok={links.filter((l) => l.ok).length} total={links.length} />
         </div>
       )}
-      {err !== "" && <p className="font-mono text-[10px] text-bad">{err}</p>}
       {!rows && <p className="font-mono text-[10px] text-muted-foreground">{t("serve.proxy.loading")}</p>}
       {rows && (
         <>

@@ -46,11 +46,21 @@ func gateServer(t *testing.T) (*Server, map[string]string) {
 
 func callTool(t *testing.T, s *Server, tok, tool string, args map[string]any) (int, string) {
 	t.Helper()
+	return callToolFrom(t, s, tok, tool, args, "")
+}
+
+// callToolFrom igual que callTool pero con RemoteAddr controlable:
+// "127.0.0.1:1" simula loopback (máquina local sin token).
+func callToolFrom(t *testing.T, s *Server, tok, tool string, args map[string]any, remote string) (int, string) {
+	t.Helper()
 	body, _ := json.Marshal(map[string]any{
 		"jsonrpc": "2.0", "id": 1, "method": "tools/call",
 		"params": map[string]any{"name": tool, "arguments": args},
 	})
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body))
+	if remote != "" {
+		req.RemoteAddr = remote
+	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	if tok != "" {
@@ -96,10 +106,23 @@ func TestGatePorRol(t *testing.T) {
 	if code, _ := callTool(t, s, toks[store.RoleAdmin], "futura_inexistente", map[string]any{}); code == http.StatusForbidden {
 		t.Fatal("admin debe pasar el gate (falla después, en el handler)")
 	}
-	// sin token no hay gate que valga (el mcpAuth de fuera da 401;
-	// aquí el rol vacío no pasa de viewer).
-	if code, _ := callTool(t, s, "", "users_add", map[string]any{}); code != http.StatusForbidden {
-		t.Fatalf("sin token: %d", code)
+	// Loopback sin token = rol local: lee y muta (operator), nunca administra.
+	const loop = "127.0.0.1:1234"
+	if code, body := callToolFrom(t, s, "", "trace_redirects", map[string]any{"url": "http://127.0.0.1:9/"}, loop); code != 200 || strings.Contains(body, "requiere rol") {
+		t.Fatalf("loopback lectura: %d %s", code, body)
+	}
+	if code, body := callToolFrom(t, s, "", "restart", map[string]any{"app": "nope"}, loop); code == http.StatusForbidden || strings.Contains(body, "requiere rol") {
+		t.Fatalf("loopback mutación operator: %d %s", code, body)
+	}
+	for _, tool := range []string{"users_add", "config_import", "prune"} {
+		code, body := callToolFrom(t, s, "", tool, map[string]any{}, loop)
+		if code != http.StatusForbidden {
+			t.Fatalf("loopback %s debió exigir admin: %d %s", tool, code, body)
+		}
+	}
+	// Remoto sin token sigue fail-closed.
+	if code, _ := callToolFrom(t, s, "", "trace_redirects", map[string]any{"url": "http://127.0.0.1:9/"}, "203.0.113.7:1234"); code != http.StatusForbidden {
+		t.Fatalf("remoto sin token: %d", code)
 	}
 	// tools/list no es tools/call: pasa sin filtrar.
 	listBody, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": map[string]any{}})

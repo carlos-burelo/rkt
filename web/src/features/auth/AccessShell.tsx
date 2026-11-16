@@ -1,18 +1,26 @@
 import { BrandMark } from "../../shared/components/ui";
 import { useI18n } from "../../shared/i18n";
 import { ThemeToggle } from "../../shared/theme/ThemeToggle";
+import { Toaster } from "@/components/ui/sonner";
 
 // Marco de acceso: formulario operativo, sin landing promocional.
+// Trae su propio Toaster: login/setup viven fuera del shell.
+// `side` usa el panel izquierdo (oculto en móvil): ideal para el stepper
+// del setup. `wide` ensancha la columna de contenido (listas del doctor).
 export function AccessShell({
   title,
   description,
   children,
   footer,
+  side,
+  wide,
 }: {
   title: string;
   description: string;
   children: React.ReactNode;
   footer: React.ReactNode;
+  side?: React.ReactNode;
+  wide?: boolean;
 }) {
   const { t } = useI18n();
   return (
@@ -30,6 +38,7 @@ export function AccessShell({
             </div>
           </div>
         </div>
+        {side && <div className="relative">{side}</div>}
         <div className="relative flex items-end justify-between gap-4 border-t border-border/70 pt-4">
           <p className="font-mono text-[9px] leading-relaxed text-muted-foreground/70">
             {t("system.access.restricted")}
@@ -41,8 +50,9 @@ export function AccessShell({
       </aside>
 
       <main className="relative flex flex-1 items-center justify-center px-5 py-10">
+        <Toaster position="bottom-right" />
         <ThemeToggle compact className="absolute top-4 right-4" />
-        <div className="w-full max-w-[22rem]">
+        <div className={`w-full ${wide ? "max-w-[30rem]" : "max-w-[22rem]"}`}>
           <div className="mb-8 flex items-center gap-3 lg:hidden">
             <span className="flex h-12 w-12 items-center justify-center border border-signal/40 bg-signal/10 text-signal">
               <BrandMark className="h-8 w-8" />

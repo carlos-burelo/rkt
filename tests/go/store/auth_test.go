@@ -132,3 +132,24 @@ func TestDumpImportUsers(t *testing.T) {
 		t.Fatal("doble import debe fallar")
 	}
 }
+
+// Regla de longitud mínima (8): 7 falla, 8 pasa, en alta y en rotación.
+func TestPasswordMinLength(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.CreateUser("a", "1234567", RoleViewer); err == nil {
+		t.Fatal("7 caracteres debe fallar")
+	}
+	if err := db.CreateUser("a", "12345678", RoleViewer); err != nil {
+		t.Fatalf("8 caracteres debe pasar: %v", err)
+	}
+	if err := db.SetPassword("a", "1234567"); err == nil {
+		t.Fatal("rotar a 7 debe fallar")
+	}
+	if err := db.SetPassword("a", "12345678"); err != nil {
+		t.Fatalf("rotar a 8 debe pasar: %v", err)
+	}
+}

@@ -63,6 +63,7 @@ type Program struct {
 	cfgPath      string
 	log          *slog.Logger
 	live         *config.Live
+	devMode      bool
 	ghm          atomic.Pointer[github.Manager]
 	ghStale      atomic.Bool
 	autoStarted  atomic.Bool
@@ -88,6 +89,9 @@ type Program struct {
 	// cancelMu protege los canceladores de despliegues en curso.
 	cancelMu      sync.Mutex
 	deployCancels map[int64]context.CancelFunc
+	// pendingMu protege los campos que exigen restart (deriva aplicada).
+	pendingMu      sync.Mutex
+	pendingRestart []string
 	// srvMetrics monitor local de la instancia (compartido con API).
 	srvMetrics *servermetrics.Monitor
 	// cron ejecutor de tareas programadas.
@@ -129,6 +133,10 @@ func New(cfgPath string, log *slog.Logger) *Program {
 	return &Program{cfgPath: cfgPath, log: log, discoverKick: make(chan struct{}, 1), probes: map[string]probeResult{},
 		lastDeploy: map[string]time.Time{}, rollingBack: map[string]bool{}, srvMetrics: servermetrics.NewMonitor()}
 }
+
+// SetDevMode marca entorno `rkt dev` (proxy Vite): relaja CSRF
+// loopback<->loopback en la API. Solo el comando dev lo activa.
+func (p *Program) SetDevMode(v bool) { p.devMode = v }
 
 // gh devuelve el manager de GitHub App (atómico: se reemplaza al crear la App).
 func (p *Program) gh() *github.Manager { return p.ghm.Load() }
@@ -225,6 +233,25 @@ func (p *Program) Run() {
 	} else if migrated != nil {
 		cfg = migrated
 	}
+	// Cortes no confirmados (el servicio murió a mitad del swap): la DB
+	// puede decir slot nuevo con proceso viejo. Se marcan aborted con
+	// evento; el supervisor arranca por manifiesto y el operador decide.
+	if db != nil {
+		if pending, err := db.PendingCutovers(); err != nil {
+			p.log.Warn("journal de cortes ilegible", "err", err)
+		} else {
+			for _, pc := range pending {
+				_ = db.FinishCutover(pc.ID, "aborted")
+				_ = db.InsertEvent("failed", pc.App, "corte interrumpido por reinicio (dir "+pc.ToDir+")")
+				p.log.Warn("corte sin confirmar, marcado aborted", "app", pc.App, "dir", pc.ToDir)
+			}
+		}
+	}
+	// Puertos grabados ocupados por terceros (TOCTOU del pool): reubicar
+	// antes de arrancar para no entrar en crashloop.
+	if cp2, ok := reallocateBusyPorts(db, cfg.Apps, nil, p.log); ok {
+		cfg = cp2
+	}
 	live := config.NewLive(cfg)
 	sup := supervisor.New(cfg.Apps, cfg.GlobalEnv, filepath.Join(logx.DirFor(p.cfgPath), "apps"), p.log)
 	cronRunner := cronjobs.New(live, db, logx.DirFor(p.cfgPath), p.log)
@@ -249,12 +276,22 @@ func (p *Program) Run() {
 	sup.Start()
 	cronRunner.Start()
 
-	apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, LogsDir: logx.DirFor(p.cfgPath), AppsBase: platform.AppsDir(logx.HomeDir(p.cfgPath)), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
+	apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, DevMode: p.devMode, LogsDir: logx.DirFor(p.cfgPath), AppsBase: platform.AppsDir(logx.HomeDir(p.cfgPath)), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
+		running := map[string]bool{}
+		for _, s := range p.sup.Snapshot() {
+			if s.Running {
+				running[s.Name] = true
+			}
+		}
+		if cp, ok := reallocateBusyPorts(db, apps, running, p.log); ok {
+			live.Swap(cp)
+			apps = cp.Apps
+		}
 		p.sup.Apply(apps, global)
 		if p.cron != nil {
 			p.cron.Apply()
 		}
-	}, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, Server: p.srvMetrics, Cron: p.cron, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh, Hub: p.hub})
+	}, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, Server: p.srvMetrics, Cron: p.cron, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh, Hub: p.hub, Pending: p.pendingRestartGet})
 	sub, err := fs.Sub(web.Dist, "dist")
 	if err != nil {
 		p.log.Error("dashboard sin dist", "err", err)
@@ -584,6 +621,17 @@ func (p *Program) restartApp(name string) bool {
 	if a := cfgfile.FindApp(p.live.Get(), name); a != nil && a.External() {
 		return false
 	}
+	running := map[string]bool{}
+	if p.sup != nil {
+		for _, s := range p.sup.Snapshot() {
+			if s.Running {
+				running[s.Name] = true
+			}
+		}
+	}
+	if cp, ok := reallocateBusyPorts(p.db, p.live.Get().Apps, running, p.log); ok {
+		p.live.Swap(cp)
+	}
 	return p.sup.Restart(name)
 }
 
@@ -608,39 +656,66 @@ func (c *supCtl) StartCanary(name, dir, port string, out io.Writer) (*exec.Cmd, 
 
 // Cutover persiste el corte (Dir, PORT y ruta→port) y adopta el canario.
 // La ruta cambia en el próximo request vía Live.Swap; el canario ya sano.
+// Journal primero: el intent queda 'started' y se confirma tras adoptar;
+// si el servicio muere a mitad, el arranque lo marca aborted (ver Run).
 func (c *supCtl) Cutover(name string, cmd *exec.Cmd, dir, port string) error {
 	portInt, err := strconv.Atoi(port)
 	if err != nil {
 		return fmt.Errorf("puerto canario inválido %q: %w", port, err)
 	}
+	var fromDir string
+	var oldDir, oldStatic string
+	var oldArgs []string
+	if a := cfgfile.FindApp(c.live.Get(), name); a != nil {
+		fromDir = a.Dir
+		oldDir, oldStatic, oldArgs = a.Dir, a.Static, a.Args
+	}
+	var cutID int64
+	if c.db != nil {
+		if id, ierr := c.db.InsertCutover(name, fromDir, dir, port, "", ""); ierr == nil {
+			cutID = id
+		}
+	}
+	// Rebase estático calculado fuera del MutateFleet para reusarlo en el
+	// patch Y en SwapLive (ver abajo).
+	var newStatic string
+	var newArgs []string
+	finish := func(status string) {
+		if c.db != nil && cutID > 0 {
+			_ = c.db.FinishCutover(cutID, status)
+		}
+	}
 	cp, err := cfgfile.MutateFleet(c.db, func(cp *config.Config) error {
 		// El path estático guardado apunta al slot que era live: rebasarlo
 		// al que pasa a serlo o el próximo canario serviría el slot viejo.
-		var oldDir, oldStatic string
-		var oldArgs []string
-		for i := range cp.Apps {
-			if cp.Apps[i].Name == name {
-				oldDir, oldStatic, oldArgs = cp.Apps[i].Dir, cp.Apps[i].Static, cp.Apps[i].Args
-				break
-			}
-		}
+		// Se calculan fuera para reusarlos en SwapLive: si el loop conserva
+		// el static/args viejos, el Apply de fondo lo reemplazaría y el
+		// puerto volvería a estar ocupado → crashloop.
 		p := cfgfile.AppPatch{Dir: &dir, Port: &portInt}
 		if ns, ok := supervisor.RebaseStatic(oldDir, oldStatic, dir); ok {
+			newStatic = ns
 			p.Static = &ns
 		}
 		if len(oldArgs) >= 2 && oldArgs[0] == "__static" {
 			if na, ok := supervisor.RebaseStatic(oldDir, oldArgs[1], dir); ok {
 				args := append([]string{oldArgs[0], na}, oldArgs[2:]...)
+				newArgs = args
 				p.Args = &args
 			}
 		}
 		return cfgfile.UpdateApp(cp, name, p)
 	})
 	if err != nil {
+		finish("failed")
 		return err
 	}
 	c.live.Swap(cp)
-	return c.sup.SwapLive(name, cmd, dir, port)
+	if err := c.sup.SwapLive(name, cmd, dir, port, newStatic, newArgs); err != nil {
+		finish("failed")
+		return err
+	}
+	finish("done")
+	return nil
 }
 
 // migrateSlots convierte apps con layout antiguo (Dir sin sufijo .a/.b) al
@@ -682,6 +757,19 @@ func migrateSlots(db *store.DB, cfg *config.Config) (*config.Config, error) {
 		return nil, err
 	}
 	return cp, nil
+}
+
+// pendingRestartGet campos que exigen restart (para /api/v1/status).
+func (p *Program) pendingRestartGet() []string {
+	p.pendingMu.Lock()
+	defer p.pendingMu.Unlock()
+	return append([]string{}, p.pendingRestart...)
+}
+
+func (p *Program) setPendingRestart(fields []string) {
+	p.pendingMu.Lock()
+	p.pendingRestart = append([]string{}, fields...)
+	p.pendingMu.Unlock()
 }
 
 // nilFS FS vacío (dist ausente): todo Stat falla -> dashboard 503.

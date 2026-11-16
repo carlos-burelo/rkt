@@ -1,7 +1,34 @@
 import { Copy } from "lucide-react";
+import { toast } from "sonner";
 import { Skeleton as SkeletonPrimitive } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { useI18n } from "../i18n";
+import { t, useI18n } from "../i18n";
+
+// errorToast: todos los errores de acción pasan por aquí (sonner estilado).
+// Muestra el mensaje amigable y ofrece copiar el error completo del sistema.
+// Con id estable (p. ej. polls) actualiza el mismo toast en vez de apilar.
+export function errorToast(friendly: string, detail?: string, opts?: { id?: string }) {
+  const full = (detail ?? friendly).trim() || friendly;
+  toast.error(friendly, {
+    id: opts?.id,
+    duration: 8000,
+    icon: <span aria-hidden className="h-1.5 w-1.5 shrink-0 bg-bad" />,
+    description: full !== friendly ? full.slice(0, 160) : undefined,
+    action: {
+      label: t("common.copy"),
+      onClick: () => {
+        navigator.clipboard?.writeText(full).then(
+          () => toast.success(t("common.copied")),
+          () => toast.error(t("common.copy"), { description: full.slice(0, 200) }),
+        );
+      },
+    },
+  });
+}
+
+export function dismissError(id: string) {
+  toast.dismiss(id);
+}
 
 // CopyButton copia al portapapeles con micro-feedback.
 export function CopyButton({ text, label, className }: { text: string; label?: string; className?: string }) {

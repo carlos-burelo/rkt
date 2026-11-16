@@ -1,13 +1,13 @@
 import { create } from "zustand";
 import { fetchAnalytics, type Analytics } from "./api";
+import { useUI } from "../../app/ui";
 
-// Analytics por host y rango: filtros + serie + error local.
+// Analytics por host y rango: filtros + serie (el error va por sonner).
 interface AnalyticsState {
   host: string;
   hosts: string[];
   days: number;
   data: Analytics | null;
-  err: string;
   setHost: (h: string) => void;
   setDays: (d: number) => void;
   load: () => void;
@@ -18,9 +18,8 @@ export const useAnalyticsPage = create<AnalyticsState>()((set, get) => ({
   hosts: [],
   days: 7,
   data: null,
-  err: "",
   setHost: (host) => {
-    set({ host, data: null, err: "" });
+    set({ host, data: null });
     get().load();
   },
   setDays: (days) => {
@@ -34,7 +33,7 @@ export const useAnalyticsPage = create<AnalyticsState>()((set, get) => ({
   },
   load: () => {
     const { host, days } = get();
-    set({ data: null, err: "" });
+    set({ data: null });
     fetchAnalytics(host, days)
       .then((data) => {
         const s = get();
@@ -43,7 +42,7 @@ export const useAnalyticsPage = create<AnalyticsState>()((set, get) => ({
       .catch((e) => {
         const s = get();
         if (s.host === host && s.days === days) {
-          set({ err: e instanceof Error ? e.message : "error" });
+          useUI.getState().fail(e);
         }
       });
   },

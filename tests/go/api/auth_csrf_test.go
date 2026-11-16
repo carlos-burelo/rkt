@@ -4,13 +4,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"rkt/internal/store"
 )
 
-// El check CSRF compara el Origin con el Host. En dev (LocalCA) localhost/
-// 127.0.0.1/::1 cuentan como mismo origen con cualquier puerto (proxy Vite
-// manda Origin localhost:5173 y el backend ve 127.0.0.1:8090). En producción
-// la comparación es exacta por host + puerto: otro puerto loopback no puede
-// mutar (SameSite=Lax no distingue puertos).
+// El check CSRF compara el Origin con el Host. En dev (comando `rkt dev`)
+// localhost/127.0.0.1/::1 cuentan como mismo origen con cualquier puerto
+// (proxy Vite manda Origin localhost:5173 y el backend ve 127.0.0.1:8090).
+// En producción la comparación es exacta por host + puerto: otro puerto
+// loopback no puede mutar (SameSite=Lax no distingue puertos).
 func TestRequireAuthOrigin(t *testing.T) {
 	_, db, done := testDeps(t)
 	defer done()
@@ -76,4 +78,27 @@ func TestRequireAuthOrigin(t *testing.T) {
 			t.Fatalf("sin Origin: got %d, quiere 401", rec.Code)
 		}
 	})
+}
+
+// Cableado DevMode: `rkt dev` relaja el proxy Vite aunque no haya TLS;
+// sin DevMode el mismo Origin da 403 (el fallo visto en dev).
+func TestRequireAuthDevModeVite(t *testing.T) {
+	for _, devMode := range []bool{false, true} {
+		d, db, done := testDeps(t)
+		d.DevMode = devMode
+		h := NewHandler(d)
+		tok := loginAs(t, h, db, "op", store.RoleOperator)
+		req := authed(http.MethodPost, "/api/v1/apps/w/restart", tok)
+		req.Host = "127.0.0.1:8090"
+		req.Header.Set("Origin", "http://localhost:5173")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		done()
+		if devMode && rec.Code == http.StatusForbidden {
+			t.Fatalf("dev: origin vite no debe dar 403: %s", rec.Body.String())
+		}
+		if !devMode && rec.Code != http.StatusForbidden {
+			t.Fatalf("sin dev: origin vite debe dar 403, got %d", rec.Code)
+		}
+	}
 }

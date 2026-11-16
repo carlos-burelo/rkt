@@ -159,7 +159,7 @@ func TestCanaryJobMataArbolCompleto(t *testing.T) {
 		t.Fatal("el nieto debe nacer dentro del job del canario")
 	}
 
-	if err := m.SwapLive("arbol", canario, dir, port); err != nil {
+	if err := m.SwapLive("arbol", canario, dir, port, "", nil); err != nil {
 		t.Fatalf("corte: %v", err)
 	}
 	waitFor(t, 10*time.Second, func() bool {

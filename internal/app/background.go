@@ -508,6 +508,7 @@ func (p *Program) watchMerged(live *config.Live, db *store.DB) {
 		if need := config.NeedRestart(old, next); len(need) > 0 {
 			p.log.Warn("cambios requieren restart", "campos", need)
 		}
+		p.setPendingRestart(config.NeedRestart(old, next))
 	}
 }
 
@@ -522,7 +523,7 @@ func (p *Program) fleetLoop(live *config.Live, db *store.DB) {
 		if p.hub == nil {
 			continue
 		}
-		if st := fleetStatusPayload(live, p.appStatuses()); st != "" && st != lastStatus {
+		if st := fleetStatusPayload(live, p.appStatuses(), p.pendingRestartGet()); st != "" && st != lastStatus {
 			lastStatus = st
 			var v any
 			_ = json.Unmarshal([]byte(st), &v)
@@ -551,18 +552,22 @@ func (p *Program) fleetLoop(live *config.Live, db *store.DB) {
 
 // fleetStatusPayload misma forma que GET /api/v1/status (string para
 // comparar barato por hash textual).
-func fleetStatusPayload(live *config.Live, apps []health.AppStatus) string {
+func fleetStatusPayload(live *config.Live, apps []health.AppStatus, pending []string) string {
 	cfg := live.Get()
 	httpsPort := ""
 	if cfg.ListenHTTPS != "" {
 		httpsPort = netutil.Port(cfg.ListenHTTPS, "443")
 	}
+	if pending == nil {
+		pending = []string{}
+	}
 	b, _ := json.Marshal(map[string]any{
-		"version":    build.Version,
-		"routes":     len(cfg.Routes),
-		"apps":       apps,
-		"http_port":  netutil.Port(cfg.ListenHTTP, "80"),
-		"https_port": httpsPort,
+		"version":         build.Version,
+		"routes":          len(cfg.Routes),
+		"apps":            apps,
+		"http_port":       netutil.Port(cfg.ListenHTTP, "80"),
+		"https_port":      httpsPort,
+		"pending_restart": pending,
 	})
 	return string(b)
 }

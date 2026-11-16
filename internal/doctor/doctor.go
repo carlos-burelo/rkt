@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"rkt/internal/pg"
 )
 
 // State de un chequeo: ok, warn (aviso) o fail (bloqueante).
@@ -175,6 +177,24 @@ func Run(e Env) []Check {
 		}
 		out = append(out, Check{Name: tc.name, State: OK, Detail: v})
 	}
+	// Postgres gestionado: solo se exige si pg_mode=local. Como los bins
+	// son 4 (initdb, pg_ctl, psql, pg_dump), el detalle lista los que
+	// faltan; el Setup lo repara fijando pg_bin al directorio bin/.
+	mode := ""
+	if e.GetSetting != nil {
+		mode = strings.TrimSpace(e.GetSetting("pg_mode"))
+	}
+	if mode == "local" {
+		bin := ""
+		if e.GetSetting != nil {
+			bin = strings.TrimSpace(e.GetSetting("pg_bin"))
+		}
+		if _, err := pg.ResolveBin(bin); err != nil {
+			out = append(out, Check{Name: "postgres", State: Fail, Detail: err.Error(), Hint: "instala PostgreSQL 14+ o fija settings set pg_bin=<dir-bin>\\pg_ctl.exe"})
+		} else {
+			out = append(out, Check{Name: "postgres", State: OK, Detail: binOrPath(bin)})
+		}
+	}
 	// Pool de puertos: formato válido y al menos un puerto libre.
 	pool := ""
 	if e.GetSetting != nil {
@@ -194,6 +214,14 @@ func Run(e Env) []Check {
 		out = append(out, Check{Name: "port_pool", State: OK, Detail: fmt.Sprintf("%s (libre %d)", pool, p)})
 	}
 	return out
+}
+
+// binOrPath describe de dónde sale un binario configurado.
+func binOrPath(v string) string {
+	if strings.TrimSpace(v) != "" {
+		return v
+	}
+	return "PATH del servicio"
 }
 
 // DirWritable verifica que el dir de logs/DB se puede crear y escribir.

@@ -16,7 +16,18 @@ import { TechIcon } from "../../shared/components/TechIcon";
 import { stackOfApp } from "../apps/model";
 import type { AppMeta, AppStatus, Deployment, Status } from "../../shared/lib/types";
 
-// Tabla de unidades: estado, dominio, puerto, rev. Lee fleet + actions.
+// El puerto es plomería interna: solo se muestra cuando el operador debe
+// conocerlo (externa) o la app es pública. En localhost va oculto.
+function isPublicDomain(h: string): boolean {
+  const v = h.trim().toLowerCase();
+  return !(v === "localhost" || v === "test" || v.endsWith(".localhost") || v.endsWith(".test"));
+}
+
+function showPortFor(meta: AppMeta | undefined): boolean {
+  if (!meta) return false;
+  if (meta.external) return true;
+  return (meta.domains ?? []).some(isPublicDomain);
+}
 export function UnitsTable({
   apps,
   metas,
@@ -35,13 +46,18 @@ export function UnitsTable({
   const lastDep = (app: string) => deps.find((d) => d.app === app);
   const rank = { failed: 0, degraded: 1, running: 2, ok: 2, stopped: 3 } as const;
   const sortedApps = [...apps].sort((a, b) => rank[stateOf(a)] - rank[stateOf(b)]);
+  const showPort = sortedApps.some((a) => showPortFor(metas.find((m) => m.name === a.name)));
+  // Sin columna de puerto la grilla pierde una pista.
+  const wideGrid = showPort
+    ? "lg:grid-cols-[3.5rem_minmax(0,1.5fr)_5rem_minmax(0,1.5fr)_7rem_5.5rem_4.5rem]"
+    : "lg:grid-cols-[3.5rem_minmax(0,1.5fr)_minmax(0,1.5fr)_7rem_5.5rem_4.5rem]";
   return (
     <section>
       <div className="mb-2 flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
         <div>
           <h2 className="text-[14px] font-medium tracking-tight">{t("overview.units.title")}</h2>
           <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-            {t("overview.units.columns")}
+            {t(showPort ? "overview.units.columns" : "overview.units.columnsNoPort")}
           </p>
         </div>
         <span className="tnum font-mono text-[10px] text-muted-foreground">
@@ -49,10 +65,10 @@ export function UnitsTable({
         </span>
       </div>
       <div className="border border-border" role="table" aria-label={t("overview.units.tableAria")}>
-        <div role="row" className="hidden grid-cols-[3.5rem_minmax(0,1.5fr)_5rem_minmax(0,1.5fr)_7rem_5.5rem_4.5rem] items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 lg:grid">
+        <div role="row" className={cn("hidden items-center gap-3 border-b border-border bg-secondary/25 px-3 py-1.5 lg:grid", wideGrid)}>
           <span role="columnheader" className="micro">{t("overview.col.state")}</span>
           <span role="columnheader" className="micro">{t("overview.col.unit")}</span>
-          <span role="columnheader" className="micro">{t("overview.col.port")}</span>
+          {showPort && <span role="columnheader" className="micro">{t("overview.col.port")}</span>}
           <span role="columnheader" className="micro">{t("overview.col.target")}</span>
           <span role="columnheader" className="micro">{t("overview.col.rev")}</span>
           <span role="columnheader" className="micro text-right">{t("overview.col.ago")}</span>
@@ -79,7 +95,8 @@ export function UnitsTable({
               tabIndex={0}
               aria-label={t("overview.units.open", { name: a.name })}
               className={cn(
-                "group relative grid cursor-pointer grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-border/70 bg-card/35 px-3 py-2.5 last:border-0 hover:bg-accent/40 focus-visible:bg-accent/40 lg:grid-cols-[3.5rem_minmax(0,1.5fr)_5rem_minmax(0,1.5fr)_7rem_5.5rem_4.5rem]",
+                "group relative grid cursor-pointer grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-border/70 bg-card/35 px-3 py-2.5 last:border-0 hover:bg-accent/40 focus-visible:bg-accent/40",
+                wideGrid,
                 state === "failed" && "bg-bad/[0.045] hover:bg-bad/[0.075] focus-visible:bg-bad/[0.075]",
               )}
               role="row"
@@ -110,13 +127,15 @@ export function UnitsTable({
                     </span>
                   </p>
                   <p className="tnum truncate font-mono text-[10px] text-muted-foreground lg:hidden">
-                    {meta?.port ? `:${meta.port} · ` : ""}{domain ?? t("overview.units.noDomain")}
+                    {showPortFor(meta) && meta?.port ? `:${meta.port} · ` : ""}{domain ?? t("overview.units.noDomain")}
                   </p>
                 </div>
               </div>
-              <span role="cell" className="tnum hidden font-mono text-[11px] text-muted-foreground lg:block">
-                {meta?.port ? `:${meta.port}` : "—"}
-              </span>
+              {showPort && (
+                <span role="cell" className="tnum hidden font-mono text-[11px] text-muted-foreground lg:block">
+                  {showPortFor(meta) && meta?.port ? `:${meta.port}` : ""}
+                </span>
+              )}
               <span role="cell" className="hidden min-w-0 lg:block">
                 {domain ? (
                   <a

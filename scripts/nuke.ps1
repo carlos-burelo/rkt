@@ -95,20 +95,22 @@ if (-not $borrado) { throw "No pude borrar $full (un proceso retiene archivos). 
 New-Item -ItemType Directory -Force $full | Out-Null
 # Restos de layouts viejos (pre-hogar único): se mueven, no se borran.
 # apps.old/certs.old quedan a un Remove-Item de desaparecer cuando
-# confirmes que no hay nada que rescatar.
+# confirmes que no hay nada que rescatar. El ProgramData legacy no se toca
+# si el home ya trae sus propios certs (evita rescatar basura ajena).
+$homeHasCerts = Test-Path (Join-Path $full "certs")
 foreach ($legacy in @(
   @{old = "C:\apps"; nuevo = "apps.old"},
   @{old = "C:\ProgramData\rkt"; nuevo = "certs.old"}
 )) {
   $src = $legacy.old
   $dst = Join-Path $full $legacy.nuevo
-  if ($src -ne $full -and (Test-Path $src) -and -not (Test-Path $dst)) {
+  if ($src -eq $full -or -not (Test-Path $src) -or (Test-Path $dst)) { continue }
+  if ($legacy.nuevo -eq "certs.old" -and $homeHasCerts) { continue }
     try {
       Move-Item $src $dst -Force
       Write-Host "Legado movido: $src -> $dst (revísalo y bórralo cuando quieras)"
     } catch {
       Write-Warning "No pude mover ${src}: ${_}"
     }
-  }
 }
 Write-Host "Limpieza total OK. El install posterior parte de cero."

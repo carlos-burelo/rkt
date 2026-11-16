@@ -23,11 +23,16 @@ func (d *Deps) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if cfg.ListenHTTPS != "" {
 		httpsPort = netutil.Port(cfg.ListenHTTPS, "443")
 	}
+	pending := []string{}
+	if d.Pending != nil {
+		pending = d.Pending()
+	}
 	writeJSON(w, map[string]any{
-		"version":    d.Version,
-		"routes":     len(cfg.Routes),
-		"apps":       apps,
-		"http_port":  httpPort,
-		"https_port": httpsPort,
+		"version":         d.Version,
+		"routes":          len(cfg.Routes),
+		"apps":            apps,
+		"http_port":       httpPort,
+		"https_port":      httpsPort,
+		"pending_restart": pending,
 	})
 }

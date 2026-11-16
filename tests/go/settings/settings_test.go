@@ -3,12 +3,13 @@ package settings
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func TestKeysYGet(t *testing.T) {
 	keys := Keys()
-	if len(keys) != 16 || keys[0] != KeyNodeBin {
+	if len(keys) != 22 || keys[0] != KeyNodeBin {
 		t.Fatalf("keys = %v", keys)
 	}
 	if s, ok := Get(KeyBaseDomain); !ok || s.Key != KeyBaseDomain {
@@ -32,6 +33,8 @@ func TestValidateSettings(t *testing.T) {
 		KeyRetentionLogDays: "30", KeyRetentionBackupDays: "7",
 		KeyDashboardHost: "rkt.ejemplo.com", KeyDashboardListen: "0.0.0.0:8090",
 		KeyListenHTTP: ":80", KeyListenHTTPS: ":443",
+		KeyPgMode: "local", KeyPgBin: exe, KeyPgPort: "5432",
+		KeyPgDatabase: "rkt", KeyPgUser: "postgres", KeyPgPass: "root",
 	}
 	for k, v := range ok {
 		if err := Validate(k, v); err != nil {
@@ -67,6 +70,34 @@ func TestValidateSettings(t *testing.T) {
 	}
 	if err := Validate(KeySiteName, ""); err != nil {
 		t.Fatalf("vacío debe permitir default: %v", err)
+	}
+	for _, tc := range []struct {
+		k, v  string
+		want  bool
+		label string
+	}{
+		{KeyPgMode, "off", true, "pg_mode off"},
+		{KeyPgMode, "local", true, "pg_mode local"},
+		{KeyPgMode, "otro", false, "pg_mode libre"},
+		{KeyPgMode, "", true, "pg_mode vacío = default"},
+		{KeyPgPort, "5432", true, "puerto válido"},
+		{KeyPgPort, "0", false, "puerto 0"},
+		{KeyPgPort, "99999", false, "puerto enorme"},
+		{KeyPgPort, "x", false, "puerto texto"},
+		{KeyPgDatabase, "rkt", true, "base válida"},
+		{KeyPgDatabase, "MiDB", false, "mayúsculas en base"},
+		{KeyPgDatabase, strings.Repeat("a", 64), false, "base larga"},
+		{KeyPgDatabase, "con espacio", false, "base con espacio"},
+		{KeyPgDatabase, "", true, "base vacía = default"},
+		{KeyPgUser, "postgres", true, "superusuario válido"},
+		{KeyPgUser, "Root", false, "mayúsculas en usuario"},
+		{KeyPgPass, "root", true, "password libre"},
+		{KeyPgPass, "", true, "password vacío = default"},
+		{KeyPgBin, exe, true, "pg_bin ejecutable"},
+	} {
+		if err := Validate(tc.k, tc.v); (err == nil) != tc.want {
+			t.Fatalf("%s (%s=%q): err=%v", tc.label, tc.k, tc.v, err)
+		}
 	}
 }
 

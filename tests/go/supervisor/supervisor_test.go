@@ -165,6 +165,24 @@ func TestBackoffFor(t *testing.T) {
 	}
 }
 
+func TestTripCrashTabla(t *testing.T) {
+	for _, c := range []struct {
+		fast   bool
+		consec int
+		want   bool
+	}{
+		{false, 100, false}, // muerte lenta: nunca es crashloop
+		{true, 0, false},
+		{true, 4, false},
+		{true, 5, true},
+		{true, 40, true},
+	} {
+		if got := tripCrash(c.fast, c.consec); got != c.want {
+			t.Fatalf("tripCrash(%v, %d) = %v, quiere %v", c.fast, c.consec, got, c.want)
+		}
+	}
+}
+
 func TestSlowDeathsDontTripGuard(t *testing.T) {
 	cmd, args := sleepProc(t, 300*time.Millisecond)
 	apps := []config.App{app1("lenta", cmd, args, 50*time.Millisecond, 100*time.Millisecond)}
@@ -334,7 +352,7 @@ func TestSwapLiveAdoptaCanario(t *testing.T) {
 	}
 	defer canario.Process.Kill()
 
-	if err := m.SwapLive("largo", canario, "", ""); err != nil {
+	if err := m.SwapLive("largo", canario, "", "", "", nil); err != nil {
 		t.Fatalf("SwapLive: %v", err)
 	}
 	waitFor(t, 5*time.Second, func() bool {
@@ -342,8 +360,59 @@ func TestSwapLiveAdoptaCanario(t *testing.T) {
 		return s.Running && s.Pid != pidViejo && s.Pid == canario.Process.Pid
 	}, "supervisor adopta el canario y mata la vieja")
 
-	if err := m.SwapLive("nadie", canario, "", ""); err == nil {
+	if err := m.SwapLive("nadie", canario, "", "", "", nil); err == nil {
 		t.Fatal("app inexistente debe fallar")
+	}
+}
+
+// SwapLive sincroniza la spec (dir/port/static/args): el Apply de fondo
+// con la flota ya cortada debe verla igual y NO reiniciar (antes el static
+// viejo provocaba reemplazo, kill fallido y crashloop por puerto ocupado).
+func TestSwapLiveSyncsSpec(t *testing.T) {
+	cmd, args := sleepProc(t, 30*time.Second)
+	oldDir := t.TempDir()
+	a := app1("web", cmd, args, 5*time.Second, 10*time.Second)
+	a.Dir = oldDir
+	a.Static = filepath.Join(oldDir, "dist")
+	a.Env = map[string]string{"PORT": "4111"}
+	m := New([]config.App{a}, nil, t.TempDir(), testLog(t))
+	m.Start()
+	defer m.Stop()
+	waitFor(t, 5*time.Second, func() bool {
+		return m.Snapshot()[0].Running
+	}, "app corriendo")
+
+	newDir := t.TempDir()
+	newStatic := filepath.Join(newDir, "dist")
+	newArgs := []string{"__static", newStatic}
+	canario := exec.Command(cmd, args...)
+	configureProc(canario)
+	if err := canario.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer canario.Process.Kill()
+	if err := m.SwapLive("web", canario, newDir, "4222", newStatic, newArgs); err != nil {
+		t.Fatalf("SwapLive: %v", err)
+	}
+	waitFor(t, 5*time.Second, func() bool {
+		s := m.Snapshot()[0]
+		return s.Running && s.Pid == canario.Process.Pid
+	}, "canario adoptado")
+
+	// Flota ya cortada (lo que Cutover persiste): mismo spec → sin reinicio.
+	fleet := app1("web", cmd, args, 5*time.Second, 10*time.Second)
+	fleet.Dir = newDir
+	fleet.Static = newStatic
+	fleet.Args = newArgs
+	fleet.Env = map[string]string{"PORT": "4222"}
+	m.Apply([]config.App{fleet}, nil)
+	time.Sleep(500 * time.Millisecond)
+	s := m.Snapshot()[0]
+	if !s.Running || s.Pid != canario.Process.Pid {
+		t.Fatalf("Apply reemplazó la instancia adoptada: %+v", s)
+	}
+	if s.Restarts != 0 {
+		t.Fatalf("Apply reinició sin cambios: %+v", s)
 	}
 }
 
@@ -403,7 +472,7 @@ http.server.HTTPServer(("127.0.0.1", int(os.environ["PORT"])), H).serve_forever(
 		return resp.StatusCode == http.StatusOK
 	}, "canario responde HTTP")
 
-	if err := m.SwapLive("web", canario, "", ""); err != nil {
+	if err := m.SwapLive("web", canario, "", "", "", nil); err != nil {
 		t.Fatalf("SwapLive: %v", err)
 	}
 	// mismo proceso, sin reinicio: sigue respondiendo

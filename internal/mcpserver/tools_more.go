@@ -27,6 +27,8 @@ import (
 	"rkt/internal/health"
 	"rkt/internal/hosts"
 	"rkt/internal/logx"
+	"rkt/internal/pg"
+	"rkt/internal/settings"
 	"rkt/internal/store"
 	"rkt/internal/weblog"
 )
@@ -95,7 +97,7 @@ type alertUpdateArg struct {
 }
 type userAddArg struct {
 	Name     string `json:"name" jsonschema:"usuario"`
-	Password string `json:"password" jsonschema:"contraseña (mín 12)"`
+	Password string `json:"password" jsonschema:"contraseña (mín 8)"`
 	Role     string `json:"role,omitempty" jsonschema:"viewer|operator|admin (default viewer)"`
 }
 type userArg struct {
@@ -103,7 +105,7 @@ type userArg struct {
 }
 type userPassArg struct {
 	Name     string `json:"name" jsonschema:"usuario"`
-	Password string `json:"password" jsonschema:"contraseña nueva (mín 12)"`
+	Password string `json:"password" jsonschema:"contraseña nueva (mín 8)"`
 }
 type exportArg struct {
 	IncludeSecrets bool `json:"include_secrets,omitempty" jsonschema:"incluir valores de Env (default false)"`
@@ -116,6 +118,43 @@ type pruneArg struct {
 	DeploymentsDays int    `json:"deployments_days,omitempty" jsonschema:"borrar deployments terminados con más días (default 30)"`
 	EventsDays      int    `json:"events_days,omitempty" jsonschema:"borrar eventos con más días (default 30)"`
 	Confirm         string `json:"confirm" jsonschema:"escribe prune para confirmar"`
+}
+type logsClearArg struct {
+	Confirm string `json:"confirm" jsonschema:"escribe clear para confirmar"`
+}
+type pgProvisionArg struct {
+	App  string `json:"app" jsonschema:"app a la que se le crea esquema+rol"`
+	Mode string `json:"mode,omitempty" jsonschema:"dedicated (default) o shared"`
+}
+type pgAppArg struct {
+	App string `json:"app" jsonschema:"app con esquema aprovisionado"`
+}
+type pgDropArg struct {
+	App     string `json:"app" jsonschema:"app cuyo esquema+rol se borra"`
+	Confirm string `json:"confirm" jsonschema:"escribe drop para confirmar"`
+}
+
+type pgTablesArg struct {
+	App string `json:"app" jsonschema:"app con esquema aprovisionado"`
+}
+
+type pgRowsArg struct {
+	App   string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table string `json:"table" jsonschema:"tabla del esquema"`
+	N     int    `json:"n,omitempty" jsonschema:"filas por página (default 100, máx 500)"`
+	Page  int    `json:"page,omitempty" jsonschema:"página (default 1)"`
+}
+
+type pgQueryArg struct {
+	App     string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	SQL     string `json:"sql" jsonschema:"una sola sentencia SQL"`
+	Confirm string `json:"confirm" jsonschema:"escribe query para confirmar (toda ejecución es mutación potencial)"`
+}
+
+type pgRestoreArg struct {
+	App     string `json:"app" jsonschema:"app destino (debe tener esquema)"`
+	File    string `json:"file" jsonschema:"ruta del dump custom (-Fc)"`
+	Confirm string `json:"confirm" jsonschema:"escribe restore para confirmar (sobrescribe datos)"`
 }
 
 func jsonText(v any) (string, error) {
@@ -139,6 +178,313 @@ func (s *Server) doAppGet(app string) (string, error) {
 		return "", fmt.Errorf("app %q inexistente", app)
 	}
 	return jsonText(appview.App(cfg, *a))
+}
+
+// pgReg adapta store.DB al Registry mínimo de pg.
+type pgReg struct{ db *store.DB }
+
+func (r pgReg) PgGet(app string) (pg.Record, bool, error) {
+	p, ok, err := r.db.PgGet(app)
+	if err != nil || !ok {
+		return pg.Record{}, ok, err
+	}
+	return pg.Record{App: p.App, Schema: p.Schema, Role: p.Role, Mode: p.Mode, DB: p.DB}, true, nil
+}
+
+func (r pgReg) PgList() ([]pg.Record, error) {
+	all, err := r.db.PgList()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]pg.Record, 0, len(all))
+	for _, p := range all {
+		out = append(out, pg.Record{App: p.App, Schema: p.Schema, Role: p.Role, Mode: p.Mode, DB: p.DB})
+	}
+	return out, nil
+}
+
+func (r pgReg) PgPut(app, schema, role, mode, db string) error {
+	return r.db.PgProvision(app, schema, role, mode, db)
+}
+
+func (r pgReg) PgRemove(app string) error {
+	return r.db.PgRemove(app)
+}
+
+func (s *Server) doPgStatus() (string, error) {
+	_, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	cfg, err := pg.LoadConfig(db.GetSetting)
+	if err != nil {
+		return jsonText(map[string]any{"enabled": false})
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	sdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, cfg.User, cfg.Pass, "postgres"))
+	if err != nil {
+		return "", err
+	}
+	defer sdb.Close()
+	v, err := pg.Version(ctx, sdb)
+	if err != nil {
+		return "", err
+	}
+	if i := strings.Index(v, " "); i > 0 {
+		if j := strings.Index(v[i+1:], " "); j > 0 {
+			v = v[:i+1+j]
+		}
+	}
+	return jsonText(map[string]any{"enabled": true, "host": cfg.Host, "port": cfg.Port, "database": cfg.DB, "version": v})
+}
+
+func (s *Server) doPgList() (string, error) {
+	_, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	recs, err := pgReg{db}.PgList()
+	if err != nil {
+		return "", err
+	}
+	cfg, err := pg.LoadConfig(db.GetSetting)
+	if err != nil {
+		return jsonText(map[string]any{"enabled": false, "apps": []any{}})
+	}
+	type row struct {
+		App    string `json:"app"`
+		Schema string `json:"schema"`
+		Role   string `json:"role"`
+		Mode   string `json:"mode"`
+		URL    string `json:"url"`
+	}
+	rows := []row{}
+	for _, r := range recs {
+		rows = append(rows, row{r.App, r.Schema, r.Role, r.Mode, pg.ConnectionURL(cfg.Host, cfg.Port, r.DB, r.Role)})
+	}
+	return jsonText(map[string]any{"enabled": true, "database": cfg.DB, "apps": rows})
+}
+
+func (s *Server) doPgProvision(a pgProvisionArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" {
+		return "", fmt.Errorf("app requerida")
+	}
+	cfg, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	// La base cuelga de una app existente: validar antes de tocar Postgres.
+	if cfgfile.FindApp(cfg, a.App) == nil {
+		return "", fmt.Errorf("app %q inexistente: créala primero (apps add)", a.App)
+	}
+	cfg2, err := pg.LoadConfig(db.GetSetting)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	url, err := pg.ProvisionApp(ctx, pgReg{db}, cfg2, a.App, a.Mode)
+	if err != nil {
+		return "", err
+	}
+	if err := cfgfile.SetEnv(db, a.App, "DATABASE_URL", url); err != nil {
+		return "", fmt.Errorf("provisionada pero env no: %w", err)
+	}
+	rec, _, _ := pgReg{db}.PgGet(a.App)
+	return jsonText(map[string]any{
+		"app": rec.App, "schema": rec.Schema, "role": rec.Role, "mode": rec.Mode, "url": url,
+	})
+}
+
+func (s *Server) doPgDrop(a pgDropArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" {
+		return "", fmt.Errorf("app requerida")
+	}
+	if a.Confirm != "drop" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"drop"}`)
+	}
+	_, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	cfg, err := pg.LoadConfig(db.GetSetting)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if err := pg.DropApp(ctx, pgReg{db}, cfg, a.App); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("pg %s borrada (esquema+rol)", a.App), nil
+}
+
+func (s *Server) doPgBackup(a pgAppArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" {
+		return "", fmt.Errorf("app requerida")
+	}
+	_, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	cfg, err := pg.LoadConfig(db.GetSetting)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	out, err := pg.BackupApp(ctx, cfg, pgReg{db}, a.App, filepath.Join(logx.DirFor(s.cfgPath), "..", "data", "backups"))
+	if err != nil {
+		return "", err
+	}
+	return out, nil
+}
+
+// pgAppDB conecta como rol de la app (trust loopback, sin password).
+func (s *Server) pgAppDB(app string) (*pg.Record, *pg.Config, error) {
+	_, db, err := s.load()
+	if err != nil {
+		return nil, nil, err
+	}
+	defer db.Close()
+	rec, ok, err := pgReg{db}.PgGet(strings.TrimSpace(app))
+	if err != nil || !ok {
+		return nil, nil, fmt.Errorf("pg: %q sin base", app)
+	}
+	cfg, err := pg.LoadConfig(db.GetSetting)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &rec, &cfg, nil
+}
+
+func (s *Server) doPgTables(a pgTablesArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" {
+		return "", fmt.Errorf("app requerida")
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	tables, err := pg.Tables(ctx, cdb, rec.Schema)
+	if err != nil {
+		return "", err
+	}
+	if tables == nil {
+		tables = []string{}
+	}
+	return jsonText(map[string]any{"app": a.App, "tables": tables})
+}
+
+func (s *Server) doPgRows(a pgRowsArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" {
+		return "", fmt.Errorf("app y table requeridos")
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	n := a.N
+	if n <= 0 {
+		n = 100
+	}
+	page := a.Page
+	if page < 1 {
+		page = 1
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	cols, rows, total, err := pg.TableRows(ctx, cdb, rec.Schema, a.Table, n, (page-1)*n)
+	if err != nil {
+		return "", err
+	}
+	byName := map[string]string{}
+	if cis, cerr := pg.ColumnTypes(ctx, cdb, rec.Schema, a.Table); cerr == nil {
+		for _, c := range cis {
+			byName[c.Name] = c.Type
+		}
+	}
+	type colJSON struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	}
+	typed := make([]colJSON, len(cols))
+	for i, c := range cols {
+		typed[i] = colJSON{Name: c, Type: byName[c]}
+	}
+	return jsonText(map[string]any{"app": a.App, "table": a.Table, "columns": cols, "types": typed, "rows": rows, "total": total, "page": page})
+}
+
+func (s *Server) doPgQuery(a pgQueryArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.SQL) == "" {
+		return "", fmt.Errorf("app y sql requeridos")
+	}
+	if a.Confirm != "query" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"query"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	res, err := pg.Query(ctx, cdb, a.SQL)
+	if err != nil {
+		return "", err
+	}
+	return jsonText(res)
+}
+
+func (s *Server) doPgRestore(a pgRestoreArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.File) == "" {
+		return "", fmt.Errorf("app y file requeridos")
+	}
+	if a.Confirm != "restore" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"restore"}`)
+	}
+	_, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	rec, ok, err := pgReg{db}.PgGet(strings.TrimSpace(a.App))
+	if err != nil || !ok {
+		return "", fmt.Errorf("pg: %q sin base", a.App)
+	}
+	cfg, err := pg.LoadConfig(db.GetSetting)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	if err := pg.Restore(ctx, cfg.Bins.PgRestore, cfg.Host, cfg.Port, cfg.User, cfg.Pass, cfg.DB, a.File); err != nil {
+		return "", err
+	}
+	_ = rec
+	return fmt.Sprintf("pg %s restaurada desde %s", a.App, a.File), nil
 }
 
 func (s *Server) doAppEnvKeys(app string) (string, error) {
@@ -641,7 +987,7 @@ func (s *Server) doSettingsList() (string, error) {
 	defer db.Close()
 	out := map[string]string{}
 	for _, k := range store.KnownSettings() {
-		out[k] = db.GetSetting(k)
+		out[k] = settings.DisplayValue(k, db.GetSetting(k))
 	}
 	return jsonText(out)
 }
@@ -661,6 +1007,11 @@ func (s *Server) doSettingsSet(a settingsSetArg) (string, error) {
 		return "", err
 	}
 	defer db.Close()
+	if eff, ok := settings.AcceptValue(a.Key, a.Value); !ok {
+		return "sin cambios (valor enmascarado)", nil
+	} else {
+		a.Value = eff
+	}
 	if err := db.SetSetting(a.Key, a.Value); err != nil {
 		return "", err
 	}
@@ -842,8 +1193,8 @@ func (s *Server) doUsersList() (string, error) {
 }
 
 func (s *Server) doUsersAdd(a userAddArg) (string, error) {
-	if a.Name == "" || len(a.Password) < 12 {
-		return "", fmt.Errorf("usuario vacío o contraseña <12")
+	if a.Name == "" || len(a.Password) < 8 {
+		return "", fmt.Errorf("usuario vacío o contraseña <8")
 	}
 	role := a.Role
 	if role == "" {
@@ -879,8 +1230,8 @@ func (s *Server) doUsersRemove(a userArg) (string, error) {
 }
 
 func (s *Server) doUsersPasswd(a userPassArg) (string, error) {
-	if a.Name == "" || len(a.Password) < 12 {
-		return "", fmt.Errorf("usuario vacío o contraseña <12")
+	if a.Name == "" || len(a.Password) < 8 {
+		return "", fmt.Errorf("usuario vacío o contraseña <8")
 	}
 	_, db, err := s.load()
 	if err != nil {
@@ -960,6 +1311,25 @@ func (s *Server) doPrune(a pruneArg) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("podado: %d deployments, %d eventos", deps, evs), nil
+}
+
+// doLogsClear vacía los logs operativos (ver logx.ClearLogs). Destructivo:
+// exige confirm=clear. No toca la DB (auditoría intacta).
+func (s *Server) doLogsClear(a logsClearArg) (string, error) {
+	if a.Confirm != "clear" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"clear"}`)
+	}
+	cleared, err := logx.ClearLogs(s.cfgPath)
+	if err != nil {
+		return "", err
+	}
+	var total int64
+	for _, b := range cleared {
+		total += b
+	}
+	return jsonText(map[string]any{
+		"cleared": cleared, "files": len(cleared), "bytes": total,
+	})
 }
 
 // registerMore añade el catálogo extendido al servidor MCP.
@@ -1099,6 +1469,46 @@ func (s *Server) registerMore(srv *mcp.Server) {
 	addTool(s, srv, &mcp.Tool{Name: "prune", Description: "Poda deployments/events viejos (confirm=prune)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a pruneArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doPrune(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "logs_clear", Description: "Vacía rkt.log, access.log, apps/*.log y deploys/*.log + backups .1 (confirm=clear). No toca la DB."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a logsClearArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doLogsClear(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_status", Description: "Estado del Postgres gestionado: versión y base (sin secretos). Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgStatus())
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_list", Description: "Bases por app: esquema, rol, modo y DATABASE_URL (sin password). Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgList())
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_provision", Description: "Crea esquema+rol para una app e inyecta DATABASE_URL en su env (mode dedicated|shared, default dedicated)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgProvisionArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgProvision(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_drop", Description: "Borra esquema+rol de una app (confirm=drop). Destructivo."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgDropArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgDrop(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_backup", Description: "Vuelca el esquema de una app a data/backups (formato custom)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgAppArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgBackup(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_tables", Description: "Lista tablas del esquema de una app. Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgTablesArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgTables(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_rows", Description: "Pagina una tabla del esquema (n/page). Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgRowsArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgRows(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_query", Description: "Ejecuta una sentencia SQL en el esquema de la app (confirm=query). SELECT devuelve filas; el resto, afectadas."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgQueryArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgQuery(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_restore", Description: "Restaura un dump custom (-Fc) sobre la app (confirm=restore). Sobrescribe datos."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgRestoreArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgRestore(a))
 		})
 	s.registerMonitor(srv)
 }

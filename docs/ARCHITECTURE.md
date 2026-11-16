@@ -49,6 +49,7 @@ cmd/rkt
 | Tareas programadas por app | `internal/cronjobs` |
 | Historial y eventos | `internal/store` |
 | Autorización: roles, ops y tabla única | `internal/authz` (API, MCP-HTTP, MCP-stdio y healthz deciden aquí) |
+| Postgres gestionado (una base, esquema por app) | `internal/pg` (SQL puro + servicio; `store` persiste `pg_apps`, `api/pg.go` expone) |
 | Layout del home (slots, current/previous, lanzador, DB, logs) | `internal/logx` (canónico; `install.ps1` lo espeja) |
 
 ## Base inmutable (contratos on-disk y de servicio)
@@ -96,6 +97,20 @@ normalizan a `http`/`https` para el transporte y conservan el upgrade. Soporta
 HTTP/1.1, HTTP/2 cuando el listener TLS lo permite, WebSocket/WSS y SSE con
 flush inmediato. TCP crudo queda fuera de alcance.
 
+## Puertos y dominios (reglas de operación)
+
+1. **Todo backend escucha en `loopback:puerto` interno.** Lo asigna rkt
+   del pool (`port_pool`); el usuario no lo elige (solo override avanzado).
+2. **El usuario nunca marca ese puerto: entra por dominio.** El puerto del
+   proxy es de la instancia, no de la app (`:18080` en dev, `:80/:443`
+   en producción).
+3. **Cada corte blue-green publica en un puerto libre nuevo y re-enruta;**
+   el anterior se libera. El puerto de creación caduca en el primer deploy.
+4. **Solo las apps externas exigen puerto**: es el proceso del usuario y
+   rkt debe saber dónde escucha. Ahí sí es input obligatorio y visible.
+5. **Público vs local solo cambia dominio+TLS** (`<app>.localhost` sin
+   nada vs `<app>.<base>` con ACME). El modelo de puertos es el mismo.
+
 ## Invariantes
 
 1. **Validar antes de persistir.** Ninguna escritura inválida llega a SQLite.
@@ -108,6 +123,13 @@ flush inmediato. TCP crudo queda fuera de alcance.
 5. **Sin estado dual.** SQLite es la única fuente de flota; no hay YAML
    paralelo ni flags legacy.
 6. **Errores accionables.** Qué falló + comando/ajuste exacto que lo corrige.
+7. **Postgres gestionado, no servido.** rkt no corre el servidor: el operador
+   instala el cluster y rkt aprovisiona encima (una base, un esquema por app,
+   rol propio o `rkt_apps` compartido). Trust solo en loopback (`pg_hba` con
+   bloque gestionado + `pg_reload_conf`); `DATABASE_URL` sin password, el
+   superuser vive en settings y sale enmascarado. Destructivo con
+   confirmación en los tres frentes (UI dos clics, CLI prompt/`--yes`,
+   MCP `confirm`).
 
 ## Estado del refactor
 
@@ -152,10 +174,21 @@ Hecho:
   logs sin ser admins; la gestión va por dashboard/API.
 - Upgrade por slots: `versions/<ver>` inmutables + `rkt upgrade` (flip de
   binpath + gate + rollback auto); `install.ps1` instala al slot.
+- Journal de cortes: intent `started` antes de persistir, `done` tras adoptar;
+  el arranque marca `aborted` lo pendiente (deriva DB-vs-runtime visible).
+- Canario con reintento ante puerto ocupado (TOCTOU del efímero) y reubicación
+  de puertos grabados ocupados al arrancar/reiniciar (con retarget de rutas).
+- Deriva visible: `pending_restart` en `/api/v1/status`, SSE y banner del dashboard.
+- Auditoría completa del CLI local (actor = usuario del SO); healthz ya no
+  necesita auditar (cada edge audita el suyo).
+- Job `race-win` en CI (supervisor, proxy, store, hub, api con `-race`).
 
-## Deuda pendiente (orden sugerido)
+## Deuda pendiente
 
-1. **Confirmar `-race` en CI.** El job está añadido, pero no se pudo ejecutar
-   localmente (sin CGO/gcc); la primera pasada del runner es la validación.
-2. **E2E del dashboard.** Hoy hay `tsc`, build y capturas; falta un runner de
-   navegador para regresiones de interacción.
+Vacía a propósito: lo listado arriba era la deuda y ya está hecho.
+Lo único que falta es validación viva en un servidor real (instalador por
+slots, `rkt upgrade` e2e, ACLs de operadores, SSE en navegador real), que no se
+puede hacer desde esta máquina sin admin: el vps en limpio es el terreno.
+E2E de navegador (`-tags e2e`, Playwright + Chromium) cubre smoke de
+navegación, gating por rol y el wizard de alta completo (validación,
+revisión, creación por origen y 403 de viewer).

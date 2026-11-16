@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"rkt/internal/config"
+	"rkt/internal/pg"
 )
 
 const (
@@ -31,6 +34,16 @@ const (
 	// Listeners públicos (requieren reinicio del servicio).
 	KeyListenHTTP  = "listen_http"
 	KeyListenHTTPS = "listen_https"
+	// Postgres gestionado (una DB compartida, un esquema por app).
+	// rkt aprovisiona sobre la instancia local (no la ejecuta): crea DB,
+	// esquemas y roles con el superusuario y deja regla trust en pg_hba
+	// para loopback, así las apps conectan sin password en la URL.
+	KeyPgMode     = "pg_mode"     // off|local (default off)
+	KeyPgBin      = "pg_bin"      // ruta absoluta a pg_ctl.exe (vacío = buscar en PATH)
+	KeyPgPort     = "pg_port"     // default 5432
+	KeyPgDatabase = "pg_database" // default rkt
+	KeyPgUser     = "pg_user"     // superusuario local (default postgres)
+	KeyPgPass     = "pg_pass"     // password del superusuario (solo loopback)
 )
 
 // Spec describe un ajuste y si exige reiniciar el servicio.
@@ -57,6 +70,12 @@ var specs = []Spec{
 	{Key: KeyDashboardListen, Restart: true, Validate: validateListenOrOff},
 	{Key: KeyListenHTTP, Restart: true, Validate: validateListenAddr},
 	{Key: KeyListenHTTPS, Restart: true, Validate: validateListenOrOff},
+	{Key: KeyPgMode, Restart: false, Validate: validatePgMode},
+	{Key: KeyPgBin, Restart: false, Validate: validateExecutable},
+	{Key: KeyPgPort, Restart: false, Validate: validatePort},
+	{Key: KeyPgDatabase, Restart: false, Validate: validatePGIdent},
+	{Key: KeyPgUser, Restart: false, Validate: validatePGIdent},
+	{Key: KeyPgPass, Restart: false, Validate: validateAny},
 }
 
 // Keys lista canónica ordenada.
@@ -179,6 +198,55 @@ func validateListenOrOff(v string) error {
 		return nil
 	}
 	return validateListenAddr(v)
+}
+
+// validatePgMode solo admite off (desactivado) o local (rkt lo supervisa).
+func validatePgMode(v string) error {
+	if v == "off" || v == "local" {
+		return nil
+	}
+	return fmt.Errorf("usa off o local")
+}
+
+// validatePort puerto TCP 1..65535.
+func validatePort(v string) error {
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n < 1 || n > 65535 {
+		return fmt.Errorf("puerto inválido (1..65535)")
+	}
+	return nil
+}
+
+// validatePGIdent identificador Postgres sin comillas ([a-z_][a-z0-9_$]*,
+// máx 63). Sin mayúsculas: Postgres las pliega a minúsculas sin comillar.
+// Hogar único: pg.ValidIdent.
+func validatePGIdent(v string) error {
+	return pg.ValidIdent(v)
+}
+
+// validateAny acepta cualquier valor no vacío (secretos sin formato);
+// el vacío significa "por defecto" y lo filtra Validate antes de llegar.
+func validateAny(string) error { return nil }
+
+// IsSecret true para valores que nunca salen en claro (p. ej. pg_pass).
+func IsSecret(key string) bool {
+	return key == KeyPgPass
+}
+
+// DisplayValue enmascara secretos no vacíos para API/UI/MCP.
+func DisplayValue(key, value string) string {
+	if IsSecret(key) && strings.TrimSpace(value) != "" {
+		return config.SecretMask
+	}
+	return value
+}
+
+// AcceptValue dice si un valor entrante se persiste (mask = conservar).
+func AcceptValue(key, value string) (string, bool) {
+	if IsSecret(key) && value == config.SecretMask {
+		return "", false
+	}
+	return value, true
 }
 
 func validateIP(v string) error {

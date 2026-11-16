@@ -53,6 +53,29 @@ func (d *Deps) logPath(r *http.Request) (string, bool) {
 	return path, true
 }
 
+// handleLogsClear vacía los logs operativos (POST, admin).
+// Ver logx.ClearLogs: trunca sin borrar handles. La auditoría la pone
+// el middleware (todo POST se audita).
+func (d *Deps) handleLogsClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, "solo POST")
+		return
+	}
+	if !requireOp(w, r, authz.OpPrune) {
+		return
+	}
+	cleared, err := logx.ClearLogsDir(d.LogsDir)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var total int64
+	for _, b := range cleared {
+		total += b
+	}
+	writeJSON(w, map[string]any{"cleared": cleared, "files": len(cleared), "bytes": total})
+}
+
 // handleLogs tail del log operativo o de app (GET).
 func (d *Deps) handleLogs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

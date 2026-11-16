@@ -115,18 +115,8 @@ func RunContext(ctx context.Context, app config.App, token string, ctl Controlle
 		return "", err
 	}
 
-	port, err := freeEphemeralPort()
+	canario, port, err := startCanaryChecked(ctl, app, inactive, out)
 	if err != nil {
-		_ = os.RemoveAll(inactive)
-		return "", err
-	}
-	canario, err := ctl.StartCanary(app.Name, inactive, port, out)
-	if err != nil {
-		_ = os.RemoveAll(inactive)
-		return "", err
-	}
-	if err := waitHTTP(port, app.HealthPath, httpWait); err != nil {
-		_ = canario.Process.Kill()
 		_ = os.RemoveAll(inactive)
 		fmt.Fprintf(out, "\n✗ canario no responde: %v\n", err)
 		return "", fmt.Errorf("canario no responde: %w", err)
@@ -206,6 +196,51 @@ func WaitAppHTTP(app config.App, timeout time.Duration) error {
 	return waitHTTP(port, app.HealthPath, timeout)
 }
 
+// canaryWait tope del probe HTTP del canario (inyectable en tests).
+var canaryWait = httpWait
+
+// ephemeralPortFn puerto efímero libre (inyectable en tests).
+var ephemeralPortFn = freeEphemeralPort
+
+// startCanaryChecked arranca el canario y espera HTTP, reintentando con
+// puerto fresco si el elegido lo ocupa otro proceso entre la reserva y el
+// arranque (TOCTOU del efímero). Sin puerto HTTP la app se corta igual:
+// el canario se valida por proceso estable.
+func startCanaryChecked(ctl Controller, app config.App, dir string, out io.Writer) (*exec.Cmd, string, error) {
+	var last error
+	for i := 0; i < 3; i++ {
+		port, err := ephemeralPortFn()
+		if err != nil {
+			return nil, "", err
+		}
+		canario, err := ctl.StartCanary(app.Name, dir, port, out)
+		if err != nil {
+			return nil, "", err
+		}
+		if err := waitHTTP(port, app.HealthPath, canaryWait); err == nil {
+			return canario, port, nil
+		} else {
+			last = err
+		}
+		_ = canario.Process.Kill()
+		if !portBusy(port) {
+			return nil, "", last
+		}
+		fmt.Fprintf(out, "\n… puerto %s ocupado al arrancar, reintentando\n", port)
+	}
+	return nil, "", last
+}
+
+// portBusy true si algo ya escucha (el puerto no está libre).
+func portBusy(port string) bool {
+	l, err := net.Listen("tcp", "127.0.0.1:"+port)
+	if err != nil {
+		return true
+	}
+	_ = l.Close()
+	return false
+}
+
 // Rollback vuelve al slot inactivo (la versión anterior) con blue-green:
 // arranca un canario desde ese slot en un puerto efímero, valida y corta.
 // Para `rollback <app>` manual (el automático vive en Run).
@@ -215,16 +250,8 @@ func Rollback(app config.App, ctl Controller, log *slog.Logger) error {
 	if !dirExists(prev) {
 		return fmt.Errorf("sin versión previa en %s", prev)
 	}
-	port, err := freeEphemeralPort()
+	canario, port, err := startCanaryChecked(ctl, app, prev, io.Discard)
 	if err != nil {
-		return err
-	}
-	canario, err := ctl.StartCanary(app.Name, prev, port, io.Discard)
-	if err != nil {
-		return err
-	}
-	if err := waitHTTP(port, app.HealthPath, httpWait); err != nil {
-		_ = canario.Process.Kill()
 		return fmt.Errorf("rollback canario no responde: %w", err)
 	}
 	if err := ctl.Cutover(app.Name, canario, prev, port); err != nil {

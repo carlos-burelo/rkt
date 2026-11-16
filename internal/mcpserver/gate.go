@@ -19,6 +19,7 @@ import (
 
 	"rkt/internal/authz"
 	"rkt/internal/logx"
+	"rkt/internal/netutil"
 	"rkt/internal/store"
 )
 
@@ -134,6 +135,11 @@ func (s *Server) gateHTTP(next http.Handler) http.Handler {
 		}
 		want := minRoleFor(tool)
 		role, actor := s.tokenRole(r)
+		if role == "" && netutil.IsLoopbackHost(netutil.ClientIP(r)) {
+			// Sin token desde loopback = máquina local: rol local
+			// (operator, nunca admin), igual que `rkt mcp` por stdio.
+			role, actor = string(authz.RoleLocal), "local"
+		}
 		if !roleAtLeast(role, want) {
 			writeRPCError(w, id, "herramienta "+tool+" requiere rol "+want)
 			return

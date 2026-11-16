@@ -78,8 +78,8 @@ func ValidateCredential(name, password string) error {
 	if !ValidUserName(name) {
 		return fmt.Errorf("usuario inválido [a-z0-9-_], máx 64")
 	}
-	if len(password) < 12 {
-		return fmt.Errorf("password mínimo 12 caracteres")
+	if len(password) < 8 {
+		return fmt.Errorf("password mínimo 8 caracteres")
 	}
 	return nil
 }
@@ -199,8 +199,8 @@ func (d *DB) DeleteUser(name string) error {
 
 // SetPassword rota password e invalida sesiones (re-login).
 func (d *DB) SetPassword(name, password string) error {
-	if len(password) < 12 {
-		return fmt.Errorf("password mínimo 12 caracteres")
+	if len(password) < 8 {
+		return fmt.Errorf("password mínimo 8 caracteres")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

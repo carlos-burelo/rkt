@@ -13,7 +13,6 @@ import (
 
 	"rkt/internal/github"
 	"rkt/internal/logx"
-	"rkt/internal/netutil"
 	"rkt/internal/store"
 )
 
@@ -138,27 +137,11 @@ func dashboardURL(listen string) string {
 
 // setupOrigin devuelve el origen público para el manifest. Sin base_domain
 // cae a loopback (GitHub permite crear Apps con URLs locales; sin webhooks).
+// Lógica pura en github.SetupOrigin (hogar único; el MCP la reutiliza).
 func (p *Program) setupOrigin() (origin, domain string, local, tls bool) {
 	base := strings.TrimSpace(p.db.GetSetting(store.KeyBaseDomain))
-	if base != "" {
-		return "https://" + base, base, false, true
-	}
 	cfg := p.live.Get()
-	tls = cfg.ListenHTTPS != ""
-	addr := cfg.ListenHTTP
-	if tls {
-		addr = cfg.ListenHTTPS
-	}
-	port := netutil.Port(addr, "")
-	host := "localhost"
-	if (tls && port != "" && port != "443") || (!tls && port != "" && port != "80") {
-		host += ":" + port
-	}
-	scheme := "http"
-	if tls {
-		scheme = "https"
-	}
-	return scheme + "://" + host, host, true, tls
+	return github.SetupOrigin(base, cfg.ListenHTTP, cfg.ListenHTTPS)
 }
 
 // githubStatus estado de la GitHub App para dashboard/API.

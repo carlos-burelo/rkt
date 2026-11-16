@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Outlet, useNavigate, useParams } from "react-router";
 import { ExternalLink, Play, RotateCw, Square } from "lucide-react";
 import { toast } from "sonner";
+import { errorToast } from "../../shared/components/feedback";
 import { Dot, StatusBadge } from "../../shared/components/ui";
 import { stateLabel } from "../../shared/lib/labels";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -54,6 +55,11 @@ export function AppTabs() {
     domains.length > 0
       ? tn("apps.header.destinations", domains.length)
       : t("apps.header.noDestination");
+  // El puerto es plomería interna (lo asigna y rota rkt): solo se muestra
+  // cuando el usuario debe conocerlo (externa). Ver "Puertos y dominios".
+  const subtitle = external
+    ? t("apps.header.meta", { port, destinations })
+    : t("apps.header.metaSimple", { destinations });
 
   return (
     <div className="space-y-4">
@@ -73,7 +79,7 @@ export function AppTabs() {
               <StatusBadge status={state} />
             </div>
             <p className="mt-2 font-mono text-[11px] text-muted-foreground">
-              {t("apps.header.meta", { port, destinations })}
+              {subtitle}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -100,7 +106,7 @@ export function AppTabs() {
                           toast.success(t("apps.toast.buildStarted"));
                           navigate(`/app/${name}/deploys`);
                         })
-                        .catch((e) => toast.error(e instanceof Error ? e.message : t("common.error")))
+                        .catch((e) => errorToast(e instanceof Error ? e.message : t("common.error")))
                     }
                   >
                     {t("apps.actions.build")}
@@ -157,7 +163,7 @@ export function AppTabs() {
                         onClick={() => {
                           fixHost(domains[0]).then((r) => {
                             if (r.ok) toast.success(t("apps.toast.hostAdded", { domain: domains[0] }));
-                            else toast.error(r.hint ?? r.error ?? t("apps.toast.hostError"));
+                            else errorToast(r.hint ?? r.error ?? t("apps.toast.hostError"));
                           });
                         }}
                       >
@@ -172,8 +178,10 @@ export function AppTabs() {
             )}
           </Cell>
           <Cell label={t("apps.field.command")}>
-            <span className="text-muted-foreground">
-              {meta?.static ? t("apps.tabs.staticValue", { path: meta.static }) : meta?.command || "—"}
+            <span className="text-muted-foreground" title={meta?.static ?? meta?.command ?? ""}>
+              {meta?.static
+                ? t("apps.tabs.staticValue", { path: meta.static.split(/[\\/]/).pop() ?? meta.static })
+                : meta?.command || "—"}
             </span>
           </Cell>
         </div>

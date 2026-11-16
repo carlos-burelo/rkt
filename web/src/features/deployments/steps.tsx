@@ -2,7 +2,12 @@ import { useMemo } from "react";
 import { useI18n } from "../../shared/i18n";
 
 // Checklist CI desde marcadores "▶/✔/✘ step" del build log. Un solo hogar:
-// lo usan el drawer de deploys y el seguimiento de creación.
+// lo usan la página de deploys y el seguimiento de creación.
+// Ojo: ok/failed llevan duración ("✔ step ok: X (1.2s)"); se recorta para
+// matchear con el "▶ step: X" que abrió el paso.
+function stepName(raw: string) {
+  return raw.replace(/\s*\([^()]*\)$/, "");
+}
 export function Steps({ log }: { log: string }) {
   const { t } = useI18n();
   const steps = useMemo(() => {
@@ -10,11 +15,11 @@ export function Steps({ log }: { log: string }) {
     for (const line of log.split("\n")) {
       if (line.startsWith("▶ step: ")) out.push({ name: line.slice(8), state: "run" });
       else if (line.startsWith("✔ step ok: ")) {
-        const name = line.slice(11);
+        const name = stepName(line.slice(11));
         const s = [...out].reverse().find((x) => x.name === name);
         if (s) s.state = "ok";
       } else if (line.startsWith("✘ step failed: ")) {
-        const name = line.slice(15);
+        const name = stepName(line.slice(15));
         const s = [...out].reverse().find((x) => x.name === name);
         if (s) s.state = "bad";
       }

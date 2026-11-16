@@ -74,6 +74,7 @@ export const serve = {
   "serve.domain.noResolve": "no resuelve",
   "serve.domain.error": "error DNS",
   "serve.domain.checked": "comprobado {at} UTC",
+  "serve.domain.retryHint": "no se pudo cargar el detalle",
   "serve.domain.check": "verificar DNS",
   "serve.domain.checking": "consultando DNS…",
   "serve.domain.preflightOk": "{host} resuelve correctamente",

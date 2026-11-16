@@ -490,4 +490,5 @@ func (s *Server) registerMonitor(srv *mcp.Server) {
 		func(ctx context.Context, req *mcp.CallToolRequest, a appUsageArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAppUsage(a))
 		})
+	s.registerRedirect(srv)
 }

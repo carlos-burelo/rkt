@@ -21,6 +21,7 @@ const FILES: Record<string, string> = {
   dotnet: "dotnet.svg",
   deno: "deno.svg",
   static: "static.svg",
+  github: "github",
 };
 
 const LABELS: Record<string, string> = {
@@ -41,12 +42,13 @@ const LABELS: Record<string, string> = {
   dotnet: ".NET",
   deno: "Deno",
   static: "Static",
+  github: "GitHub",
 };
 
 function fileFor(kind: string, resolved: "light" | "dark"): string | null {
   const base = FILES[kind];
   if (!base) return null;
-  if (base === "astro" || base === "remix") {
+  if (base === "astro" || base === "remix" || base === "github") {
     return `${base}-${resolved}.svg`;
   }
   return base;

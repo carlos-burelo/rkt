@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { EmptyState, PageHeader } from "../../shared/components/patterns";
+import { PageHeader } from "../../shared/components/patterns";
 import { useI18n } from "../../shared/i18n";
 import { useServer } from "./server.store";
 import { ServerOverview } from "./ServerOverview";
@@ -13,7 +13,6 @@ export function Server() {
   const snap = useServer((s) => s.snap);
   const history = useServer((s) => s.history);
   const procs = useServer((s) => s.procs);
-  const err = useServer((s) => s.err);
 
   useEffect(() => {
     const st = useServer.getState();
@@ -21,13 +20,9 @@ export function Server() {
     return () => st.stop();
   }, []);
 
-  if (!snap && err === "") {
+  if (!snap) {
     return <p className="font-mono text-[11px] text-muted-foreground">{t("server.loading")}</p>;
   }
-  if (err !== "") {
-    return <EmptyState title={t("server.unavailable")} hint={err} />;
-  }
-  if (!snap) return null;
 
   return (
     <div className="space-y-4">

@@ -12,7 +12,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"os/user"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -32,6 +34,22 @@ var JSON = flag.Bool("json", false, "salida JSON en comandos de lectura")
 
 // deployTimeout POSTs largos al servicio (deploy/rollback tardan minutos).
 const deployTimeout = 10 * time.Minute
+
+// auditLocal registra una mutación del CLI (actor = usuario del SO).
+// La vía directa a SQLite no pasa por middleware: sin esto no deja rastro,
+// mientras la API audita por middleware y MCP por gate.
+func auditLocal(cfgPath, action, target string) {
+	db, err := store.Open(logx.DBPath(cfgPath))
+	if err != nil {
+		return
+	}
+	defer db.Close()
+	actor := "cli"
+	if u, err := user.Current(); err == nil && u.Username != "" {
+		actor = u.Username
+	}
+	_ = db.AddAudit(actor, "cli "+action, target, "-")
+}
 
 // controlPost llama una acción de control con el token compartido que el
 // servicio escribe en logs/control.token (nunca viaja por la red pública).
@@ -104,7 +122,7 @@ func Run(cfgPath string) {
 			fmt.Println("servicio detenido")
 			return
 		case "run":
-			RunForeground(cfgPath)
+			RunForeground(cfgPath, false)
 			return
 		case "__static":
 			// interno: el supervisor arranca sitios estáticos así
@@ -188,7 +206,10 @@ func Run(cfgPath string) {
 			runMCP(cfgPath)
 			return
 		case "hosts":
-			cmdHosts(flag.Args()[1:])
+			cmdHosts(flag.Args()[1:], cfgPath)
+			return
+		case "pg":
+			cmdPg(flag.Args()[1:], cfgPath)
 			return
 		case "upgrade":
 			cmdUpgrade(flag.Args()[1:], cfgPath)
@@ -245,6 +266,7 @@ Servicio:
 Operate (contra el servicio en marcha):
   status [--json]                        salud + apps + backends
   logs [-n 50] [-f] [-app nombre]        logs (operativo o de app)
+  logs clear [--yes]                   vacía rkt.log, access.log, apps/ y deploys/
   doctor [--json]                        entorno: toolchains, bins, pool, DB
   restart <app>                          reinicio supervisado inmediato
   deploy <app>                           pull+build+swap+restart+rollback
@@ -258,6 +280,7 @@ Gestión (flota en SQLite, con backup implícito):
   env global [set CLAVE=valor|unset CLAVE]  variables de toda la flota
   settings list|set                      settings set CLAVE=valor
   users list|add|del|passwd              usuarios dashboard (primer add = admin)
+  pg status|list|provision|drop|backup  base compartida: un esquema por app
   config export [file]|import <file>     respaldo/restaura en git
   backup [destino]|restore <archivo.db>  respaldo/restaura binario
   reset                                borra todo, preserva solo users
@@ -316,17 +339,18 @@ func cmdDev(args []string, cfgPath string) {
 	fmt.Println("Dominios locales: usa *.localhost (resuelve solo) o `rkt hosts add <host>` como admin.")
 	fmt.Printf("HTTP %s · HTTPS %s\n", *httpAddr, *httpsAddr)
 	fmt.Println("TLS de desarrollo: CA propia en logs/devca/ca.crt (se instala en Root del usuario).")
-	RunForeground(path)
+	RunForeground(path, true)
 }
 
 // RunForeground corre el programa en foreground con Ctrl+C limpio.
-func RunForeground(cfgPath string) {
+func RunForeground(cfgPath string, dev bool) {
 	logger, closeLog, err := logx.Setup(cfgPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer closeLog()
 	prg := app.New(cfgPath, logger)
+	prg.SetDevMode(dev)
 	ctx, sigstop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer sigstop()
 	go func() {
@@ -363,6 +387,7 @@ func cmdRestart(args []string, cfgPath string) {
 		log.Fatalf("restart: %s %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 	fmt.Printf("app %s reiniciando (sin cortes hasta restart_grace)\n", args[0])
+	auditLocal(cfgPath, "restart", args[0])
 }
 
 // cmdDeploy publica una app desde git: rkt deploy <app>
@@ -406,11 +431,18 @@ func cmdDeploy(args []string, cfgPath string) {
 		log.Fatalf("deploy: %s", out.Error)
 	}
 	fmt.Printf("deploy ok: %s rev %s\n", out.Deployed, out.Rev)
+	auditLocal(cfgPath, "deploy", args[0])
 }
 
 // cmdLogs imprime últimas N líneas del log y opcionalmente sigue (-f).
 // Con -app NOMBRE lee logs/apps/NOMBRE.log (sin follow).
+// `logs clear [--yes]` vacía los logs operativos (rkt.log, access.log,
+// apps/*.log, deploys/*.log + backups .1). Sin --yes pide confirmación.
 func cmdLogs(args []string, cfgPath string) {
+	if len(args) > 0 && args[0] == "clear" {
+		cmdLogsClear(args[1:], cfgPath)
+		return
+	}
 	n := 50
 	follow := false
 	appName := ""
@@ -433,7 +465,7 @@ func cmdLogs(args []string, cfgPath string) {
 			}
 			appName = args[i]
 		default:
-			log.Fatalf("logs: flag desconocido %q (uso: logs [-n 50] [-f] [-app nombre])", args[i])
+			log.Fatalf("logs: flag desconocido %q (uso: logs [-n 50] [-f] [-app nombre] | logs clear [--yes])", args[i])
 		}
 	}
 	path := logx.Path(cfgPath)
@@ -485,4 +517,39 @@ func fileSize(path string) int64 {
 		return 0
 	}
 	return st.Size()
+}
+
+// cmdLogsClear vacía los logs operativos (ver logx.ClearLogs). Destructivo:
+// sin --yes pide confirmación en terminal.
+func cmdLogsClear(args []string, cfgPath string) {
+	yes := false
+	for _, a := range args {
+		if a == "--yes" || a == "-y" {
+			yes = true
+			continue
+		}
+		log.Fatalf("logs clear: flag desconocido %q (uso: logs clear [--yes])", a)
+	}
+	if !yes {
+		if prompt("vaciar rkt.log, access.log, apps/*.log y deploys/*.log", "no") != "si" {
+			fmt.Println("cancelado")
+			return
+		}
+	}
+	cleared, err := logx.ClearLogs(cfgPath)
+	if err != nil {
+		log.Fatalf("logs clear: %v", err)
+	}
+	var total int64
+	names := make([]string, 0, len(cleared))
+	for name := range cleared {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		fmt.Printf("vaciado %s (%d bytes)\n", name, cleared[name])
+		total += cleared[name]
+	}
+	fmt.Printf("logs limpios: %d archivos, %d bytes\n", len(names), total)
+	auditLocal(cfgPath, "logs.clear", "")
 }

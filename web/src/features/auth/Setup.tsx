@@ -1,31 +1,145 @@
 import { useEffect, useState } from "react";
-import { setup } from "./api";
+import { ArrowLeft, ArrowUpRight, CornerDownLeft } from "lucide-react";
+import { TechIcon } from "../../shared/components/TechIcon";
+import { setup, me as fetchMe } from "./api";
+import { useAuth } from "./store";
 import { Me } from "../../shared/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Err } from "../../shared/components/ui";
 import { AccessShell } from "./AccessShell";
 import { useI18n } from "../../shared/i18n";
+import { useUI } from "../../app/ui";
 import { fetchDoctor, type DoctorCheck } from "../server/api";
 import { getSettings, setSetting, getGithubStatus, type GithubStatus } from "../settings/api";
 import { fixHost } from "../routes/api";
 
 type Step = "admin" | "red" | "tools" | "github" | "done";
 
+const STEP_KEY = "rkt.setup.step";
+const ME_KEY = "rkt.setup.me";
+
+// El setup abre sesión al crear el admin: un reload (HMR) a mitad del
+// wizard te encontraba logueado y la puerta te sacaba a /overview sin
+// poder continuar. El progreso sobrevive en sessionStorage (por pestaña)
+// y la ruta /setup admite admins con sesión para terminar lo pendiente.
+function loadStep(): Step {
+  try {
+    const s = sessionStorage.getItem(STEP_KEY);
+    if (s === "admin" || s === "red" || s === "tools" || s === "github" || s === "done") return s;
+  } catch {
+    /* sin storage: desde el inicio */
+  }
+  return "admin";
+}
+
+function loadMe(): Me | null {
+  try {
+    const raw = sessionStorage.getItem(ME_KEY);
+    if (raw) return JSON.parse(raw) as Me;
+  } catch {
+    /* sin storage: sin cuenta */
+  }
+  return useAuth.getState().who;
+}
+
+function clearResume() {
+  try {
+    sessionStorage.removeItem(STEP_KEY);
+    sessionStorage.removeItem(ME_KEY);
+  } catch {
+    /* sin storage: nada que limpiar */
+  }
+}
+
 // Setup por pasos: admin (obligatorio) + red/herramientas/GitHub
 // omitibles. El doctor corre en el paso 3 con reparación in situ
 // (bins). Todo lo omitido sigue disponible en el dashboard.
 export function Setup({ onOk }: { onOk: (me: Me) => void }) {
   const { t } = useI18n();
-  const [step, setStep] = useState<Step>("admin");
-  const [me, setMe] = useState<Me | null>(null);
+  const [step, setStepState] = useState<Step>(() => {
+    const s = loadStep();
+    // Sin cuenta (ni creada ni sesión), el wizard empieza en admin.
+    if (s !== "admin" && !loadMe()) return "admin";
+    // Admin con sesión retomando sin progreso guardado (p. ej. reload
+    // antes del fix): la cuenta ya existe, sigue en red.
+    if (s === "admin" && useAuth.getState().setupRequired === false) return "red";
+    return s;
+  });
+  const [me, setMeState] = useState<Me | null>(() => loadMe());
   const steps: Step[] = ["admin", "red", "tools", "github", "done"];
   const idx = steps.indexOf(step);
+
+  const setStep = (s: Step) => {
+    setStepState(s);
+    try {
+      sessionStorage.setItem(STEP_KEY, s);
+    } catch {
+      /* sin storage: se pierde al recargar */
+    }
+  };
+  const setMe = (m: Me | null) => {
+    setMeState(m);
+    try {
+      if (m) sessionStorage.setItem(ME_KEY, JSON.stringify(m));
+      else sessionStorage.removeItem(ME_KEY);
+    } catch {
+      /* sin storage: se pierde al recargar */
+    }
+  };
+  const finish = (m: Me) => {
+    clearResume();
+    onOk(m);
+  };
 
   return (
     <AccessShell
       title={t("system.auth.setupTitle")}
       description={t("system.auth.setupDesc")}
+      wide
+      side={
+        <ol className="space-y-1" aria-label={t("system.auth.stepsAria")}>
+          {steps.map((s, i) => {
+            const done = i < idx;
+            const active = i === idx;
+            return (
+              <li
+                key={s}
+                aria-current={active ? "step" : undefined}
+                className={`flex items-center gap-3 border px-3 py-2.5 ${
+                  active
+                    ? "border-signal/50 bg-signal/[0.07]"
+                    : done
+                      ? "border-border/60 bg-card/30"
+                      : "border-transparent"
+                }`}
+              >
+                <span
+                  aria-hidden
+                  className={`tnum flex h-6 w-6 shrink-0 items-center justify-center font-mono text-[11px] ${
+                    active
+                      ? "bg-signal font-bold text-black"
+                      : done
+                        ? "bg-ok/20 text-ok"
+                        : "bg-secondary text-muted-foreground"
+                  }`}
+                >
+                  {done ? "✓" : i + 1}
+                </span>
+                <span className="min-w-0">
+                  <span className={`block text-[13px] ${active ? "font-medium text-foreground" : done ? "text-foreground/80" : "text-muted-foreground"}`}>
+                    {t(`system.auth.step.${s}`)}
+                  </span>
+                  <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground">
+                    {t(`system.auth.stepDesc.${s}`)}
+                  </span>
+                </span>
+                {active && <span aria-hidden className="ml-auto h-4 w-px shrink-0 bg-signal" />}
+              </li>
+            );
+          })}
+        </ol>
+      }
       footer={
         <div className="space-y-2">
           <div className="flex items-center gap-1.5" aria-label={t("system.auth.stepsAria")}>
@@ -50,7 +164,7 @@ export function Setup({ onOk }: { onOk: (me: Me) => void }) {
       {step === "red" && <StepRed onNext={() => setStep("tools")} onBack={() => setStep("admin")} />}
       {step === "tools" && <StepTools onNext={() => setStep("github")} onBack={() => setStep("red")} />}
       {step === "github" && <StepGithub onNext={() => setStep("done")} onBack={() => setStep("tools")} />}
-      {step === "done" && me && <StepDone me={me} onOk={() => onOk(me)} onBack={() => setStep("github")} />}
+      {step === "done" && me && <StepDone me={me} onOk={() => finish(me)} onBack={() => setStep("github")} />}
     </AccessShell>
   );
 }
@@ -67,7 +181,7 @@ function Nav({ onBack, onNext, nextLabel, nextDisabled, nextAria }: {
     <div className="flex items-center gap-2">
       {onBack && (
         <Button type="button" variant="ghost" size="sm" onClick={onBack} aria-label={t("common.back")}>
-          ←
+          <ArrowLeft className="h-3 w-3" />
         </Button>
       )}
       <Button type="button" variant="outline" size="sm" onClick={onNext} aria-label={t("system.auth.skip")}>
@@ -83,6 +197,7 @@ function Nav({ onBack, onNext, nextLabel, nextDisabled, nextAria }: {
 
 function StepAdmin({ onDone }: { onDone: (me: Me) => void }) {
   const { t } = useI18n();
+  const fail = useUI((u) => u.fail);
   const [user, setUser] = useState("");
   const [p1, setP1] = useState("");
   const [p2, setP2] = useState("");
@@ -98,7 +213,18 @@ function StepAdmin({ onDone }: { onDone: (me: Me) => void }) {
     try {
       onDone(await setup(user.trim(), p1));
     } catch (e) {
-      setErr(e instanceof Error ? e.message : t("common.error"));
+      // La cuenta se creó pero el paso se perdió (reload entre POST y
+      // avance): retoma con la sesión que el setup ya abrió.
+      const msg = e instanceof Error ? e.message : t("common.error");
+      if (msg.includes("ya completado")) {
+        try {
+          onDone(await fetchMe());
+          return;
+        } catch {
+          /* cae al toast */
+        }
+      }
+      fail(e);
     }
   }
 
@@ -139,7 +265,7 @@ function StepAdmin({ onDone }: { onDone: (me: Me) => void }) {
       </label>
       <Button type="submit" className="mt-1 h-8 w-full justify-between">
         <span>{t("system.auth.createAccountNext")}</span>
-        <span aria-hidden className="font-mono text-[9px] tracking-[0.08em] opacity-60">↵</span>
+        <CornerDownLeft aria-hidden className="h-3 w-3 opacity-60" />
       </Button>
     </form>
   );
@@ -147,12 +273,11 @@ function StepAdmin({ onDone }: { onDone: (me: Me) => void }) {
 
 function StepRed({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const { t } = useI18n();
+  const fail = useUI((u) => u.fail);
   const [domain, setDomain] = useState("");
-  const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function save() {
-    setErr("");
     const v = domain.trim();
     if (v === "") {
       onNext();
@@ -163,7 +288,7 @@ function StepRed({ onNext, onBack }: { onNext: () => void; onBack: () => void })
       await setSetting("base_domain", v);
       onNext();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : t("common.error"));
+      fail(e);
     } finally {
       setBusy(false);
     }
@@ -171,7 +296,6 @@ function StepRed({ onNext, onBack }: { onNext: () => void; onBack: () => void })
 
   return (
     <div className="space-y-3">
-      <Err msg={err} />
       <p className="font-mono text-[11px] leading-relaxed text-muted-foreground">{t("system.auth.redDesc")}</p>
       <label className="field-label">
         {t("system.auth.baseDomain")}
@@ -191,18 +315,17 @@ function StepRed({ onNext, onBack }: { onNext: () => void; onBack: () => void })
 
 function StepTools({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const { t } = useI18n();
+  const fail = useUI((u) => u.fail);
   const [checks, setChecks] = useState<DoctorCheck[] | null>(null);
-  const [err, setErr] = useState("");
   const [fixKey, setFixKey] = useState<string | null>(null);
   const [fixVal, setFixVal] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function load() {
-    setErr("");
     try {
       setChecks(await fetchDoctor());
     } catch (e) {
-      setErr(e instanceof Error ? e.message : t("common.error"));
+      fail(e);
     }
   }
 
@@ -212,7 +335,6 @@ function StepTools({ onNext, onBack }: { onNext: () => void; onBack: () => void 
   }, []);
 
   async function saveFix(key: string) {
-    setErr("");
     setSaving(true);
     try {
       await setSetting(key, fixVal.trim());
@@ -220,7 +342,7 @@ function StepTools({ onNext, onBack }: { onNext: () => void; onBack: () => void 
       setFixVal("");
       await load();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : t("common.error"));
+      fail(e);
     } finally {
       setSaving(false);
     }
@@ -229,7 +351,6 @@ function StepTools({ onNext, onBack }: { onNext: () => void; onBack: () => void 
   const fails = (checks ?? []).filter((c) => c.state === "fail").length;
   return (
     <div className="space-y-3">
-      <Err msg={err} />
       <p className="font-mono text-[11px] leading-relaxed text-muted-foreground">{t("system.auth.toolsDesc")}</p>
       {checks === null ? (
         <p className="font-mono text-[11px] text-muted-foreground">{t("system.auth.checking")}</p>
@@ -322,8 +443,8 @@ function StepGithub({ onNext, onBack }: { onNext: () => void; onBack: () => void
       ) : (
         st?.setup_url && (
           <Button type="button" variant="outline" size="sm" className="w-full justify-between" onClick={() => window.open(st.setup_url, "_blank", "noopener")}>
-            <span>{t("system.auth.ghConnect")}</span>
-            <span aria-hidden>↗</span>
+            <span className="flex items-center gap-2"><TechIcon kind="github" size={16} />{t("system.auth.ghConnect")}</span>
+            <ArrowUpRight aria-hidden className="h-3 w-3" />
           </Button>
         )
       )}
@@ -360,7 +481,7 @@ function StepDone({ me, onOk, onBack }: { me: Me; onOk: () => void; onBack: () =
       </ul>
       <div className="flex items-center gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onBack} aria-label={t("common.back")}>
-          ←
+          <ArrowLeft className="h-3 w-3" />
         </Button>
         <span className="flex-1" />
         <Button type="button" size="sm" onClick={onOk} aria-label={t("system.auth.finish")}>

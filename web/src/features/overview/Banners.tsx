@@ -56,3 +56,23 @@ export function TlsBanner({ items }: { items: { host: string; date: string }[] }
     </section>
   );
 }
+
+// Deriva aplicada vs deseada: cambios que exigen reinicio del servicio.
+export function RestartBanner({ fields }: { fields: string[] }) {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  if (fields.length === 0) return null;
+  return (
+    <section
+      aria-label={t("overview.restart.aria")}
+      className="flex flex-wrap items-center gap-3 border border-warn/30 bg-warn/[0.05] px-3 py-2"
+    >
+      <p className="min-w-0 flex-1 font-mono text-[11px] text-warn">
+        {t("overview.restart.text", { fields: fields.join(", ") })}
+      </p>
+      <Button size="xs" variant="outline" onClick={() => navigate("/server")}>
+        {t("overview.restart.action")}
+      </Button>
+    </section>
+  );
+}

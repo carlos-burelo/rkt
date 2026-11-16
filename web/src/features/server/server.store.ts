@@ -1,13 +1,17 @@
 import { create } from "zustand";
 import { fetchServer, fetchServerHistory, fetchServerProcesses } from "./api";
 import type { ServerPoint, ServerProcess, ServerSnapshot } from "./api";
+import { useUI } from "../../app/ui";
+import { dismissError } from "../../shared/components/feedback";
 
 // Monitor del host: snapshot 5s + procesos 15s. Polls con guard alive.
+// Los fallos van por sonner con id estable (sin apilar); se cierra al recuperar.
+const ERR_ID = "server-monitor";
+
 interface ServerState {
   snap: ServerSnapshot | null;
   history: ServerPoint[];
   procs: ServerProcess[];
-  err: string;
   start: () => void;
   stop: () => void;
 }
@@ -20,17 +24,19 @@ export const useServer = create<ServerState>()((set) => ({
   snap: null,
   history: [],
   procs: [],
-  err: "",
   start: () => {
     stopTimers();
     alive = true;
     const loadSnap = () => {
       fetchServer()
         .then((s) => {
-          if (alive) set({ snap: s, err: "" });
+          if (alive) {
+            set({ snap: s });
+            dismissError(ERR_ID);
+          }
         })
         .catch((e) => {
-          if (alive) set({ err: e instanceof Error ? e.message : "error" });
+          if (alive) useUI.getState().fail(e, undefined, ERR_ID);
         });
       fetchServerHistory(6)
         .then((h) => {

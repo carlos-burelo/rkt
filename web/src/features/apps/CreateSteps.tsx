@@ -221,7 +221,7 @@ export function DetailsStep({
               {detectError.detail}
             </p>
           )}
-          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 [&>label>span:first-child]:min-h-8">
             <Field label={t("create.command")} hint={t("create.commandOverride")} error={tried ? errs.command : ""}>
               <PathInput
                 value={command}
@@ -275,7 +275,7 @@ export function DetailsStep({
         </Field>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>label>span:first-child]:min-h-8">
         <Field label={t("create.name")} hint={t("create.nameHint")} error={tried ? errs.name : ""}>
           <Input
             value={name}
@@ -328,7 +328,7 @@ export function DetailsStep({
       </button>
 
       {advanced && (
-        <div className="grid grid-cols-1 gap-3 border border-border bg-card/40 p-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 border border-border bg-card/40 p-3 sm:grid-cols-2 [&>label>span:first-child]:min-h-8">
           {origin !== "external" && (
             <Field label={t("create.command")} hint={t("create.commandOverride")}>
               <PathInput
@@ -340,24 +340,28 @@ export function DetailsStep({
               />
             </Field>
           )}
-          <Field label={t("create.dir")} hint={t("create.dirDefault")}>
-            <PathInput
-              value={dir}
-              onChange={setDir}
-              mode="dir"
-              placeholder={t("create.dirPlaceholder")}
-              ariaLabel={t("create.dir")}
-            />
-          </Field>
-          <Field label={t("create.port")} hint={t("common.optional")}>
-            <Input
-              value={port}
-              onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))}
-              inputMode="numeric"
-              placeholder={t("create.portPlaceholder")}
-              className="tnum font-mono text-[11px]"
-            />
-          </Field>
+          {origin === "manual" && (
+            <Field label={t("create.dir")} hint={t("create.dirDefault")}>
+              <PathInput
+                value={dir}
+                onChange={setDir}
+                mode="dir"
+                placeholder={t("create.dirPlaceholder")}
+                ariaLabel={t("create.dir")}
+              />
+            </Field>
+          )}
+          {(origin === "manual" || origin === "external") && (
+            <Field label={t("create.port")} hint={t("common.optional")}>
+              <Input
+                value={port}
+                onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))}
+                inputMode="numeric"
+                placeholder={t("create.portPlaceholder")}
+                className="tnum font-mono text-[11px]"
+              />
+            </Field>
+          )}
         </div>
       )}
     </div>

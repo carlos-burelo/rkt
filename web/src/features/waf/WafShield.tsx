@@ -8,18 +8,20 @@ import { useAuth } from "../auth/store";
 import { useUI } from "../../app/ui";
 import { useI18n } from "../../shared/i18n";
 import { rel } from "../../shared/lib/time";
+import { dismissError } from "../../shared/components/feedback";
 import { fetchWaf, putWaf, unban, type WafState } from "./api";
 
 const POLL_MS = 15000;
+const ERR_ID = "waf-monitor";
 
 // Escudo: reglas del WAF y últimos bloqueos. Solo operator (el backend
-// exige rol y los bloqueos exponen IPs atacantes).
+// exige rol y los bloqueos exponen IPs atacantes). Fallos por sonner con
+// id estable (el poll no apila); se cierra al recuperar.
 export function WafShield() {
   const { t, tn } = useI18n();
   const canWrite = useAuth((a) => a.canWrite);
   const fail = useUI((u) => u.fail);
   const [waf, setWaf] = useState<WafState | null>(null);
-  const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [newPath, setNewPath] = useState("");
   const [newMethod, setNewMethod] = useState("");
@@ -32,11 +34,11 @@ export function WafShield() {
         .then((w) => {
           if (!alive) return;
           setWaf(w);
-          setErr("");
+          dismissError(ERR_ID);
         })
         .catch((e) => {
           if (!alive) return;
-          setErr(e instanceof Error ? e.message : t("common.error"));
+          fail(e, undefined, ERR_ID);
         });
     };
     load();
@@ -80,7 +82,6 @@ export function WafShield() {
     <Section
       title={t("serve.waf.title")}
       description={t("serve.waf.desc")}
-      accent={!!err}
       actions={
         <Button variant="ghost" size="xs" onClick={() => {
           fetchWaf().then(setWaf).catch(fail);
@@ -89,7 +90,6 @@ export function WafShield() {
         </Button>
       }
     >
-      {err !== "" && <p className="mb-3 font-mono text-[10px] text-bad">{err}</p>}
       {waf === null ? (
         <p className="font-mono text-[10px] text-muted-foreground">{t("common.loading")}</p>
       ) : (

@@ -20,12 +20,10 @@ import (
 	"rkt/internal/logx"
 )
 
-// crashWindow / maxCrashes: tope anti-crashloop.
-// maxBackoff: tope del backoff exponencial.
+// maxCrashes / maxBackoff: tope y espera del anti-crashloop.
 const (
-	crashWindow = time.Minute
-	maxCrashes  = 5
-	maxBackoff  = 5 * time.Minute
+	maxCrashes = 5
+	maxBackoff = 5 * time.Minute
 )
 
 // Status foto de una app para healthz.
@@ -67,7 +65,6 @@ type app struct {
 	// nieto nacido antes del Assign tardío escapa y el Stop se cuelga.
 	canaryJob *jobCtx
 	lastExit  string
-	crashes   []time.Time
 	stopCh    chan struct{}
 	restartC  chan struct{}
 	resumeC   chan struct{}
@@ -274,7 +271,6 @@ func (m *Manager) Restart(name string) bool {
 		}
 		a.mu.Lock()
 		a.failed = false
-		a.crashes = nil
 		a.consec = 0
 		a.intentional = true
 		alive := a.alive
@@ -336,7 +332,6 @@ func (m *Manager) SwapAndRestart(name string, swap func() error) error {
 
 	a.mu.Lock()
 	a.failed = false
-	a.crashes = nil
 	a.consec = 0
 	a.held = true
 	a.intentional = true
@@ -470,20 +465,12 @@ func (a *app) loop() {
 		prev := a.consec
 		if !intentional {
 			if fast {
-				now := time.Now()
-				kept := a.crashes[:0]
-				for _, t := range a.crashes {
-					if now.Sub(t) < crashWindow {
-						kept = append(kept, t)
-					}
-				}
-				a.crashes = append(kept, now)
 				a.consec++
 			} else {
 				a.consec = 0 // vivió lo suficiente: no es crash
 			}
 		}
-		crashes := len(a.crashes)
+		consec := a.consec
 		a.mu.Unlock()
 
 		select {
@@ -525,13 +512,13 @@ func (a *app) loop() {
 			}
 		}
 
-		if fast && crashes >= maxCrashes {
+		if tripCrash(fast, consec) {
 			a.mu.Lock()
 			a.failed = true
 			a.mu.Unlock()
-			a.log.Error("crashloop, ya no reintento", "muertes", crashes)
+			a.log.Error("crashloop, ya no reintento", "muertes", consec)
 			if a.onEvent != nil {
-				a.onEvent("failed", a.cfg.Name, fmt.Sprintf("crashloop %d muertes", crashes))
+				a.onEvent("failed", a.cfg.Name, fmt.Sprintf("crashloop %d muertes", consec))
 			}
 			return
 		}
@@ -555,6 +542,14 @@ func (a *app) loop() {
 		case <-timer.C:
 		}
 	}
+}
+
+// tripCrash decide si la racha de muertes rápidas para la app (failed).
+// Se cuenta racha (consec), no ventana de tiempo: con backoff exponencial
+// los intentos se espacian y 5 muertes en 60s fijas nunca se alcanzan,
+// así que el guard por ventana jamás saltaba en producción.
+func tripCrash(fast bool, consec int) bool {
+	return fast && consec >= maxCrashes
 }
 
 // backoffFor duplica por crash rápido seguido, topado a maxBackoff.
@@ -678,9 +673,11 @@ func (a *app) attach(job *jobCtx, cmd *exec.Cmd, preassigned bool) bool {
 // SwapLive reemplaza la instancia actual por un proceso ya arrancado y
 // sano (el canario), matando la vieja. El corte de tráfico ya ocurrió en
 // la ruta; aquí solo se transfiere la supervisión sin arrancar de cero.
-// dir/port (no vacíos) actualizan la spec para que los reinicios
-// posteriores usen el slot y puerto nuevos.
-func (m *Manager) SwapLive(name string, cmd *exec.Cmd, dir, port string) error {
+// dir/port/static/args (no vacíos/nil) actualizan la spec para que los
+// reinicios posteriores usen el slot y puerto nuevos Y para que el Apply
+// de fondo vea la spec igual a la flota (si no, la reemplazaría y el
+// puerto volvería a estar ocupado → crashloop).
+func (m *Manager) SwapLive(name string, cmd *exec.Cmd, dir, port, static string, args []string) error {
 	m.mu.Lock()
 	if m.stopping {
 		m.mu.Unlock()
@@ -701,11 +698,16 @@ func (m *Manager) SwapLive(name string, cmd *exec.Cmd, dir, port string) error {
 	a.mu.Lock()
 	a.adopt = cmd
 	a.failed = false
-	a.crashes = nil
 	a.consec = 0
 	a.intentional = true
 	if dir != "" {
 		a.cfg.Dir = dir
+	}
+	if static != "" {
+		a.cfg.Static = static
+	}
+	if args != nil {
+		a.cfg.Args = args
 	}
 	if port != "" {
 		if a.cfg.Env == nil {

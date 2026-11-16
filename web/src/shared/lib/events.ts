@@ -45,7 +45,6 @@ function setConn(c: FleetConn) {
   if (c === "live") {
     fails = 0;
     useUI.getState().setOnline(true);
-    useUI.getState().clearErr();
   } else if (c === "offline") {
     useUI.getState().setOnline(false);
   }

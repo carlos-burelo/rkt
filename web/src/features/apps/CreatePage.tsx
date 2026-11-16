@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "../../shared/components/patterns";
 import { useUI } from "../../app/ui";
 import { useI18n } from "../../shared/i18n";
-import { SLUG, looksGit } from "./createDialog.model";
+import { SLUG, looksGit, ORIGINS } from "./createDialog.model";
 import { OriginStep, DetailsStep, ReviewStep } from "./CreateSteps";
 import { CreateTrack } from "./CreateTrack";
 import { useCreate } from "./create.store";
@@ -42,7 +42,7 @@ export function CreatePage() {
   const done = (name: string) => openApp(name);
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6">
+    <div className={`mx-auto w-full space-y-6 ${s.track ? "" : "max-w-3xl"}`}>
       <PageHeader
         title={t("create.title")}
         description={t(s.step === 1 ? "create.step1Desc" : s.step === 2 ? "create.step2Desc" : "create.step3Desc")}
@@ -80,9 +80,15 @@ export function CreatePage() {
       {s.track ? (
         <CreateTrack
           app={s.track.app}
+          deploymentId={s.track.id}
           kind={s.track.kind}
           status={s.trackStatus}
           log={s.trackLog}
+          domain={s.domain}
+          command={s.command}
+          originLabel={t(ORIGINS.find((o) => o.id === s.origin)?.labelKey ?? "create.origin.git")}
+          source={s.origin === "git" ? s.repo : s.dir}
+          auto={s.origin === "git" ? s.auto : undefined}
           onClose={() => {
             s.reset();
             navigate("/overview");

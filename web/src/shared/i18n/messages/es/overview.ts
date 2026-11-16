@@ -27,8 +27,13 @@ export const overview = {
   "overview.attention.open": "abrir ficha",
   "overview.attention.alerts": "alertas",
 
+  "overview.restart.aria": "reinicio pendiente",
+  "overview.restart.text": "Reinicio pendiente ({fields}): aplica reiniciando el servicio",
+  "overview.restart.action": "ver servidor",
+
   "overview.units.title": "Apps",
   "overview.units.columns": "app · puerto · destino · revisión",
+  "overview.units.columnsNoPort": "app · destino · revisión",
   "overview.units.attentionFirst": "atención primero",
   "overview.units.count": "{n} registradas",
   "overview.units.tableAria": "apps registradas",
