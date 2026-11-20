@@ -1,4 +1,4 @@
-#Requires -RunAsAdministrator
+﻿#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
   Instala rkt en Windows Server (prod): binario + SQLite + firewall + servicio.
@@ -64,16 +64,15 @@ foreach ($sub in @("data", "secrets", "logs", "apps", "certs")) {
   New-Item -ItemType Directory -Force (Join-Path $InstallDir $sub) | Out-Null
 }
 
-# 0b. token deploy en archivo con ACL, nunca en env de máquina (legible
+# 0b. token deploy en archivo bajo secrets/, nunca en env de máquina (legible
 # por usuarios locales desde el registro). El servicio lee la ruta.
-# La ACL la pone el pase único de 5b (herencia): el fichero nace cubierta.
 if ($GithubToken -ne "") {
   $secretDir = Join-Path $InstallDir "secrets"
   New-Item -ItemType Directory -Force $secretDir | Out-Null
   $tokenFile = Join-Path $secretDir "github.token"
   Set-Content -Path $tokenFile -Value $GithubToken -NoNewline -Encoding ascii
   [Environment]::SetEnvironmentVariable("RKT_GITHUB_TOKEN_FILE", $tokenFile, "Machine")
-  Write-Host "GITHUB_TOKEN guardado en $tokenFile (ACL SYSTEM+Admins)."
+  Write-Host "GITHUB_TOKEN guardado en $tokenFile."
 }
 
 # 0. rollback al slot previo (previous.txt): flip de binpath + restart.
@@ -223,29 +222,9 @@ Write-Host "Binario en $exe"
 
 # 5. la configuración vive en SQLite: el primer arranque siembra defaults.
 #    Edítala desde el dashboard (loopback) o con `rkt settings/routes/apps`.
-
-# 5b. ACL del hogar entero (datos, secretos, logs, apps, certs):
-# solo SYSTEM + Administradores, con herencia. Solo SUMA (sin
-# /inheritance:r ni :r): probado que quitar la herencia con un grant
-# (OI)(CI)-only deja los ficheros con DACL vacía (ni SYSTEM arranca
-# el servicio: 1053) porque en ficheros ese flag no da acceso efectivo.
-# Primer pase: efectivo en cada objeto presente. Segundo: herencia futura.
-$adminSid = "*S-1-5-32-544"
-icacls $InstallDir /grant "*S-1-5-18:F" "${adminSid}:F" /T /C | Out-Null
-icacls $InstallDir /grant "*S-1-5-18:(OI)(CI)F" "${adminSid}:(OI)(CI)F" /T /C | Out-Null
-
-# 5c. grupo de operadores: leer logs sin ser admin. RX en el hogar
-# (atravesar) + RX con herencia en logs/ (futuros .log incluidos).
-# secrets/ y data/ quedan SYSTEM+Admins: la gestión va por dashboard/API,
-# nunca por SQLite directa.
-$opGroup = "rkt-operators"
-if (-not (Get-LocalGroup -Name $opGroup -ErrorAction SilentlyContinue)) {
-  New-LocalGroup -Name $opGroup -Description "Lee logs de rkt; gestiona por dashboard/API" | Out-Null
-  Write-Host "Grupo local $opGroup creado (agrega miembros: Add-LocalGroupMember $opGroup <usuario>)."
-}
-icacls $InstallDir /grant "${opGroup}:RX" /C | Out-Null
-$logsDir = Join-Path $InstallDir "logs"
-icacls $logsDir /grant "${opGroup}:(OI)(CI)RX" /T /C | Out-Null
+#    Todo el proyecto usa un solo directorio ($InstallDir) para todo,
+#    con permisos estándar de sistema de archivos sin permisos especiales
+#    que bloqueen su modificación/eliminación o cuentas de usuario.
 
 # 6. firewall 80/443
 if (-not $SkipFirewall) {

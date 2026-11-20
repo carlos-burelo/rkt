@@ -126,7 +126,7 @@ export const serve = {
     "Estado por ruta: dial TCP al servicio y certificado ACME. Selecciona un host para filtrar. Solo lectura.",
 
   // WAF
-  "serve.waf.title": "Escudo",
+  "serve.waf.title": "Seguridad (WAF)",
   "serve.waf.desc": "bloqueos del edge antes del backend · solo el operador edita reglas",
   "serve.waf.rules": "reglas",
   "serve.waf.rulesSub": "paths + métodos",

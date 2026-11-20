@@ -21,11 +21,32 @@ export interface GithubStatus {
   setup_url?: string;
   local?: boolean;
   stale?: boolean;
+  install_pending?: boolean;
+  webhook_active?: boolean;
+  warning?: string;
+  error?: string;
+}
+
+export interface GithubTestResult {
+  ok: boolean;
+  account?: string;
+  installations?: number;
+  repositories?: number;
+  repository_selection?: string;
+  latency_ms?: number;
   error?: string;
 }
 
 export async function getGithubStatus(): Promise<GithubStatus> {
   return api<GithubStatus>("/api/v1/github");
+}
+
+export async function disconnectGithub(): Promise<void> {
+  await api("/api/v1/github", { method: "DELETE" });
+}
+
+export async function testGithub(): Promise<GithubTestResult> {
+  return api<GithubTestResult>("/api/v1/github/test", { method: "POST" });
 }
 
 export interface ApiToken {

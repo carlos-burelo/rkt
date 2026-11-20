@@ -83,6 +83,8 @@ func testDeps(t *testing.T) (Deps, *store.DB, func()) {
 			}
 			return "rev7", nil
 		},
+		GithubDisconnect: func() error { return nil },
+		GithubTest:       func() (map[string]any, error) { return map[string]any{"ok": true}, nil },
 	}
 	return d, db, func() { db.Close() }
 }
@@ -1032,6 +1034,29 @@ func TestGithubEndpoint(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"full_name":"acme/priv"`) ||
 		!strings.Contains(rec.Body.String(), `"private":true`) {
 		t.Fatalf("github repos = %d %s", rec.Code, rec.Body.String())
+	}
+
+	// prueba en vivo y desvinculación
+	d.GithubTest = func() (map[string]any, error) {
+		return map[string]any{"ok": true, "latency_ms": 45, "repositories": 12}, nil
+	}
+	var disconnected bool
+	d.GithubDisconnect = func() error {
+		disconnected = true
+		return nil
+	}
+	h = NewHandler(d)
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodPost, "/api/v1/github/test", tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"latency_ms":45`) {
+		t.Fatalf("github test = %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(http.MethodDelete, "/api/v1/github", tok))
+	if rec.Code != http.StatusOK || !disconnected || !strings.Contains(rec.Body.String(), `"ok":true`) {
+		t.Fatalf("github delete = %d %s", rec.Code, rec.Body.String())
 	}
 }
 

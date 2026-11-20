@@ -10,7 +10,7 @@ export const nav = {
   "nav.logs": "Registros",
   "nav.routes": "Dominios",
   "nav.databases": "Bases de datos",
-  "nav.waf": "Escudo",
+  "nav.waf": "Seguridad (WAF)",
   "nav.proxy": "Proxy",
   "nav.environment": "Entorno",
   "nav.analytics": "Analítica",

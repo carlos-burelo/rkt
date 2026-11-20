@@ -18,11 +18,16 @@ import (
 
 func needPwsh(t *testing.T) string {
 	t.Helper()
-	p, err := exec.LookPath("pwsh")
-	if err != nil {
-		t.Skip("sin pwsh en PATH")
+	for _, bin := range []string{"pwsh", "powershell"} {
+		p, err := exec.LookPath(bin)
+		if err == nil {
+			if out, err := exec.Command(p, "-NoProfile", "-Command", "Write-Output ok").Output(); err == nil && strings.TrimSpace(string(out)) == "ok" {
+				return p
+			}
+		}
 	}
-	return p
+	t.Skip("sin pwsh/powershell ejecutable en PATH")
+	return ""
 }
 
 func readScript(t *testing.T, name string) (root, body string) {
@@ -47,13 +52,14 @@ func pwshParseErrs(t *testing.T, pwsh, target string, isFile bool) []string {
 	}
 	out, err := exec.Command(pwsh, "-NoProfile", "-Command",
 		"$errs=$null;$toks=$null;[void][System.Management.Automation.Language.Parser]::"+
-			call+";$errs|ForEach-Object{$_.Message}").CombinedOutput()
+			call+";$errs|ForEach-Object{$_.Message}").Output()
 	if err != nil {
 		t.Fatalf("pwsh Parser: %v\n%s", err, out)
 	}
 	var errs []string
 	for _, ln := range strings.Split(string(out), "\n") {
-		if ln = strings.TrimSpace(ln); ln != "" {
+		ln = strings.TrimSpace(ln)
+		if ln != "" && !strings.Contains(ln, "InitializeDefaultDrives") {
 			errs = append(errs, ln)
 		}
 	}
@@ -89,7 +95,6 @@ func TestInstallLimpio(t *testing.T) {
 		"Flip ",
 		"Rollback a ",
 		"sc.exe failure",
-		"rkt-operators",
 		"doctor --json",
 		"Get-Command git",
 		"sin git no hay deploys",
@@ -104,9 +109,11 @@ func TestInstallLimpio(t *testing.T) {
 		"No pude borrar",
 		"apps.old",
 		"sc.exe delete",
+		"icacls",
+		"rkt-operators",
 	} {
 		if strings.Contains(body, s) {
-			t.Errorf("install.ps1 no debe borrar nada (mover a nuke.ps1): %q", s)
+			t.Errorf("install.ps1 no debe contener permisos bloqueantes ni borrado: %q", s)
 		}
 	}
 }
@@ -201,13 +208,14 @@ func TestNukeDirGuarda(t *testing.T) {
 	for _, c := range cases {
 		sb.WriteString("[Console]::WriteLine((Test-RktNukeDir '" + c.in + "'))\n")
 	}
-	out, err := exec.Command(pwsh, "-NoProfile", "-Command", sb.String()).CombinedOutput()
+	out, err := exec.Command(pwsh, "-NoProfile", "-Command", sb.String()).Output()
 	if err != nil {
 		t.Fatalf("pwsh guardia: %v\n%s", err, out)
 	}
 	var got []string
 	for _, ln := range strings.Split(string(out), "\n") {
-		if ln = strings.TrimSpace(ln); ln != "" {
+		ln = strings.TrimSpace(ln)
+		if ln != "" && !strings.Contains(ln, "InitializeDefaultDrives") {
 			got = append(got, ln)
 		}
 	}

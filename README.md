@@ -95,8 +95,7 @@ irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1
 ```
 
 Para borrar todo rastro antes de instalar (servicio, datos, firewall,
-variables, grupo `rkt-operators`; lo de usuario va a `apps.old`/`certs.old`),
-script dedicado:
+variables; lo de usuario va a `apps.old`/`certs.old`), script dedicado:
 
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/nuke.ps1)))
@@ -105,11 +104,10 @@ script dedicado:
 El instalador descarga el release, verifica checksum, publica el slot
 `versions/<ver>/rkt.exe`, registra el servicio apuntando al slot
 (auto-arranque con recovery ante crash), abre firewall y deja `rkt` en el
-`PATH` (lanzador = copia del slot activo). Crea el grupo local
-`rkt-operators` con lectura de logs (agrega miembros con
-`Add-LocalGroupMember rkt-operators <usuario>`): gestionan por
-dashboard/API sin ser admins. También detecta la IP
-pública, expone el dashboard en `http://IP:8090` y crea el primer admin con
+`PATH` (lanzador = copia del slot activo). Usa un solo directorio para todo
+con permisos estándar de archivo (sin permisos especiales que bloqueen
+modificación/eliminación ni permisos especiales de cuentas de usuario).
+También detecta la IP pública, expone el dashboard en `http://IP:8090` y crea el primer admin con
 password aleatoria (la imprime una vez). Sin YAML: todo se administra desde
 el dashboard o el CLI.
 

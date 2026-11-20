@@ -368,3 +368,20 @@ func TestManifestLocalSinWebhook(t *testing.T) {
 		t.Fatalf("local no debe pedir webhook/eventos: %+v %v", m.HookAttributes, m.DefaultEvents)
 	}
 }
+
+func TestSetupGithubErrorRedirect(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := SetupHandler(SetupDeps{
+		Log:          log,
+		DashboardURL: "http://127.0.0.1:8090/settings",
+	})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_rkt/setup?error=access_denied&error_description=User+cancelled+authorization", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "User cancelled authorization") || !strings.Contains(body, "http://127.0.0.1:8090/settings") {
+		t.Fatalf("body sin mensaje o link de retorno: %s", body)
+	}
+}

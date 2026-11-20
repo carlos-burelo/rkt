@@ -24,11 +24,21 @@ func boolStr(b bool) string {
 }
 
 // verifyInstallation confirma una instalación contra la API (setup browser).
+// Incluye reintentos con backoff suave ante latencia de propagación de réplicas en GitHub.
 func (p *Program) verifyInstallation(id int64) (string, error) {
 	if p.gh() == nil {
 		return "", fmt.Errorf("sin github app")
 	}
-	return p.gh().Installation(id)
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		account, err := p.gh().Installation(id)
+		if err == nil {
+			return account, nil
+		}
+		lastErr = err
+		time.Sleep(1 * time.Second)
+	}
+	return "", lastErr
 }
 
 // onSetup atiende el setup del browser tras instalar: verifica y dispara
@@ -171,6 +181,9 @@ func (p *Program) githubStatus() (map[string]any, error) {
 		if p.ghStale.Load() {
 			out["stale"] = true
 		}
+		if !local && (cfg.ListenHTTPS == "" || domain == "") {
+			out["warning"] = "Para auto-deploy con webhooks en producción, configura base_domain y escucha HTTPS."
+		}
 		return out, nil
 	}
 	out["configured"] = true
@@ -183,6 +196,10 @@ func (p *Program) githubStatus() (map[string]any, error) {
 		out["install_url"] = "https://github.com/apps/" + cfg.Github.AppSlug + "/installations/new"
 	}
 	out["repositories"] = p.db.GetSetting("github_repo_count")
+	out["webhook_active"] = (cfg.Github.WebhookSecret != "" && !local)
+	if !local && (cfg.ListenHTTPS == "" || domain == "") {
+		out["warning"] = "Para auto-deploy con webhooks en producción, configura base_domain y escucha HTTPS."
+	}
 	if p.gh() == nil {
 		return out, nil
 	}
@@ -205,7 +222,7 @@ func (p *Program) githubStatus() (map[string]any, error) {
 	}
 	out["installations"] = len(insts)
 	if len(insts) == 0 {
-		// la App existe pero no está instalada (o la desinstalaron)
+		// La App existe pero aún no se ha instalado en ninguna cuenta/org.
 		for _, k := range []string{
 			"github_install_id", "github_account", "github_repo_selection",
 			"github_install_url", "github_install_target", "github_repo_count",
@@ -215,6 +232,7 @@ func (p *Program) githubStatus() (map[string]any, error) {
 		out["account"] = ""
 		out["repositories"] = ""
 		out["repository_selection"] = ""
+		out["install_pending"] = true
 		return out, nil
 	}
 	inst := insts[0]
@@ -237,6 +255,52 @@ func (p *Program) githubStatus() (map[string]any, error) {
 		}
 	}
 	return out, nil
+}
+
+// disconnectGithub desvincula limpiamente la GitHub App y borra su clave.
+func (p *Program) disconnectGithub() error {
+	p.dropGithub()
+	p.ghStale.Store(false)
+	p.log.Info("github: app desvinculada por petición del usuario")
+	return nil
+}
+
+// testGithub prueba en vivo la autenticación contra la API de GitHub.
+func (p *Program) testGithub() (map[string]any, error) {
+	gh := p.gh()
+	if gh == nil || p.db.GetSetting("github_app_id") == "" {
+		return nil, fmt.Errorf("GitHub no está configurado")
+	}
+	start := time.Now()
+	insts, err := gh.Installations()
+	latency := time.Since(start).Milliseconds()
+	if err != nil {
+		if errors.Is(err, github.ErrAppGone) {
+			p.dropGithub()
+			return nil, fmt.Errorf("la GitHub App ya no existe o la clave privada no es válida")
+		}
+		return nil, fmt.Errorf("error al conectar con GitHub (%dms): %w", latency, err)
+	}
+	repoCount := 0
+	if len(insts) > 0 {
+		if tok, err := gh.TokenFor(insts[0].ID); err == nil {
+			if repos, err := gh.Repositories(tok); err == nil {
+				repoCount = len(repos)
+			}
+		}
+	}
+	account := p.db.GetSetting("github_account")
+	if account == "" && len(insts) > 0 {
+		account = insts[0].Account.Login
+	}
+	return map[string]any{
+		"ok":                   true,
+		"account":              account,
+		"installations":        len(insts),
+		"repositories":         repoCount,
+		"repository_selection": p.db.GetSetting("github_repo_selection"),
+		"latency_ms":           latency,
+	}, nil
 }
 
 // dropGithub limpia la configuración local cuando la App ya no existe

@@ -81,6 +81,8 @@ func TestMatrizAuthZ(t *testing.T) {
 		// lecturas operator+ (superficie sensible)
 		{"GET", "/api/v1/audit", "", 403, 403, 200},
 		{"GET", "/api/v1/github", "", 403, 200, 200},
+		{"DELETE", "/api/v1/github", "", 403, 200, 200},
+		{"POST", "/api/v1/github/test", "", 403, 200, 200},
 		{"GET", "/api/v1/github/repos", "", 403, 200, 200},
 		{"GET", "/api/v1/alert-channels", "", 403, 200, 200},
 		{"GET", "/api/v1/domains/zones", "", 200, 200, 200},

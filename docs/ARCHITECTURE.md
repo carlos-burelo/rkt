@@ -170,8 +170,9 @@ Hecho:
 - Un solo verificador: `internal/authz` con tabla única op→rol; API, MCP-HTTP,
   MCP-stdio y healthz deciden ahí. Sesiones valen en `/mcp`, streams con
   `?ticket=` de un uso, stdio con gate (local=operator, nunca admin).
-- Grupo `rkt-operators` (RX en hogar/logs, nunca secrets/data): operadores leen
-  logs sin ser admins; la gestión va por dashboard/API.
+- Hogar único con permisos estándar: todo vive bajo un solo directorio sin
+  permisos especiales que bloqueen modificación/eliminación ni cuentas especiales;
+  la gestión de acceso se controla por roles en dashboard/API.
 - Upgrade por slots: `versions/<ver>` inmutables + `rkt upgrade` (flip de
   binpath + gate + rollback auto); `install.ps1` instala al slot.
 - Journal de cortes: intent `started` antes de persistir, `done` tras adoptar;

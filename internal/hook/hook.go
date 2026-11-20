@@ -152,14 +152,32 @@ type SetupDeps struct {
 //   - setup_action=manifest&code=..: canjea credenciales y manda a instalar.
 func SetupHandler(d SetupDeps) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		dash := d.DashboardURL
+		if dash == "" {
+			dash = "/"
+		}
 		defer func() {
 			if v := recover(); v != nil {
 				d.Log.Error("setup: panic recuperado", "v", v)
 				writeHookPage(w, http.StatusInternalServerError, "Error interno",
-					`<h1>Algo falló</h1><p>El setup de GitHub no terminó. Revisa los logs del servicio.</p>`)
+					`<h1>Algo falló</h1><p>El setup de GitHub no terminó debido a un error interno.</p>`+
+						returnBtn(dash, "Volver al panel"))
 			}
 		}()
 		q := r.URL.Query()
+		if errCode := q.Get("error"); errCode != "" {
+			errDesc := q.Get("error_description")
+			if errDesc == "" {
+				errDesc = "La operación fue cancelada o rechazada en GitHub."
+			}
+			d.Log.Warn("setup: error devuelto por GitHub", "error", errCode, "desc", errDesc)
+			writeHookPage(w, http.StatusOK, "Vinculación cancelada",
+				`<h1>Vinculación con GitHub no completada</h1>`+
+					`<div class="err">`+templateEscape(errDesc)+`</div>`+
+					`<p>No se realizaron cambios en tu servidor rkt. Puedes iniciar el proceso nuevamente cuando desees.</p>`+
+					returnBtn(dash, "Volver a Ajustes"))
+			return
+		}
 		switch q.Get("setup_action") {
 		case "install":
 			setupInstall(w, r, d)
@@ -172,7 +190,8 @@ func SetupHandler(d SetupDeps) http.Handler {
 				return
 			}
 			writeHookPage(w, http.StatusBadRequest, "Setup inválido",
-				`<h1>Petición incompleta</h1><p>Falta <code>setup_action</code> o <code>code</code>.</p>`)
+				`<h1>Petición incompleta</h1><p>No se recibieron los parámetros necesarios de GitHub (falta <code>setup_action</code> o <code>code</code>).</p>`+
+					returnBtn(dash, "Volver a Ajustes"))
 		}
 	})
 }
@@ -219,30 +238,48 @@ func writeHookPage(w http.ResponseWriter, status int, title, body string) {
 	_, _ = fmt.Fprint(w, hookPage(title, body))
 }
 
+func returnBtn(target, label string) string {
+	if target == "" {
+		target = "/"
+	}
+	if label == "" {
+		label = "Volver al panel"
+	}
+	return `<p style="margin-top:20px"><a class="btn" href="` + templateEscape(target) + `">` + templateEscape(label) + `</a></p>`
+}
+
 func setupInstall(w http.ResponseWriter, r *http.Request, d SetupDeps) {
+	dash := d.DashboardURL
+	if dash == "" {
+		dash = "/"
+	}
 	q := r.URL.Query()
 	var id int64
 	if _, err := fmt.Sscanf(q.Get("installation_id"), "%d", &id); err != nil || id <= 0 {
 		writeHookPage(w, http.StatusBadRequest, "Instalación inválida",
-			`<h1>Instalación inválida</h1><p>GitHub no envió un <code>installation_id</code> válido.</p>`)
+			`<h1>Instalación inválida</h1><p>GitHub no envió un identificador numérico de instalación válido (<code>installation_id</code>).</p>`+
+				returnBtn(dash, "Volver a Ajustes"))
 		return
 	}
 	account, err := d.Verify(id)
 	if err != nil {
 		d.Log.Warn("setup: instalación no verificada", "id", id, "err", err)
-		detail := `<p>GitHub rechazó la verificación. Revisa que la App e instalación existan.</p>`
+		detail := `<p>GitHub rechazó la verificación. Comprueba que tengas permisos de administrador en la cuenta u organización.</p>`
 		if strings.Contains(err.Error(), "sin github app") {
-			detail = `<p>Este servidor aún no tiene la clave de la App.</p>
-<p>Completa primero la creación desde <b>Ajustes</b> y vuelve a intentar.</p>`
+			detail = `<p>Este servidor aún no tiene la clave privada de la GitHub App.</p>
+<p>Completa primero la creación de la App desde <b>Ajustes</b> e inténtalo de nuevo.</p>`
 		}
 		writeHookPage(w, http.StatusUnauthorized, "Sin verificar",
-			`<h1>No pude verificar la instalación</h1><div class="err">La verificación contra GitHub falló.</div>`+detail)
+			`<h1>No pude verificar la instalación</h1><div class="err">`+templateEscape(err.Error())+`</div>`+
+				detail+returnBtn(dash, "Volver a Ajustes"))
 		return
 	}
 	if err := d.OnSetup(id, account); err != nil {
 		d.Log.Error("setup: registro fallido", "err", err)
 		writeHookPage(w, http.StatusInternalServerError, "Registro fallido",
-			`<h1>No pude guardar la instalación</h1><p>Revisa los logs del servicio e inténtalo otra vez.</p>`)
+			`<h1>No pude guardar la instalación</h1><div class="err">`+templateEscape(err.Error())+`</div>`+
+				`<p>Ocurrió un error al persistir el registro en la base de datos de rkt.</p>`+
+				returnBtn(dash, "Volver a Ajustes"))
 		return
 	}
 	d.Log.Info("setup: app vinculada", "account", account, "installation", id)
@@ -254,31 +291,41 @@ func setupInstall(w http.ResponseWriter, r *http.Request, d SetupDeps) {
 }
 
 func setupManifest(w http.ResponseWriter, r *http.Request, d SetupDeps) {
+	dash := d.DashboardURL
+	if dash == "" {
+		dash = "/"
+	}
 	q := r.URL.Query()
 	state := q.Get("state")
 	if state == "" || d.ConsumeState == nil || !d.ConsumeState(state) {
 		writeHookPage(w, http.StatusForbidden, "Setup no autorizado",
-			`<h1>Setup no autorizado</h1><p>Falta el state del dashboard o ya caducó. Vuelve a <b>Ajustes</b> e inicia el flujo otra vez.</p>`)
+			`<h1>Enlace expirado o no autorizado</h1><p>El token temporal de seguridad (<code>state</code>) no es válido o ya caducó (+30 min). Por protección, cada enlace es de un solo uso.</p><p>Vuelve a <b>Ajustes</b> e inicia el flujo de vinculación nuevamente.</p>`+
+				returnBtn(dash, "Volver a Ajustes"))
 		return
 	}
 	code := q.Get("code")
 	if code == "" || d.Exchange == nil || d.OnManifest == nil {
 		writeHookPage(w, http.StatusBadRequest, "Código faltante",
-			`<h1>Falta el código</h1><p>GitHub no devolvió <code>code</code> en la URL.</p>`)
+			`<h1>Falta el código de autorización</h1><p>GitHub no devolvió el parámetro <code>code</code> en la redirección.</p>`+
+				returnBtn(dash, "Volver a Ajustes"))
 		return
 	}
 	creds, err := d.Exchange(code)
 	if err != nil {
 		d.Log.Warn("setup: canje manifest fallido", "err", err)
 		writeHookPage(w, http.StatusUnauthorized, "Código inválido",
-			`<h1>Código inválido o vencido</h1><p>Vuelve a <b>Ajustes</b> y crea la App otra vez.</p>`)
+			`<h1>Código inválido o vencido</h1><div class="err">`+templateEscape(err.Error())+`</div>`+
+				`<p>El código de autorización temporal de GitHub ya fue utilizado o caducó. Inicia nuevamente la creación desde Ajustes.</p>`+
+				returnBtn(dash, "Volver a Ajustes"))
 		return
 	}
 	installURL, err := d.OnManifest(creds)
 	if err != nil {
 		d.Log.Error("setup: guardar credenciales fallido", "err", err)
 		writeHookPage(w, http.StatusInternalServerError, "Registro fallido",
-			`<h1>No pude guardar la App</h1><p>Revisa los logs del servicio e inténtalo otra vez.</p>`)
+			`<h1>No pude guardar las credenciales</h1><div class="err">`+templateEscape(err.Error())+`</div>`+
+				`<p>No se pudo almacenar la clave privada de la GitHub App en el servidor.</p>`+
+				returnBtn(dash, "Volver a Ajustes"))
 		return
 	}
 	d.Log.Info("setup: app creada", "slug", creds.Slug, "id", creds.ID)

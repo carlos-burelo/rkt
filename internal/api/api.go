@@ -58,6 +58,10 @@ type Deps struct {
 	Github func() (map[string]any, error)
 	// GithubRepos repos accesibles a las instalaciones (selector de app).
 	GithubRepos func() ([]github.Repo, error)
+	// GithubDisconnect desvincula la GitHub App limpiamente (nil = no soportado).
+	GithubDisconnect func() error
+	// GithubTest prueba en vivo la conexión con GitHub (nil = no soportado).
+	GithubTest func() (map[string]any, error)
 	// GithubManager manager vivo para inferir plan de repos privados.
 	GithubManager func() *github.Manager
 	// Hub bus de eventos para /fleet/stream (nil = stream deshabilitado).
@@ -207,8 +211,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("/api/v1/env", d.handleEnvIndex)
 	mux.HandleFunc("/api/v1/env/", d.handleEnvSub)
 
-	// GitHub App: estado, alcance de repos e instalación.
+	// GitHub App: estado, alcance de repos, prueba y desvinculación.
 	mux.HandleFunc("/api/v1/github", d.handleGithub)
+	mux.HandleFunc("/api/v1/github/test", d.handleGithubTest)
 
 	// Repos accesibles a la App (selector de "nueva app").
 	mux.HandleFunc("/api/v1/github/repos", d.handleGithubRepos)

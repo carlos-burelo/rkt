@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { ArrowLeft, ArrowUpRight, CornerDownLeft } from "lucide-react";
 import { TechIcon } from "../../shared/components/TechIcon";
 import { setup, me as fetchMe } from "./api";
@@ -412,10 +412,46 @@ function StepGithub({ onNext, onBack }: { onNext: () => void; onBack: () => void
   const { t } = useI18n();
   const [st, setSt] = useState<GithubStatus | null>(null);
   const [understood, setUnderstood] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const pollTimer = useRef<number | null>(null);
+
+  const checkStatus = () => {
+    return getGithubStatus().then((s) => {
+      setSt(s);
+      return s;
+    }).catch(() => {
+      setSt(null);
+      return null;
+    });
+  };
 
   useEffect(() => {
-    getGithubStatus().then(setSt).catch(() => setSt(null));
+    checkStatus();
   }, []);
+
+  useEffect(() => {
+    if (!polling) {
+      if (pollTimer.current) clearInterval(pollTimer.current);
+      return;
+    }
+    pollTimer.current = window.setInterval(async () => {
+      const s = await checkStatus();
+      if (s?.configured) {
+        setPolling(false);
+      }
+    }, 2500);
+
+    return () => {
+      if (pollTimer.current) clearInterval(pollTimer.current);
+    };
+  }, [polling]);
+
+  const onConnectClick = () => {
+    if (st?.setup_url) {
+      window.open(st.setup_url, "_blank", "noopener");
+      setPolling(true);
+    }
+  };
 
   const perms = [
     t("system.auth.ghPermContents"),
@@ -439,13 +475,38 @@ function StepGithub({ onNext, onBack }: { onNext: () => void; onBack: () => void
         {t("system.auth.ghScopeWarn")}
       </p>
       {st?.configured ? (
-        <p className="font-mono text-[11px] text-ok">{t("system.auth.ghConfigured", { account: st.account ?? "?" })}</p>
+        <div className="border border-ok/40 bg-ok/5 px-3 py-2 font-mono text-[11px] text-ok">
+          {t("system.auth.ghSuccess", { account: st.account ?? "?" })}
+        </div>
       ) : (
         st?.setup_url && (
-          <Button type="button" variant="outline" size="sm" className="w-full justify-between" onClick={() => window.open(st.setup_url, "_blank", "noopener")}>
-            <span className="flex items-center gap-2"><TechIcon kind="github" size={16} />{t("system.auth.ghConnect")}</span>
-            <ArrowUpRight aria-hidden className="h-3 w-3" />
-          </Button>
+          <div className="space-y-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full justify-between"
+              onClick={onConnectClick}
+            >
+              <span className="flex items-center gap-2">
+                <TechIcon kind="github" size={16} />
+                {polling ? t("system.auth.ghWaiting") : t("system.auth.ghConnect")}
+              </span>
+              <ArrowUpRight aria-hidden className="h-3 w-3" />
+            </Button>
+            {polling && (
+              <div className="flex items-center justify-between px-1">
+                <span className="font-mono text-[10px] text-signal animate-pulse">{t("system.auth.ghWaiting")}</span>
+                <button
+                  type="button"
+                  onClick={() => checkStatus()}
+                  className="font-mono text-[10px] text-muted-foreground hover:underline"
+                >
+                  {t("system.auth.ghCheckNow")}
+                </button>
+              </div>
+            )}
+          </div>
         )
       )}
       <label className="flex cursor-pointer items-start gap-2 border border-border/70 px-2 py-1.5">
@@ -458,7 +519,7 @@ function StepGithub({ onNext, onBack }: { onNext: () => void; onBack: () => void
         />
         <span className="font-mono text-[10px] leading-relaxed text-muted-foreground">{t("system.auth.ghOptOut")}</span>
       </label>
-      <Nav onBack={onBack} onNext={onNext} nextLabel={t("system.auth.skipNext")} nextDisabled={!understood && !st?.configured} />
+      <Nav onBack={onBack} onNext={onNext} nextLabel={st?.configured ? t("common.next") : t("system.auth.skipNext")} nextDisabled={!understood && !st?.configured} />
     </div>
   );
 }

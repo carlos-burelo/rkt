@@ -291,7 +291,7 @@ func (p *Program) Run() {
 		if p.cron != nil {
 			p.cron.Apply()
 		}
-	}, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, Server: p.srvMetrics, Cron: p.cron, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubManager: p.gh, Hub: p.hub, Pending: p.pendingRestartGet})
+	}, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, Server: p.srvMetrics, Cron: p.cron, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubDisconnect: p.disconnectGithub, GithubTest: p.testGithub, GithubManager: p.gh, Hub: p.hub, Pending: p.pendingRestartGet})
 	sub, err := fs.Sub(web.Dist, "dist")
 	if err != nil {
 		p.log.Error("dashboard sin dist", "err", err)
