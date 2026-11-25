@@ -5,7 +5,9 @@ package cli
 // borrado en nuke (servicio, procesos, firewall, env, PATH, ACLs, reintentos,
 // legados a .old), guardia Test-RktNukeDir ejecutada por tabla y los 2
 // comandos del README (nuke + install) con parseo de una línea.
-// Sin pwsh se salta lo que lo exige (CI Linux); el resto es estático.
+// strict.ps1 (gate pre-prod) también se parsea aquí: si no compila, no hay
+// puerta que valga. Sin pwsh se salta lo que lo exige (CI Linux); el resto
+// es estático.
 
 import (
 	"os"
@@ -69,7 +71,7 @@ func pwshParseErrs(t *testing.T, pwsh, target string, isFile bool) []string {
 func TestScriptsSintaxis(t *testing.T) {
 	pwsh := needPwsh(t)
 	root, _ := readScript(t, "install.ps1")
-	for _, name := range []string{"install.ps1", "nuke.ps1"} {
+	for _, name := range []string{"install.ps1", "nuke.ps1", "strict.ps1"} {
 		if errs := pwshParseErrs(t, pwsh, filepath.Join(root, "scripts", name), true); len(errs) > 0 {
 			t.Fatalf("%s con errores de sintaxis:\n%s", name, strings.Join(errs, "\n"))
 		}

@@ -36,6 +36,7 @@ scripts/shots/node_modules/
 # cobertura local
 /cover.out
 /cover
+/strict.log
 /.gocache/
 /.playwright/
 

@@ -138,6 +138,44 @@ jobs:
         run: go run ./tests/run.go test -race rkt/internal/supervisor rkt/internal/proxy rkt/internal/store rkt/internal/hub rkt/internal/api -count=1 -p 1
         shell: pwsh
 
+  strict:
+    # Gate pre-prod: scripts/strict.ps1 (gofmt total, diff --check, vet,
+    # build, web íntegra, tests -count=1 -cover con umbrales máximos, race
+    # en TODOS los paquetes, Chromium + e2e browser, gates prod).
+    # En verde antes de cualquier release.
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Instalar gcc (race detector)
+        run: choco install mingw --no-progress -y
+        shell: pwsh
+
+      - name: Cache Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\ms-playwright
+          key: playwright-0.6401.0-${{ runner.os }}
+
+      - name: Gate estricto
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/strict.ps1
+        shell: pwsh
+
   linux:
     # TODO(linux-ci): omitido por ahora — bluegreen (ZeroDowntime, BuildLocalReal)
     # y DeployCancelMidBuild fallan sistemáticamente en runners ubuntu
