@@ -49,6 +49,27 @@ export async function preflightDomain(host: string): Promise<DomainPreflight> {
   return api<DomainPreflight>(`/api/v1/domains/preflight?host=${encodeURIComponent(host)}`);
 }
 
+export interface DomainGuideRecord {
+  type: string;
+  name: string;
+  value: string;
+  ttl: number;
+}
+
+export interface DomainGuide {
+  host: string;
+  status: "ok" | "no-record" | "wrong-ip" | "cname" | "ipv6-only" | "local" | "no-public-ip";
+  ready: boolean;
+  summary: string;
+  record?: DomainGuideRecord;
+  wildcard?: DomainGuideRecord;
+  steps: { id: string; title: string; detail: string; done: boolean }[];
+}
+
+export async function domainGuide(host: string): Promise<DomainGuide> {
+  return api<DomainGuide>(`/api/v1/domains/guide?host=${encodeURIComponent(host)}`);
+}
+
 export interface DomainSuggestion {
   host: string;
   kind: "local" | "test" | "base";

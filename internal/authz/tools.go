@@ -29,6 +29,7 @@ var toolOp = map[string]Op{
 	"detect_plan":         OpDetectRead,
 	"domains_suggest":     OpDomainsRead,
 	"verify_domain":       OpDomainsRead,
+	"domain_guide":        OpDomainsRead,
 	"watch_status":        OpAppsRead,
 	"trace_redirects":     OpRoutesRead,
 	"github_setup_check":  OpDeploymentsRead,

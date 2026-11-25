@@ -24,6 +24,8 @@ import (
 	"rkt/internal/cfgfile"
 	"rkt/internal/config"
 	"rkt/internal/deploy"
+	"rkt/internal/dnscheck"
+	"rkt/internal/domains"
 	"rkt/internal/health"
 	"rkt/internal/hosts"
 	"rkt/internal/logx"
@@ -48,6 +50,10 @@ type routesUpdateArg struct {
 type hostArg struct {
 	Host string `json:"host,omitempty" jsonschema:"host a quitar"`
 	Path string `json:"path,omitempty" jsonschema:"prefijo a quitar (rutas sin host)"`
+}
+type guideArg struct {
+	Host string `json:"host" jsonschema:"dominio a configurar (ej: app.midominio.com)"`
+	Wait int    `json:"wait_seconds,omitempty" jsonschema:"esperar hasta N s (máx 120) a que el DNS apunte a este servidor"`
 }
 type verifyArg struct {
 	Host string `json:"host" jsonschema:"host a verificar"`
@@ -1939,6 +1945,31 @@ func (s *Server) doDomainsSuggest(name string) (string, error) {
 	return jsonText(map[string]any{"name": slug, "suggestions": out})
 }
 
+// doDomainGuide resuelve DNS real (no el hosts local) y arma la guía. Con
+// wait_seconds repite cada 3 s hasta Ready o agotar el tiempo.
+func (s *Server) doDomainGuide(ctx context.Context, a guideArg) (string, error) {
+	host := strings.TrimSpace(strings.ToLower(a.Host))
+	if host == "" || strings.ContainsAny(host, " /\\") {
+		return "", fmt.Errorf("host inválido")
+	}
+	_, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	base, pub := db.GetSetting(store.KeyBaseDomain), db.GetSetting(store.KeyPublicIP)
+	db.Close()
+	deadline := time.Now().Add(time.Duration(min(max(a.Wait, 0), 120)) * time.Second)
+	for {
+		c, cancel := context.WithTimeout(ctx, 4*time.Second)
+		g := domains.BuildGuide(host, base, pub, dnscheck.Check(c, nil, host))
+		cancel()
+		if g.Ready || time.Now().After(deadline) || ctx.Err() != nil {
+			return jsonText(g)
+		}
+		time.Sleep(3 * time.Second)
+	}
+}
+
 func (s *Server) doVerifyDomain(host string) (string, error) {
 	cfg, db, err := s.load()
 	if err != nil {
@@ -2631,6 +2662,10 @@ func (s *Server) registerMore(srv *mcp.Server) {
 	addTool(s, srv, &mcp.Tool{Name: "domains_suggest", Description: "Dominios libres para un nombre (localhost/test/base)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a nameArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doDomainsSuggest(a.App))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "domain_guide", Description: "Guía DNS de un dominio: registro A a crear (nombre, valor, TTL), estado real (ok/no-record/wrong-ip/cname/ipv6-only), pasos y wildcard. Con wait_seconds espera la propagación. Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a guideArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doDomainGuide(ctx, a))
 		})
 	addTool(s, srv, &mcp.Tool{Name: "verify_domain", Description: "Verifica DNS local y respuesta HTTP del proxy para un host."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a verifyArg) (*mcp.CallToolResult, any, error) {

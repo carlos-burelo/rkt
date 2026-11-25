@@ -264,6 +264,9 @@ func NewHandler(d Deps) http.Handler {
 	// Sugerencia de dominios (localhost/test/base) para el editor de rutas.
 	mux.HandleFunc("/api/v1/domains/suggest", d.handleDomainsSuggest)
 
+	// Guía DNS paso a paso (registro A, estado, siguiente acción).
+	mux.HandleFunc("/api/v1/domains/guide", d.handleDomainGuide)
+
 	// Zonas locales agrupadas (panel tipo DNS): base + subdominios.
 	mux.HandleFunc("/api/v1/domains/zones", d.handleZones)
 

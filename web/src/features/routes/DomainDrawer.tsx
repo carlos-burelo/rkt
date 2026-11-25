@@ -5,6 +5,7 @@ import { CopyButton } from "../../shared/components/feedback";
 import { StatusText } from "../../shared/components/ui";
 import { isWildcard } from "../proxy/graph";
 import { useI18n } from "../../shared/i18n";
+import { DnsGuide } from "./DnsGuide";
 import { useRoutes } from "./routes.store";
 
 const { Root, Portal, Backdrop, Popup, Title, Close } = DialogPrimitive;
@@ -121,6 +122,8 @@ export function DomainDrawer({ host, onClose }: { host: string | null; onClose: 
                     </div>
                   )}
                 </section>
+
+                <DnsGuide host={data.host} />
 
                 <p className="font-mono text-[9px] text-muted-foreground/70">
                   {t("serve.domain.checked", { at: data.checked_at.replace("T", " ").slice(0, 19) })}
