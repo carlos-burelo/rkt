@@ -23,6 +23,11 @@ PRODUCT.md
 web/node_modules/
 web/dist/*
 !web/dist/.gitkeep
+site/node_modules/
+site/dist/*
+site/.astro/
+site/public/install.ps1
+site/public/nuke.ps1
 scripts/shots/node_modules/
 
 # estado local de skill de diseño (no se comitea)

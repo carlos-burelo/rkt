@@ -1,0 +1,51 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+const { title, description = "rkt: un solo binario para servir apps web en Windows Server." } = Astro.props;
+---
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} — rkt</title>
+    <meta name="description" content={description} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; background: #0c0e12; color: #e8eaf0;
+        font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+        line-height: 1.6;
+      }
+      a { color: #fb7c01; }
+      header, main, footer { max-width: 960px; margin: 0 auto; padding: 0 1.25rem; }
+      header nav { display: flex; gap: 1rem; align-items: center; padding: 1rem 0; }
+      header nav a.logo { color: #fff; text-decoration: none; font-weight: 800; font-size: 1.25rem; }
+      header nav a:not(.logo) { color: #c9cdd8; text-decoration: none; }
+      header nav a:not(.logo):hover { color: #fff; }
+      main { padding-bottom: 3rem; }
+      footer { color: #8b90a0; font-size: 0.875rem; padding: 2rem 1.25rem; border-top: 1px solid #22262f; }
+      pre { background: #14171e; padding: 1rem; border-radius: 0.5rem; overflow: auto; }
+      code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.9em; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a class="logo" href="/">RKT</a>
+        <a href="/docs">Docs</a>
+        <a href="https://github.com/carlos-burelo/rkt">GitHub</a>
+      </nav>
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer>
+      MIT · Un solo binario para servir apps web en Windows Server.
+    </footer>
+  </body>
+</html>
