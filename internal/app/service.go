@@ -36,6 +36,7 @@ import (
 	"rkt/internal/dashboard"
 	"rkt/internal/deploy"
 	"rkt/internal/devca"
+	"rkt/internal/geoip"
 	"rkt/internal/github"
 	"rkt/internal/health"
 	"rkt/internal/hook"
@@ -61,6 +62,7 @@ const pollInterval = 10 * time.Second
 // Program es el servicio: guarda servidores para Stop limpio.
 type Program struct {
 	cfgPath      string
+	geo          *geoip.Locator
 	log          *slog.Logger
 	live         *config.Live
 	devMode      bool
@@ -130,7 +132,7 @@ type probeResult struct {
 
 // New crea el programa sin arrancarlo.
 func New(cfgPath string, log *slog.Logger) *Program {
-	return &Program{cfgPath: cfgPath, log: log, discoverKick: make(chan struct{}, 1), probes: map[string]probeResult{},
+	return &Program{cfgPath: cfgPath, geo: geoip.Open(logx.GeoIPPath(cfgPath)), log: log, discoverKick: make(chan struct{}, 1), probes: map[string]probeResult{},
 		lastDeploy: map[string]time.Time{}, rollingBack: map[string]bool{}, srvMetrics: servermetrics.NewMonitor()}
 }
 
@@ -276,7 +278,7 @@ func (p *Program) Run() {
 	sup.Start()
 	cronRunner.Start()
 
-	apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, DevMode: p.devMode, LogsDir: logx.DirFor(p.cfgPath), AppsBase: platform.AppsDir(logx.HomeDir(p.cfgPath)), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
+	apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, DevMode: p.devMode, LogsDir: logx.DirFor(p.cfgPath), GeoIP: p.geo, AppsBase: platform.AppsDir(logx.HomeDir(p.cfgPath)), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
 		running := map[string]bool{}
 		for _, s := range p.sup.Snapshot() {
 			if s.Running {
@@ -514,6 +516,7 @@ func (p *Program) Run() {
 	go p.fleetLoop(live, db)
 	go p.alertLoop(live, db)
 	go p.maintenanceLoop(live, db)
+	go p.attackLoop(db)
 	if cfg.Github != nil {
 		gh, err := github.New(cfg.Github.AppID, cfg.Github.KeyFile, "")
 		if err != nil {

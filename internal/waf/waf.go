@@ -4,8 +4,8 @@
 // viva. Además niega cabeceras internas del framework que jamás manda un
 // navegador (x-middleware-subrequest: bypass de middleware,
 // CVE-2025-29927); si llegan de fuera, son ataque.
-// Guarda los últimos bloqueos en memoria para el panel (sin persistir:
-// son telemetría efímera, no historial).
+// Guarda los últimos bloqueos en memoria para el panel; el historial lo
+// persiste quien registre SetSink (mapa de ataques).
 package waf
 
 import (
@@ -57,6 +57,19 @@ type banState struct {
 }
 
 var (
+	sinkMu sync.RWMutex
+	sink   func(Block)
+)
+
+// SetSink registra quién persiste los bloqueos (nil = nadie). El WAF solo
+// avisa; encolar y volcar a disco es asunto del llamador (no bloquea el request).
+func SetSink(fn func(Block)) {
+	sinkMu.Lock()
+	sink = fn
+	sinkMu.Unlock()
+}
+
+var (
 	ringMu sync.Mutex
 	ring   []Block
 	banMu  sync.Mutex
@@ -65,14 +78,21 @@ var (
 
 // record guarda un bloqueo (anillo: solo los últimos maxBlocks).
 func record(ip, host, method, path, rule string) {
-	ringMu.Lock()
-	defer ringMu.Unlock()
-	ring = append(ring, Block{
+	b := Block{
 		At: time.Now().UTC().Format(time.RFC3339),
 		IP: ip, Host: host, Method: method, Path: path, Rule: rule,
-	})
+	}
+	ringMu.Lock()
+	ring = append(ring, b)
 	if len(ring) > maxBlocks {
 		ring = append(ring[:0], ring[len(ring)-maxBlocks:]...)
+	}
+	ringMu.Unlock()
+	sinkMu.RLock()
+	fn := sink
+	sinkMu.RUnlock()
+	if fn != nil {
+		fn(b)
 	}
 }
 

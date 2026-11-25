@@ -133,6 +133,16 @@ export const serve = {
 
   // WAF
   "serve.waf.title": "Seguridad (WAF)",
+  "serve.attacks.title": "Mapa de ataques",
+  "serve.attacks.desc": "{total} bloqueos en las últimas {hours} h · de dónde vienen y qué buscan",
+  "serve.attacks.none": "sin bloqueos en esta ventana",
+  "serve.attacks.countries": "países",
+  "serve.attacks.ips": "IPs",
+  "serve.attacks.rules": "reglas",
+  "serve.attacks.noGeoip": "Sin base geoip: los países salen como 🌐. Descarga DB-IP lite (~5 MB, CC BY 4.0).",
+  "serve.attacks.installGeoip": "instalar geoip",
+  "serve.attacks.downloading": "descargando…",
+  "serve.attacks.geoipOk": "geoip instalado",
   "serve.waf.desc": "bloqueos del edge antes del backend · solo el operador edita reglas",
   "serve.waf.rules": "reglas",
   "serve.waf.rulesSub": "paths + métodos",

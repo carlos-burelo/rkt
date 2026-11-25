@@ -228,6 +228,18 @@ var migrations = []string{
 		db TEXT NOT NULL DEFAULT '',
 		created_at TEXT NOT NULL DEFAULT ''
 	);`,
+	// v25: bloqueos del WAF persistidos (mapa de ataques por país/IP/regla).
+	`CREATE TABLE IF NOT EXISTS attacks (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		ts TEXT NOT NULL,
+		ip TEXT NOT NULL DEFAULT '',
+		host TEXT NOT NULL DEFAULT '',
+		method TEXT NOT NULL DEFAULT '',
+		path TEXT NOT NULL DEFAULT '',
+		rule TEXT NOT NULL DEFAULT '',
+		country TEXT NOT NULL DEFAULT ''
+	);
+	CREATE INDEX IF NOT EXISTS idx_attacks_ts ON attacks(ts);`,
 }
 
 // DB wrapper.

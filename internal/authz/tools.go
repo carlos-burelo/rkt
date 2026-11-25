@@ -16,6 +16,8 @@ var toolOp = map[string]Op{
 	"usage_summary":        OpMetricsRead,
 	"zones_list":           OpZonesRead,
 	"alerts_list":          OpAlertsRead,
+	"attacks_summary":      OpWAFRead,
+	"geoip_update":         OpWAFWrite,
 	"alert_channels_list":  OpAlertsWrite,
 	"alert_channels_add":   OpAlertsWrite,
 	"alert_channel_remove": OpAlertsWrite,

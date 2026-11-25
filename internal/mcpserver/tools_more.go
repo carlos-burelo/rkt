@@ -26,6 +26,7 @@ import (
 	"rkt/internal/deploy"
 	"rkt/internal/dnscheck"
 	"rkt/internal/domains"
+	"rkt/internal/geoip"
 	"rkt/internal/health"
 	"rkt/internal/hosts"
 	"rkt/internal/logx"
@@ -50,6 +51,9 @@ type routesUpdateArg struct {
 type hostArg struct {
 	Host string `json:"host,omitempty" jsonschema:"host a quitar"`
 	Path string `json:"path,omitempty" jsonschema:"prefijo a quitar (rutas sin host)"`
+}
+type attacksArg struct {
+	Hours int `json:"hours,omitempty" jsonschema:"ventana en horas (default 24, máx 720)"`
 }
 type guideArg struct {
 	Host string `json:"host" jsonschema:"dominio a configurar (ej: app.midominio.com)"`
@@ -1974,6 +1978,35 @@ func (s *Server) doDomainGuide(ctx context.Context, a guideArg) (string, error) 
 	}
 }
 
+// doAttacksSummary agregados del WAF persistido (mapa de ataques).
+func (s *Server) doAttacksSummary(a attacksArg) (string, error) {
+	_, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	hours := a.Hours
+	if hours <= 0 || hours > 24*30 {
+		hours = 24
+	}
+	sum, err := db.SummarizeAttacks(hours, 15, time.Now())
+	if err != nil {
+		return "", err
+	}
+	return jsonText(map[string]any{"summary": sum, "geoip_ready": geoip.Open(logx.GeoIPPath(s.cfgPath)).Ready()})
+}
+
+// doGeoIPUpdate descarga la base país por IP; el servicio la recarga solo.
+func (s *Server) doGeoIPUpdate(ctx context.Context) (string, error) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	src, err := geoip.Update(c, logx.GeoIPPath(s.cfgPath), time.Now())
+	if err != nil {
+		return "", err
+	}
+	return jsonText(map[string]any{"ok": true, "source": src})
+}
+
 func (s *Server) doVerifyDomain(host string) (string, error) {
 	cfg, db, err := s.load()
 	if err != nil {
@@ -2722,6 +2755,14 @@ func (s *Server) registerMore(srv *mcp.Server) {
 	addTool(s, srv, &mcp.Tool{Name: "domains_suggest", Description: "Dominios libres para un nombre (localhost/test/base)."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a nameArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doDomainsSuggest(a.App))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "attacks_summary", Description: "Mapa de ataques: bloqueos del WAF en la ventana, por país, IP, regla y hora, más los últimos. Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a attacksArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doAttacksSummary(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "geoip_update", Description: "Descarga la base país por IP (DB-IP lite) para geolocalizar ataques. Sale a download.db-ip.com."},
+		func(ctx context.Context, req *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
+			return text(s.doGeoIPUpdate(ctx))
 		})
 	addTool(s, srv, &mcp.Tool{Name: "domain_guide", Description: "Guía DNS de un dominio: registro A a crear (nombre, valor, TTL), estado real (ok/no-record/wrong-ip/cname/ipv6-only), pasos y wildcard. Con wait_seconds espera la propagación. Solo lectura."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a guideArg) (*mcp.CallToolResult, any, error) {

@@ -255,6 +255,11 @@ func (p *Program) runMaintenance(live *config.Live, db *store.DB) {
 		}
 	}
 	if d := settingDays(db, store.KeyRetentionEventDays, 30); d > 0 {
+		if n, err := db.PruneAttacks(now.AddDate(0, 0, -d)); err != nil {
+			p.log.Warn("poda ataques", "err", err)
+		} else if n > 0 {
+			p.log.Info("ataques podados", "n", n)
+		}
 		if n, err := db.PruneEvents(now.AddDate(0, 0, -d)); err != nil {
 			p.log.Warn("poda events", "err", err)
 		} else if n > 0 {

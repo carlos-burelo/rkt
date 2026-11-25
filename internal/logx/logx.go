@@ -91,6 +91,11 @@ func DBPath(configPath string) string {
 	return filepath.Join(DataDir(configPath), "rkt.db")
 }
 
+// GeoIPPath ruta de la base país por IP (la descarga geoip.Update).
+func GeoIPPath(configPath string) string {
+	return filepath.Join(DataDir(configPath), "geoip.csv")
+}
+
 // AppKeyPath ruta del PEM de la GitHub App (lo escribe el setup).
 func AppKeyPath(configPath string) string {
 	return filepath.Join(SecretsDir(configPath), "github-app.pem")

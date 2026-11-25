@@ -16,6 +16,7 @@ import (
 	"rkt/internal/config"
 	"rkt/internal/cronjobs"
 	"rkt/internal/dnscheck"
+	"rkt/internal/geoip"
 	"rkt/internal/github"
 	"rkt/internal/health"
 	"rkt/internal/hub"
@@ -32,6 +33,8 @@ type Deps struct {
 	Live    *config.Live
 	Version string
 	LogsDir string
+	// GeoIP país por IP para el mapa de ataques (nil = sin geolocalizar).
+	GeoIP   *geoip.Locator
 	Apps    func() []health.AppStatus
 	Restart func(name string) bool
 	// Apply aplica el manifiesto al supervisor (arranca/reinicia/detiene).
@@ -315,6 +318,10 @@ func NewHandler(d Deps) http.Handler {
 	// WAF: reglas, bloqueos recientes y baneos (operator: expone IPs).
 	mux.HandleFunc("/api/v1/waf", d.handleWAF)
 	mux.HandleFunc("/api/v1/waf/bans", d.handleWAFBans)
+
+	// Mapa de ataques (WAF persistido) y base geoip.
+	mux.HandleFunc("/api/v1/security/attacks", d.handleAttacks)
+	mux.HandleFunc("/api/v1/security/geoip", d.handleGeoIPUpdate)
 
 	// Build log de un deploy (para vista detalle) + retry mismo rev.
 	mux.HandleFunc("/api/v1/deployments/", d.handleDeploymentDetail)
