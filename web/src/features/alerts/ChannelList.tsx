@@ -8,6 +8,7 @@ import { FormDialog, Field } from "../../shared/components/FormDialog";
 import { ConfirmButton } from "../../shared/components/ConfirmButton";
 import { useAuth } from "../auth/store";
 import { useI18n } from "../../shared/i18n";
+import { testChannel } from "./api";
 import { useAlerts } from "./alerts.store";
 
 // Canales webhook: lista + alta con formulario local.
@@ -19,6 +20,16 @@ export function ChannelList() {
   const removeChannel = useAlerts((s) => s.removeChannel);
   const [chName, setChName] = useState("");
   const [chURL, setChURL] = useState("");
+  const [probe, setProbe] = useState<Record<number, string>>({});
+  const runTest = async (id: number) => {
+    setProbe((p) => ({ ...p, [id]: t("ops.alerts.channelTesting") }));
+    try {
+      const r = await testChannel(id);
+      setProbe((p) => ({ ...p, [id]: r.ok ? t("ops.alerts.channelTestOk") : (r.error ?? "error") }));
+    } catch (e) {
+      setProbe((p) => ({ ...p, [id]: e instanceof Error ? e.message : "error" }));
+    }
+  };
   return (
     <Section
       title={t("ops.alerts.channelsTitle")}
@@ -34,7 +45,7 @@ export function ChannelList() {
             title={t("ops.alerts.channelNewTitle")}
             description={t("ops.alerts.channelNewDesc")}
             submitLabel={t("common.create")}
-            canSubmit={chName.trim() !== "" && /^https?:\/\//.test(chURL)}
+            canSubmit={chName.trim() !== "" && /^(https?:\/\/|mailto:)/i.test(chURL)}
             onSubmit={async () => {
               await addChannel(chName.trim(), chURL.trim());
               setChName("");
@@ -44,7 +55,7 @@ export function ChannelList() {
             <Field label={t("ops.alerts.channelName")}>
               <Input value={chName} onChange={(e) => setChName(e.target.value)} className="h-8 font-mono text-[12px]" />
             </Field>
-            <Field label="URL" hint="http(s)://host/webhook">
+            <Field label="URL" hint={t("ops.alerts.channelUrlHint")}>
               <Input value={chURL} onChange={(e) => setChURL(e.target.value)} className="h-8 font-mono text-[12px]" />
             </Field>
           </FormDialog>
@@ -59,6 +70,12 @@ export function ChannelList() {
             <StatusText tone={c.enabled ? "ok" : "muted"}>
               {c.enabled ? t("ops.alerts.channelOn") : t("ops.alerts.channelOff")}
             </StatusText>
+            {canWrite && (
+              <Button size="xs" variant="outline" onClick={() => runTest(c.id)}>
+                {t("ops.alerts.channelTest")}
+              </Button>
+            )}
+            {probe[c.id] && <span className="max-w-[30%] truncate font-mono text-[10px] text-muted-foreground" title={probe[c.id]}>{probe[c.id]}</span>}
             {canWrite && (
               <ConfirmButton
                 title={t("ops.alerts.channelDelete", { id: c.id })}

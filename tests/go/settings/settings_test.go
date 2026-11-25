@@ -9,7 +9,7 @@ import (
 
 func TestKeysYGet(t *testing.T) {
 	keys := Keys()
-	if len(keys) != 22 || keys[0] != KeyNodeBin {
+	if len(keys) != 28 || keys[0] != KeyNodeBin {
 		t.Fatalf("keys = %v", keys)
 	}
 	if s, ok := Get(KeyBaseDomain); !ok || s.Key != KeyBaseDomain {
@@ -94,6 +94,14 @@ func TestValidateSettings(t *testing.T) {
 		{KeyPgPass, "root", true, "password libre"},
 		{KeyPgPass, "", true, "password vacío = default"},
 		{KeyPgBin, exe, true, "pg_bin ejecutable"},
+		{KeySMTPHost, "smtp.ejemplo.com", true, "smtp host"},
+		{KeySMTPHost, "con espacio", false, "smtp host inválido"},
+		{KeySMTPPort, "587", true, "smtp puerto"},
+		{KeySMTPPort, "x", false, "smtp puerto texto"},
+		{KeySMTPFrom, "rkt@ejemplo.com", true, "remitente"},
+		{KeySMTPFrom, "no-es-correo", false, "remitente inválido"},
+		{KeySMTPSecurity, "tls", true, "seguridad tls"},
+		{KeySMTPSecurity, "ssl", false, "seguridad desconocida"},
 	} {
 		if err := Validate(tc.k, tc.v); (err == nil) != tc.want {
 			t.Fatalf("%s (%s=%q): err=%v", tc.label, tc.k, tc.v, err)
@@ -110,5 +118,11 @@ func TestRequiresRestart(t *testing.T) {
 	}
 	if RequiresRestart("nope") {
 		t.Fatal("clave desconocida")
+	}
+}
+
+func TestSMTPPassEsSecreto(t *testing.T) {
+	if !IsSecret(KeySMTPPass) || !IsSecret(KeyPgPass) || IsSecret(KeySMTPUser) {
+		t.Fatal("solo pg_pass y smtp_pass son secretos")
 	}
 }

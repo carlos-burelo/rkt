@@ -89,6 +89,10 @@ type alertAddArg struct {
 	Threshold float64 `json:"threshold,omitempty" jsonschema:"umbral (0.1 = 10% en error_rate)"`
 	WindowMin int     `json:"window_min,omitempty" jsonschema:"ventana minutos (default 60)"`
 }
+type channelAddArg struct {
+	Name string `json:"name" jsonschema:"nombre del canal"`
+	URL  string `json:"url" jsonschema:"webhook http(s)://... o correo mailto:a@x.com,b@y.com (requiere smtp_host y smtp_from)"`
+}
 type alertDelArg struct {
 	ID int64 `json:"id" jsonschema:"id de la regla"`
 }
@@ -2418,6 +2422,62 @@ func (s *Server) doAlertsTest(id int64) (string, error) {
 	return "", fmt.Errorf("regla #%d inexistente", id)
 }
 
+func (s *Server) doAlertChannelAdd(a channelAddArg) (string, error) {
+	_, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	if err := alerts.ValidChannelURL(a.URL, alerts.SMTPConfig(db.GetSetting)); err != nil {
+		return "", err
+	}
+	id, err := db.AddChannel(strings.TrimSpace(a.Name), strings.TrimSpace(a.URL), true)
+	if err != nil {
+		return "", err
+	}
+	return jsonText(map[string]any{"id": id, "next": "prueba el canal con alert_channel_test"})
+}
+
+func (s *Server) doAlertChannelRemove(id int64) (string, error) {
+	_, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	if err := db.DeleteChannel(id); err != nil {
+		return "", err
+	}
+	return jsonText(map[string]any{"ok": true})
+}
+
+// doAlertChannelTest envía ya un mensaje de prueba por el canal (correo
+// o webhook) y devuelve el error real si falla.
+func (s *Server) doAlertChannelTest(ctx context.Context, id int64) (string, error) {
+	_, db, err := s.load()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	chans, err := db.ListChannels()
+	if err != nil {
+		return "", err
+	}
+	for _, c := range chans {
+		if c.ID != id {
+			continue
+		}
+		c2, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		err := alerts.Send(c2, c.URL, alerts.Notification{ChannelID: c.ID, Message: "prueba de rkt: el canal funciona"},
+			alerts.SMTPConfig(db.GetSetting), time.Now())
+		if err != nil {
+			return jsonText(map[string]any{"ok": false, "error": err.Error()})
+		}
+		return jsonText(map[string]any{"ok": true})
+	}
+	return "", fmt.Errorf("canal #%d inexistente", id)
+}
+
 func (s *Server) doAlertChannelsList() (string, error) {
 	_, db, err := s.load()
 	if err != nil {
@@ -2729,7 +2789,19 @@ func (s *Server) registerMore(srv *mcp.Server) {
 		func(ctx context.Context, req *mcp.CallToolRequest, a alertDelArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doAlertsTest(a.ID))
 		})
-	add("alert_channels_list", "Canales webhook configurados.", s.doAlertChannelsList)
+	add("alert_channels_list", "Canales de alerta (webhook o correo mailto:).", s.doAlertChannelsList)
+	addTool(s, srv, &mcp.Tool{Name: "alert_channels_add", Description: "Crea un canal de alerta: webhook http(s) o correo mailto:. Para correo configura antes smtp_host/smtp_from con settings_set."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a channelAddArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doAlertChannelAdd(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "alert_channel_remove", Description: "Borra un canal de alerta por id (desasigna sus reglas)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a alertDelArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doAlertChannelRemove(a.ID))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "alert_channel_test", Description: "Envía un mensaje de prueba por el canal (id) y devuelve ok o el error real de SMTP/webhook."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a alertDelArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doAlertChannelTest(ctx, a.ID))
+		})
 	add("discover_status", "Estado de GitHub App/base_domain para auto-registro.", s.doDiscoverStatus)
 	add("users_list", "Usuarios (sin hashes) y roles.", s.doUsersList)
 	addTool(s, srv, &mcp.Tool{Name: "users_add", Description: "Crea usuario local (password ≥12). Queda en el historial del agente."},

@@ -72,6 +72,10 @@ export async function addChannel(name: string, url: string): Promise<void> {
   await api("/api/v1/alert-channels", { method: "POST", body: JSON.stringify({ name, url }) });
 }
 
+export async function testChannel(id: number): Promise<{ ok: boolean; error?: string }> {
+  return api<{ ok: boolean; error?: string }>(`/api/v1/alert-channels/${id}/test`, { method: "POST" });
+}
+
 export async function updateChannel(id: number, name: string, url: string, enabled: boolean): Promise<void> {
   await api(`/api/v1/alert-channels/${id}`, { method: "PUT", body: JSON.stringify({ name, url, enabled }) });
 }

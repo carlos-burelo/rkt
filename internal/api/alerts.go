@@ -1,14 +1,14 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
-	"net/url"
 	"rkt/internal/authz"
 	"strconv"
 	"strings"
+	"time"
 
 	"rkt/internal/alerts"
 	"rkt/internal/cfgfile"
@@ -172,7 +172,7 @@ func (d *Deps) handleAlertChannels(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "JSON inválido")
 			return
 		}
-		if err := validWebhook(in.URL); err != nil {
+		if err := alerts.ValidChannelURL(in.URL, alerts.SMTPConfig(d.DB.GetSetting)); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -193,9 +193,15 @@ func (d *Deps) handleAlertChannel(w http.ResponseWriter, r *http.Request) {
 	if !requireOp(w, r, authz.OpAlertsWrite) {
 		return
 	}
-	id, err := strconv.ParseInt(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/alert-channels/"), "/"), 10, 64)
+	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/alert-channels/"), "/")
+	test := strings.HasSuffix(rest, "/test")
+	id, err := strconv.ParseInt(strings.TrimSuffix(rest, "/test"), 10, 64)
 	if err != nil || id <= 0 {
 		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	if test {
+		d.handleChannelTest(w, r, id)
 		return
 	}
 	switch r.Method {
@@ -209,7 +215,7 @@ func (d *Deps) handleAlertChannel(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "JSON inválido")
 			return
 		}
-		if err := validWebhook(in.URL); err != nil {
+		if err := alerts.ValidChannelURL(in.URL, alerts.SMTPConfig(d.DB.GetSetting)); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -229,17 +235,32 @@ func (d *Deps) handleAlertChannel(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func validWebhook(raw string) error {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return fmt.Errorf("webhook inválido: usa http(s)://host/ruta")
+// handleChannelTest POST /api/v1/alert-channels/{id}/test: envía una prueba
+// real por el canal; responde {ok} o {ok:false,error} con la causa.
+func (d *Deps) handleChannelTest(w http.ResponseWriter, r *http.Request, id int64) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, "solo POST")
+		return
 	}
-	host := strings.ToLower(u.Hostname())
-	if host == "metadata.google.internal" || host == "169.254.169.254" {
-		return fmt.Errorf("webhook bloqueado: no se permite el endpoint de metadatos")
+	chans, err := d.DB.ListChannels()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	if ip := net.ParseIP(host); ip != nil && ip.IsLinkLocalUnicast() {
-		return fmt.Errorf("webhook bloqueado: IP link-local")
+	for _, c := range chans {
+		if c.ID != id {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		err := alerts.Send(ctx, c.URL, alerts.Notification{ChannelID: c.ID, Message: "prueba de rkt: el canal funciona"},
+			alerts.SMTPConfig(d.DB.GetSetting), time.Now())
+		if err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+		return
 	}
-	return nil
+	writeErr(w, http.StatusNotFound, "canal inexistente")
 }

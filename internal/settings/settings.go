@@ -4,6 +4,7 @@ package settings
 import (
 	"fmt"
 	"net"
+	"net/mail"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -44,6 +45,13 @@ const (
 	KeyPgDatabase = "pg_database" // default rkt
 	KeyPgUser     = "pg_user"     // superusuario local (default postgres)
 	KeyPgPass     = "pg_pass"     // password del superusuario (solo loopback)
+	// SMTP para canales de alerta por correo (mailto:).
+	KeySMTPHost     = "smtp_host"
+	KeySMTPPort     = "smtp_port"     // default 587 (465 con smtp_security=tls)
+	KeySMTPUser     = "smtp_user"     // vacío = sin autenticación
+	KeySMTPPass     = "smtp_pass"     // secreto: nunca sale en claro
+	KeySMTPFrom     = "smtp_from"     // remitente (obligatorio para enviar)
+	KeySMTPSecurity = "smtp_security" // starttls (default) | tls | none
 )
 
 // Spec describe un ajuste y si exige reiniciar el servicio.
@@ -76,6 +84,12 @@ var specs = []Spec{
 	{Key: KeyPgDatabase, Restart: false, Validate: validatePGIdent},
 	{Key: KeyPgUser, Restart: false, Validate: validatePGIdent},
 	{Key: KeyPgPass, Restart: false, Validate: validateAny},
+	{Key: KeySMTPHost, Restart: false, Validate: validateHost},
+	{Key: KeySMTPPort, Restart: false, Validate: validatePort},
+	{Key: KeySMTPUser, Restart: false, Validate: validateAny},
+	{Key: KeySMTPPass, Restart: false, Validate: validateAny},
+	{Key: KeySMTPFrom, Restart: false, Validate: validateEmail},
+	{Key: KeySMTPSecurity, Restart: false, Validate: validateSMTPSecurity},
 }
 
 // Keys lista canónica ordenada.
@@ -228,9 +242,24 @@ func validatePGIdent(v string) error {
 // el vacío significa "por defecto" y lo filtra Validate antes de llegar.
 func validateAny(string) error { return nil }
 
+func validateEmail(v string) error {
+	if _, err := mail.ParseAddress(strings.TrimSpace(v)); err != nil {
+		return fmt.Errorf("correo inválido: %w", err)
+	}
+	return nil
+}
+
+func validateSMTPSecurity(v string) error {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "starttls", "tls", "none":
+		return nil
+	}
+	return fmt.Errorf("usa starttls, tls o none")
+}
+
 // IsSecret true para valores que nunca salen en claro (p. ej. pg_pass).
 func IsSecret(key string) bool {
-	return key == KeyPgPass
+	return key == KeyPgPass || key == KeySMTPPass
 }
 
 // DisplayValue enmascara secretos no vacíos para API/UI/MCP.

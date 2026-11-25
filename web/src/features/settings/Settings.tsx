@@ -13,6 +13,7 @@ const GROUPS: { title: string; desc: string; keys: string[] }[] = [
   { title: "system.settings.groupDeploy", desc: "system.settings.groupDeployDesc", keys: ["port_pool"] },
   { title: "system.settings.groupQuota", desc: "system.settings.groupQuotaDesc", keys: ["quota_reqs", "quota_bytes"] },
   { title: "system.settings.groupPg", desc: "system.settings.groupPgDesc", keys: ["pg_mode", "pg_bin", "pg_port", "pg_database", "pg_user", "pg_pass"] },
+  { title: "system.settings.groupSmtp", desc: "system.settings.groupSmtpDesc", keys: ["smtp_host", "smtp_port", "smtp_security", "smtp_user", "smtp_pass", "smtp_from"] },
 ];
 
 // Ajustes: layout + grupos. Estado en el store, piezas aparte.

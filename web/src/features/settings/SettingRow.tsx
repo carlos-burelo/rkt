@@ -16,6 +16,12 @@ const DESCRIPTION_KEYS: Record<string, string> = {
   quota_reqs: "system.settings.desc.quota_reqs",
   quota_bytes: "system.settings.desc.quota_bytes",
   public_ip: "system.settings.desc.public_ip",
+  smtp_host: "system.settings.desc.smtp_host",
+  smtp_port: "system.settings.desc.smtp_port",
+  smtp_security: "system.settings.desc.smtp_security",
+  smtp_user: "system.settings.desc.smtp_user",
+  smtp_pass: "system.settings.desc.smtp_pass",
+  smtp_from: "system.settings.desc.smtp_from",
 };
 
 const LABELS: Record<string, string> = {
@@ -27,6 +33,12 @@ const LABELS: Record<string, string> = {
   quota_reqs: "system.settings.label.quota_reqs",
   quota_bytes: "system.settings.label.quota_bytes",
   public_ip: "system.settings.label.public_ip",
+  smtp_host: "system.settings.label.smtp_host",
+  smtp_port: "system.settings.label.smtp_port",
+  smtp_security: "system.settings.label.smtp_security",
+  smtp_user: "system.settings.label.smtp_user",
+  smtp_pass: "system.settings.label.smtp_pass",
+  smtp_from: "system.settings.label.smtp_from",
 };
 
 const PICKERS: Record<string, "dir" | "file"> = {

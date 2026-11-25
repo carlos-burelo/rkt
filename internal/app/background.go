@@ -1,10 +1,8 @@
 package app
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
-	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -207,51 +205,25 @@ func (p *Program) deliverAlerts(db *store.DB, now time.Time) {
 	if err != nil {
 		return
 	}
-	client := &http.Client{Timeout: 5 * time.Second}
+	smtp := alerts.SMTPConfig(db.GetSetting)
 	for _, d := range pending {
 		ts, _ := time.Parse(time.RFC3339, d.NextAt)
 		if d.NextAt != "" && now.Before(ts) {
 			continue
 		}
-		msg := d.Message
-		if msg == "" {
-			msg = fmt.Sprintf("alerta #%d", d.FireID)
-		}
-		payload := map[string]any{
-			"source": "rkt", "fire_id": d.FireID, "channel_id": d.ChannelID,
-			"message": msg, "ts": now.Format(time.RFC3339),
-		}
-		switch {
-		case strings.Contains(d.URL, "hooks.slack.com"):
-			payload = map[string]any{"text": "rkt · " + msg}
-		case strings.Contains(d.URL, "discord.com/api/webhooks"), strings.Contains(d.URL, "discordapp.com/api/webhooks"):
-			payload = map[string]any{"content": "rkt · " + msg}
-		}
-		body, _ := json.Marshal(payload)
-		req, err := http.NewRequest(http.MethodPost, d.URL, bytes.NewReader(body))
-		if err != nil {
-			continue
-		}
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := client.Do(req)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := alerts.Send(ctx, d.URL, alerts.Notification{FireID: d.FireID, ChannelID: d.ChannelID, Message: d.Message}, smtp, now)
+		cancel()
 		attempts := d.Attempts + 1
-		if err != nil || resp.StatusCode >= 300 {
-			msg := "sin respuesta"
-			if err != nil {
-				msg = err.Error()
-			} else {
-				resp.Body.Close()
-				msg = "http " + strconv.Itoa(resp.StatusCode)
-			}
+		if err != nil {
 			status := "pending"
 			next := now.Add(time.Duration(attempts*30) * time.Second).Format(time.RFC3339)
 			if attempts >= 5 {
 				status, next = "failed", ""
 			}
-			_ = db.MarkDelivery(d.ID, status, attempts, next, msg)
+			_ = db.MarkDelivery(d.ID, status, attempts, next, err.Error())
 			continue
 		}
-		resp.Body.Close()
 		_ = db.MarkDelivery(d.ID, "sent", attempts, "", "")
 	}
 }
