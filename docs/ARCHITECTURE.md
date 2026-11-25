@@ -57,7 +57,9 @@ cmd/rkt
 Lo que sigue no se cambia sin migración explícita. El server en limpio
 parte de aquí:
 
-1. **Un solo hogar**: `<InstallDir>` (defecto `C:\Program Files\rkt`).
+1. **Un solo hogar**: `<InstallDir>` (defecto `C:\rkt`; el home viejo
+   `C:\Program Files\rkt` se conserva si ya existe: el instalador lo
+   detecta y no instala al costado).
    `rkt.db` (ancla), `data/rkt.db` (SQLite real), `versions/<ver>/rkt.exe`
    (slots inmutables), `rkt.exe` (lanzador = copia del slot activo, PATH),
    `current.txt`/`previous.txt`/`VERSION.txt`, `logs/`, `secrets/`,

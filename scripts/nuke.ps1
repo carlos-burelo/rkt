@@ -13,7 +13,7 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$InstallDir = "C:\Program Files\rkt"
+  [string]$InstallDir = "C:\rkt"
 )
 $ErrorActionPreference = "Stop"
 
@@ -74,8 +74,9 @@ if ($mp) {
     Where-Object { $_ -ne "" -and $_.TrimEnd("\") -ine $full.TrimEnd("\") })
   [Environment]::SetEnvironmentVariable("Path", ($kept -join ";"), "Machine")
 }
-# ACLs previas pueden dejar a Admins sin DELETE: tomar posesión y heredar
-# de Program Files antes de borrar. Sin esto, ni siquiera elevado limpia.
+# ACLs heredadas (típico del home viejo bajo Program Files) pueden dejar a
+# Admins sin DELETE: tomar posesión y heredar del padre antes de borrar.
+# Sin esto, ni siquiera elevado limpia.
 # (icacls y no takeown: el /D de takeown pide el "sí" localizado.)
 try {
   & icacls $full /setowner "*S-1-5-32-544" /T /C 2>$null | Out-Null

@@ -6,7 +6,7 @@ import (
 )
 
 func TestHomeLayout(t *testing.T) {
-	home := filepath.Join("C:", "Program Files", "rkt")
+	home := filepath.Join("C:", "rkt")
 	if got := VersionsDir(home); got != filepath.Join(home, "versions") {
 		t.Fatalf("VersionsDir = %s", got)
 	}

@@ -5,7 +5,9 @@
 .DESCRIPTION
   Pensado para: irm <url> | iex. Descarga el .exe del último GitHub release,
   abre 80/443 y registra/arranca el servicio. Todo vive bajo un solo home
-  (<InstallDir>, por defecto C:\Program Files\rkt). Layout canónico en
+  (<InstallDir>, por defecto C:\rkt: sin espacios y fuera de carpetas
+  protegidas cuya herencia bloquea DELETE incluso a Admins).
+  Layout canónico en
   internal/logx; este script lo espeja, no lo define:
     rkt.exe                   lanzador = copia del slot activo (para el PATH)
     VERSION.txt, current.txt  versión activa (previous.txt tras un upgrade)
@@ -32,7 +34,7 @@
 param(
   [string]$Repo = $env:RKT_REPO,
   [string]$Version = "latest",
-  [string]$InstallDir = "C:\Program Files\rkt",
+  [string]$InstallDir = "C:\rkt",
   [string]$LocalExe = "",
   [switch]$SkipFirewall,
   [switch]$Force,
@@ -53,6 +55,21 @@ if ([string]::IsNullOrWhiteSpace($Repo)) { $Repo = "carlos-burelo/rkt" }
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
   ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) { throw "Ejecuta como Administrador." }
+
+# 1b. home viejo: el defecto anterior era Program Files\rkt (con espacio y
+# con herencia que bloquea DELETE incluso a Admins). Si no se pasó
+# -InstallDir explícito y el home nuevo está vacío pero el viejo tiene
+# instalación (current.txt/VERSION.txt), se conserva el viejo: instalar al
+# costado duplicaría el servicio y pelearía 80/443.
+$oldDefault = Join-Path $env:SystemDrive "Program Files\rkt"
+if (-not $PSBoundParameters.ContainsKey("InstallDir") -and $InstallDir -eq "C:\rkt") {
+  $freshHome = -not ((Test-Path (Join-Path $InstallDir "current.txt")) -or (Test-Path (Join-Path $InstallDir "VERSION.txt")))
+  $legacyHome = (Test-Path (Join-Path $oldDefault "current.txt")) -or (Test-Path (Join-Path $oldDefault "VERSION.txt"))
+  if ($freshHome -and $legacyHome) {
+    $InstallDir = $oldDefault
+    Write-Warning "Instalación previa en ${oldDefault}: se conserva ese home. Para mudarlo, pasa -InstallDir explícito."
+  }
+}
 
 $launcher = Join-Path $InstallDir "rkt.exe"
 $cfg = Join-Path $InstallDir "rkt.db"

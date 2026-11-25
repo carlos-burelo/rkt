@@ -98,6 +98,11 @@ func TestInstallLimpio(t *testing.T) {
 		"doctor --json",
 		"Get-Command git",
 		"sin git no hay deploys",
+		`[string]$InstallDir = "C:\rkt"`,
+		"$oldDefault",
+		`Join-Path $env:SystemDrive "Program Files\rkt"`,
+		"se conserva ese home",
+		"duplicaría el servicio",
 	} {
 		if !strings.Contains(body, s) {
 			t.Errorf("install.ps1 sin %q", s)
@@ -199,7 +204,8 @@ func TestNukeDirGuarda(t *testing.T) {
 		{`C:\Program Files (x86)`, "False"},
 		{`C:\Users`, "False"},
 		{``, "False"},                    // vacío
-		{`C:\Program Files\rkt`, "True"}, // defecto
+		{`C:\rkt`, "True"},               // defecto
+		{`C:\Program Files\rkt`, "True"}, // home viejo: válido, se conserva
 		{`C:\rkt\datos`, "True"},         // corto pero válido
 		{`D:\apps\rkt`, "True"},          // otra unidad
 	}

@@ -116,7 +116,7 @@ Actualizar = `rkt upgrade` (mismo layout: flip de binpath + gate de salud
 Nunca se escribe el exe en uso: el slot viejo queda intacto.
 
 Todo vive bajo un solo home (`-InstallDir`, por defecto
-`C:\Program Files\rkt`):
+`C:\rkt`: sin espacios y fuera de carpetas protegidas):
 
 ```text
 rkt.exe, VERSION.txt      lanzador (PATH) y versión activa

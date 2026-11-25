@@ -91,7 +91,15 @@ Toda mutación valida antes de persistir. `routes` aplica por hot-reload
 | `pg list` | Bases por app: esquema, rol, modo |
 | `pg provision <app> [--mode dedicated\|shared]` | Crea esquema+rol e inyecta `DATABASE_URL` (sin password) en el env |
 | `pg tables <app>` | Tablas del esquema |
-| `pg rows <app> <tabla> [--n 100] [--page 1]` | Filas paginadas con total |
+| `pg rows <app> <tabla> [--n 100] [--page 1] [--order col] [--dir asc\|desc] [--filter col:op:val]... [--search q]` | Filas con total filtrado (ops: eq neq gt gte lt lte like ilike in isnull isnotnull) |
+| `pg schema <app> [tabla]` | Inspector: columnas (tipo/nulo/default/PK), RLS, policies y conteo |
+| `pg insert <app> <tabla> '{"col":valor}' [--yes]` | Inserta una fila (pide confirmar) |
+| `pg update <app> <tabla> '<pk-json>' '<patch-json>' [--yes]` | Actualiza por PK exacta (pide confirmar) |
+| `pg delete <app> <tabla> (--pk '<json>' \| --filter col:op:val...) [--yes]` | Borra por PK o filtros; sin ninguno no borra (pide confirmar) |
+| `pg create-table <app> <tabla> '[{"name":"id","type":"uuid","pk":true}]' [--yes]` | Crea tabla (tipos cerrados, pide confirmar) |
+| `pg add-column <app> <tabla> <col> <tipo> [--not-null] [--default ...] [--yes]` | Añade columna (pide confirmar) |
+| `pg drop-table <app> <tabla> [--yes]` | Borra tabla (pide confirmar, los datos se pierden) |
+| `pg drop-column <app> <tabla> <col> [--yes]` | Quita columna (pide confirmar) |
 | `pg query <app> <sql> [--yes]` | Una sentencia SQL en el esquema (pide confirmar) |
 | `pg backup <app>` | Vuelca el esquema a `data/backups/pg-<app>-<ts>.dump` (-Fc) |
 | `pg restore <app> <dump> [--yes]` | Restaura el dump sobre la app (pide confirmar, sobrescribe) |
@@ -219,8 +227,11 @@ local y registra deployment), `env_set` (solo escritura),
 `deployment_logs` (tail del build), `wait_healthy` (gate post-deploy),
 `restart`, `rollback`, `deploy`, `retry`, `apps_remove` (baja con rutas),
 `start`, `stop` (detención persistente).
-Postgres: `pg_status|list|tables|rows` (lectura), `pg_provision|backup`
-(escritura), `pg_query` (exige `confirm=query`), `pg_restore`
+Postgres: `pg_status|list|tables|rows|schema` (lectura; rows con
+order/dir/filters/search), `pg_provision|backup` (escritura),
+`pg_insert` (exige `confirm=insert`), `pg_update` (exige `confirm=update`),
+`pg_delete` (exige `confirm=delete`; pk o filtros, sin ninguno no borra),
+`pg_query` (exige `confirm=query`), `pg_restore`
 (exige `confirm=restore`), `pg_drop` (exige `confirm=drop`).
 
 Catálogo extendido (control total): `app_get`, `app_env_keys`, `env_delete`,
@@ -246,7 +257,7 @@ en caliente en ≤10s (supervisor.Apply).
 ```jsonc
 // opencode.json (V2)
 {"mcp": {"servers": {"rkt": {"type": "local",
-  "command": ["C:\\Program Files\\rkt\\rkt.exe", "-config",
-              "C:\\Program Files\\rkt\\rkt.db", "mcp"]}}},
+  "command": ["C:\\rkt\\rkt.exe", "-config",
+              "C:\\rkt\\rkt.db", "mcp"]}}},
  "plugins": []}
 ```
