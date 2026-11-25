@@ -78,6 +78,26 @@ func TestScriptsSintaxis(t *testing.T) {
 	}
 }
 
+// Sin BOM: irm|iex y [scriptblock]::Create fallan en PowerShell 5.1 si el
+// .ps1 arranca con BOM (el parser lo cuenta como token antes de param y
+// [CmdletBinding()] se vuelve "inesperado"). Se fija a nivel de bytes,
+// sin pwsh, para que corra también en CI Linux.
+func TestScriptsSinBOM(t *testing.T) {
+	r, err := repoRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"install.ps1", "nuke.ps1", "strict.ps1", "gate.ps1"} {
+		b, err := os.ReadFile(filepath.Join(r, "scripts", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(b) >= 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF {
+			t.Errorf("%s con BOM UTF-8; guárdalo sin BOM (LF)", name)
+		}
+	}
+}
+
 func TestInstallLimpio(t *testing.T) {
 	_, body := readScript(t, "install.ps1")
 	// El install instala; el borrado vive en nuke.ps1.

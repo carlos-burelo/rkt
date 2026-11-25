@@ -1,4 +1,4 @@
-﻿#Requires -RunAsAdministrator
+#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
   Instala rkt en Windows Server (prod): binario + SQLite + firewall + servicio.
