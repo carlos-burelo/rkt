@@ -123,12 +123,22 @@ if ($LocalExe -ne "") {
   if ($Version -eq "latest") {
     # /releases/latest excluye betas (este proyecto aún no tiene estables
     # recientes: latest = v0.6.6 con otro nombre de asset -> 404). Se toma
-    # el publicado más nuevo, betas incluidas; -Version lo fija a mano.
+    # el publicado más nuevo, betas incluidas (se piden 10: basta el primero;
+    # pedir 100 provocaba timeouts del API). Con reintentos: el API a veces
+    # devuelve su página de error (unicorn) en vez de JSON.
     Write-Host "Resolviendo último release de $Repo (incluye betas)..."
-    $rels = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases?per_page=100" `
-      -Headers @{ Accept = "application/vnd.github+json" }
-    $rel = @($rels | Where-Object { -not $_.draft } | Sort-Object created_at -Descending | Select-Object -First 1)
-    if (-not $rel) { throw "Sin releases publicados en $Repo" }
+    $rel = $null
+    for ($i = 1; $i -le 3 -and -not $rel; $i++) {
+      try {
+        if ($i -gt 1) { Start-Sleep -Seconds ($i * 10) }
+        $rels = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases?per_page=10" `
+          -Headers @{ Accept = "application/vnd.github+json" } -TimeoutSec 30
+        $rel = @($rels | Where-Object { -not $_.draft } | Sort-Object created_at -Descending | Select-Object -First 1)
+      } catch {
+        Write-Warning ("GitHub API intento {0} fallido ({1}); reintento..." -f $i, $_.Exception.Message)
+      }
+    }
+    if (-not $rel) { throw "Sin respuesta de GitHub API tras 3 intentos (revisa salida a internet/proxy). Fija versión a mano: -Version v0.7.0-beta.17" }
     $Version = $rel.tag_name
   }
   Write-Host "Descargando $Repo $Version..."

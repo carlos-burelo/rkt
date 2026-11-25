@@ -125,6 +125,10 @@ func TestInstallLimpio(t *testing.T) {
 		`Join-Path $env:SystemDrive "Program Files\rkt"`,
 		"se conserva ese home",
 		"duplicaría el servicio",
+		"releases?per_page=10",
+		"reintento",
+		"-TimeoutSec 30",
+		"Fija versión a mano",
 	} {
 		if !strings.Contains(body, s) {
 			t.Errorf("install.ps1 sin %q", s)
