@@ -1,0 +1,7 @@
+# Worker assets-only: publica site/dist (landing + docs + install.ps1).
+# Build/preview: Cloudflare corre los comandos del dashboard desde la raíz del repo.
+name = "rkt"
+compatibility_date = "2026-11-25"
+
+[assets]
+directory = "./dist"
