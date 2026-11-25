@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Formato Go
         run: |
@@ -40,7 +40,7 @@ jobs:
         shell: pwsh
 
       - name: Instalar y compilar dashboard (go:embed antes de vet/build)
-        run: pnpm --dir web install --frozen-lockfile; pnpm --dir web build
+        run: pnpm install --frozen-lockfile; pnpm --dir web build
         shell: pwsh
 
       - name: Vet
@@ -160,7 +160,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Instalar gcc (race detector)
         run: choco install mingw --no-progress -y

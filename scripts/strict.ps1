@@ -30,7 +30,7 @@ Step "diff --check" { git diff --check; if ($LASTEXITCODE -ne 0) { throw "diff -
 Step "web íntegra" {
   # Primero: go:embed exige dist con ficheros reales; vet/build/test
   # fallan en checkout limpio si el dashboard no se compiló antes.
-  pnpm --dir web install --frozen-lockfile; if ($LASTEXITCODE -ne 0) { throw "pnpm install" }
+  pnpm install --frozen-lockfile; if ($LASTEXITCODE -ne 0) { throw "pnpm install" }
   pnpm --dir web build; if ($LASTEXITCODE -ne 0) { throw "pnpm build" }
   pnpm --dir web exec tsc --noEmit; if ($LASTEXITCODE -ne 0) { throw "tsc" }
   pnpm --dir web test; if ($LASTEXITCODE -ne 0) { throw "vitest" }

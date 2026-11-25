@@ -1,0 +1,11 @@
+# Monorepo pnpm único: web (dashboard), site (landing+docs), scripts/shots (tooling).
+# Instalar siempre desde la raíz: pnpm install --frozen-lockfile
+packages:
+  - 'web'
+  - 'site'
+  - 'scripts/shots'
+
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true

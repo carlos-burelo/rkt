@@ -71,7 +71,7 @@ compila y corre en Linux (sin tope de RAM y sin CA automática).
 Requisitos: Windows, Go 1.26+, Node 22+ y pnpm.
 
 ```powershell
-pnpm --dir web install
+pnpm install
 pnpm --dir web build
 go build -o bin/rkt.exe ./cmd/rkt
 bin\rkt.exe -config rkt.local.db dev

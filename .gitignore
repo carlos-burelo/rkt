@@ -20,6 +20,8 @@ PRODUCT.md
 
 # web (monorepo): deps y build. .gitkeep solo mantiene el dir en git;
 # go:embed ignora los archivos ocultos, así que go build exige pnpm build.
+# Workspace pnpm único en la raíz: node_modules central + symlinks por paquete.
+/node_modules/
 web/node_modules/
 web/dist/*
 !web/dist/.gitkeep
