@@ -92,6 +92,40 @@ if ($GithubToken -ne "") {
   Write-Host "GITHUB_TOKEN guardado en $tokenFile."
 }
 
+# Helpers (definidos antes del primer uso: PowerShell ejecuta de arriba
+# abajo y llamar antes de definir es "término no reconocido").
+# Copy-ConReintentos copia con reintentos: un antivirus o un handle
+# tardío pueden retener el binario recién descargado en Windows.
+# Guarda el último error y lo avisa: sin esto el throw posterior
+# no dice si fue lock, ACL o Defender.
+function Copy-ConReintentos([string]$origen, [string]$destino, [int]$intentos = 5) {
+  $ultimo = $null
+  for ($i = 0; $i -lt $intentos; $i++) {
+    try {
+      Copy-Item $origen $destino -Force -ErrorAction Stop
+      return $true
+    } catch {
+      $ultimo = $_
+      Start-Sleep -Seconds 2
+    }
+  }
+  if ($ultimo) {
+    Write-Warning ("Copy-ConReintentos falló ${origen} -> ${destino}: $($ultimo.Exception.Message)")
+  }
+  return $false
+}
+
+function Wait-RktHealth {
+  for ($i = 0; $i -lt 40; $i++) {
+    try {
+      $r = Invoke-WebRequest -Uri "http://127.0.0.1:8090/api/v1/auth/status" -UseBasicParsing -TimeoutSec 3
+      if ($r.StatusCode -eq 200) { return $true }
+    } catch {}
+    Start-Sleep 2
+  }
+  return $false
+}
+
 # 0. rollback al slot previo (previous.txt): flip de binpath + restart.
 # Sin reintentos de copia: el slot viejo sigue intacto.
 if ($Rollback) {
@@ -189,27 +223,6 @@ $exe = Join-Path $slotDir "rkt.exe"
 New-Item -ItemType Directory -Force $slotDir | Out-Null
 
 Remove-NetFirewallRule -DisplayName "RKT Proxy HTTP/HTTPS" -ErrorAction SilentlyContinue | Out-Null
-
-# Copy-ConReintentos copia con reintentos: un antivirus o un handle
-# tardío pueden retener el binario recién descargado en Windows.
-# Guarda el último error y lo avisa: sin esto el throw posterior
-# no dice si fue lock, ACL o Defender.
-function Copy-ConReintentos([string]$origen, [string]$destino, [int]$intentos = 5) {
-  $ultimo = $null
-  for ($i = 0; $i -lt $intentos; $i++) {
-    try {
-      Copy-Item $origen $destino -Force -ErrorAction Stop
-      return $true
-    } catch {
-      $ultimo = $_
-      Start-Sleep -Seconds 2
-    }
-  }
-  if ($ultimo) {
-    Write-Warning ("Copy-ConReintentos falló ${origen} -> ${destino}: $($ultimo.Exception.Message)")
-  }
-  return $false
-}
 
 # 4. parar servicio previo. Sin backup del exe en uso: el slot nuevo se
 # publica al costado y el flip es solo binpath (sección 7).
@@ -342,17 +355,6 @@ sc.exe query Rkt
 # 9. autoconfiguración: IP pública, dashboard externo, firewall y admin.
 # El instalador no deja pasos manuales para entrar desde fuera.
 function Rkt-CLI { param([string[]]$CliArgs) & $exe -config $cfg @CliArgs }
-
-function Wait-RktHealth {
-  for ($i = 0; $i -lt 40; $i++) {
-    try {
-      $r = Invoke-WebRequest -Uri "http://127.0.0.1:8090/api/v1/auth/status" -UseBasicParsing -TimeoutSec 3
-      if ($r.StatusCode -eq 200) { return $true }
-    } catch {}
-    Start-Sleep 2
-  }
-  return $false
-}
 
 $settings = @{}
 try {
