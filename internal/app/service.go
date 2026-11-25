@@ -38,6 +38,7 @@ import (
 	"rkt/internal/deploy"
 	"rkt/internal/devca"
 	"rkt/internal/geoip"
+	"rkt/internal/gitcred"
 	"rkt/internal/github"
 	"rkt/internal/health"
 	"rkt/internal/hook"
@@ -279,22 +280,26 @@ func (p *Program) Run() {
 	sup.Start()
 	cronRunner.Start()
 
-	apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, DevMode: p.devMode, LogsDir: logx.DirFor(p.cfgPath), GeoIP: p.geo, Canary: canary.Open(logx.HomeDir(p.cfgPath)), HomeDir: logx.HomeDir(p.cfgPath), CfgPath: p.cfgPath, AppsBase: platform.AppsDir(logx.HomeDir(p.cfgPath)), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
-		running := map[string]bool{}
-		for _, s := range p.sup.Snapshot() {
-			if s.Running {
-				running[s.Name] = true
+	apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, DevMode: p.devMode, LogsDir: logx.DirFor(p.cfgPath), GeoIP: p.geo,
+		GitResolve: func(repo string) (gitcred.Access, error) {
+			return gitcred.Resolve(p.db, logx.SecretsDir(p.cfgPath), p.gh(), repo, "")
+		},
+		GithubRevalidate: p.githubRevalidate, Canary: canary.Open(logx.HomeDir(p.cfgPath)), HomeDir: logx.HomeDir(p.cfgPath), CfgPath: p.cfgPath, AppsBase: platform.AppsDir(logx.HomeDir(p.cfgPath)), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
+			running := map[string]bool{}
+			for _, s := range p.sup.Snapshot() {
+				if s.Running {
+					running[s.Name] = true
+				}
 			}
-		}
-		if cp, ok := reallocateBusyPorts(db, apps, running, p.log); ok {
-			live.Swap(cp)
-			apps = cp.Apps
-		}
-		p.sup.Apply(apps, global)
-		if p.cron != nil {
-			p.cron.Apply()
-		}
-	}, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, Server: p.srvMetrics, Cron: p.cron, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubDisconnect: p.disconnectGithub, GithubTest: p.testGithub, GithubManager: p.gh, Hub: p.hub, Pending: p.pendingRestartGet})
+			if cp, ok := reallocateBusyPorts(db, apps, running, p.log); ok {
+				live.Swap(cp)
+				apps = cp.Apps
+			}
+			p.sup.Apply(apps, global)
+			if p.cron != nil {
+				p.cron.Apply()
+			}
+		}, Build: p.buildLocal, Deploy: p.deployApp, DeployAsync: p.deployAppAsync, Rollback: p.rollbackApp, Retry: p.retryDeployment, Cancel: p.cancelDeploy, Server: p.srvMetrics, Cron: p.cron, TLS: p.tlsStatus, Github: p.githubStatus, GithubRepos: p.githubRepos, GithubDisconnect: p.disconnectGithub, GithubTest: p.testGithub, GithubManager: p.gh, Hub: p.hub, Pending: p.pendingRestartGet})
 	sub, err := fs.Sub(web.Dist, "dist")
 	if err != nil {
 		p.log.Error("dashboard sin dist", "err", err)
@@ -1107,10 +1112,11 @@ func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, 
 			p.endOp(app.Name)
 		}
 	}()
-	token, err := p.appToken(&app)
+	acc, err := p.gitAccess(&app)
 	if err != nil {
 		return 0, "", err
 	}
+	token := acc.Token
 	dir := logx.DirFor(p.cfgPath)
 	if err := os.MkdirAll(filepath.Join(dir, "deploys"), 0o755); err != nil {
 		return 0, "", err
@@ -1127,6 +1133,9 @@ func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, 
 		depID, _ = p.db.InsertDeployment(app.Name, "", out.Name(), actor)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	if acc.SSHKey != "" {
+		ctx = deploy.WithSSHKey(ctx, acc.SSHKey)
+	}
 	if depID > 0 {
 		p.cancelMu.Lock()
 		if p.deployCancels == nil {
@@ -1188,42 +1197,14 @@ func (p *Program) startDeploy(app config.App, actor string, async bool) (int64, 
 	return depID, rev, nil
 }
 
-// appToken resuelve token para el repo: GitHub App (instalación que cubre
-// appToken resuelve credencial para clonar: GitHub App instalada en el repo,
-// o PAT de token_env (el deploy lo exige solo si git falla por acceso:
-// repos públicos clonan anónimo sin nada).
-func (p *Program) appToken(app *config.App) (string, error) {
-	if !deploy.NeedsAuth(app.Deploy.Repo) {
-		return "", nil
+// gitAccess resuelve el acceso al repo con el orden único de
+// gitcred.Resolve (GitHub App primero).
+func (p *Program) gitAccess(app *config.App) (gitcred.Access, error) {
+	acc, err := gitcred.Resolve(p.db, logx.SecretsDir(p.cfgPath), p.gh(), app.Deploy.Repo, app.Deploy.TokenEnv)
+	if err == nil && acc.Note != "" {
+		p.log.Info("git: acceso por mecanismo alterno", "app", app.Name, "via", acc.Via, "nota", acc.Note)
 	}
-	if p.gh() != nil {
-		owner, repo, ok := github.ParseRepo(app.Deploy.Repo)
-		if !ok {
-			return "", fmt.Errorf("repo no parseable %q", app.Deploy.Repo)
-		}
-		id, _, err := p.gh().InstallationForRepo(owner, repo)
-		if err != nil {
-			return "", fmt.Errorf("instalación para %s/%s: %w (revisa que la App esté instalada con acceso a todos los repos)", owner, repo, err)
-		}
-		tok, err := p.gh().TokenFor(id)
-		if err != nil {
-			return "", fmt.Errorf("token github app: %w", err)
-		}
-		return tok, nil
-	}
-	if file := os.Getenv("RKT_GITHUB_TOKEN_FILE"); file != "" {
-		if b, err := os.ReadFile(file); err == nil {
-			if token := strings.TrimSpace(string(b)); token != "" {
-				return token, nil
-			}
-		}
-	}
-	if token := os.Getenv(app.Deploy.TokenEnv); token != "" {
-		return token, nil
-	}
-	// Sin token configurado se intenta anónimo (repos públicos); si el repo
-	// es privado, el clone falla con el aviso accionable.
-	return "", nil
+	return acc, err
 }
 
 // tlsStatus interroga la cache ACME (existe/expira). Sin manager/TLS: off.

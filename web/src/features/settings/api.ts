@@ -75,3 +75,37 @@ export async function createToken(name: string, role: string, ttlHours: number):
 export async function revokeToken(id: number): Promise<void> {
   await api(`/api/v1/tokens/${id}`, { method: "DELETE" });
 }
+
+export interface GitCred {
+  name: string;
+  kind: "pat" | "ssh";
+  match: string;
+  public_key?: string;
+  fingerprint?: string;
+  created_at: string;
+}
+
+export interface GithubReport {
+  installations: { id: number; account: string; type: string; selection: string; repos: number; settings_url?: string }[];
+  missing: { account: string; type: string; install_url: string }[];
+  needs_all_repos: string[];
+  org_detection: boolean;
+  notes: string[];
+  healthy: boolean;
+}
+
+export async function listGitCreds(): Promise<GitCred[]> {
+  return api<GitCred[]>("/api/v1/git/credentials");
+}
+
+export async function addGitCred(body: { name: string; kind: "pat" | "ssh"; match: string; secret: string }): Promise<{ deploy_key?: string }> {
+  return api<{ deploy_key?: string }>("/api/v1/git/credentials", { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function delGitCred(name: string): Promise<void> {
+  await api(`/api/v1/git/credentials/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
+export async function revalidateGithub(): Promise<GithubReport> {
+  return api<GithubReport>("/api/v1/github/revalidate", { method: "POST" });
+}

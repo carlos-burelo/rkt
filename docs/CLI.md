@@ -209,6 +209,22 @@ Analytics, Observability, Domains (TLS), Environment (agrupado),
 Settings, Users, CI, Alerts, Tareas (cron command/http).
 ⌘K paleta, toasts, PWA offline.
 
+## Repos privados (git)
+
+Orden único de acceso al clonar: **1) GitHub App** instalada en el dueño del repo (preferida: pide *All repositories* en tu cuenta y en cada org) → **2) credencial guardada** (repo exacto > `owner/*` > `*`) → **3) token de entorno heredado** → **4) anónimo**. Que la App no cubra un repo no es error: se prueba el siguiente mecanismo.
+
+```
+rkt git cred add --name ci --kind pat --match "acme/*" --secret-file token.txt   # PAT (repo / contents:read)
+rkt git cred add --name web --kind ssh --match acme/web                          # genera deploy key; registra la pública en GitHub
+rkt git cred list | rm <nombre>
+```
+
+- Los secretos viven en `secrets/git/` (0600); la API, el MCP y los logs solo muestran nombre, tipo, patrón y huella. Pásalos por `--secret-file` o `RKT_GIT_SECRET`, nunca por argv.
+- **Revalidar la App** (`POST /api/v1/github/revalidate`, MCP `github_revalidate`, botón en Ajustes): relee instalaciones, marca las que quedaron en *selected* y, si hay un PAT con `read:org`, detecta tus orgs nuevas donde falta instalar la App (con el enlace directo).
+- Probar un repo: `GET /api/v1/git/access?repo=` o MCP `git_access_check` (dice qué mecanismo se usa y prueba `git ls-remote`).
+- MCP: `git_creds_list`, `git_cred_add` (ssh sin secreto = la privada nunca viaja), `git_cred_remove`, `git_access_check`, `github_revalidate`.
+- El auto-deploy por sondeo requiere la App o un PAT; una deploy key SSH despliega manual o por webhook.
+
 ## Canary: subir un build sin git
 
 Para probar un `rkt.exe` de desarrollo en un servidor sin pasar por commit/CI/release.

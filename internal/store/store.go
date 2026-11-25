@@ -240,6 +240,16 @@ var migrations = []string{
 		country TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX IF NOT EXISTS idx_attacks_ts ON attacks(ts);`,
+	// v26: credenciales git para repos privados fuera de la GitHub App
+	// (PAT o deploy key SSH). Solo metadatos: el secreto vive en secrets/.
+	`CREATE TABLE IF NOT EXISTS git_credentials (
+		name TEXT PRIMARY KEY,
+		kind TEXT NOT NULL,
+		match TEXT NOT NULL DEFAULT '*',
+		public_key TEXT NOT NULL DEFAULT '',
+		fingerprint TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL DEFAULT ''
+	);`,
 }
 
 // DB wrapper.

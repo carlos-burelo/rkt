@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { PageHeader, Section } from "../../shared/components/patterns";
 import { useI18n } from "../../shared/i18n";
 import { McpCard } from "./McpCard";
+import { GitAccessCard } from "./GitAccessCard";
 import { GithubCard } from "./GithubCard";
 import { SettingRow } from "./SettingRow";
 import { useSettings } from "./settings.store";
@@ -49,6 +50,7 @@ export function Settings() {
         </div>
       )}
       <GithubCard />
+      <GitAccessCard />
       <McpCard />
       {GROUPS.map((group) => (
         <Section key={group.title} title={t(group.title)} description={t(group.desc)}>

@@ -387,11 +387,16 @@ func (p *Program) autoDeploy(live *config.Live) {
 				p.log.Warn("auto-deploy: repo no parseable", "app", a.Name)
 				continue
 			}
-			tok, err := p.appToken(a)
+			acc, err := p.gitAccess(a)
 			if err != nil {
-				p.log.Warn("auto-deploy: sin token", "app", a.Name, "err", err)
+				p.log.Warn("auto-deploy: sin acceso", "app", a.Name, "err", err)
 				continue
 			}
+			if acc.SSHKey != "" {
+				p.log.Info("auto-deploy: deploy key SSH no consulta la API; usa webhook o deploy manual", "app", a.Name)
+				continue
+			}
+			tok := acc.Token
 			remote, err := p.gh().CommitSHA(owner, repo, a.Deploy.Ref, tok)
 			if err != nil {
 				p.log.Warn("auto-deploy: sin remoto", "app", a.Name, "err", err)

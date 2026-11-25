@@ -18,6 +18,7 @@ import (
 	"rkt/internal/cronjobs"
 	"rkt/internal/dnscheck"
 	"rkt/internal/geoip"
+	"rkt/internal/gitcred"
 	"rkt/internal/github"
 	"rkt/internal/health"
 	"rkt/internal/hub"
@@ -38,6 +39,10 @@ type Deps struct {
 	Canary  *canary.Store
 	HomeDir string
 	CfgPath string
+	// Git privado: resuelve el mecanismo de acceso de un repo y revalida la
+	// cobertura de la GitHub App (nil = no disponible).
+	GitResolve       func(repo string) (gitcred.Access, error)
+	GithubRevalidate func() (github.Report, error)
 	// GeoIP país por IP para el mapa de ataques (nil = sin geolocalizar).
 	GeoIP   *geoip.Locator
 	Apps    func() []health.AppStatus
@@ -326,6 +331,12 @@ func NewHandler(d Deps) http.Handler {
 
 	// Mapa de ataques (WAF persistido) y base geoip.
 	mux.HandleFunc("/api/v1/security/attacks", d.handleAttacks)
+
+	// Git privado: credenciales (PAT/SSH), prueba de acceso y revalidate de la App.
+	mux.HandleFunc("/api/v1/git/credentials", d.handleGitCreds)
+	mux.HandleFunc("/api/v1/git/credentials/", d.handleGitCred)
+	mux.HandleFunc("/api/v1/git/access", d.handleGitAccess)
+	mux.HandleFunc("/api/v1/github/revalidate", d.handleGithubRevalidate)
 
 	// Canary: subir (no aplicar) binarios de rkt; apply/rollback aparte.
 	mux.HandleFunc("/api/v1/canary", d.handleCanary)

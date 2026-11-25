@@ -214,6 +214,9 @@ func Run(cfgPath string) {
 		case "upgrade":
 			cmdUpgrade(flag.Args()[1:], cfgPath)
 			return
+		case "git":
+			cmdGit(flag.Args()[1:], cfgPath)
+			return
 		case "canary":
 			cmdCanary(flag.Args()[1:])
 			return
@@ -264,6 +267,9 @@ Servicio:
   hosts list|add|rm <host>               DNS local (hosts del sistema, admin)
   upgrade [--version X|--local exe]       binario del servicio por slots
     [--rollback] [--force] [--check]        (flip binpath + gate + rollback auto)
+  git cred add|list|rm                   credenciales para repos privados sin App
+    --name N --kind pat|ssh --match owner/*  (secreto: --secret-file o RKT_GIT_SECRET;
+                                              ssh sin secreto genera la deploy key)
   canary push <rkt.exe> [--apply]        sube un build de dev sin git (solo sube;
     list | apply <id> | rollback            --apply = self-update con rollback)
     --to https://panel --key TOKEN          (o RKT_URL / RKT_KEY)

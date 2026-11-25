@@ -29,6 +29,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -88,8 +89,8 @@ func RunContext(ctx context.Context, app config.App, token string, ctl Controlle
 		// Sin token git ya intentó anónimo (vale para repos públicos):
 		// si el fallo es de acceso, el repo es privado (o no existe) y
 		// toca token; si no, es red o URL y el error de git ya lo dice.
-		if token == "" && NeedsAuth(d.Repo) && needsAuthErr(err.Error()) {
-			return "", fmt.Errorf("sin acceso al repo (privado o no existe): pon token en env %s o archivo RKT_GITHUB_TOKEN_FILE (secreto de máquina para el servicio): %v", d.TokenEnv, err)
+		if token == "" && sshKeyOf(ctx) == "" && NeedsAuth(d.Repo) && needsAuthErr(err.Error()) {
+			return "", fmt.Errorf("sin acceso al repo (privado o no existe). Opciones: (1) instala la GitHub App en el dueño del repo y corre `github_revalidate`; (2) guarda un PAT: `rkt git cred add --name N --kind pat --match <owner>/* --secret-file F`; (3) deploy key SSH: `rkt git cred add --name N --kind ssh --match <owner>/<repo>`: %v", err)
 		}
 		return "", err
 	}
@@ -317,6 +318,10 @@ func gitCmd(ctx context.Context, token string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	env := append([]string{}, os.Environ()...)
 	env = append(env, "GIT_TERMINAL_PROMPT=0")
+	if key := sshKeyOf(ctx); key != "" {
+		// Solo esta llave (IdentitiesOnly), sin prompts, y TOFU para el host.
+		env = append(env, "GIT_SSH_COMMAND=ssh -i \""+filepath.ToSlash(key)+"\" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=accept-new")
+	}
 	if token != "" {
 		cred := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
 		env = append(env,
@@ -330,6 +335,15 @@ func gitCmd(ctx context.Context, token string, args ...string) *exec.Cmd {
 }
 
 func gitClone(ctx context.Context, d *config.Deploy, token, staging string, log *slog.Logger) error {
+	if sshKeyOf(ctx) != "" {
+		u, ok := SSHURL(d.Repo)
+		if !ok {
+			return fmt.Errorf("deploy key SSH: no sé convertir %q a SSH (solo https://host/owner/repo)", d.Repo)
+		}
+		dc := *d
+		dc.Repo = u
+		d = &dc
+	}
 	log.Info("clonando", "repo", d.Repo, "ref", d.Ref)
 	if isSHA(d.Ref) {
 		if out, err := gitCmd(ctx, token, "clone", d.Repo, staging).CombinedOutput(); err != nil {
@@ -522,4 +536,50 @@ func OneLine(b []byte) string {
 		s = s[:300] + "…"
 	}
 	return s
+}
+
+type sshKeyCtx struct{}
+
+// WithSSHKey adjunta la ruta de una deploy key SSH al contexto del deploy:
+// el clon usa SSH con esa llave en vez de token https. Mantiene las
+// firmas de Run*/gitClone (el token sigue siendo https).
+func WithSSHKey(ctx context.Context, keyPath string) context.Context {
+	return context.WithValue(ctx, sshKeyCtx{}, keyPath)
+}
+
+func sshKeyOf(ctx context.Context) string {
+	s, _ := ctx.Value(sshKeyCtx{}).(string)
+	return s
+}
+
+// SSHURL convierte https://host/owner/repo[.git] en git@host:owner/repo.git.
+func SSHURL(repo string) (string, bool) {
+	u, err := url.Parse(strings.TrimSpace(repo))
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		return "", false
+	}
+	p := strings.Trim(strings.TrimSuffix(strings.Trim(u.Path, "/"), ".git"), "/")
+	if strings.Count(p, "/") != 1 {
+		return "", false
+	}
+	return "git@" + u.Hostname() + ":" + p + ".git", true
+}
+
+// CheckAccess prueba que el repo sea alcanzable con la credencial del
+// contexto/token (git ls-remote), sin clonar. Devuelve el error de git.
+func CheckAccess(ctx context.Context, repo, token string) error {
+	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+	target := repo
+	if sshKeyOf(ctx) != "" {
+		u, ok := SSHURL(repo)
+		if !ok {
+			return fmt.Errorf("no sé convertir %q a SSH", repo)
+		}
+		target = u
+	}
+	if out, err := gitCmd(ctx, token, "ls-remote", target).CombinedOutput(); err != nil {
+		return fmt.Errorf("%v: %s", err, OneLine(out))
+	}
+	return nil
 }

@@ -492,4 +492,5 @@ func (s *Server) registerMonitor(srv *mcp.Server) {
 		})
 	s.registerRedirect(srv)
 	s.registerCanary(srv)
+	s.registerGit(srv)
 }

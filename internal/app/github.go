@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"rkt/internal/gitcred"
 	"rkt/internal/github"
 	"rkt/internal/logx"
 	"rkt/internal/store"
@@ -363,4 +364,29 @@ func (p *Program) githubRepos() ([]github.Repo, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].FullName < out[j].FullName })
 	return out, nil
+}
+
+// githubRevalidate relee las instalaciones de la App y detecta cuentas/orgs
+// donde falta instalarla (con el PAT del usuario si hay).
+func (p *Program) githubRevalidate() (github.Report, error) {
+	gh := p.gh()
+	if gh == nil {
+		return github.Report{}, fmt.Errorf("GitHub App no configurada: créala desde Ajustes → GitHub")
+	}
+	slug := p.db.GetSetting("github_app_slug")
+	if slug == "" {
+		if cfg := p.live.Get(); cfg.Github != nil {
+			slug = cfg.Github.AppSlug
+		}
+	}
+	rep, err := gitcred.Revalidate(p.db, logx.SecretsDir(p.cfgPath), gh, slug)
+	if err != nil {
+		return rep, err
+	}
+	n := 0
+	for _, in := range rep.Installations {
+		n += in.Repos
+	}
+	_ = p.db.SetSetting("github_repo_count", strconv.Itoa(n))
+	return rep, nil
 }
