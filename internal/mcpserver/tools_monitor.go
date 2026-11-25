@@ -491,4 +491,5 @@ func (s *Server) registerMonitor(srv *mcp.Server) {
 			return text(s.doAppUsage(a))
 		})
 	s.registerRedirect(srv)
+	s.registerCanary(srv)
 }

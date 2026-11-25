@@ -44,6 +44,7 @@ const (
 	OpAlertsRead      Op = "alerts.read"
 	OpCronRead        Op = "cron.read"
 	OpAuditRead       Op = "audit.read"
+	OpCanaryRead      Op = "canary.read"
 
 	OpAppsWrite     Op = "apps.write"
 	OpDeployRun     Op = "deploy.run"
@@ -68,6 +69,7 @@ const (
 	OpTokensAdmin  Op = "tokens.admin"
 	OpConfigImport Op = "config.import"
 	OpPrune        Op = "prune"
+	OpCanaryWrite  Op = "canary.write"
 )
 
 // opMinRole tabla única operación -> rol mínimo.
@@ -103,12 +105,14 @@ var opMinRole = map[Op]Role{
 	OpEnvRead:       RoleOperator,
 	OpSettingsRead:  RoleOperator,
 	OpWAFRead:       RoleOperator,
+	OpCanaryRead:    RoleOperator,
 
 	OpHostsWrite:   RoleAdmin,
 	OpUsersAdmin:   RoleAdmin,
 	OpTokensAdmin:  RoleAdmin,
 	OpConfigImport: RoleAdmin,
 	OpPrune:        RoleAdmin,
+	OpCanaryWrite:  RoleAdmin,
 	OpAuditRead:    RoleAdmin,
 }
 

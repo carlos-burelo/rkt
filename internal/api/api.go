@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"rkt/internal/canary"
 	"rkt/internal/cfgfile"
 	"rkt/internal/config"
 	"rkt/internal/cronjobs"
@@ -33,6 +34,10 @@ type Deps struct {
 	Live    *config.Live
 	Version string
 	LogsDir string
+	// Canary: binarios de rkt subidos sin git; HomeDir/CfgPath para lanzar el upgrade.
+	Canary  *canary.Store
+	HomeDir string
+	CfgPath string
 	// GeoIP país por IP para el mapa de ataques (nil = sin geolocalizar).
 	GeoIP   *geoip.Locator
 	Apps    func() []health.AppStatus
@@ -321,6 +326,10 @@ func NewHandler(d Deps) http.Handler {
 
 	// Mapa de ataques (WAF persistido) y base geoip.
 	mux.HandleFunc("/api/v1/security/attacks", d.handleAttacks)
+
+	// Canary: subir (no aplicar) binarios de rkt; apply/rollback aparte.
+	mux.HandleFunc("/api/v1/canary", d.handleCanary)
+	mux.HandleFunc("/api/v1/canary/", d.handleCanaryItem)
 	mux.HandleFunc("/api/v1/security/geoip", d.handleGeoIPUpdate)
 
 	// Build log de un deploy (para vista detalle) + retry mismo rev.

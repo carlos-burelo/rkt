@@ -18,8 +18,8 @@ func TestWebAntesDeGo(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct{ archivo, antes, despues string }{
-		{".github/workflows/ci.yml", "pnpm --dir web install", "run.go vet"},
-		{"scripts/strict.ps1", "pnpm --dir web install", "run.go vet"},
+		{".github/workflows/ci.yml", "pnpm install --frozen-lockfile", "run.go vet"},
+		{"scripts/strict.ps1", "pnpm install --frozen-lockfile", "run.go vet"},
 		{"scripts/gate.ps1", "pnpm --dir web build", "go build ./..."},
 	} {
 		b, err := os.ReadFile(filepath.Join(r, filepath.FromSlash(tc.archivo)))

@@ -30,6 +30,7 @@ import (
 	"rkt/internal/api"
 	"rkt/internal/build"
 	"rkt/internal/buildpack"
+	"rkt/internal/canary"
 	"rkt/internal/cfgfile"
 	"rkt/internal/config"
 	"rkt/internal/cronjobs"
@@ -278,7 +279,7 @@ func (p *Program) Run() {
 	sup.Start()
 	cronRunner.Start()
 
-	apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, DevMode: p.devMode, LogsDir: logx.DirFor(p.cfgPath), GeoIP: p.geo, AppsBase: platform.AppsDir(logx.HomeDir(p.cfgPath)), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
+	apiH := api.NewHandler(api.Deps{DB: db, Live: live, Version: build.Version, DevMode: p.devMode, LogsDir: logx.DirFor(p.cfgPath), GeoIP: p.geo, Canary: canary.Open(logx.HomeDir(p.cfgPath)), HomeDir: logx.HomeDir(p.cfgPath), CfgPath: p.cfgPath, AppsBase: platform.AppsDir(logx.HomeDir(p.cfgPath)), Apps: p.appStatuses, Restart: p.restartApp, Apply: func(apps []config.App, global map[string]string) {
 		running := map[string]bool{}
 		for _, s := range p.sup.Snapshot() {
 			if s.Running {

@@ -209,6 +209,32 @@ Analytics, Observability, Domains (TLS), Environment (agrupado),
 Settings, Users, CI, Alerts, Tareas (cron command/http).
 ⌘K paleta, toasts, PWA offline.
 
+## Canary: subir un build sin git
+
+Para probar un `rkt.exe` de desarrollo en un servidor sin pasar por commit/CI/release.
+**Subir no actualiza**: el binario queda guardado (máx. 3, 256 MB) y aplicarlo es un paso aparte.
+
+```
+rkt canary push .inkt.exe --to https://panel.midominio.com --key $RKT_KEY --label (git describe)
+rkt canary list   --to ... --key ...
+rkt canary apply <id> --to ... --key ...     # self-update: gate de salud + rollback auto
+rkt canary rollback --to ... --key ...       # vuelve al slot previo
+```
+
+- Requiere token **admin** (`RKT_URL` / `RKT_KEY` como alternativa a `--to` / `--key`). Usa https: el token y el binario viajan por ahí.
+- La subida verifica `sha256` y que sea un ejecutable del SO. `--apply` en `push` sube y aplica en un paso.
+- Aplicar lanza `rkt upgrade --local <canary> --force` desacoplado; el servicio se reinicia (~1 min) y su log queda en `logs/upgrade.log`.
+- API: `GET|PUT /api/v1/canary`, `POST /api/v1/canary/{id}/apply`, `DELETE /api/v1/canary/{id}`, `POST /api/v1/canary/rollback`.
+- MCP: `canary_list`, `canary_status`, `canary_fetch` (el servidor descarga de una URL https con sha256), `canary_apply`, `canary_discard`, `canary_rollback`. Un agente no puede pasar 60 MB como argumento: sube con `rkt canary push` o `canary_fetch`.
+- Solo Windows para aplicar (igual que `rkt upgrade`).
+
+## Dominios, correo y ataques (API + MCP)
+
+- **Guía DNS**: `GET /api/v1/domains/guide?host=` y MCP `domain_guide` (con `wait_seconds` espera la propagación). Devuelve el registro A exacto, estado real y pasos.
+- **Entorno de GitHub App**: `github_setup_check` / el wizard detectan IP pública sin dominio o A que no apunta al servidor y bloquean con el comando que lo arregla (`rkt set base_domain <dominio>`).
+- **Alertas por correo**: `rkt set smtp_host/smtp_from [smtp_user smtp_pass smtp_security]` y un canal `mailto:a@x.com`. Prueba: `POST /api/v1/alert-channels/{id}/test` o MCP `alert_channel_test`.
+- **Mapa de ataques**: `GET /api/v1/security/attacks?hours=` y MCP `attacks_summary`. Países con `POST /api/v1/security/geoip` / `geoip_update` (descarga DB-IP lite, CC BY 4.0).
+
 ## MCP (`rkt mcp`)
 
 Servidor [Model Context Protocol](https://modelcontextprotocol.io) por stdio.

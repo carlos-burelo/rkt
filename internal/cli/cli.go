@@ -214,6 +214,9 @@ func Run(cfgPath string) {
 		case "upgrade":
 			cmdUpgrade(flag.Args()[1:], cfgPath)
 			return
+		case "canary":
+			cmdCanary(flag.Args()[1:])
+			return
 		case "help", "-h", "--help":
 			usage(0)
 			return
@@ -261,6 +264,9 @@ Servicio:
   hosts list|add|rm <host>               DNS local (hosts del sistema, admin)
   upgrade [--version X|--local exe]       binario del servicio por slots
     [--rollback] [--force] [--check]        (flip binpath + gate + rollback auto)
+  canary push <rkt.exe> [--apply]        sube un build de dev sin git (solo sube;
+    list | apply <id> | rollback            --apply = self-update con rollback)
+    --to https://panel --key TOKEN          (o RKT_URL / RKT_KEY)
   version                                versión del binario
 
 Operate (contra el servicio en marcha):
