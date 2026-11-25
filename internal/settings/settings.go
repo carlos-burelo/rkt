@@ -32,6 +32,7 @@ const (
 	// Consola pública: host en 80/443 y/o listener extra.
 	KeyDashboardHost   = "dashboard_host"
 	KeyDashboardListen = "dashboard_listen"
+	KeyDashboardTLS    = "dashboard_tls" // off (default) | auto: HTTPS en dashboard_listen
 	// Listeners públicos (requieren reinicio del servicio).
 	KeyListenHTTP  = "listen_http"
 	KeyListenHTTPS = "listen_https"
@@ -76,6 +77,7 @@ var specs = []Spec{
 	{Key: KeyRetentionBackupDays, Restart: false, Validate: validateNonNegative},
 	{Key: KeyDashboardHost, Restart: false, Validate: validateDashboardHost},
 	{Key: KeyDashboardListen, Restart: true, Validate: validateListenOrOff},
+	{Key: KeyDashboardTLS, Restart: true, Validate: validateDashboardTLS},
 	{Key: KeyListenHTTP, Restart: true, Validate: validateListenAddr},
 	{Key: KeyListenHTTPS, Restart: true, Validate: validateListenOrOff},
 	{Key: KeyPgMode, Restart: false, Validate: validatePgMode},
@@ -207,6 +209,14 @@ func validateListenAddr(v string) error {
 }
 
 // validateListenOrOff permite "off" para desactivar un listener (TLS).
+func validateDashboardTLS(v string) error {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "off", "auto":
+		return nil
+	}
+	return fmt.Errorf("usa off o auto")
+}
+
 func validateListenOrOff(v string) error {
 	if v == "off" {
 		return nil

@@ -42,6 +42,7 @@ const (
 	KeyRetentionBackupDays = settings.KeyRetentionBackupDays
 	KeyDashboardHost       = settings.KeyDashboardHost
 	KeyDashboardListen     = settings.KeyDashboardListen
+	KeyDashboardTLS        = settings.KeyDashboardTLS
 	KeyListenHTTP          = settings.KeyListenHTTP
 	KeyListenHTTPS         = settings.KeyListenHTTPS
 )

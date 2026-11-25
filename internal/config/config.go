@@ -236,6 +236,9 @@ type HealthzConfig struct {
 type DashboardConfig struct {
 	Host   string `yaml:"host" json:"host"`
 	Listen string `yaml:"listen" json:"listen"`
+	// TLS "auto" sirve HTTPS en Listen: cert ACME del Host si resuelve y
+	// autofirmado persistente para IP u otros nombres. "" = HTTP plano.
+	TLS string `yaml:"tls" json:"tls"`
 }
 
 // RateLimitConfig frena abuso por IP (bots) antes del backend.
@@ -886,6 +889,9 @@ func NeedRestart(old, new *Config) []string {
 	}
 	if old.Dashboard.Listen != new.Dashboard.Listen {
 		out = append(out, "dashboard.listen")
+	}
+	if old.Dashboard.TLS != new.Dashboard.TLS {
+		out = append(out, "dashboard.tls")
 	}
 	if !rateLimitEqual(old.RateLimit, new.RateLimit) {
 		out = append(out, "rate_limit")

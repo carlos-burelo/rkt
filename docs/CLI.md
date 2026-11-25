@@ -209,6 +209,12 @@ Analytics, Observability, Domains (TLS), Environment (agrupado),
 Settings, Users, CI, Alerts, Tareas (cron command/http).
 ⌘K paleta, toasts, PWA offline.
 
+## Dashboard: dominio propio y HTTPS en el 8090
+
+- **Dominio**: `rkt set dashboard_host panel.midominio.com` (crea antes el registro A, guía con `domain_guide`). Vacío/`auto` = `rkt.<base_domain>`; `off` = solo loopback. Se sirve en 80/443 con certificado Let's Encrypt automático.
+- **Listener propio** (`dashboard_listen`, p. ej. `0.0.0.0:8090`) es HTTP plano por defecto. Con `rkt set dashboard_tls auto` (y reinicio) habla **HTTPS**: si entras por el dominio y el DNS ya apunta al servidor usa el certificado Let's Encrypt (la validación entra por el puerto 80); por IP u otro nombre usa un **autofirmado persistente** en `secrets/dashboard-tls/` que cubre localhost, la IP pública y el dominio. Su huella SHA-256 sale en el log (`dashboard TLS activo`): fíjala en clientes y agentes en vez de desactivar la verificación.
+- Al activarlo, todos los clientes del 8090 (CLI, MCP) deben pasar a `https://`. `dashboard_tls=off` (default) no cambia nada.
+
 ## Repos privados (git)
 
 Orden único de acceso al clonar: **1) GitHub App** instalada en el dueño del repo (preferida: pide *All repositories* en tu cuenta y en cada org) → **2) credencial guardada** (repo exacto > `owner/*` > `*`) → **3) token de entorno heredado** → **4) anónimo**. Que la App no cubra un repo no es error: se prueba el siguiente mecanismo.

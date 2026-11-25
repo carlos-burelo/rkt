@@ -9,7 +9,7 @@ import { SettingRow } from "./SettingRow";
 import { useSettings } from "./settings.store";
 
 const GROUPS: { title: string; desc: string; keys: string[] }[] = [
-  { title: "system.settings.groupNetwork", desc: "system.settings.groupNetworkDesc", keys: ["base_domain", "public_ip", "site_name"] },
+  { title: "system.settings.groupNetwork", desc: "system.settings.groupNetworkDesc", keys: ["base_domain", "public_ip", "site_name", "dashboard_host", "dashboard_listen", "dashboard_tls"] },
   { title: "system.settings.groupProcess", desc: "system.settings.groupProcessDesc", keys: ["node_bin", "python_bin"] },
   { title: "system.settings.groupDeploy", desc: "system.settings.groupDeployDesc", keys: ["port_pool"] },
   { title: "system.settings.groupQuota", desc: "system.settings.groupQuotaDesc", keys: ["quota_reqs", "quota_bytes"] },

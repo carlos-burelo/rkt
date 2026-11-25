@@ -506,10 +506,21 @@ func (p *Program) Run() {
 		p.stateMu.Lock()
 		p.srvDashboard = srvDashboard
 		p.stateMu.Unlock()
-		p.log.Warn("dashboard expuesto sin TLS en listener propio; usa dashboard_host en 443 para producción",
-			"listen", cfg.Dashboard.Listen)
+		serve := srvDashboard.ListenAndServe
+		if cfg.Dashboard.TLS == "auto" {
+			if tcfg, err := p.dashboardTLS(cfg, ca, mgr); err != nil {
+				p.log.Error("dashboard TLS: sin certificado, sirvo HTTP plano", "err", err)
+			} else {
+				srvDashboard.TLSConfig = tcfg
+				serve = func() error { return srvDashboard.ListenAndServeTLS("", "") }
+			}
+		}
+		if srvDashboard.TLSConfig == nil {
+			p.log.Warn("dashboard expuesto sin TLS en listener propio; activa dashboard_tls=auto o usa dashboard_host en 443",
+				"listen", cfg.Dashboard.Listen)
+		}
 		go func() {
-			if err := srvDashboard.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			if err := serve(); err != nil && err != http.ErrServerClosed {
 				p.log.Error("dashboard muerto", "err", err)
 			}
 		}()

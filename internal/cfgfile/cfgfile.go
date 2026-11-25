@@ -307,6 +307,10 @@ func applyDashboard(cfg *config.Config, db *store.DB) {
 	default:
 		cfg.Dashboard.Host = strings.Trim(h, ".")
 	}
+	cfg.Dashboard.TLS = ""
+	if strings.EqualFold(strings.TrimSpace(db.GetSetting(store.KeyDashboardTLS)), "auto") {
+		cfg.Dashboard.TLS = "auto"
+	}
 	cfg.Dashboard.Listen = strings.TrimSpace(db.GetSetting(store.KeyDashboardListen))
 	if cfg.Dashboard.Listen == "off" {
 		cfg.Dashboard.Listen = ""

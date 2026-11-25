@@ -9,7 +9,7 @@ import (
 
 func TestKeysYGet(t *testing.T) {
 	keys := Keys()
-	if len(keys) != 28 || keys[0] != KeyNodeBin {
+	if len(keys) != 29 || keys[0] != KeyNodeBin {
 		t.Fatalf("keys = %v", keys)
 	}
 	if s, ok := Get(KeyBaseDomain); !ok || s.Key != KeyBaseDomain {
