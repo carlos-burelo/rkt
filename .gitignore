@@ -49,3 +49,14 @@ scripts/shots/node_modules/
 
 # estado local del servicio (db, logs, certs)
 /logs/
+
+# logs de debug de CI y estado local de instancia/agentes (no se comitean)
+/ci*.log
+/apps/
+/data/
+/.agents/
+/.claude/
+/.codex/
+/.gemini/
+/.opencode/
+/.vscode/
