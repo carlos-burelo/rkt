@@ -145,19 +145,28 @@ func dashboardURL(listen string) string {
 	return "http://" + net.JoinHostPort(host, port) + "/settings?github=ok"
 }
 
-// setupOrigin devuelve el origen público para el manifest. Sin base_domain
-// cae a loopback (GitHub permite crear Apps con URLs locales; sin webhooks).
-// Lógica pura en github.SetupOrigin (hogar único; el MCP la reutiliza).
-func (p *Program) setupOrigin() (origin, domain string, local, tls bool) {
-	base := strings.TrimSpace(p.db.GetSetting(store.KeyBaseDomain))
+// setupPlan origen público + veredicto de entorno para el manifest.
+// Lógica pura en github.PlanSetup (hogar único; el MCP la reutiliza).
+func (p *Program) setupPlan() github.Plan {
 	cfg := p.live.Get()
-	return github.SetupOrigin(base, cfg.ListenHTTP, cfg.ListenHTTPS)
+	return github.PlanSetup(p.db.GetSetting(store.KeyBaseDomain), p.db.GetSetting(store.KeyPublicIP),
+		cfg.ListenHTTP, cfg.ListenHTTPS, nil)
 }
 
 // githubStatus estado de la GitHub App para dashboard/API.
 func (p *Program) githubStatus() (map[string]any, error) {
 	out := map[string]any{"configured": false}
-	origin, domain, local, tls := p.setupOrigin()
+	plan := p.setupPlan()
+	origin, domain, local, tls := plan.Origin, plan.Domain, plan.Local, plan.TLS
+	out["env"] = plan.Env.Kind
+	if plan.Env.Blocked() {
+		// Fail-closed: crear la App con este origen falla en GitHub o deja
+		// el webhook sin entregar. Sin setup_url la UI no ofrece conectar.
+		out["error"] = plan.Env.Problem
+		out["fix"] = plan.Env.Fix
+		out["local"] = local
+		return out, nil
+	}
 	label := "local"
 	if !local {
 		label = strings.ReplaceAll(strings.Split(domain, ".")[0], "_", "-")

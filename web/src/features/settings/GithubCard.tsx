@@ -119,6 +119,13 @@ export function GithubCard() {
             </p>
           )}
 
+          {gh.error && !gh.configured && (
+            <p className="border border-warn/30 bg-warn/5 px-2.5 py-1.5 font-mono text-[11px] text-warn">
+              {gh.error}
+              {gh.fix && <><br />{gh.fix}</>}
+            </p>
+          )}
+
           {gh.setup_url ? (
             <div className="space-y-2">
               <div className="flex items-center gap-3">

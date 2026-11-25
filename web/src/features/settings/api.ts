@@ -19,6 +19,8 @@ export interface GithubStatus {
   install_target?: string;
   installations?: number;
   setup_url?: string;
+  env?: string;
+  fix?: string;
   local?: boolean;
   stale?: boolean;
   install_pending?: boolean;

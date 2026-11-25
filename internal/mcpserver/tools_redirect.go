@@ -158,25 +158,31 @@ func checkManifestRedirectURL(raw string) []string {
 }
 
 // doGithubSetupCheck valida el redirect_url del manifest con la config
-// efectiva (base_domain o loopback), sin red: no filtra el state one-time.
+// efectiva (base_domain, IP pública y DNS del dominio); no filtra el state one-time.
 func (s *Server) doGithubSetupCheck() (string, error) {
 	cfg, db, err := s.load()
 	if err != nil {
 		return "", err
 	}
 	defer db.Close()
-	origin, domain, local, tls := github.SetupOrigin(
-		db.GetSetting(store.KeyBaseDomain), cfg.ListenHTTP, cfg.ListenHTTPS)
-	redirectURL := origin + "/_rkt/setup"
+	plan := github.PlanSetup(db.GetSetting(store.KeyBaseDomain), db.GetSetting(store.KeyPublicIP),
+		cfg.ListenHTTP, cfg.ListenHTTPS, nil)
+	redirectURL := plan.Origin + "/_rkt/setup"
 	problems := checkManifestRedirectURL(redirectURL)
+	out := map[string]any{
+		"origin": plan.Origin, "domain": plan.Domain, "local": plan.Local, "tls": plan.TLS,
+		"redirect_url": redirectURL, "env": plan.Env.Kind,
+	}
 	verdict := "ok"
-	if len(problems) > 0 {
+	if plan.Env.Blocked() {
+		verdict = "error"
+		problems = append(problems, plan.Env.Problem)
+		out["fix"] = plan.Env.Fix
+	} else if len(problems) > 0 {
 		verdict = "needs_attention"
 	}
-	return jsonText(map[string]any{
-		"origin": origin, "domain": domain, "local": local, "tls": tls,
-		"redirect_url": redirectURL, "problems": problems, "verdict": verdict,
-	})
+	out["problems"], out["verdict"] = problems, verdict
+	return jsonText(out)
 }
 
 // registerRedirect añade tools de redirecciones al monitoreo.

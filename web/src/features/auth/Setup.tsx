@@ -489,6 +489,12 @@ function StepGithub({ onNext, onBack }: { onNext: () => void; onBack: () => void
       <p className="border border-warn/40 bg-warn/5 px-2 py-1.5 font-mono text-[10px] leading-relaxed text-muted-foreground">
         {t("system.auth.ghScopeWarn")}
       </p>
+      {st?.error && !st.configured && (
+        <p className="border border-warn/40 bg-warn/5 px-2 py-1.5 font-mono text-[10px] leading-relaxed text-warn">
+          {st.error}
+          {st.fix && <><br />{st.fix}</>}
+        </p>
+      )}
       {st?.configured ? (
         <div className="border border-ok/40 bg-ok/5 px-3 py-2 font-mono text-[11px] text-ok">
           {t("system.auth.ghSuccess", { account: st.account ?? "?" })}
