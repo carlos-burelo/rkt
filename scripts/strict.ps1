@@ -27,18 +27,20 @@ function Step([string]$name, [scriptblock]$b) {
 
 Step "gofmt total" { $out = gofmt -l . 2>$null; if ($out) { throw "gofmt pendiente:`n$out" } }
 Step "diff --check" { git diff --check; if ($LASTEXITCODE -ne 0) { throw "diff --check" } }
-Step "vet total" { go run ./tests/run.go vet ./...; if ($LASTEXITCODE -ne 0) { throw "vet" } }
-Step "build -trimpath" {
-  go build -trimpath -o bin/rkt.exe ./cmd/rkt
-  if ($LASTEXITCODE -ne 0) { throw "build" }
-}
 Step "web íntegra" {
+  # Primero: go:embed exige dist con ficheros reales; vet/build/test
+  # fallan en checkout limpio si el dashboard no se compiló antes.
   pnpm --dir web install --frozen-lockfile; if ($LASTEXITCODE -ne 0) { throw "pnpm install" }
   pnpm --dir web build; if ($LASTEXITCODE -ne 0) { throw "pnpm build" }
   pnpm --dir web exec tsc --noEmit; if ($LASTEXITCODE -ne 0) { throw "tsc" }
   pnpm --dir web test; if ($LASTEXITCODE -ne 0) { throw "vitest" }
   node scripts/i18n-check.mjs; if ($LASTEXITCODE -ne 0) { throw "i18n" }
   node scripts/fixtures-check.mjs; if ($LASTEXITCODE -ne 0) { throw "fixtures" }
+}
+Step "vet total" { go run ./tests/run.go vet ./...; if ($LASTEXITCODE -ne 0) { throw "vet" } }
+Step "build -trimpath" {
+  go build -trimpath -o bin/rkt.exe ./cmd/rkt
+  if ($LASTEXITCODE -ne 0) { throw "build" }
 }
 Step "tests -count=1 -cover" {
   go run ./tests/run.go test ./... -count=1 -cover -timeout 20m > strict.log 2>&1

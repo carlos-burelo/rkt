@@ -71,7 +71,7 @@ func pwshParseErrs(t *testing.T, pwsh, target string, isFile bool) []string {
 func TestScriptsSintaxis(t *testing.T) {
 	pwsh := needPwsh(t)
 	root, _ := readScript(t, "install.ps1")
-	for _, name := range []string{"install.ps1", "nuke.ps1", "strict.ps1"} {
+	for _, name := range []string{"install.ps1", "nuke.ps1", "strict.ps1", "gate.ps1"} {
 		if errs := pwshParseErrs(t, pwsh, filepath.Join(root, "scripts", name), true); len(errs) > 0 {
 			t.Fatalf("%s con errores de sintaxis:\n%s", name, strings.Join(errs, "\n"))
 		}

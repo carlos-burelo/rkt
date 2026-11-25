@@ -39,16 +39,16 @@ jobs:
           if ($out) { Write-Error "gofmt pendiente:`n$out"; exit 1 }
         shell: pwsh
 
+      - name: Instalar y compilar dashboard (go:embed antes de vet/build)
+        run: pnpm --dir web install --frozen-lockfile; pnpm --dir web build
+        shell: pwsh
+
       - name: Vet
         run: go run ./tests/run.go vet ./...
         shell: pwsh
 
       - name: Build (errores de compilación antes que web)
         run: go build -trimpath -o bin/rkt.exe ./cmd/rkt
-        shell: pwsh
-
-      - name: Instalar y compilar dashboard (go:embed)
-        run: pnpm --dir web install --frozen-lockfile; pnpm --dir web build
         shell: pwsh
 
       - name: Tipos del dashboard

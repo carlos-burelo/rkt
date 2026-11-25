@@ -81,18 +81,20 @@ $m = MapPackages $files
 if ($m.full -and -not $Full) { Write-Host "cambio global (go.mod/harness): subo a suite completa"; $Full = $true }
 
 Step "gofmt" { $out = gofmt -l internal, tests, cmd, scripts 2>$null; if ($out) { throw "gofmt pendiente:`n$out" } }
-Step "build" {
-  go build ./...
-  if ($LASTEXITCODE -ne 0) { throw "build" }
-}
 Step "web dist al día" {
+  # Primero: go:embed exige dist con ficheros reales; go build falla en
+  # checkout limpio si el dashboard no se compiló antes.
   $src = Get-ChildItem web/src -Recurse -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   $dist = Get-Item web/dist/index.html -ErrorAction SilentlyContinue
-  if ($src -and (-not $dist -or $src.LastWriteTime -gt $dist.LastWriteTime)) {
-    Write-Host "dist viejo: reconstruyo (8s aprox)"
+  if (-not $dist -or $src.LastWriteTime -gt $dist.LastWriteTime) {
+    Write-Host "dist viejo o ausente: reconstruyo (8s aprox)"
     pnpm --dir web build
     if ($LASTEXITCODE -ne 0) { throw "pnpm build" }
   } else { Write-Host "dist al día" }
+}
+Step "build" {
+  go build ./...
+  if ($LASTEXITCODE -ne 0) { throw "build" }
 }
 if ($m.web -or $Full) {
   Step "web tsc+test+i18n+fixtures" {
