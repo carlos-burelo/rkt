@@ -39,6 +39,23 @@ func clickBack(t *testing.T, page playwright.Page) {
 	}
 }
 
+// nombreBox devuelve el campo Nombre del wizard por placeholder exacto,
+// no por label: el hint de Dominio ("vacío = nombre…") hace que GetByLabel
+// (substring) resuelva a 2 elementos, y otros placeholders contienen
+// "mi-app" ("apps/mi-app", "…\mi-app"). Un solo hogar para el selector.
+func nombreBox(t *testing.T, page playwright.Page) playwright.Locator {
+	t.Helper()
+	return page.GetByPlaceholder("mi-app", playwright.PageGetByPlaceholderOptions{Exact: playwright.Bool(true)})
+}
+
+// repoDirBox devuelve el campo de carpeta del wizard por label exacto:
+// el copy ya cambió una vez ("repositorio" -> "proyecto") y el substring
+// es frágil. Un solo hogar para el selector.
+func repoDirBox(t *testing.T, page playwright.Page) playwright.Locator {
+	t.Helper()
+	return page.GetByLabel("Carpeta del proyecto", playwright.PageGetByLabelOptions{Exact: playwright.Bool(true)})
+}
+
 func appInDB(t *testing.T, app *browserApp, name string) bool {
 	t.Helper()
 	fleet, err := app.db.LoadFleet()

@@ -47,12 +47,12 @@ func TestCreateWizardValidacion(t *testing.T) {
 	if err := page.GetByLabel("Repositorio").Fill("https://github.com/o/MiApp.git"); err != nil {
 		t.Fatal(err)
 	}
-	if v, err := page.GetByLabel("Nombre").InputValue(); err != nil || v != "miapp" {
+	if v, err := nombreBox(t, page).InputValue(); err != nil || v != "miapp" {
 		t.Fatalf("slug sugerido = %q, err = %v", v, err)
 	}
 
 	// Nombre inválido: error y no avanza (sin tocar Red).
-	if err := page.GetByLabel("Nombre").Fill("MALA_NOMBRE!"); err != nil {
+	if err := nombreBox(t, page).Fill("MALA_NOMBRE!"); err != nil {
 		t.Fatal(err)
 	}
 	clickNext(t, page)
@@ -89,7 +89,7 @@ func TestCreateManualCompleto(t *testing.T) {
 	if err := page.GetByLabel("Comando").Fill(`C:\Windows\System32\cmd.exe`); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.GetByLabel("Nombre").Fill("man1"); err != nil {
+	if err := nombreBox(t, page).Fill("man1"); err != nil {
 		t.Fatal(err)
 	}
 	// El directorio vive en "avanzado": abrirlo no duplica el comando ya escrito.
@@ -145,10 +145,10 @@ func TestCreateExternalCompleto(t *testing.T) {
 	stepIs(t, page, "2")
 
 	dir := t.TempDir()
-	if err := page.GetByLabel("Nombre").Fill("ext1"); err != nil {
+	if err := nombreBox(t, page).Fill("ext1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.GetByLabel("Carpeta del repositorio").Fill(dir); err != nil {
+	if err := repoDirBox(t, page).Fill(dir); err != nil {
 		t.Fatal(err)
 	}
 	// El puerto solo acepta dígitos.
@@ -253,10 +253,13 @@ func TestCreateAtrasConserva(t *testing.T) {
 	stepIs(t, page, "2")
 
 	dir := t.TempDir()
-	if err := page.GetByLabel("Nombre").Fill("back1"); err != nil {
+	if err := nombreBox(t, page).Fill("back1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.GetByLabel("Carpeta del repositorio").Fill(dir); err != nil {
+	if err := repoDirBox(t, page).Fill(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := page.GetByLabel("Puerto").Fill("4321"); err != nil {
 		t.Fatal(err)
 	}
 	clickNext(t, page)
@@ -264,10 +267,10 @@ func TestCreateAtrasConserva(t *testing.T) {
 
 	clickBack(t, page)
 	stepIs(t, page, "2")
-	if v, err := page.GetByLabel("Nombre").InputValue(); err != nil || v != "back1" {
+	if v, err := nombreBox(t, page).InputValue(); err != nil || v != "back1" {
 		t.Fatalf("nombre no conservado: %q %v", v, err)
 	}
-	if v, err := page.GetByLabel("Carpeta del repositorio").InputValue(); err != nil || v != dir {
+	if v, err := repoDirBox(t, page).InputValue(); err != nil || v != dir {
 		t.Fatalf("dir no conservado: %q %v", v, err)
 	}
 
@@ -298,10 +301,13 @@ func TestCreateViewerSinPermiso(t *testing.T) {
 	stepIs(t, page, "2")
 
 	dir := t.TempDir()
-	if err := page.GetByLabel("Nombre").Fill("noview"); err != nil {
+	if err := nombreBox(t, page).Fill("noview"); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.GetByLabel("Carpeta del repositorio").Fill(dir); err != nil {
+	if err := repoDirBox(t, page).Fill(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := page.GetByLabel("Puerto").Fill("4322"); err != nil {
 		t.Fatal(err)
 	}
 	clickNext(t, page)
