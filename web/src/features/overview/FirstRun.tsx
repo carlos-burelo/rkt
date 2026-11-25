@@ -44,7 +44,7 @@ export function FirstRun({ apps, metas, deps }: { apps: AppStatus[]; metas: AppM
       </div>
       {!hasApp && (
         <div className="border-t border-border px-3 py-2.5">
-          <Button size="sm" onClick={() => navigate("/apps/new")}>
+          <Button size="sm" variant="outline" onClick={() => navigate("/apps/new")}>
             {t("overview.firstRun.create")} <ArrowRight className="h-3 w-3" />
           </Button>
         </div>

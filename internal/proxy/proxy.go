@@ -23,10 +23,25 @@ import (
 // NewHandler devuelve handler único: match por Host -> ReverseProxy,
 // con rate-limit por IP delante si la config lo activa.
 // Lee la config viva por request (hot-reload de rutas).
+// NewHandler sin pista de supervisor: ante dial fallido reintenta hasta
+// restart_grace (cubre arranque y deploys).
 func NewHandler(live *config.Live, log *slog.Logger) http.Handler {
+	return newHandler(live, log, nil)
+}
+
+// NewHandlerWithFailFast igual pero con atajo: failFast(target) dice si el
+// backend está en estado terminal (app en failed: el supervisor ya no
+// reintenta). Entonces el dial fallido va directo a 502 sin gastar el
+// grace. Solo failed, no stopped: en arranque el grace sigue cubriendo.
+func NewHandlerWithFailFast(live *config.Live, log *slog.Logger, failFast func(target string) bool) http.Handler {
+	return newHandler(live, log, failFast)
+}
+
+func newHandler(live *config.Live, log *slog.Logger, failFast func(target string) bool) http.Handler {
 	transport := &graceTransport{
-		live: live,
-		log:  log,
+		live:     live,
+		log:      log,
+		failFast: failFast,
 		base: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
 			DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
@@ -190,14 +205,16 @@ func ipAllowed(ip string, cidrs []string) bool {
 // graceTransport reintenta solo errores de dial hasta restart_grace. Antes
 // cada request hacía un dial TCP extra para comprobar el backend.
 type graceTransport struct {
-	base http.RoundTripper
-	live *config.Live
-	log  *slog.Logger
+	base     http.RoundTripper
+	live     *config.Live
+	log      *slog.Logger
+	failFast func(target string) bool
 }
 
 func (t *graceTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	grace := t.live.Get().Grace()
 	deadline := time.Now().Add(grace)
+	seenDial := false
 	for {
 		resp, err := t.base.RoundTrip(req)
 		if err == nil {
@@ -205,6 +222,13 @@ func (t *graceTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		if req.Context().Err() != nil || time.Now().After(deadline) || !isDialErr(err) {
 			return nil, err
+		}
+		if !seenDial {
+			seenDial = true
+			if t.failFast != nil && t.failFast(req.URL.Scheme+"://"+req.URL.Host) {
+				t.log.Warn("backend en failed, 502 directo", "host", req.URL.Host)
+				return nil, err
+			}
 		}
 		if req.Body != nil && req.Body != http.NoBody {
 			if req.GetBody == nil {

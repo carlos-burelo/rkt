@@ -225,3 +225,43 @@ func TestGraceTransport(t *testing.T) {
 	}
 	_ = time.Second
 }
+
+// failFast en true: el dial fallido de un backend en failed va directo a
+// 502 (una sola llamada, sin gastar el grace). En false reintenta igual.
+func TestGraceTransportFailFast(t *testing.T) {
+	cfg := config.Default()
+	cfg.RestartGrace = "10s"
+	if err := cfg.Finalize(); err != nil {
+		t.Fatal(err)
+	}
+	live := config.NewLive(cfg)
+	dialErr := &net.OpError{Op: "dial", Err: errors.New("refused")}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	req := httptest.NewRequest("GET", "http://127.0.0.1:1/", nil)
+	base := &fakeRT{errs: 99, err: dialErr, resp: &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("ok"))}}
+	start := time.Now()
+	tr := &graceTransport{base: base, live: live, log: log, failFast: func(string) bool { return true }}
+	if _, err := tr.RoundTrip(req); err == nil {
+		t.Fatal("failed debe devolver el error de dial")
+	}
+	if base.calls != 1 {
+		t.Fatalf("fail-fast sin reintentos: calls=%d", base.calls)
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Fatal("fail-fast debe responder al instante")
+	}
+	base = &fakeRT{errs: 99, err: dialErr, resp: &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("ok"))}}
+	tr = &graceTransport{base: base, live: live, log: log, failFast: func(string) bool { return false }}
+	cfg2 := config.Default()
+	cfg2.RestartGrace = "30ms"
+	if err := cfg2.Finalize(); err != nil {
+		t.Fatal(err)
+	}
+	tr.live = config.NewLive(cfg2)
+	if _, err := tr.RoundTrip(req); err == nil {
+		t.Fatal("sin fail-fast debe agotar el grace con error")
+	}
+	if base.calls < 1 {
+		t.Fatal("sin fail-fast debe reintentar")
+	}
+}

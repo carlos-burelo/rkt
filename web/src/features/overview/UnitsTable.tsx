@@ -3,12 +3,11 @@ import { ChevronRight, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Avatar, Dot, MicroLink, StateRail, StatusBadge, stateOf } from "../../shared/components/ui";
-import { Section, Stat } from "../../shared/components/patterns";
+import { Section } from "../../shared/components/patterns";
 import { rel } from "../../shared/lib/time";
 import { stateLabel } from "../../shared/lib/labels";
 import { publicHost, publicUrl } from "../../shared/lib/url";
 import { useUI } from "../../app/ui";
-import { useFleet } from "./hooks";
 import { useI18n } from "../../shared/i18n";
 import { Departures } from "./Departures";
 import { UsageStrip } from "./UsageStrip";
@@ -97,7 +96,7 @@ export function UnitsTable({
               className={cn(
                 "group relative grid cursor-pointer grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-border/70 bg-card/35 px-3 py-2.5 last:border-0 hover:bg-accent/40 focus-visible:bg-accent/40",
                 wideGrid,
-                state === "failed" && "bg-bad/[0.045] hover:bg-bad/[0.075] focus-visible:bg-bad/[0.075]",
+                state === "failed" && "bg-bad/5 hover:bg-bad/8 focus-visible:bg-bad/8",
               )}
               role="row"
             >
@@ -106,14 +105,13 @@ export function UnitsTable({
                 <Dot status={state} />
               </span>
               <div role="cell" className="flex min-w-0 items-center gap-2.5">
-                <Avatar name={a.name} />
-                {showStack && <TechIcon kind={stack} size={18} />}
+                {showStack ? <TechIcon kind={stack} size={18} /> : <Avatar name={a.name} />}
                 <div className="min-w-0">
                   <p className="flex min-w-0 items-baseline gap-1.5 font-mono text-[13px]">
                     <span className="truncate font-medium">{a.name}</span>
                     <span
                       className={cn(
-                        "hidden shrink-0 text-[10px] tracking-[0.04em] uppercase sm:inline",
+                        "hidden shrink-0 text-[10px] tracking-[0.04em] sm:inline",
                         state === "failed"
                           ? "text-bad"
                           : state === "degraded"
@@ -215,6 +213,7 @@ export function OverviewSide({
       <Section
         title={t("overview.sections.departures")}
         description={t("overview.sections.departuresDesc")}
+        collapsible
         actions={<MicroLink to="/deployments" className="text-[10px]">{t("overview.sections.seeAll")}</MicroLink>}
       >
         <Departures deps={deps} />
@@ -255,21 +254,6 @@ export function OverviewSide({
       <Section title={t("overview.sections.meter")} description={t("overview.sections.meterDesc")}>
         <UsageStrip />
       </Section>
-
-      <StatsStrip />
     </aside>
-  );
-}
-
-function StatsStrip() {
-  const { t } = useI18n();
-  const { status, metas } = useFleet();
-  const apps = status?.apps ?? [];
-  if (apps.length === 0) return null;
-  return (
-    <div className="grid grid-cols-2 gap-px border border-border bg-border">
-      <Stat value={`${apps.length}`} label={t("overview.stats.units")} sub={t("overview.stats.unitsSub")} />
-      <Stat value={`${metas.reduce((n, m) => n + (m.domains?.length ?? 0), 0)}`} label={t("overview.stats.targets")} sub={t("overview.stats.targetsSub")} />
-    </div>
   );
 }

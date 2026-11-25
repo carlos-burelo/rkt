@@ -5,7 +5,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { now, iso, apps, metas, depSeed, fullRev, deps, evs, routes, proxy, dayKeys, byDay, analytics, usage, obsBuckets, obs, serverHistory, serverSnapshot, serverProcs, cronJobs, cronRuns, cronLog, settings, users, channels, fires, audit, alerts, envs, buildLog, logText } from "./fixtures.mjs";
+import { now, iso, apps, metas, depSeed, fullRev, deps, evs, routes, proxy, dayKeys, byDay, analytics, usage, obsBuckets, obs, serverHistory, serverSnapshot, serverProcs, cronJobs, cronRuns, cronLog, settings, users, channels, fires, audit, alerts, envs, buildLog, logText, pgApps, pgSchemaProductos, pgProductos, pgSchemaClientes, pgClientes, pgSchemaPedidos, pgPedidos } from "./fixtures.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const OUT = join(ROOT, "docs", "shots");
@@ -200,6 +200,88 @@ async function mockApi(page, { authed = true, setupRequired = false } = {}) {
       const body = frames.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`).join("");
       return route.fulfill({ status: 200, contentType: "text/event-stream", body });
     }
+    // Postgres gestionado (studio de bases): datos fijos de catálogo.
+    if (p === "/api/v1/pg") {
+      if (method === "GET") return json(route, { enabled: true, host: "127.0.0.1", port: 5432, database: "rkt", apps: pgApps });
+      const app = "tienda";
+      return json(route, { app, schema: app, role: app, mode: "dedicated", url: `postgres://${app}@127.0.0.1:5432/rkt?sslmode=disable` });
+    }
+    if (p === "/api/v1/pg/tables") {
+      const detail = [
+        { name: "clientes", rows: pgClientes.length },
+        { name: "pedidos", rows: pgPedidos.length },
+        { name: "productos", rows: pgProductos.length },
+      ];
+      return json(route, { app: "tienda", tables: detail.map((d) => d.name), detail });
+    }
+    const pgData = {
+      productos: { schema: pgSchemaProductos, rows: pgProductos, textCol: 1 },
+      clientes: { schema: pgSchemaClientes, rows: pgClientes, textCol: 1 },
+      pedidos: { schema: pgSchemaPedidos, rows: pgPedidos, textCol: 3 },
+    };
+    if (p === "/api/v1/pg/rows") {
+      const table = url.searchParams.get("table") ?? "productos";
+      const t = pgData[table] ?? pgData.productos;
+      if (method === "GET") {
+        const q = url.searchParams;
+        const n = Math.min(500, Math.max(1, Number(q.get("n")) || 100));
+        const page = Math.max(1, Number(q.get("page")) || 1);
+        const search = (q.get("search") ?? "").trim().toLowerCase();
+        const order = q.get("order") ?? "";
+        const dir = (q.get("dir") ?? "asc").toLowerCase();
+        let all = t.rows.map((r) => [...r]);
+        if (search) all = all.filter((r) => String(r[t.textCol] ?? "").toLowerCase().includes(search));
+        const cols = t.schema.columns.map((c) => c.name);
+        if (order && cols.includes(order)) {
+          const i = cols.indexOf(order);
+          all = [...all].sort((a, b) => {
+            const x = String(a[i] ?? ""), y = String(b[i] ?? "");
+            return dir === "desc" ? y.localeCompare(x) : x.localeCompare(y);
+          });
+        }
+        const total = all.length;
+        const slice = all.slice((page - 1) * n, page * n);
+        return json(route, {
+          app: "tienda", table, total, page,
+          columns: cols,
+          types: cols.map((c) => ({ name: c, type: t.schema.columns.find((k) => k.name === c)?.type ?? "" })),
+          rows: slice, order, dir, filters: q.getAll("filter"), search: q.get("search") ?? "",
+        });
+      }
+      if (method === "POST") return json(route, { app: "tienda", table, row: {} });
+      if (method === "PATCH") return json(route, { app: "tienda", table, updated: 1 });
+      return json(route, { app: "tienda", table, deleted: 1 });
+    }
+    if (p === "/api/v1/pg/schema") {
+      const table = url.searchParams.get("table") ?? "";
+      if (method === "GET") {
+        if (table) {
+          const t = pgData[table] ?? pgData.productos;
+          return json(route, {
+            app: "tienda", schema: t.schema,
+            policies: table === "pedidos" ? [] : [{ name: "lectura pública", cmd: "SELECT", roles: "{anon}", using: "true" }],
+          });
+        }
+        return json(route, { app: "tienda", tables: [pgSchemaClientes, pgSchemaPedidos, pgSchemaProductos] });
+      }
+      if (method === "POST") return json(route, { app: "tienda", table: "nueva", created: true });
+      return json(route, { app: "tienda", table: "nueva", dropped: true });
+    }
+    if (p === "/api/v1/pg/schema/column") {
+      if (method === "POST") return json(route, { app: "tienda", table: "productos", column: "apodo", added: true });
+      return json(route, { app: "tienda", table: "productos", column: "apodo", dropped: true });
+    }
+    if (p === "/api/v1/pg/schema/rls") return json(route, { app: "tienda", table: "productos", rls: true });
+    if (p === "/api/v1/pg/query") {
+      return json(route, {
+        columns: pgSchemaProductos.columns.map((c) => c.name),
+        types: pgSchemaProductos.columns.map((c) => c.type),
+        rows: pgProductos.slice(0, 5), command: "SELECT",
+      });
+    }
+    if (p.endsWith("/backup") && p.startsWith("/api/v1/pg/")) return json(route, { path: "data/backups/pg-tienda-20261121-120000.dump" });
+    if (p === "/api/v1/pg/restore") return json(route, { app: "tienda", restored: "data/backups/pg-tienda.dump" });
+    if (p.startsWith("/api/v1/pg/") && method === "DELETE") return json(route, { app: "tienda", dropped: true });
     return json(route, { error: `mock sin ruta: ${p}` }, 404);
   });
 }
@@ -240,6 +322,30 @@ const main = async () => {
   await shot("alerts", "alerts");
   await shot("environment", "environment");
   await shot("settings", "settings");
+  await shot("databases", "databases");
+  // pestaña esquema del studio (inspector + DDL)
+  await page.goto(`${BASE}/databases`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Esquema", exact: true }).click();
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: join(OUT, "databases-esquema.png"), fullPage: false });
+  console.log("ok databases-esquema");
+  // diálogo insertar fila (FormDialog: crear/editar va en diálogo)
+  await page.goto(`${BASE}/databases`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "insertar" }).first().click();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: join(OUT, "databases-row-new.png"), fullPage: false });
+  console.log("ok databases-row-new");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  // diálogo crear tabla (DDL con aire)
+  await page.getByRole("button", { name: "crear tabla" }).first().click();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: join(OUT, "databases-table-new.png"), fullPage: false });
+  console.log("ok databases-table-new");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
   await shot("users", "users");
   for (const tab of ["overview", "deploys", "logs", "analytics", "env", "settings"]) {
     await shot(`app-${tab}`, `app/tienda/${tab}`);
@@ -255,28 +361,21 @@ const main = async () => {
   console.log("ok overlay-palette");
   await page.keyboard.press("Escape");
 
-  await page.goto(`${BASE}/deployments`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(300);
-  await page.locator('[role="row"]').filter({ hasText: "#143" }).click();
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: join(OUT, "overlay-drawer.png"), fullPage: false });
-  console.log("ok overlay-drawer");
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(300);
+  // detalle de deploy (las filas navegan a /deployments/:id, no a drawer)
+  await page.goto(`${BASE}/deployments/143`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: join(OUT, "deploy-detail.png"), fullPage: false });
+  console.log("ok deploy-detail");
 
-  // drawer de un deploy en curso (SSE en vivo + checklist de pasos)
-  await page.locator('[role="row"]').filter({ hasText: "#125" }).click();
+  // detalle de un deploy en curso (SSE en vivo + checklist de pasos)
+  await page.goto(`${BASE}/deployments/125`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1500);
   await page.screenshot({ path: join(OUT, "deploy-running.png"), fullPage: false });
   console.log("ok deploy-running");
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(300);
 
-  // drawer de un deploy fallido (reintento + reversión)
-  await page.goto(`${BASE}/deployments`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(300);
-  await page.locator('[role="row"]').filter({ hasText: "#139" }).click();
-  await page.getByText("DETALLE DEL DESPLIEGUE").waitFor({ timeout: 10000 });
+  // detalle de un deploy fallido (reintento + reversión)
+  await page.goto(`${BASE}/deployments/139`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "#139" }).waitFor({ timeout: 10000 });
   await page.waitForTimeout(800);
   await page.screenshot({ path: join(OUT, "deploy-failed.png"), fullPage: false });
   console.log("ok deploy-failed");
@@ -305,7 +404,7 @@ const main = async () => {
   await page.waitForTimeout(300);
   await page.getByText("Directorio local", { exact: true }).click();
   await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByPlaceholder("C:\\proyectos\\mi-app").fill("C:\\rkt\\apps\\tienda");
+  await page.getByPlaceholder("apps/mi-app").fill("C:\\rkt\\apps\\tienda");
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.waitForTimeout(800);
   await page.screenshot({ path: join(OUT, "app-create-review.png"), fullPage: false });
@@ -382,6 +481,7 @@ const main = async () => {
   for (const [name, route] of [
     ["deployments", "deployments"],
     ["waf", "waf"],
+    ["databases", "databases"],
     ["logs", "logs"],
     ["cron", "cron"],
     ["routes", "routes"],

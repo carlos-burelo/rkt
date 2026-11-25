@@ -154,8 +154,12 @@ export function Setup({ onOk }: { onOk: (me: Me) => void }) {
           </div>
           <p className="font-mono text-[9px] leading-relaxed text-muted-foreground/70">
             {t("system.auth.stepOf", { n: idx + 1, total: steps.length, step: t(`system.auth.step.${step}`) })}
-            <br />
-            {t("system.auth.setupFooterTwo")}
+              {step === "admin" && (
+                <>
+                  <br />
+                  {t("system.auth.setupFooterTwo")}
+                </>
+              )}
           </p>
         </div>
       }
@@ -313,6 +317,17 @@ function StepRed({ onNext, onBack }: { onNext: () => void; onBack: () => void })
   );
 }
 
+// Nombre legible para el doctor: el backend habla de bins y settings,
+// el usuario ve herramientas. Sin tocar el backend (sus tests usan esos
+// nombres).
+function prettyCheckName(name: string, t: (k: string) => string): string {
+  if (name.startsWith("node ")) return t("system.auth.checkNode");
+  if (name.startsWith("python ")) return t("system.auth.checkPython");
+  if (name.startsWith("port_pool")) return t("system.auth.checkPorts");
+  if (name.startsWith("symlink ")) return t("system.auth.checkSymlink");
+  return name;
+}
+
 function StepTools({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const { t } = useI18n();
   const fail = useUI((u) => u.fail);
@@ -362,7 +377,7 @@ function StepTools({ onNext, onBack }: { onNext: () => void; onBack: () => void 
                 <span className={c.state === "ok" ? "text-ok" : c.state === "warn" ? "text-warn" : "text-bad"}>
                   {c.state === "ok" ? "✓" : c.state === "warn" ? "!" : "✗"}
                 </span>
-                <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                <span className="min-w-0 flex-1 truncate">{prettyCheckName(c.name, t)}</span>
                 <span className="truncate text-[10px] text-muted-foreground">{c.detail}</span>
               </p>
               {c.hint && <p className="pl-5 font-mono text-[10px] text-muted-foreground">→ {c.hint}</p>}

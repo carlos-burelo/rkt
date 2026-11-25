@@ -1,6 +1,6 @@
 import {
   LayoutGrid, Rocket, Hammer, Terminal, BarChart3, Activity,
-  Bell, Globe, FlaskConical, Settings, Users, Server, CalendarClock, Shield, Database,
+  Bell, Globe, FlaskConical, Settings, Users, Server, CalendarClock, Shield, Database, CircleHelp,
 } from "lucide-react";
 
 // Navegación del shell. `labelKey` se traduce en el componente; `admin`
@@ -39,6 +39,7 @@ export const GROUPS = [
     items: [
       { to: "/settings", labelKey: "nav.settings", icon: Settings },
       { to: "/users", labelKey: "nav.users", icon: Users, admin: true },
+      { to: "/help", labelKey: "nav.help", icon: CircleHelp },
     ],
   },
 ] as const;
@@ -60,6 +61,7 @@ export const PAGE_LABEL: Record<string, string> = {
   alerts: "nav.alerts",
   settings: "nav.settings",
   users: "nav.users",
+  help: "nav.help",
   app: "nav.app",
   apps: "create.title",
 };

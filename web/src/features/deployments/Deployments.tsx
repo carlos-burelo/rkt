@@ -84,7 +84,7 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={t("deployments.filter.placeholder")}
-              className="h-7 border-transparent bg-transparent pl-8 font-mono text-[12px] hover:border-input"
+              className="h-7 border-border bg-field/25 pl-8 font-mono text-[12px]"
               aria-label={t("deployments.filter.aria")}
             />
           </div>
@@ -143,8 +143,8 @@ export function Deployments({ bare = false, status, max }: { bare?: boolean; sta
             aria-label={t("deployments.row.openAria", { app: d.app, id: d.id })}
             className={cn(
               "group relative grid cursor-pointer grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-border/70 bg-card/35 px-3 py-2.5 text-left last:border-0 hover:bg-accent/40 focus-visible:bg-accent/40 lg:grid-cols-[1.5rem_minmax(0,1fr)_8rem_4.5rem_5.5rem_1.5rem]",
-              d.status === "running" && "animate-row-arrive bg-signal/[0.035] hover:bg-signal/[0.06]",
-              d.status === "failed" && "bg-bad/[0.045] hover:bg-bad/[0.075] focus-visible:bg-bad/[0.075]",
+              d.status === "running" && "animate-row-arrive bg-signal/5 hover:bg-signal/8",
+              d.status === "failed" && "bg-bad/5 hover:bg-bad/8 focus-visible:bg-bad/8",
             )}
             role="row"
           >

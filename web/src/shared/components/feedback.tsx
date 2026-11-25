@@ -43,7 +43,7 @@ export function CopyButton({ text, label, className }: { text: string; label?: s
       title={title}
       aria-label={title}
       className={cn(
-        "rounded-[1px] p-0.5 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground",
+        "rounded-[1px] p-1 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground",
         className,
       )}
     >
@@ -98,7 +98,7 @@ export function Bars({
         {showValues && (
           <div className="absolute inset-x-0 top-0 flex gap-1.5" aria-hidden>
             {data.map((v, i) => (
-              <span key={i} className="tnum min-w-0 flex-1 truncate text-center font-mono text-[8px] leading-4 text-muted-foreground/75">
+              <span key={i} className="tnum min-w-0 flex-1 truncate text-center font-mono text-[9px] leading-4 text-muted-foreground/75">
                 {v}
               </span>
             ))}
@@ -126,7 +126,7 @@ export function Bars({
       {labels && (
         <div className="mt-1.5 flex gap-1.5" aria-hidden>
           {labels.map((l, i) => (
-            <span key={i} className="min-w-0 flex-1 truncate text-center font-mono text-[8px] tracking-[0.04em] text-muted-foreground/70">
+            <span key={i} className="min-w-0 flex-1 truncate text-center font-mono text-[9px] tracking-[0.04em] text-muted-foreground/70">
               {l}
             </span>
           ))}

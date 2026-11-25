@@ -20,7 +20,7 @@ export function CI() {
         meta={<span className="tnum font-mono text-[10px] text-muted-foreground">{tn("ops.ci.outputs", deps.length)}</span>}
       />
       <StatGrid>
-        <Stat value={`${running}`} label={t("ops.ci.running")} sub={t("ops.ci.now")} tone={running > 0 ? "signal" : undefined} />
+        <Stat value={`${running}`} label={t("ops.ci.running")} sub={t("ops.ci.now")} />
         <Stat value={`${ok}`} label={t("ops.ci.ok")} sub={t("ops.ci.history")} tone={ok > 0 ? "ok" : undefined} />
         <Stat value={`${failed}`} label={t("ops.ci.failed")} sub={t("ops.ci.needLook")} tone={failed > 0 ? "bad" : undefined} />
         <Stat value={`${deps.length}`} label={t("ops.ci.outputsLabel")} sub={t("ops.ci.prodOnly")} />

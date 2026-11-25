@@ -9,7 +9,7 @@ import type { Deployment, RktEvent } from "../../shared/lib/types";
 export function Departures({ deps }: { deps: Deployment[] }) {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const recent = deps.slice(0, 6);
+  const recent = deps.slice(0, 5);
   return (
     <div className="divide-y divide-border/70">
       {recent.map((d) => (
@@ -45,7 +45,7 @@ export function Activity({ evs }: { evs: RktEvent[] }) {
   const { t } = useI18n();
   return (
     <div className="divide-y divide-border/60">
-      {evs.slice(0, 8).map((e) => (
+      {evs.slice(0, 5).map((e) => (
         <div key={e.id} className="grid grid-cols-[4.5rem_5rem_minmax(0,1fr)] items-baseline gap-2 px-3 py-1.5">
           <span className="tnum font-mono text-[10px] text-muted-foreground/60">{rel(e.ts)}</span>
           <span className="truncate font-mono text-[10px] tracking-[0.06em] text-muted-foreground uppercase">

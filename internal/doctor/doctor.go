@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -48,6 +49,9 @@ type Env struct {
 	EnsureDir func(path string) error
 	// WriteProbe escribe y borra un archivo (prueba de escritura real).
 	WriteProbe func(dir string) error
+	// SymlinkProbe crea un enlace simbólico de prueba (en Windows exige
+	// modo desarrollador o admin). Nil = no se chequea.
+	SymlinkProbe func() error
 }
 
 // SystemEnv entorno real del proceso que ejecuta el doctor.
@@ -91,6 +95,22 @@ func SystemEnv(getSetting func(string) string) Env {
 			name := f.Name()
 			_ = f.Close()
 			return os.Remove(name)
+		},
+		SymlinkProbe: func() error {
+			dir, err := os.MkdirTemp("", "doctor-link")
+			if err != nil {
+				return err
+			}
+			defer os.RemoveAll(dir)
+			target := filepath.Join(dir, "origen.txt")
+			if err := os.WriteFile(target, []byte("x"), 0o644); err != nil {
+				return err
+			}
+			link := filepath.Join(dir, "enlace.txt")
+			if err := os.Symlink(target, link); err != nil {
+				return err
+			}
+			return os.Remove(link)
 		},
 	}
 }
@@ -212,6 +232,16 @@ func Run(e Env) []Check {
 		out = append(out, Check{Name: "port_pool", State: Fail, Detail: pool, Hint: "sin puertos libres: amplía el pool o libera puertos"})
 	} else {
 		out = append(out, Check{Name: "port_pool", State: OK, Detail: fmt.Sprintf("%s (libre %d)", pool, p)})
+	}
+	// Enlaces simbólicos: Next standalone los usa en el build. En Windows
+	// exigen modo desarrollador o admin; sin eso el build falla con EPERM.
+	// Aviso, no bloqueo: solo afecta a ese preset.
+	if runtime.GOOS == "windows" && e.SymlinkProbe != nil {
+		if err := e.SymlinkProbe(); err != nil {
+			out = append(out, Check{Name: "symlink (modo desarrollador)", State: Warn, Detail: "sin permiso", Hint: "activa modo desarrollador (Ajustes de Windows > Para desarrolladores): Next standalone necesita symlinks"})
+		} else {
+			out = append(out, Check{Name: "symlink (modo desarrollador)", State: OK, Detail: "permitidos"})
+		}
 	}
 	return out
 }

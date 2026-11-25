@@ -47,7 +47,7 @@ export function Cron() {
       <StatGrid>
         <Stat value={`${total}`} label={t("cron.total")} sub={t("cron.totalSub")} />
         <Stat value={`${active}`} label={t("cron.active")} sub={t("cron.activeSub")} tone={active > 0 ? "ok" : undefined} />
-        <Stat value={`${running}`} label={t("cron.running")} sub={t("cron.runningSub")} tone={running > 0 ? "signal" : undefined} />
+        <Stat value={`${running}`} label={t("cron.running")} sub={t("cron.runningSub")} />
         <Stat value={`${failed}`} label={t("cron.failed")} sub={t("cron.failedSub")} tone={failed > 0 ? "bad" : undefined} />
       </StatGrid>
       <div className="border border-border" role="table" aria-label={t("cron.tableAria")}>

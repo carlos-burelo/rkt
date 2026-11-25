@@ -27,6 +27,7 @@ import { AppSettings } from "../features/apps/AppSettings";
 import { Routes } from "../features/routes/Routes";
 import { Databases } from "../features/databases/Databases";
 import { Waf } from "../features/waf/Waf";
+import { Help } from "../features/help/Help";
 import { Settings } from "../features/settings/Settings";
 import { Users } from "../features/users/Users";
 
@@ -99,6 +100,24 @@ function AppLogsTab() {
   return <Logs />;
 }
 
+// Ruta desconocida: se avisa en vez de rebotar en silencio al resumen.
+// Un deep-link roto o escrito a mano merece su propio mensaje.
+function NotFound() {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  return (
+    <div className="mx-auto mt-16 w-full max-w-md border border-border bg-card/60 p-6 text-center">
+      <p className="micro text-muted-foreground">{t("shell.notFoundDesc")}</p>
+      <h1 className="mt-2 text-[18px] font-medium">{t("shell.notFoundTitle")}</h1>
+      <div className="mt-4">
+        <Button size="sm" onClick={() => navigate("/overview", { replace: true })}>
+          {t("shell.goOverview")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // Fallback de render: un error de vista no debe blanquear la app entera.
 function RouteError() {
   const { t } = useI18n();
@@ -169,8 +188,9 @@ export const router = createBrowserRouter(
             { path: "databases", element: <Databases /> },
             { path: "waf", element: <WafRoute /> },
             { path: "settings", element: <Settings /> },
+            { path: "help", element: <Help /> },
             { path: "users", element: <UsersRoute /> },
-            { path: "*", element: <Navigate to="/overview" replace /> },
+            { path: "*", element: <NotFound /> },
           ],
         },
       ],

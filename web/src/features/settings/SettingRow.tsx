@@ -60,7 +60,7 @@ export function SettingRow({ k, index }: { k: string; index: number }) {
         <div className="flex justify-end gap-1">
           <FormDialog
             trigger={
-              <Button variant="outline" size="xs">
+              <Button variant="outline" size="xs" aria-label={t("system.settings.editTitle", { key: k })}>
                 {t("common.edit")}
               </Button>
             }

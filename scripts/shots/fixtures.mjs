@@ -304,3 +304,79 @@ export const logText = Array.from({ length: 120 }, (_, i) => {
   return `time=2026-11-02T${String(9 + Math.floor(i / 12)).padStart(2, "0")}:${String((i * 5) % 60).padStart(2, "0")}:00Z level=${level} ${msg}`;
 }).join("\n");
 
+// Postgres gestionado ( studio de bases ): una base compartida, un esquema
+// por app. Tienda concentra el catálogo; api guarda sesiones.
+export const pgApps = [
+  { app: "tienda", schema: "tienda", role: "tienda", mode: "dedicated", url: "postgres://tienda@127.0.0.1:5432/rkt?sslmode=disable" },
+  { app: "api", schema: "api", role: "api", mode: "dedicated", url: "postgres://api@127.0.0.1:5432/rkt?sslmode=disable" },
+];
+
+export const pgSchemaProductos = {
+  table: "productos",
+  columns: [
+    { name: "id", type: "uuid", nullable: false, default: "gen_random_uuid()", is_pk: true },
+    { name: "nombre", type: "text", nullable: false, is_pk: false },
+    { name: "precio", type: "numeric", nullable: false, default: "0", is_pk: false },
+    { name: "stock", type: "integer", nullable: false, default: "0", is_pk: false },
+    { name: "activo", type: "boolean", nullable: false, default: "true", is_pk: false },
+    { name: "creado_en", type: "timestamptz", nullable: false, default: "now()", is_pk: false },
+  ],
+  pk: ["id"],
+  rls: true,
+  rls_force: false,
+  rows: 8,
+};
+
+export const pgProductos = [
+  ["3fa85f64-5717-4562-b3fc-2c963f66afa6", "Cafetera espresso", "189.99", 12, true, "2026-10-02T09:14:00Z"],
+  ["7c9e6679-7425-40de-944b-e07fc1f90ae7", "Molino manual", "59.50", 34, true, "2026-10-04T11:02:00Z"],
+  ["6ecd8c99-4036-403d-bf84-cf8400f67836", "Taza cerámica 300ml", "12.90", 210, true, "2026-10-05T16:40:00Z"],
+  ["b7d3c9e2-1a4b-4c8e-9f2a-5d6e7c8b9a0d", "Filtro papel nº 4 (x100)", "8.75", 500, true, "2026-10-07T08:20:00Z"],
+  ["a1b2c3d4-1111-4222-8333-444455556666", "Café en grano 1kg", "24.00", 86, true, "2026-10-09T13:55:00Z"],
+  ["e5f6a7b8-2222-4333-8444-555566667777", "Prensa francesa 1l", "45.00", 0, false, "2026-10-11T10:10:00Z"],
+  ["c9d0e1f2-3333-4444-8555-666677778888", "Leche de avena 6-pack", "18.60", 64, true, "2026-10-14T17:30:00Z"],
+  ["d3e4f5a6-4444-4555-8666-777788889999", "Termo acero 500ml", "32.99", 41, true, "2026-10-18T12:05:00Z"],
+];
+
+export const pgSchemaClientes = {
+  table: "clientes",
+  columns: [
+    { name: "id", type: "uuid", nullable: false, default: "gen_random_uuid()", is_pk: true },
+    { name: "nombre", type: "text", nullable: false, is_pk: false },
+    { name: "email", type: "text", nullable: false, is_pk: false },
+    { name: "creado_en", type: "timestamptz", nullable: false, default: "now()", is_pk: false },
+  ],
+  pk: ["id"],
+  rls: true,
+  rls_force: false,
+  rows: 4,
+};
+
+export const pgClientes = [
+  ["11111111-1111-4111-8111-111111111111", "Ana Ruiz", "ana@ejemplo.com", "2026-09-02T10:00:00Z"],
+  ["22222222-2222-4222-8222-222222222222", "Bruno Díaz", "bruno@ejemplo.com", "2026-09-14T15:30:00Z"],
+  ["33333333-3333-4333-8333-333333333333", "Carmen Gil", "carmen@ejemplo.com", "2026-10-01T09:12:00Z"],
+  ["44444444-4444-4444-8444-444444444444", "David Sanz", null, "2026-10-20T18:45:00Z"],
+];
+
+export const pgSchemaPedidos = {
+  table: "pedidos",
+  columns: [
+    { name: "id", type: "bigint", nullable: false, is_pk: true },
+    { name: "cliente_id", type: "uuid", nullable: false, is_pk: false },
+    { name: "total", type: "numeric", nullable: false, default: "0", is_pk: false },
+    { name: "estado", type: "text", nullable: false, default: "'pendiente'", is_pk: false },
+    { name: "creado_en", type: "timestamptz", nullable: false, default: "now()", is_pk: false },
+  ],
+  pk: ["id"],
+  rls: false,
+  rls_force: false,
+  rows: 3,
+};
+
+export const pgPedidos = [
+  [101, "11111111-1111-4111-8111-111111111111", "202.89", "enviado", "2026-10-21T11:00:00Z"],
+  [102, "33333333-3333-4333-8333-333333333333", "45.00", "pendiente", "2026-11-02T09:30:00Z"],
+  [103, "22222222-2222-4222-8222-222222222222", "12.90", "cancelado", "2026-11-05T14:15:00Z"],
+];
+

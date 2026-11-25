@@ -139,10 +139,42 @@ type pgTablesArg struct {
 }
 
 type pgRowsArg struct {
+	App     string   `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table   string   `json:"table" jsonschema:"tabla del esquema"`
+	N       int      `json:"n,omitempty" jsonschema:"filas por página (default 100, máx 500)"`
+	Page    int      `json:"page,omitempty" jsonschema:"página (default 1)"`
+	Order   string   `json:"order,omitempty" jsonschema:"columna de orden"`
+	Dir     string   `json:"dir,omitempty" jsonschema:"asc o desc"`
+	Filters []string `json:"filters,omitempty" jsonschema:"filtros col:op:val (eq,neq,gt,gte,lt,lte,like,ilike,in,isnull,isnotnull)"`
+	Search  string   `json:"search,omitempty" jsonschema:"búsqueda global en columnas de texto"`
+}
+
+type pgSchemaArg struct {
 	App   string `json:"app" jsonschema:"app con esquema aprovisionado"`
-	Table string `json:"table" jsonschema:"tabla del esquema"`
-	N     int    `json:"n,omitempty" jsonschema:"filas por página (default 100, máx 500)"`
-	Page  int    `json:"page,omitempty" jsonschema:"página (default 1)"`
+	Table string `json:"table,omitempty" jsonschema:"tabla (vacío = todas)"`
+}
+
+type pgInsertArg struct {
+	App     string         `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table   string         `json:"table" jsonschema:"tabla del esquema"`
+	Data    map[string]any `json:"data" jsonschema:"fila a insertar (objeto col->valor)"`
+	Confirm string         `json:"confirm" jsonschema:"escribe insert para confirmar"`
+}
+
+type pgUpdateArg struct {
+	App     string         `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table   string         `json:"table" jsonschema:"tabla del esquema"`
+	PK      map[string]any `json:"pk" jsonschema:"clave primaria exacta (col->valor)"`
+	Patch   map[string]any `json:"patch" jsonschema:"columnas a cambiar (col->valor)"`
+	Confirm string         `json:"confirm" jsonschema:"escribe update para confirmar"`
+}
+
+type pgDeleteArg struct {
+	App     string         `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table   string         `json:"table" jsonschema:"tabla del esquema"`
+	PK      map[string]any `json:"pk,omitempty" jsonschema:"clave primaria exacta (o filters)"`
+	Filters []string       `json:"filters,omitempty" jsonschema:"filtros col:op:val (o pk)"`
+	Confirm string         `json:"confirm" jsonschema:"escribe delete para confirmar"`
 }
 
 type pgQueryArg struct {
@@ -155,6 +187,120 @@ type pgRestoreArg struct {
 	App     string `json:"app" jsonschema:"app destino (debe tener esquema)"`
 	File    string `json:"file" jsonschema:"ruta del dump custom (-Fc)"`
 	Confirm string `json:"confirm" jsonschema:"escribe restore para confirmar (sobrescribe datos)"`
+}
+
+type pgIndexArg struct {
+	App   string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table string `json:"table" jsonschema:"tabla del esquema"`
+}
+
+type pgCreateIndexArg struct {
+	App     string   `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table   string   `json:"table" jsonschema:"tabla del esquema"`
+	Name    string   `json:"name" jsonschema:"nombre del índice"`
+	Columns []string `json:"columns" jsonschema:"columnas del índice"`
+	Unique  bool     `json:"unique,omitempty" jsonschema:"índice único (default false)"`
+	Method  string   `json:"method,omitempty" jsonschema:"btree|hash|gin|gist (default btree)"`
+	Confirm string   `json:"confirm" jsonschema:"escribe create para confirmar"`
+}
+
+type pgDropIndexArg struct {
+	App     string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Index   string `json:"index" jsonschema:"nombre del índice"`
+	Confirm string `json:"confirm" jsonschema:"escribe drop para confirmar"`
+}
+
+type pgConstraintsArg struct {
+	App   string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table string `json:"table" jsonschema:"tabla del esquema"`
+}
+
+type pgPolicyCreateArg struct {
+	App     string   `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table   string   `json:"table" jsonschema:"tabla del esquema"`
+	Name    string   `json:"name" jsonschema:"nombre de la policy"`
+	Cmd     string   `json:"cmd,omitempty" jsonschema:"ALL|SELECT|INSERT|UPDATE|DELETE (default ALL)"`
+	Roles   []string `json:"roles,omitempty" jsonschema:"roles (vacío = PUBLIC)"`
+	Using   string   `json:"using,omitempty" jsonschema:"expresión USING"`
+	Check   string   `json:"check,omitempty" jsonschema:"expresión WITH CHECK"`
+	Confirm string   `json:"confirm" jsonschema:"escribe create para confirmar"`
+}
+
+type pgPolicyDropArg struct {
+	App     string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table   string `json:"table" jsonschema:"tabla del esquema"`
+	Name    string `json:"name" jsonschema:"nombre de la policy"`
+	Confirm string `json:"confirm" jsonschema:"escribe drop para confirmar"`
+}
+
+type pgRenameArg struct {
+	App      string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table    string `json:"table" jsonschema:"tabla actual"`
+	NewTable string `json:"new_table" jsonschema:"nuevo nombre de la tabla"`
+	Confirm  string `json:"confirm" jsonschema:"escribe alter para confirmar"`
+}
+
+type pgRenameColArg struct {
+	App       string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table     string `json:"table" jsonschema:"tabla del esquema"`
+	Column    string `json:"column" jsonschema:"columna actual"`
+	NewColumn string `json:"new_column" jsonschema:"nuevo nombre de la columna"`
+	Confirm   string `json:"confirm" jsonschema:"escribe alter para confirmar"`
+}
+
+type pgAlterColArg struct {
+	App         string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table       string `json:"table" jsonschema:"tabla del esquema"`
+	Column      string `json:"column" jsonschema:"columna a alterar"`
+	Type        string `json:"type,omitempty" jsonschema:"nuevo tipo (ej text, bigint)"`
+	Default     string `json:"default,omitempty" jsonschema:"nuevo DEFAULT (expresión SQL)"`
+	DropDefault bool   `json:"drop_default,omitempty" jsonschema:"quita el DEFAULT (default false)"`
+	NotNull     *bool  `json:"not_null,omitempty" jsonschema:"NOT NULL (verdadero lo pone, falso lo quita)"`
+	Confirm     string `json:"confirm" jsonschema:"escribe alter para confirmar"`
+}
+
+type pgTruncateArg struct {
+	App     string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table   string `json:"table" jsonschema:"tabla a vaciar"`
+	Confirm string `json:"confirm" jsonschema:"escribe truncate para confirmar"`
+}
+
+type pgDuplicateArg struct {
+	App      string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table    string `json:"table" jsonschema:"tabla origen"`
+	NewTable string `json:"new_table" jsonschema:"tabla destino (no debe existir)"`
+	WithData bool   `json:"with_data,omitempty" jsonschema:"copiar datos además del esquema (default false)"`
+	Confirm  string `json:"confirm" jsonschema:"escribe duplicate para confirmar"`
+}
+
+type pgBackupsArg struct {
+	App string `json:"app" jsonschema:"app con esquema aprovisionado"`
+}
+
+type pgBackupDelArg struct {
+	App     string `json:"app" jsonschema:"app dueña del backup"`
+	Name    string `json:"name" jsonschema:"nombre del archivo (pg-<app>-*.dump)"`
+	Confirm string `json:"confirm" jsonschema:"escribe delete para confirmar"`
+}
+
+type pgImportArg struct {
+	App     string   `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table   string   `json:"table" jsonschema:"tabla destino"`
+	Columns []string `json:"columns" jsonschema:"columnas (1..100)"`
+	Rows    [][]any  `json:"rows" jsonschema:"filas (1..1000, mismo ancho que columns)"`
+	Confirm string   `json:"confirm" jsonschema:"escribe import para confirmar"`
+}
+
+type pgBatchArg struct {
+	App     string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	SQL     string `json:"sql" jsonschema:"lote SQL (máx 20 sentencias)"`
+	Confirm string `json:"confirm" jsonschema:"escribe batch para confirmar"`
+}
+
+type pgExplainArg struct {
+	App     string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	SQL     string `json:"sql" jsonschema:"sentencia a explicar"`
+	Confirm string `json:"confirm" jsonschema:"escribe explain para confirmar"`
 }
 
 func jsonText(v any) (string, error) {
@@ -412,7 +558,14 @@ func (s *Server) doPgRows(a pgRowsArg) (string, error) {
 		return "", err
 	}
 	defer cdb.Close()
-	cols, rows, total, err := pg.TableRows(ctx, cdb, rec.Schema, a.Table, n, (page-1)*n)
+	filters, err := pg.ParseFilters(a.Filters)
+	if err != nil {
+		return "", err
+	}
+	cols, rows, total, err := pg.TableRowsEx(ctx, cdb, rec.Schema, a.Table, pg.RowsQuery{
+		Limit: n, Offset: (page - 1) * n,
+		OrderCol: a.Order, OrderDir: a.Dir, Filters: filters, Search: a.Search,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -458,6 +611,126 @@ func (s *Server) doPgQuery(a pgQueryArg) (string, error) {
 	return jsonText(res)
 }
 
+func (s *Server) doPgSchema(a pgSchemaArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" {
+		return "", fmt.Errorf("app requerida")
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if strings.TrimSpace(a.Table) != "" {
+		s, err := pg.DescribeTable(ctx, cdb, rec.Schema, a.Table)
+		if err != nil {
+			return "", err
+		}
+		pols, _ := pg.ListPolicies(ctx, cdb, rec.Schema, a.Table)
+		if pols == nil {
+			pols = []pg.Policy{}
+		}
+		return jsonText(map[string]any{"app": a.App, "schema": s, "policies": pols})
+	}
+	tables, err := pg.Tables(ctx, cdb, rec.Schema)
+	if err != nil {
+		return "", err
+	}
+	out := make([]pg.TableSchema, 0, len(tables))
+	for _, t := range tables {
+		s, err := pg.DescribeTable(ctx, cdb, rec.Schema, t)
+		if err != nil {
+			return "", err
+		}
+		out = append(out, s)
+	}
+	return jsonText(map[string]any{"app": a.App, "tables": out})
+}
+
+func (s *Server) doPgInsert(a pgInsertArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" || len(a.Data) == 0 {
+		return "", fmt.Errorf("app, table y data requeridos")
+	}
+	if a.Confirm != "insert" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"insert"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	row, err := pg.InsertRow(ctx, cdb, rec.Schema, a.Table, a.Data)
+	if err != nil {
+		return "", err
+	}
+	return jsonText(map[string]any{"app": a.App, "table": a.Table, "row": row})
+}
+
+func (s *Server) doPgUpdate(a pgUpdateArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" || len(a.PK) == 0 || len(a.Patch) == 0 {
+		return "", fmt.Errorf("app, table, pk y patch requeridos")
+	}
+	if a.Confirm != "update" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"update"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	n, err := pg.UpdateRow(ctx, cdb, rec.Schema, a.Table, a.PK, a.Patch)
+	if err != nil {
+		return "", err
+	}
+	return jsonText(map[string]any{"app": a.App, "table": a.Table, "updated": n})
+}
+
+func (s *Server) doPgDelete(a pgDeleteArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" {
+		return "", fmt.Errorf("app y table requeridos")
+	}
+	if a.Confirm != "delete" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"delete"}`)
+	}
+	filters, err := pg.ParseFilters(a.Filters)
+	if err != nil {
+		return "", err
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	n, err := pg.DeleteRows(ctx, cdb, rec.Schema, a.Table, a.PK, filters)
+	if err != nil {
+		return "", err
+	}
+	return jsonText(map[string]any{"app": a.App, "table": a.Table, "deleted": n})
+}
+
 func (s *Server) doPgRestore(a pgRestoreArg) (string, error) {
 	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.File) == "" {
 		return "", fmt.Errorf("app y file requeridos")
@@ -485,6 +758,984 @@ func (s *Server) doPgRestore(a pgRestoreArg) (string, error) {
 	}
 	_ = rec
 	return fmt.Sprintf("pg %s restaurada desde %s", a.App, a.File), nil
+}
+
+func (s *Server) doPgIndexes(a pgIndexArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" {
+		return "", fmt.Errorf("app y table requeridos")
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	idxs, err := pg.ListIndexes(ctx, cdb, rec.Schema, a.Table)
+	if err != nil {
+		return "", err
+	}
+	if idxs == nil {
+		idxs = []pg.IndexInfo{}
+	}
+	return jsonText(map[string]any{"app": a.App, "table": a.Table, "indexes": idxs})
+}
+
+func (s *Server) doPgCreateIndex(a pgCreateIndexArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" || strings.TrimSpace(a.Name) == "" || len(a.Columns) == 0 {
+		return "", fmt.Errorf("app, table, name y columns requeridos")
+	}
+	if a.Confirm != "create" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"create"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.CreateIndexExec(ctx, cdb, rec.Schema, a.Table, a.Name, a.Columns, a.Unique, a.Method); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("índice %s creado en %s", a.Name, a.Table), nil
+}
+
+func (s *Server) doPgDropIndex(a pgDropIndexArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Index) == "" {
+		return "", fmt.Errorf("app e index requeridos")
+	}
+	if a.Confirm != "drop" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"drop"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.DropIndexExec(ctx, cdb, rec.Schema, a.Index); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("índice %s borrado", a.Index), nil
+}
+
+func (s *Server) doPgConstraints(a pgConstraintsArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" {
+		return "", fmt.Errorf("app y table requeridos")
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	cons, err := pg.ListConstraints(ctx, cdb, rec.Schema, a.Table)
+	if err != nil {
+		return "", err
+	}
+	if cons == nil {
+		cons = []pg.ConstraintInfo{}
+	}
+	return jsonText(map[string]any{"app": a.App, "table": a.Table, "constraints": cons})
+}
+
+func (s *Server) doPgPolicyCreate(a pgPolicyCreateArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" || strings.TrimSpace(a.Name) == "" {
+		return "", fmt.Errorf("app, table y name requeridos")
+	}
+	if a.Confirm != "create" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"create"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.CreatePolicyExec(ctx, cdb, rec.Schema, a.Table, a.Name, a.Cmd, a.Roles, a.Using, a.Check); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("policy %s creada en %s", a.Name, a.Table), nil
+}
+
+func (s *Server) doPgPolicyDrop(a pgPolicyDropArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" || strings.TrimSpace(a.Name) == "" {
+		return "", fmt.Errorf("app, table y name requeridos")
+	}
+	if a.Confirm != "drop" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"drop"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.DropPolicyExec(ctx, cdb, rec.Schema, a.Table, a.Name); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("policy %s borrada de %s", a.Name, a.Table), nil
+}
+
+func (s *Server) doPgRenameTable(a pgRenameArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" || strings.TrimSpace(a.NewTable) == "" {
+		return "", fmt.Errorf("app, table y new_table requeridos")
+	}
+	if a.Confirm != "alter" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"alter"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.RenameTableExec(ctx, cdb, rec.Schema, a.Table, a.NewTable); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("tabla %s → %s", a.Table, a.NewTable), nil
+}
+
+func (s *Server) doPgRenameColumn(a pgRenameColArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" || strings.TrimSpace(a.Column) == "" || strings.TrimSpace(a.NewColumn) == "" {
+		return "", fmt.Errorf("app, table, column y new_column requeridos")
+	}
+	if a.Confirm != "alter" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"alter"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.RenameColumnExec(ctx, cdb, rec.Schema, a.Table, a.Column, a.NewColumn); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("columna %s.%s → %s", a.Table, a.Column, a.NewColumn), nil
+}
+
+func (s *Server) doPgAlterColumn(a pgAlterColArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" || strings.TrimSpace(a.Column) == "" {
+		return "", fmt.Errorf("app, table y column requeridos")
+	}
+	if a.Confirm != "alter" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"alter"}`)
+	}
+	if strings.TrimSpace(a.Type) == "" && strings.TrimSpace(a.Default) == "" && !a.DropDefault && a.NotNull == nil {
+		return "", fmt.Errorf("nada que alterar: indica type, default/drop_default o not_null")
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	applied := []string{}
+	if strings.TrimSpace(a.Type) != "" {
+		if err := pg.AlterColumnTypeExec(ctx, cdb, rec.Schema, a.Table, a.Column, a.Type); err != nil {
+			return "", err
+		}
+		applied = append(applied, "type="+a.Type)
+	}
+	if a.DropDefault {
+		if err := pg.AlterColumnDefaultExec(ctx, cdb, rec.Schema, a.Table, a.Column, "", true); err != nil {
+			return "", err
+		}
+		applied = append(applied, "drop_default")
+	} else if strings.TrimSpace(a.Default) != "" {
+		if err := pg.AlterColumnDefaultExec(ctx, cdb, rec.Schema, a.Table, a.Column, a.Default, false); err != nil {
+			return "", err
+		}
+		applied = append(applied, "default")
+	}
+	if a.NotNull != nil {
+		if err := pg.AlterColumnNullableExec(ctx, cdb, rec.Schema, a.Table, a.Column, *a.NotNull); err != nil {
+			return "", err
+		}
+		applied = append(applied, "not_null")
+	}
+	return fmt.Sprintf("columna %s.%s alterada (%s)", a.Table, a.Column, strings.Join(applied, ",")), nil
+}
+
+func (s *Server) doPgTruncate(a pgTruncateArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" {
+		return "", fmt.Errorf("app y table requeridos")
+	}
+	if a.Confirm != "truncate" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"truncate"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.TruncateExec(ctx, cdb, rec.Schema, a.Table); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("tabla %s vaciada", a.Table), nil
+}
+
+func (s *Server) doPgDuplicate(a pgDuplicateArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" || strings.TrimSpace(a.NewTable) == "" {
+		return "", fmt.Errorf("app, table y new_table requeridos")
+	}
+	if a.Confirm != "duplicate" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"duplicate"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.DuplicateExec(ctx, cdb, rec.Schema, a.Table, a.NewTable, a.WithData); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("tabla %s duplicada en %s", a.Table, a.NewTable), nil
+}
+
+func (s *Server) doPgBackups(a pgBackupsArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" {
+		return "", fmt.Errorf("app requerida")
+	}
+	if _, _, err := s.pgAppDB(a.App); err != nil {
+		return "", err
+	}
+	dir := filepath.Join(logx.DirFor(s.cfgPath), "..", "data", "backups")
+	list, err := pg.ListBackups(dir, strings.TrimSpace(a.App))
+	if err != nil {
+		return "", err
+	}
+	if list == nil {
+		list = []pg.BackupInfo{}
+	}
+	return jsonText(map[string]any{"app": a.App, "backups": list})
+}
+
+func (s *Server) doPgBackupDelete(a pgBackupDelArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Name) == "" {
+		return "", fmt.Errorf("app y name requeridos")
+	}
+	if a.Confirm != "delete" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"delete"}`)
+	}
+	if _, _, err := s.pgAppDB(a.App); err != nil {
+		return "", err
+	}
+	dir := filepath.Join(logx.DirFor(s.cfgPath), "..", "data", "backups")
+	if err := pg.DeleteBackup(dir, strings.TrimSpace(a.App), strings.TrimSpace(a.Name)); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("backup %s borrado", a.Name), nil
+}
+
+func (s *Server) doPgImport(a pgImportArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" || len(a.Columns) == 0 || len(a.Rows) == 0 {
+		return "", fmt.Errorf("app, table, columns y rows requeridos")
+	}
+	if a.Confirm != "import" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"import"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	if _, _, err := pg.BuildInsertMany(rec.Schema, a.Table, a.Columns, a.Rows); err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	n, err := pg.InsertManyExec(ctx, cdb, rec.Schema, a.Table, a.Columns, a.Rows)
+	if err != nil {
+		return "", err
+	}
+	return jsonText(map[string]any{"app": a.App, "table": a.Table, "inserted": n})
+}
+
+func (s *Server) doPgBatch(a pgBatchArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.SQL) == "" {
+		return "", fmt.Errorf("app y sql requeridos")
+	}
+	if a.Confirm != "batch" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"batch"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	res, err := pg.QueryMulti(ctx, cdb, a.SQL)
+	if err != nil {
+		return "", err
+	}
+	return jsonText(res)
+}
+
+func (s *Server) doPgExplain(a pgExplainArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.SQL) == "" {
+		return "", fmt.Errorf("app y sql requeridos")
+	}
+	if a.Confirm != "explain" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"explain"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	rows, cols, isJSON, err := pg.Explain(ctx, cdb, a.SQL)
+	if err != nil {
+		return "", err
+	}
+	return jsonText(map[string]any{"columns": cols, "rows": rows, "json": isJSON})
+}
+
+type pgViewsArg struct {
+	App  string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Name string `json:"name,omitempty" jsonschema:"vista o matview (vacío = lista todas)"`
+}
+
+type pgViewCreateArg struct {
+	App          string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Name         string `json:"name" jsonschema:"nombre de la vista"`
+	SQL          string `json:"sql" jsonschema:"SELECT de la vista (solo lectura)"`
+	Materialized bool   `json:"materialized,omitempty" jsonschema:"crea matview en vez de vista (default false)"`
+	OrReplace    bool   `json:"or_replace,omitempty" jsonschema:"OR REPLACE si ya existe, solo vistas (default false)"`
+	WithData     bool   `json:"with_data,omitempty" jsonschema:"matview con datos iniciales (default false)"`
+	Confirm      string `json:"confirm" jsonschema:"escribe create para confirmar"`
+}
+
+type pgViewDropArg struct {
+	App     string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Name    string `json:"name" jsonschema:"vista o matview a borrar"`
+	Confirm string `json:"confirm" jsonschema:"escribe drop para confirmar"`
+}
+
+type pgMatviewRefreshArg struct {
+	App      string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Name     string `json:"name" jsonschema:"matview a refrescar"`
+	WithData bool   `json:"with_data,omitempty" jsonschema:"refresca con datos (default false = sin datos)"`
+	Confirm  string `json:"confirm" jsonschema:"escribe refresh para confirmar"`
+}
+
+type pgFunctionsArg struct {
+	App  string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Func string `json:"func,omitempty" jsonschema:"identidad nombre(args) para ver su definición (vacío = lista)"`
+}
+
+type pgFunctionDropArg struct {
+	App     string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Func    string `json:"func" jsonschema:"identidad nombre(args) de la función"`
+	Confirm string `json:"confirm" jsonschema:"escribe drop para confirmar"`
+}
+
+type pgProceduresArg struct {
+	App       string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Procedure string `json:"procedure,omitempty" jsonschema:"identidad nombre(args) para ver su definición (vacío = lista)"`
+}
+
+type pgProcedureCallArg struct {
+	App       string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Procedure string `json:"procedure" jsonschema:"llamada nombre(literales) del procedimiento"`
+	Confirm   string `json:"confirm" jsonschema:"escribe call para confirmar"`
+}
+
+type pgProcedureDropArg struct {
+	App       string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Procedure string `json:"procedure" jsonschema:"identidad nombre(args) del procedimiento"`
+	Confirm   string `json:"confirm" jsonschema:"escribe drop para confirmar"`
+}
+
+type pgTriggersArg struct {
+	App   string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table string `json:"table,omitempty" jsonschema:"tabla (vacío = todas)"`
+}
+
+// pgEventList acepta "insert,update" o ["insert","update"].
+type pgEventList []string
+
+func (l *pgEventList) UnmarshalJSON(b []byte) error {
+	var arr []string
+	if err := json.Unmarshal(b, &arr); err == nil {
+		*l = splitPgEvents(arr)
+		return nil
+	}
+	var single string
+	if err := json.Unmarshal(b, &single); err == nil {
+		*l = splitPgEvents([]string{single})
+		return nil
+	}
+	return fmt.Errorf("events: usa texto con comas o lista de textos")
+}
+
+func splitPgEvents(in []string) []string {
+	out := []string{}
+	for _, e := range in {
+		for _, p := range strings.Split(e, ",") {
+			if t := strings.TrimSpace(p); t != "" {
+				out = append(out, t)
+			}
+		}
+	}
+	return out
+}
+
+type pgTriggerCreateArg struct {
+	App         string      `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table       string      `json:"table" jsonschema:"tabla del esquema"`
+	Name        string      `json:"name" jsonschema:"nombre del trigger"`
+	Timing      string      `json:"timing" jsonschema:"before, after o instead of"`
+	Events      pgEventList `json:"events" jsonschema:"eventos insert|update|delete|truncate (texto con comas o lista)"`
+	Orientation string      `json:"orientation,omitempty" jsonschema:"row o statement (default row)"`
+	Function    string      `json:"function" jsonschema:"función a ejecutar nombre(args)"`
+	Condition   string      `json:"condition,omitempty" jsonschema:"condición WHEN sin punto y coma (opcional)"`
+	Confirm     string      `json:"confirm" jsonschema:"escribe create para confirmar"`
+}
+
+type pgTriggerDropArg struct {
+	App     string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table   string `json:"table" jsonschema:"tabla del esquema"`
+	Name    string `json:"name" jsonschema:"nombre del trigger"`
+	Confirm string `json:"confirm" jsonschema:"escribe drop para confirmar"`
+}
+
+type pgTriggerToggleArg struct {
+	App     string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Table   string `json:"table" jsonschema:"tabla del esquema"`
+	Name    string `json:"name" jsonschema:"nombre del trigger"`
+	Enable  bool   `json:"enable,omitempty" jsonschema:"verdadero lo activa, falso lo desactiva"`
+	Confirm string `json:"confirm" jsonschema:"escribe toggle para confirmar"`
+}
+
+type pgSequencesArg struct {
+	App string `json:"app" jsonschema:"app con esquema aprovisionado"`
+}
+
+type pgSequenceRestartArg struct {
+	App     string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Name    string `json:"name" jsonschema:"nombre de la secuencia"`
+	With    int64  `json:"with,omitempty" jsonschema:"valor de reinicio (0 = sin valor)"`
+	Confirm string `json:"confirm" jsonschema:"escribe restart para confirmar"`
+}
+
+type pgSequenceSetvalArg struct {
+	App      string `json:"app" jsonschema:"app con esquema aprovisionado"`
+	Name     string `json:"name" jsonschema:"nombre de la secuencia"`
+	Value    int64  `json:"value" jsonschema:"nuevo valor de la secuencia"`
+	IsCalled bool   `json:"is_called,omitempty" jsonschema:"verdadero si el valor ya se usó (default false)"`
+	Confirm  string `json:"confirm" jsonschema:"escribe setval para confirmar"`
+}
+
+func (s *Server) doPgViews(a pgViewsArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" {
+		return "", fmt.Errorf("app requerida")
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if strings.TrimSpace(a.Name) != "" {
+		v, err := pg.GetViewDef(ctx, cdb, rec.Schema, strings.TrimSpace(a.Name))
+		if err != nil {
+			return "", err
+		}
+		return jsonText(map[string]any{"app": a.App, "view": v})
+	}
+	views, err := pg.ListViews(ctx, cdb, rec.Schema)
+	if err != nil {
+		return "", err
+	}
+	if views == nil {
+		views = []pg.ViewInfo{}
+	}
+	matviews, err := pg.ListMatviews(ctx, cdb, rec.Schema)
+	if err != nil {
+		return "", err
+	}
+	if matviews == nil {
+		matviews = []pg.ViewInfo{}
+	}
+	return jsonText(map[string]any{"app": a.App, "views": views, "matviews": matviews})
+}
+
+func (s *Server) doPgViewCreate(a pgViewCreateArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Name) == "" || strings.TrimSpace(a.SQL) == "" {
+		return "", fmt.Errorf("app, name y sql requeridos")
+	}
+	if a.Confirm != "create" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"create"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.CreateViewExec(ctx, cdb, rec.Schema, strings.TrimSpace(a.Name), a.SQL, a.Materialized, a.OrReplace, a.WithData); err != nil {
+		return "", err
+	}
+	kind := "vista"
+	if a.Materialized {
+		kind = "matview"
+	}
+	return fmt.Sprintf("%s %s creada", kind, strings.TrimSpace(a.Name)), nil
+}
+
+func (s *Server) doPgViewDrop(a pgViewDropArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Name) == "" {
+		return "", fmt.Errorf("app y name requeridos")
+	}
+	if a.Confirm != "drop" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"drop"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	v, err := pg.GetViewDef(ctx, cdb, rec.Schema, strings.TrimSpace(a.Name))
+	if err != nil {
+		return "", err
+	}
+	if err := pg.DropViewExec(ctx, cdb, rec.Schema, strings.TrimSpace(a.Name), v.Kind == "materialized"); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("vista %s borrada", strings.TrimSpace(a.Name)), nil
+}
+
+func (s *Server) doPgMatviewRefresh(a pgMatviewRefreshArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Name) == "" {
+		return "", fmt.Errorf("app y name requeridos")
+	}
+	if a.Confirm != "refresh" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"refresh"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.RefreshMatviewExec(ctx, cdb, rec.Schema, strings.TrimSpace(a.Name), a.WithData); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("matview %s refrescada", strings.TrimSpace(a.Name)), nil
+}
+
+func (s *Server) doPgFunctions(a pgFunctionsArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" {
+		return "", fmt.Errorf("app requerida")
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if strings.TrimSpace(a.Func) != "" {
+		f, err := pg.GetRoutineDef(ctx, cdb, rec.Schema, strings.TrimSpace(a.Func))
+		if err != nil {
+			return "", err
+		}
+		return jsonText(map[string]any{"app": a.App, "function": f})
+	}
+	funcs, err := pg.ListFunctions(ctx, cdb, rec.Schema)
+	if err != nil {
+		return "", err
+	}
+	if funcs == nil {
+		funcs = []pg.FuncInfo{}
+	}
+	return jsonText(map[string]any{"app": a.App, "functions": funcs})
+}
+
+func (s *Server) doPgFunctionDrop(a pgFunctionDropArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Func) == "" {
+		return "", fmt.Errorf("app y func requeridos")
+	}
+	if a.Confirm != "drop" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"drop"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.DropRoutineExec(ctx, cdb, rec.Schema, strings.TrimSpace(a.Func), false); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("función %s borrada", strings.TrimSpace(a.Func)), nil
+}
+
+func (s *Server) doPgProcedures(a pgProceduresArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" {
+		return "", fmt.Errorf("app requerida")
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if strings.TrimSpace(a.Procedure) != "" {
+		p, err := pg.GetRoutineDef(ctx, cdb, rec.Schema, strings.TrimSpace(a.Procedure))
+		if err != nil {
+			return "", err
+		}
+		return jsonText(map[string]any{"app": a.App, "procedure": p})
+	}
+	procs, err := pg.ListProcedures(ctx, cdb, rec.Schema)
+	if err != nil {
+		return "", err
+	}
+	if procs == nil {
+		procs = []pg.FuncInfo{}
+	}
+	return jsonText(map[string]any{"app": a.App, "procedures": procs})
+}
+
+func (s *Server) doPgProcedureCall(a pgProcedureCallArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Procedure) == "" {
+		return "", fmt.Errorf("app y procedure requeridos")
+	}
+	if a.Confirm != "call" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"call"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	res, err := pg.CallProcedureExec(ctx, cdb, rec.Schema, strings.TrimSpace(a.Procedure))
+	if err != nil {
+		return "", err
+	}
+	return jsonText(res)
+}
+
+func (s *Server) doPgProcedureDrop(a pgProcedureDropArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Procedure) == "" {
+		return "", fmt.Errorf("app y procedure requeridos")
+	}
+	if a.Confirm != "drop" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"drop"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.DropRoutineExec(ctx, cdb, rec.Schema, strings.TrimSpace(a.Procedure), true); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("procedimiento %s borrado", strings.TrimSpace(a.Procedure)), nil
+}
+
+func (s *Server) doPgTriggers(a pgTriggersArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" {
+		return "", fmt.Errorf("app requerida")
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	trs, err := pg.ListTriggers(ctx, cdb, rec.Schema, strings.TrimSpace(a.Table))
+	if err != nil {
+		return "", err
+	}
+	if trs == nil {
+		trs = []pg.TriggerInfo{}
+	}
+	return jsonText(map[string]any{"app": a.App, "table": strings.TrimSpace(a.Table), "triggers": trs})
+}
+
+func (s *Server) doPgTriggerCreate(a pgTriggerCreateArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" || strings.TrimSpace(a.Name) == "" || strings.TrimSpace(a.Timing) == "" || strings.TrimSpace(a.Function) == "" {
+		return "", fmt.Errorf("app, table, name, timing y function requeridos")
+	}
+	if len(a.Events) == 0 {
+		return "", fmt.Errorf("events requerido (insert|update|delete|truncate)")
+	}
+	if a.Confirm != "create" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"create"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.CreateTriggerExec(ctx, cdb, rec.Schema, strings.TrimSpace(a.Table), strings.TrimSpace(a.Name), strings.TrimSpace(a.Timing), []string(a.Events), strings.TrimSpace(a.Orientation), strings.TrimSpace(a.Function), strings.TrimSpace(a.Condition)); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("trigger %s creado en %s", strings.TrimSpace(a.Name), strings.TrimSpace(a.Table)), nil
+}
+
+func (s *Server) doPgTriggerDrop(a pgTriggerDropArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" || strings.TrimSpace(a.Name) == "" {
+		return "", fmt.Errorf("app, table y name requeridos")
+	}
+	if a.Confirm != "drop" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"drop"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.DropTriggerExec(ctx, cdb, rec.Schema, strings.TrimSpace(a.Table), strings.TrimSpace(a.Name)); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("trigger %s borrado de %s", strings.TrimSpace(a.Name), strings.TrimSpace(a.Table)), nil
+}
+
+func (s *Server) doPgTriggerToggle(a pgTriggerToggleArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Table) == "" || strings.TrimSpace(a.Name) == "" {
+		return "", fmt.Errorf("app, table y name requeridos")
+	}
+	if a.Confirm != "toggle" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"toggle"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	if err := pg.ToggleTriggerExec(ctx, cdb, rec.Schema, strings.TrimSpace(a.Table), strings.TrimSpace(a.Name), a.Enable); err != nil {
+		return "", err
+	}
+	verb := "desactivado"
+	if a.Enable {
+		verb = "activado"
+	}
+	return fmt.Sprintf("trigger %s %s", strings.TrimSpace(a.Name), verb), nil
+}
+
+func (s *Server) doPgSequences(a pgSequencesArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" {
+		return "", fmt.Errorf("app requerida")
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	seqs, err := pg.ListSequences(ctx, cdb, rec.Schema)
+	if err != nil {
+		return "", err
+	}
+	if seqs == nil {
+		seqs = []pg.SeqInfo{}
+	}
+	return jsonText(map[string]any{"app": a.App, "sequences": seqs})
+}
+
+func (s *Server) doPgSequenceRestart(a pgSequenceRestartArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Name) == "" {
+		return "", fmt.Errorf("app y name requeridos")
+	}
+	if a.Confirm != "restart" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"restart"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	var with *int64
+	if a.With != 0 {
+		v := a.With
+		with = &v
+	}
+	if err := pg.RestartSequenceExec(ctx, cdb, rec.Schema, strings.TrimSpace(a.Name), with); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("secuencia %s reiniciada", strings.TrimSpace(a.Name)), nil
+}
+
+func (s *Server) doPgSequenceSetval(a pgSequenceSetvalArg) (string, error) {
+	if strings.TrimSpace(a.App) == "" || strings.TrimSpace(a.Name) == "" {
+		return "", fmt.Errorf("app y name requeridos")
+	}
+	if a.Confirm != "setval" {
+		return "", fmt.Errorf(`confirmación requerida: {"confirm":"setval"}`)
+	}
+	rec, cfg, err := s.pgAppDB(a.App)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cdb, err := pg.Connect(ctx, pg.SuperDSN(cfg.Host, cfg.Port, rec.Role, "", cfg.DB))
+	if err != nil {
+		return "", err
+	}
+	defer cdb.Close()
+	v, err := pg.SetvalExec(ctx, cdb, rec.Schema, strings.TrimSpace(a.Name), a.Value, a.IsCalled)
+	if err != nil {
+		return "", err
+	}
+	return jsonText(map[string]any{"app": a.App, "name": strings.TrimSpace(a.Name), "value": v})
 }
 
 func (s *Server) doAppEnvKeys(app string) (string, error) {
@@ -1498,9 +2749,25 @@ func (s *Server) registerMore(srv *mcp.Server) {
 		func(ctx context.Context, req *mcp.CallToolRequest, a pgTablesArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doPgTables(a))
 		})
-	addTool(s, srv, &mcp.Tool{Name: "pg_rows", Description: "Pagina una tabla del esquema (n/page). Solo lectura."},
+	addTool(s, srv, &mcp.Tool{Name: "pg_rows", Description: "Pagina una tabla del esquema (n/page, order/dir, filters col:op:val, search). Solo lectura."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a pgRowsArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doPgRows(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_schema", Description: "Inspector de tabla (columnas, tipos, PK, RLS, conteo) o de todas. Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgSchemaArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgSchema(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_insert", Description: "Inserta una fila en una tabla (confirm=insert)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgInsertArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgInsert(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_update", Description: "Actualiza una fila por PK exacta (confirm=update)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgUpdateArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgUpdate(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_delete", Description: "Borra filas por PK o filtros (confirm=delete). Sin pk ni filtros no borra."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgDeleteArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgDelete(a))
 		})
 	addTool(s, srv, &mcp.Tool{Name: "pg_query", Description: "Ejecuta una sentencia SQL en el esquema de la app (confirm=query). SELECT devuelve filas; el resto, afectadas."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a pgQueryArg) (*mcp.CallToolResult, any, error) {
@@ -1509,6 +2776,134 @@ func (s *Server) registerMore(srv *mcp.Server) {
 	addTool(s, srv, &mcp.Tool{Name: "pg_restore", Description: "Restaura un dump custom (-Fc) sobre la app (confirm=restore). Sobrescribe datos."},
 		func(ctx context.Context, req *mcp.CallToolRequest, a pgRestoreArg) (*mcp.CallToolResult, any, error) {
 			return text(s.doPgRestore(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_indexes", Description: "Lista índices de una tabla. Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgIndexArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgIndexes(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_create_index", Description: "Crea un índice en una tabla (confirm=create)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgCreateIndexArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgCreateIndex(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_drop_index", Description: "Borra un índice del esquema (confirm=drop)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgDropIndexArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgDropIndex(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_constraints", Description: "Lista constraints (PK, FK, unique, check) de una tabla. Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgConstraintsArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgConstraints(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_policy_create", Description: "Crea una policy RLS en una tabla (confirm=create)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgPolicyCreateArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgPolicyCreate(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_policy_drop", Description: "Borra una policy RLS de una tabla (confirm=drop)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgPolicyDropArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgPolicyDrop(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_rename_table", Description: "Renombra una tabla del esquema (confirm=alter)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgRenameArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgRenameTable(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_rename_column", Description: "Renombra una columna de una tabla (confirm=alter)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgRenameColArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgRenameColumn(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_alter_column", Description: "Altera tipo, DEFAULT o NOT NULL de una columna (confirm=alter)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgAlterColArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgAlterColumn(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_truncate", Description: "Vacía una tabla sin borrar su esquema (confirm=truncate). Destructivo."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgTruncateArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgTruncate(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_duplicate", Description: "Duplica una tabla en otra nueva, con o sin datos (confirm=duplicate)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgDuplicateArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgDuplicate(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_backups", Description: "Lista backups del esquema de una app. Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgBackupsArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgBackups(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_backup_delete", Description: "Borra un backup del disco (confirm=delete)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgBackupDelArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgBackupDelete(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_rows_import", Description: "Inserta un lote de filas en una tabla (confirm=import, máx 1000 filas)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgImportArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgImport(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_query_batch", Description: "Ejecuta un lote SQL de hasta 20 sentencias (confirm=batch)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgBatchArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgBatch(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_query_explain", Description: "Muestra el plan EXPLAIN de una sentencia (confirm=explain)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgExplainArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgExplain(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_views", Description: "Lista views y matviews del esquema, o su definición si indicas name. Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgViewsArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgViews(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_view_create", Description: "Crea una vista o matview desde un SELECT (confirm=create)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgViewCreateArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgViewCreate(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_view_drop", Description: "Borra una vista o matview del esquema (confirm=drop)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgViewDropArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgViewDrop(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_matview_refresh", Description: "Refresca una matview con o sin datos (confirm=refresh)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgMatviewRefreshArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgMatviewRefresh(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_functions", Description: "Lista funciones del esquema, o su definición si indicas func. Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgFunctionsArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgFunctions(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_function_drop", Description: "Borra una función por identidad nombre(args) (confirm=drop)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgFunctionDropArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgFunctionDrop(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_procedures", Description: "Lista procedimientos del esquema, o su definición si indicas procedure. Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgProceduresArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgProcedures(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_procedure_call", Description: "Ejecuta CALL a un procedimiento con literales (confirm=call)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgProcedureCallArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgProcedureCall(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_procedure_drop", Description: "Borra un procedimiento por identidad nombre(args) (confirm=drop)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgProcedureDropArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgProcedureDrop(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_triggers", Description: "Lista triggers del esquema, de una tabla si indicas table. Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgTriggersArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgTriggers(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_trigger_create", Description: "Crea un trigger en una tabla con eventos y función (confirm=create)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgTriggerCreateArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgTriggerCreate(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_trigger_drop", Description: "Borra un trigger de una tabla (confirm=drop)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgTriggerDropArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgTriggerDrop(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_trigger_toggle", Description: "Activa o desactiva un trigger de una tabla (confirm=toggle)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgTriggerToggleArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgTriggerToggle(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_sequences", Description: "Lista secuencias del esquema con su estado. Solo lectura."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgSequencesArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgSequences(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_sequence_restart", Description: "Reinicia una secuencia, con valor opcional (confirm=restart)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgSequenceRestartArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgSequenceRestart(a))
+		})
+	addTool(s, srv, &mcp.Tool{Name: "pg_sequence_setval", Description: "Fija el valor de una secuencia y devuelve el nuevo (confirm=setval)."},
+		func(ctx context.Context, req *mcp.CallToolRequest, a pgSequenceSetvalArg) (*mcp.CallToolResult, any, error) {
+			return text(s.doPgSequenceSetval(a))
 		})
 	s.registerMonitor(srv)
 }

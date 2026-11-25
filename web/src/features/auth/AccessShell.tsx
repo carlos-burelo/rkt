@@ -38,7 +38,19 @@ export function AccessShell({
             </div>
           </div>
         </div>
-        {side && <div className="relative">{side}</div>}
+        {side ?? (
+          <div className="relative space-y-3">
+            <p className="micro">{t("system.access.aboutTitle")}</p>
+            <ul className="space-y-2.5">
+              {[t("system.access.about1"), t("system.access.about2"), t("system.access.about3")].map((s) => (
+                <li key={s} className="flex items-start gap-2.5 text-[12px] leading-relaxed text-muted-foreground">
+                  <span aria-hidden className="mt-1.5 h-1 w-1 shrink-0 bg-signal" />
+                  <span>{s}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="relative flex items-end justify-between gap-4 border-t border-border/70 pt-4">
           <p className="font-mono text-[9px] leading-relaxed text-muted-foreground/70">
             {t("system.access.restricted")}

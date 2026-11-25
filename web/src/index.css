@@ -226,6 +226,18 @@
   :where(button, [role="button"], summary):not(:disabled) {
     cursor: pointer;
   }
+  /* Botones en Title Case: el copy vive en minúsculas y la primera letra
+  de cada palabra se capitaliza por CSS. Excepciones (micro, código)
+  usan sus propias clases con mayor especificidad o utilities. */
+  button {
+    text-transform: capitalize;
+  }
+  /* Datos crudos dentro de botones (nombres, tiempos, cifras mono) no se
+  tocan: el slug v-next no es V-Next. */
+  button .tnum,
+  button .font-mono {
+    text-transform: none;
+  }
   * {
     scrollbar-width: thin;
     scrollbar-color: color-mix(in oklch, var(--foreground) 28%, transparent) transparent;

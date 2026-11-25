@@ -1,9 +1,9 @@
 export const state = {
   "state.ok": "correcto",
   "state.running": "en marcha",
-  "state.degraded": "degradado",
-  "state.warning": "degradado",
-  "state.warn": "degradado",
+  "state.degraded": "degradada",
+  "state.warning": "degradada",
+  "state.warn": "degradada",
   "state.failed": "fallida",
   "state.bad": "fallida",
   "state.stopped": "detenida",

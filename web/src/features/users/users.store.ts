@@ -7,6 +7,7 @@ import type { AuditEntry, User } from "../../shared/lib/types";
 interface UsersState {
   users: User[];
   audit: AuditEntry[];
+  loaded: boolean;
   load: () => Promise<void>;
   create: (name: string, password: string, role: string) => Promise<void>;
   remove: (name: string) => Promise<void>;
@@ -16,13 +17,15 @@ interface UsersState {
 export const useUsers = create<UsersState>()((set, get) => ({
   users: [],
   audit: [],
+  loaded: false,
   load: async () => {
     try {
-      set({ users: await listUsers() });
+      set({ users: await listUsers(), loaded: true });
       listAudit()
         .then((audit) => set({ audit }))
         .catch(() => {});
     } catch (e) {
+      set({ loaded: true });
       useUI.getState().fail(e);
     }
   },

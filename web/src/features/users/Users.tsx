@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { PageHeader, EmptyState } from "../../shared/components/patterns";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "../auth/store";
 import { useI18n } from "../../shared/i18n";
 import { useUsers } from "./users.store";
@@ -12,6 +13,7 @@ export function Users() {
   const { t, tn } = useI18n();
   const me = useAuth((a) => a.who);
   const users = useUsers((s) => s.users);
+  const loaded = useUsers((s) => s.loaded);
 
   useEffect(() => {
     useUsers.getState().load();
@@ -44,7 +46,19 @@ export function Users() {
         {users.map((u) => (
           <UserRow key={u.name} u={u} />
         ))}
-        {users.length === 0 && <EmptyState title={t("system.users.emptyTitle")} hint={t("system.users.emptyHint")} />}
+        {!loaded && (
+          <div className="space-y-px" aria-busy="true" aria-label={t("shell.loadingFleet")}>
+            <span className="sr-only">{t("shell.loadingFleet")}</span>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex h-12 items-center gap-3 border-b border-border/60 bg-card/35 px-3 last:border-0">
+                <Skeleton className="h-3 w-3" />
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            ))}
+          </div>
+        )}
+        {loaded && users.length === 0 && <EmptyState title={t("system.users.emptyTitle")} hint={t("system.users.emptyHint")} />}
       </div>
       <AuditList />
     </div>

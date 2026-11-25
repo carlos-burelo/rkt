@@ -37,8 +37,8 @@ export const deployments = {
   "deployments.row.by": "por {user}",
   "deployments.row.localOperator": "operador local",
   "deployments.runningEllipsis": "en curso…",
-  "deployments.empty.title": "sin despliegues para este filtro",
-  "deployments.empty.hint": "no hay entornos separados que filtrar",
+  "deployments.empty.title": "sin despliegues",
+  "deployments.empty.hint": "crea una app y despliega: el historial aparece aquí",
 
   "deployments.manifest": "detalle del despliegue",
   "deployments.detail.back": "despliegues",

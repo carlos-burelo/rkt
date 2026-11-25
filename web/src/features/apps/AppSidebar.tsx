@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router";
+import { Link, useMatch, useNavigate } from "react-router";
 import { ArrowLeft } from "lucide-react";
 import { Avatar, Dot } from "../../shared/components/ui";
 import {
@@ -19,6 +19,26 @@ export const APP_TABS = [
   { id: "env", label: "nav.environment" },
   { id: "settings", label: "nav.settings" },
 ] as const;
+
+// Tab sin anidar: el botón se renderiza COMO enlace (ver SideNavItem en
+// layout). Evita link > button duplicados al lector de pantalla.
+function AppTabItem({ name, id, label }: { name: string; id: string; label: string }) {
+  const to = `/app/${encodeURIComponent(name)}/${id}`;
+  const match = useMatch({ path: to, end: false });
+  const { t } = useI18n();
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        render={<Link to={to} />}
+        isActive={!!match}
+        tooltip={t(label)}
+        className="relative h-8 rounded-[1px] px-2 text-[12px] font-normal text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-px before:bg-signal before:opacity-0 data-active:before:opacity-100 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+      >
+        <span className="flex-1 truncate text-left group-data-[collapsible=icon]:hidden">{t(label)}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
 
 export function AppSidebar({ name }: { name: string }) {
   const { t } = useI18n();
@@ -65,19 +85,7 @@ export function AppSidebar({ name }: { name: string }) {
           <SidebarGroupContent>
             <SidebarMenu className="gap-0.5">
               {tabs.map((tab) => (
-                <SidebarMenuItem key={tab.id}>
-                  <NavLink to={`/app/${encodeURIComponent(name)}/${tab.id}`} className="w-full">
-                    {({ isActive }) => (
-                      <SidebarMenuButton
-                        isActive={isActive}
-                        tooltip={t(tab.label)}
-                        className="relative h-8 rounded-[1px] px-2 text-[12px] font-normal text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-px before:bg-signal before:opacity-0 data-active:before:opacity-100 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
-                      >
-                        <span className="flex-1 truncate text-left group-data-[collapsible=icon]:hidden">{t(tab.label)}</span>
-                      </SidebarMenuButton>
-                    )}
-                  </NavLink>
-                </SidebarMenuItem>
+                <AppTabItem key={tab.id} name={name} id={tab.id} label={tab.label} />
               ))}
             </SidebarMenu>
           </SidebarGroupContent>

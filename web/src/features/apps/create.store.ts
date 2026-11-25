@@ -258,6 +258,7 @@ function step2ok(s: CreateState): boolean {
     repo: s.origin === "git" && s.repo.trim() !== "" && !looksGit(s.repo),
     name: !SLUG.test(s.name),
     dir: (s.origin === "local" || s.origin === "external") && s.dir.trim() === "",
+    port: s.origin === "external" && s.port.trim() === "",
     command: s.origin === "manual" && s.command.trim() === "",
     gitRepo: s.origin === "git" && s.repo.trim() === "",
   };

@@ -34,6 +34,8 @@ export function PageHeader({
 }
 
 // Section: bloque de contenido con cabecera hairline, sin sombra.
+// collapsible lo deja plegar (Eventos/Despliegues del resumen): la cabecera
+// es un botón con aria-expanded y el contenido se monta solo abierto.
 export function Section({
   title,
   description,
@@ -41,6 +43,8 @@ export function Section({
   children,
   accent = false,
   className,
+  collapsible = false,
+  defaultOpen = true,
 }: {
   title: string;
   description?: string;
@@ -48,18 +52,36 @@ export function Section({
   children: React.ReactNode;
   accent?: boolean;
   className?: string;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <section className={cn("border border-border bg-card/45", accent && "border-t-signal/70", className)}>
       <header className="flex flex-wrap items-center gap-3 border-b border-border bg-secondary/20 px-3 py-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <span aria-hidden className={cn("h-1.5 w-1.5 shrink-0", accent ? "bg-signal" : "bg-muted-foreground/40")} />
-          <h2 className="text-[12px] font-medium tracking-tight">{title}</h2>
-          {description && <p className="hidden truncate text-[11px] text-muted-foreground sm:block">{description}</p>}
+          {collapsible ? (
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            >
+              <h2 className="text-[12px] font-medium tracking-tight">{title}</h2>
+              {description && <p className="hidden truncate text-[11px] normal-case text-muted-foreground sm:block">{description}</p>}
+              <span aria-hidden className={cn("ml-1 text-[10px] text-muted-foreground transition-transform", open && "rotate-180")}>▾</span>
+            </button>
+          ) : (
+            <>
+              <h2 className="text-[12px] font-medium tracking-tight">{title}</h2>
+              {description && <p className="hidden truncate text-[11px] text-muted-foreground sm:block">{description}</p>}
+            </>
+          )}
         </div>
         {actions}
       </header>
-      <div className="p-3">{children}</div>
+      {open && <div className="p-3">{children}</div>}
     </section>
   );
 }
@@ -106,9 +128,9 @@ export function Stat({
   );
 }
 
-export function StatGrid({ children, className }: { children: React.ReactNode; className?: string }) {
+export function StatGrid({ children, className, ...rest }: { children: React.ReactNode; className?: string } & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("grid grid-cols-2 gap-px border border-border bg-border lg:grid-cols-4", className)}>
+    <div className={cn("grid grid-cols-2 gap-px border border-border bg-border lg:grid-cols-4", className)} {...rest}>
       {children}
     </div>
   );

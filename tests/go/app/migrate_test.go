@@ -25,10 +25,21 @@ func TestMigrateSlots(t *testing.T) {
 	if err := os.MkdirAll(legacy, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	statik := filepath.Join(dir, "estatica")
+	if err := os.MkdirAll(statik, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	cp, err := cfgfile.MutateFleet(db, func(cp *config.Config) error {
 		cp.Apps = append(cp.Apps, config.App{
 			Name: "legacy", Command: "c", Dir: legacy,
 			Env:          map[string]string{"PORT": "3210"},
+			RestartDelay: "5s", MinUptime: "10s",
+		})
+		cp.Apps = append(cp.Apps, config.App{
+			Name: "estatica", Command: "rkt", Dir: statik,
+			Args:         []string{"__static", statik},
+			Static:       statik,
+			Env:          map[string]string{"PORT": "3211"},
 			RestartDelay: "5s", MinUptime: "10s",
 		})
 		cp.Routes = append(cp.Routes, config.Route{
@@ -50,6 +61,15 @@ func TestMigrateSlots(t *testing.T) {
 	got := cfgfile.FindApp(migrated, "legacy")
 	if got == nil || !strings.HasSuffix(got.Dir, ".a") {
 		t.Fatalf("Dir sin sufijo .a: %+v", got)
+	}
+	// El root estático y los args __static se rebasan al slot nuevo: si no,
+	// el supervisor sirve una ruta que ya no existe.
+	st := cfgfile.FindApp(migrated, "estatica")
+	if st == nil || st.Dir != statik+".a" || st.Static != statik+".a" {
+		t.Fatalf("Static sin rebase: %+v", st)
+	}
+	if len(st.Args) != 2 || st.Args[0] != "__static" || st.Args[1] != statik+".a" {
+		t.Fatalf("Args sin rebase: %+v", st.Args)
 	}
 	if _, err := os.Stat(legacy + ".a"); err != nil {
 		t.Fatalf("dir renombrado: %v", err)

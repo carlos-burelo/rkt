@@ -397,10 +397,11 @@ func cmdDeploy(args []string, cfgPath string) {
 	if len(args) != 1 || args[0] == "" {
 		log.Fatal("uso: deploy <app>")
 	}
-	cfg, err := cfgfile.Load(cfgPath)
+	cfg, db, err := cfgfile.LoadMerged(cfgPath)
 	if err != nil {
 		log.Fatalf("deploy: %v", err)
 	}
+	db.Close()
 	found := false
 	for i := range cfg.Apps {
 		if cfg.Apps[i].Name == args[0] {

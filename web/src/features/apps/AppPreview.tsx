@@ -41,7 +41,7 @@ function MiniFrame({
   }, []);
 
   return (
-    <div ref={box} className="relative aspect-video w-full overflow-hidden bg-background">
+    <div ref={box} className="relative aspect-video w-full overflow-hidden bg-zinc-950">
       <iframe
         key={nonce}
         src={src}
@@ -131,7 +131,8 @@ export function AppPreview({ domain, running }: { domain: string; running: boole
               </a>
             )}
             {state === "loading" && (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/70">
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-950">
+                <span aria-hidden className="h-1 w-16 animate-pulse bg-signal/60" />
                 <p className="font-mono text-[10px] text-muted-foreground">{t("apps.preview.loading", { domain })}</p>
               </div>
             )}

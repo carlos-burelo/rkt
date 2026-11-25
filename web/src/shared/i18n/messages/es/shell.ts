@@ -1,6 +1,8 @@
 export const shell = {
   "shell.terminal": "apps",
   "shell.empty": "sin apps",
+  "shell.units.one": "{n} app",
+  "shell.units.other": "{n} apps",
   "shell.running": "{running}/{total} en marcha",
   "shell.runningFailed": "{running}/{total} en marcha · {failed} caída",
   "shell.runningFailedPlural": "{running}/{total} en marcha · {failed} caídas",
@@ -8,6 +10,7 @@ export const shell = {
   "shell.search": "Buscar o ejecutar",
   "shell.account": "cuenta",
   "shell.appSection": "Aplicación",
+  "shell.dbSection": "Módulo",
   "shell.newApp": "Nueva app",
   "shell.backToApps": "aplicaciones",
   "shell.logout": "Salir",
@@ -26,6 +29,8 @@ export const shell = {
   "shell.alertsAriaOk": "{running}/{total} en marcha · ver alertas",
   "shell.interfaceError": "error de interfaz",
   "shell.reload": "Recargar",
+  "shell.notFoundTitle": "página no encontrada",
+  "shell.notFoundDesc": "esa dirección no existe en este panel",
   "shell.goOverview": "ir al resumen",
   "shell.unknownError": "error desconocido",
 };

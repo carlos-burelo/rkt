@@ -18,5 +18,6 @@ export const nav = {
   "nav.alerts": "Alertas",
   "nav.settings": "Ajustes",
   "nav.users": "Usuarios",
+  "nav.help": "Ayuda",
   "nav.app": "App",
 };

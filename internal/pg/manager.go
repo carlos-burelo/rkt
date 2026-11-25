@@ -310,21 +310,53 @@ func ColumnTypes(ctx context.Context, db *sql.DB, schema, table string) ([]ColIn
 }
 
 // TableRows pagina una tabla (limit capado) con su total.
+// Sin filtros: atajo Supabase para el visor simple. Con filtros/orden usa TableRowsEx.
 func TableRows(ctx context.Context, db *sql.DB, schema, table string, limit, offset int) (cols []string, rows [][]any, total int64, err error) {
+	return TableRowsEx(ctx, db, schema, table, RowsQuery{Limit: limit, Offset: offset})
+}
+
+// textColsLive columnas de texto para la búsqueda global (máx 10).
+func textColsLive(ctx context.Context, db *sql.DB, schema, table string) ([]string, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2 AND data_type IN ('text','character varying','character','uuid','json','jsonb','inet') ORDER BY ordinal_position LIMIT 10`,
+		schema, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+// TableRowsEx paginado Supabase: filtros AND, búsqueda global OR, orden y
+// total filtrado (no el total de la tabla).
+func TableRowsEx(ctx context.Context, db *sql.DB, schema, table string, q RowsQuery) (cols []string, rows [][]any, total int64, err error) {
 	if err := ValidIdent(schema); err != nil {
 		return nil, nil, 0, err
 	}
 	if err := ValidIdent(table); err != nil {
 		return nil, nil, 0, err
 	}
-	if limit <= 0 || limit > 500 {
-		limit = 100
+	q = normalizeRowsQuery(q)
+	var searchCols []string
+	if strings.TrimSpace(q.Search) != "" {
+		searchCols, err = textColsLive(ctx, db, schema, table)
+		if err != nil {
+			return nil, nil, 0, err
+		}
 	}
-	if offset < 0 {
-		offset = 0
+	sel, args, err := BuildSelect(schema, table, q, searchCols)
+	if err != nil {
+		return nil, nil, 0, err
 	}
-	q := `SELECT * FROM ` + QuoteIdent(schema) + `.` + QuoteIdent(table) + ` LIMIT $1 OFFSET $2`
-	rs, err := db.QueryContext(ctx, q, limit, offset)
+	rs, err := db.QueryContext(ctx, sel, args...)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -333,10 +365,276 @@ func TableRows(ctx context.Context, db *sql.DB, schema, table string, limit, off
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM `+QuoteIdent(schema)+`.`+QuoteIdent(table)).Scan(&total); err != nil {
+	cnt, cargs, err := BuildCount(schema, table, q.Filters, q.Search, searchCols)
+	if err != nil {
 		return nil, nil, 0, err
 	}
+	if err := db.QueryRowContext(ctx, cnt, cargs...).Scan(&total); err != nil {
+		return nil, nil, 0, err
+	}
+	if cols == nil {
+		cols = []string{}
+	}
+	if rows == nil {
+		rows = [][]any{}
+	}
 	return cols, rows, total, nil
+}
+
+// DescribeTable inspector de tabla: columnas, PK, RLS y conteo exacto.
+func DescribeTable(ctx context.Context, db *sql.DB, schema, table string) (TableSchema, error) {
+	var out TableSchema
+	if err := ValidIdent(schema); err != nil {
+		return out, err
+	}
+	if err := ValidIdent(table); err != nil {
+		return out, err
+	}
+	rows, err := db.QueryContext(ctx,
+		`SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2 ORDER BY ordinal_position`,
+		schema, table)
+	if err != nil {
+		return out, err
+	}
+	type raw struct {
+		name, typ, nullable string
+		def                 sql.NullString
+	}
+	var raws []raw
+	for rows.Next() {
+		var r raw
+		if err := rows.Scan(&r.name, &r.typ, &r.nullable, &r.def); err != nil {
+			rows.Close()
+			return out, err
+		}
+		raws = append(raws, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return out, err
+	}
+	if len(raws) == 0 {
+		return out, fmt.Errorf("tabla %q inexistente", table)
+	}
+	pkRows, err := db.QueryContext(ctx,
+		`SELECT a.attname FROM pg_index i JOIN pg_class c ON c.oid=i.indrelid JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum=ANY(i.indkey) WHERE n.nspname=$1 AND c.relname=$2 AND i.indisprimary ORDER BY a.attnum`,
+		schema, table)
+	if err != nil {
+		return out, err
+	}
+	pkSet := map[string]bool{}
+	var pk []string
+	for pkRows.Next() {
+		var n string
+		if err := pkRows.Scan(&n); err != nil {
+			pkRows.Close()
+			return out, err
+		}
+		pkSet[n] = true
+		pk = append(pk, n)
+	}
+	pkRows.Close()
+	if err := pkRows.Err(); err != nil {
+		return out, err
+	}
+	var rls, forced bool
+	if err := db.QueryRowContext(ctx,
+		`SELECT c.relrowsecurity, c.relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relname=$2`,
+		schema, table).Scan(&rls, &forced); err != nil {
+		return out, err
+	}
+	var total int64
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM `+QuoteIdent(schema)+`.`+QuoteIdent(table)).Scan(&total); err != nil {
+		return out, err
+	}
+	cols := make([]ColumnDetail, 0, len(raws))
+	for _, r := range raws {
+		c := ColumnDetail{Name: r.name, Type: r.typ, Nullable: r.nullable == "YES", IsPK: pkSet[r.name]}
+		if r.def.Valid {
+			d := r.def.String
+			c.Default = &d
+		}
+		cols = append(cols, c)
+	}
+	if pk == nil {
+		pk = []string{}
+	}
+	return TableSchema{Table: table, Columns: cols, PK: pk, RLS: rls, RLSForce: forced, Rows: total}, nil
+}
+
+// TableCounts filas exactas por tabla (para la lista del Studio).
+func TableCounts(ctx context.Context, db *sql.DB, schema string, tables []string) (map[string]int64, error) {
+	out := map[string]int64{}
+	for _, t := range tables {
+		if err := ValidIdent(t); err != nil {
+			return nil, err
+		}
+		var n int64
+		if err := db.QueryRowContext(ctx, `SELECT count(*) FROM `+QuoteIdent(schema)+`.`+QuoteIdent(t)).Scan(&n); err != nil {
+			return nil, err
+		}
+		out[t] = n
+	}
+	return out, nil
+}
+
+// InsertRow inserta y devuelve la fila creada (RETURNING * como mapa).
+func InsertRow(ctx context.Context, db *sql.DB, schema, table string, data map[string]any) (map[string]any, error) {
+	q, args, err := BuildInsert(schema, table, data)
+	if err != nil {
+		return nil, err
+	}
+	rs, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rs.Close()
+	cols, _, rows, err := scanRows(rs)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return map[string]any{}, nil
+	}
+	out := make(map[string]any, len(cols))
+	for i, c := range cols {
+		out[c] = rows[0][i]
+	}
+	return out, nil
+}
+
+// UpdateRow actualiza por PK exacta; devuelve filas afectadas.
+func UpdateRow(ctx context.Context, db *sql.DB, schema, table string, pk, patch map[string]any) (int64, error) {
+	q, args, err := BuildUpdate(schema, table, pk, patch)
+	if err != nil {
+		return 0, err
+	}
+	res, err := db.ExecContext(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// DeleteRows borra por PK exacta o por filtros; devuelve filas afectadas.
+func DeleteRows(ctx context.Context, db *sql.DB, schema, table string, pk map[string]any, filters []RowFilter) (int64, error) {
+	q, args, err := BuildDelete(schema, table, pk, filters)
+	if err != nil {
+		return 0, err
+	}
+	res, err := db.ExecContext(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// CreateTableExec crea una tabla desde el Studio (columnas validadas).
+func CreateTableExec(ctx context.Context, db *sql.DB, schema, table string, cols []ColumnDef) error {
+	q, err := BuildCreateTable(schema, table, cols)
+	if err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx, q)
+	return err
+}
+
+// AddColumnExec añade una columna validada.
+func AddColumnExec(ctx context.Context, db *sql.DB, schema, table string, col ColumnDef) error {
+	q, err := BuildAddColumn(schema, table, col)
+	if err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx, q)
+	return err
+}
+
+// DropColumnExec quita una columna (con confirmación en capas superiores).
+func DropColumnExec(ctx context.Context, db *sql.DB, schema, table, col string) error {
+	if err := ValidIdent(schema); err != nil {
+		return err
+	}
+	if err := ValidIdent(table); err != nil {
+		return err
+	}
+	if err := ValidIdent(col); err != nil {
+		return fmt.Errorf("col: %w", err)
+	}
+	_, err := db.ExecContext(ctx, `ALTER TABLE `+QuoteIdent(schema)+`.`+QuoteIdent(table)+` DROP COLUMN `+QuoteIdent(col))
+	return err
+}
+
+// DropTableExec borra una tabla del esquema (con confirmación arriba).
+func DropTableExec(ctx context.Context, db *sql.DB, schema, table string) error {
+	if err := ValidIdent(schema); err != nil {
+		return err
+	}
+	if err := ValidIdent(table); err != nil {
+		return err
+	}
+	_, err := db.ExecContext(ctx, `DROP TABLE `+QuoteIdent(schema)+`.`+QuoteIdent(table))
+	return err
+}
+
+// SetRLS activa o desactiva row level security en una tabla.
+func SetRLS(ctx context.Context, db *sql.DB, schema, table string, enable bool) error {
+	if err := ValidIdent(schema); err != nil {
+		return err
+	}
+	if err := ValidIdent(table); err != nil {
+		return err
+	}
+	verb := `DISABLE`
+	if enable {
+		verb = `ENABLE`
+	}
+	_, err := db.ExecContext(ctx, `ALTER TABLE `+QuoteIdent(schema)+`.`+QuoteIdent(table)+` `+verb+` ROW LEVEL SECURITY`)
+	return err
+}
+
+// Policy describe una policy RLS (para el inspector).
+type Policy struct {
+	Name    string `json:"name"`
+	Command string `json:"cmd"`
+	Roles   string `json:"roles"`
+	Using   string `json:"using,omitempty"`
+	Check   string `json:"check,omitempty"`
+}
+
+// ListPolicies policies RLS de una tabla (vacío = sin policies).
+func ListPolicies(ctx context.Context, db *sql.DB, schema, table string) ([]Policy, error) {
+	if err := ValidIdent(schema); err != nil {
+		return nil, err
+	}
+	if err := ValidIdent(table); err != nil {
+		return nil, err
+	}
+	rows, err := db.QueryContext(ctx,
+		`SELECT policyname, cmd, roles, qual, with_check FROM pg_policies WHERE schemaname=$1 AND tablename=$2 ORDER BY policyname`,
+		schema, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Policy{}
+	for rows.Next() {
+		var p Policy
+		var qual, check sql.NullString
+		var roles string
+		_ = roles
+		if err := rows.Scan(&p.Name, &p.Command, &roles, &qual, &check); err != nil {
+			return nil, err
+		}
+		p.Roles = roles
+		if qual.Valid {
+			p.Using = qual.String
+		}
+		if check.Valid {
+			p.Check = check.String
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // QueryResult resultado de consola SQL.

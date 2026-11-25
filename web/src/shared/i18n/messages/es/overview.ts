@@ -132,6 +132,8 @@ export const overview = {
   "overview.tlsSoon.one": "{n} certificado vence en 14 días o menos",
   "overview.tlsSoon.other": "{n} certificados vencen en 14 días o menos",
   "overview.tlsSoonAction": "revisar dominios",
+  "overview.tlsSoonAria": "certificados por vencer",
+  "overview.tlsSoonMore": "+{n} más",
   "overview.restarts24h.one": "{n} reinicio 24h",
   "overview.restarts24h.other": "{n} reinicios 24h",
 

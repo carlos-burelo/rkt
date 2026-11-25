@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useParams } from "react-router";
 import { ExternalLink, Play, RotateCw, Square } from "lucide-react";
 import { toast } from "sonner";
 import { errorToast } from "../../shared/components/feedback";
-import { Dot, StatusBadge } from "../../shared/components/ui";
+import { StatusBadge } from "../../shared/components/ui";
 import { stateLabel } from "../../shared/lib/labels";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -75,7 +75,6 @@ export function AppTabs() {
                   {t("apps.tabs.external")}
                 </span>
               )}
-              <Dot status={state} />
               <StatusBadge status={state} />
             </div>
             <p className="mt-2 font-mono text-[11px] text-muted-foreground">

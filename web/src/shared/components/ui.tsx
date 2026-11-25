@@ -50,7 +50,7 @@ export function StatusBadge({ status, className }: { status: string; className?:
   return (
     <Badge
       variant="outline"
-      className={cn("tnum", STATUS_TONE[status] ?? STATUS_TONE.stopped, className)}
+      className={cn("tnum normal-case tracking-normal", STATUS_TONE[status] ?? STATUS_TONE.stopped, className)}
     >
       {stateLabel(status)}
     </Badge>
@@ -82,22 +82,15 @@ export function StateRail({ status }: { status: string }) {
 }
 
 // Glyph de app: cuadrado con inicial, no avatar circular.
-const GLYPH_TONES = [
-  "border-border bg-secondary/60 text-muted-foreground",
-  "border-border bg-secondary/60 text-muted-foreground",
-  "border-border bg-secondary/60 text-muted-foreground",
-  "border-border bg-secondary/60 text-muted-foreground",
-];
+const GLYPH_TONE = "border-border bg-secondary/60 text-muted-foreground";
 
 export function Avatar({ name, className }: { name: string; className?: string }) {
   const ch = (name.trim()[0] ?? "?").toUpperCase();
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return (
     <span
       className={cn(
         "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[1px] border font-mono text-[10px] font-medium uppercase",
-        GLYPH_TONES[h % GLYPH_TONES.length],
+        GLYPH_TONE,
         className,
       )}
       aria-hidden
@@ -153,7 +146,7 @@ export function MicroLink({
   className?: string;
 }) {
   const cls = cn(
-    "inline-flex items-center gap-1 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground",
+    "inline-flex items-center gap-1 py-0.5 font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase hover:text-foreground",
     className,
   );
   const inner = (

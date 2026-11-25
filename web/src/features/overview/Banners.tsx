@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Dot, MicroLink, stateOf } from "../../shared/components/ui";
+import { Time } from "../../shared/components/patterns";
 import { useI18n } from "../../shared/i18n";
 import type { AppStatus } from "../../shared/lib/types";
 
@@ -15,7 +16,7 @@ export function AttentionBanner({ apps }: { apps: AppStatus[] }) {
   return (
     <section
       aria-label={t("overview.attention.aria")}
-      className={failedApps.length > 0 ? "border border-bad/30 bg-bad/[0.055] px-3 py-2" : "border border-warn/30 bg-warn/[0.05] px-3 py-2"}
+      className={failedApps.length > 0 ? "border border-bad/30 bg-bad/8 px-3 py-2" : "border border-warn/30 bg-warn/8 px-3 py-2"}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <p className="flex min-w-0 flex-1 basis-full items-center gap-2 font-mono text-[11px] leading-relaxed sm:basis-0">
@@ -46,13 +47,36 @@ export function AttentionBanner({ apps }: { apps: AppStatus[] }) {
 
 export function TlsBanner({ items }: { items: { host: string; date: string }[] }) {
   const { t, tn } = useI18n();
+  const navigate = useNavigate();
   if (items.length === 0) return null;
+  const top = items.slice(0, 3);
+  const rest = items.length - top.length;
   return (
-    <section className="flex flex-wrap items-center gap-3 border border-warn/30 bg-warn/[0.05] px-3 py-2">
-      <p className="min-w-0 flex-1 font-mono text-[11px] text-warn">
-        {tn("overview.tlsSoon", items.length)} · {items.map((x) => `${x.host} (${x.date})`).join(", ")}
-      </p>
-      <MicroLink to="/routes" className="text-[10px]">{t("overview.tlsSoonAction")}</MicroLink>
+    <section aria-label={t("overview.tlsSoonAria")} className="border border-warn/30 bg-warn/8 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="min-w-0 flex-1 font-mono text-[11px] text-warn">{tn("overview.tlsSoon", items.length)}</p>
+        <MicroLink to="/routes" className="text-[10px]">{t("overview.tlsSoonAction")}</MicroLink>
+      </div>
+      <ul className="mt-1.5 divide-y divide-warn/15 border-t border-warn/20">
+        {top.map((x) => (
+          <li key={x.host} className="flex items-baseline justify-between gap-3 py-1">
+            <button
+              type="button"
+              onClick={() => navigate("/routes")}
+              className="min-w-0 truncate text-left font-mono text-[11px] text-foreground/85 hover:text-signal hover:underline"
+              title={x.host}
+            >
+              {x.host}
+            </button>
+            <span className="tnum shrink-0 font-mono text-[10px] text-muted-foreground">
+              <Time iso={x.date} />
+            </span>
+          </li>
+        ))}
+      </ul>
+      {rest > 0 && (
+        <p className="mt-1 font-mono text-[10px] text-muted-foreground">{t("overview.tlsSoonMore", { n: rest })}</p>
+      )}
     </section>
   );
 }
@@ -65,7 +89,7 @@ export function RestartBanner({ fields }: { fields: string[] }) {
   return (
     <section
       aria-label={t("overview.restart.aria")}
-      className="flex flex-wrap items-center gap-3 border border-warn/30 bg-warn/[0.05] px-3 py-2"
+      className="flex flex-wrap items-center gap-3 border border-warn/30 bg-warn/8 px-3 py-2"
     >
       <p className="min-w-0 flex-1 font-mono text-[11px] text-warn">
         {t("overview.restart.text", { fields: fields.join(", ") })}

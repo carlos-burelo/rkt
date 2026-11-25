@@ -34,6 +34,7 @@ export function CreatePage() {
     repo: s.origin === "git" && s.repo.trim() !== "" && !looksGit(s.repo) ? t("create.error.repoUrl") : "",
     name: !SLUG.test(s.name) ? t("create.error.name") : "",
     dir: (s.origin === "local" || s.origin === "external") && s.dir.trim() === "" ? t("create.error.dir") : "",
+    port: s.origin === "external" && s.port.trim() === "" ? t("create.error.port") : "",
     command: (s.origin === "manual" || (s.origin === "git" && s.manualRequired)) && s.command.trim() === "" ? t("create.error.command") : "",
     gitRepo: s.origin === "git" && s.repo.trim() === "" ? t("create.error.gitRepo") : "",
   };

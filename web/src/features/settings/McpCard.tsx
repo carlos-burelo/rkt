@@ -84,7 +84,7 @@ export function McpCard() {
               <option value="admin">{t("system.mcp.roleAdmin")}</option>
             </select>
           </label>
-          <Button size="sm" disabled={busy} onClick={create}>
+          <Button size="sm" variant="outline" disabled={busy} onClick={create}>
             <KeyRound className="h-3 w-3" /> {t("system.mcp.create")}
           </Button>
         </div>

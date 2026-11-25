@@ -13,7 +13,7 @@ import { UnitsTable, OverviewSide } from "./UnitsTable";
 
 // Resumen: composición. Datos del bus, piezas autocontenidas.
 export function Overview() {
-  const { t, tn } = useI18n();
+  const { t } = useI18n();
   const { status, evs, deps, metas, loading } = useFleet();
   const navigate = useNavigate();
   const apps = status?.apps ?? [];
@@ -49,27 +49,12 @@ export function Overview() {
 
   const discovered = evs.filter((e) => e.kind === "discover").slice(0, 2);
   const openAlerts = evs.filter((e) => e.kind === "alert").slice(0, 3);
-  const running = apps.filter((a) => a.running && !a.failed).length;
-  const failed = apps.filter((a) => a.failed).length;
-  const dayAgo = Date.now() - 24 * 3600 * 1000;
-  const restarts = evs.filter((e) => {
-    const t = new Date(e.ts).getTime();
-    return t >= dayAgo && (e.kind === "died" || e.kind === "restarted" || e.kind === "failed");
-  }).length;
 
   return (
     <div className="space-y-5">
       <PageHeader
         title={t("nav.overview")}
         description={t("overview.description")}
-        meta={
-          <span className="hidden items-center gap-2 font-mono text-[10px] text-muted-foreground lg:flex">
-            <span className="h-1 w-1 bg-ok" />
-            {t("overview.meta.running", { running, total: apps.length })}
-            {failed > 0 && <span className="text-bad">· {tn("overview.stuck", failed)}</span>}
-            {restarts > 0 && <span className="text-warn">· {tn("overview.restarts24h", restarts)}</span>}
-          </span>
-        }
       />
 
       <AttentionBanner apps={apps} />
@@ -82,7 +67,18 @@ export function Overview() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
         <div className="min-w-0 space-y-5">
           <UnitsTable apps={apps} metas={metas} deps={deps} status={status} />
-          <Section title={t("overview.sections.events")} description={t("overview.sections.eventsDesc")} actions={<span className="tnum font-mono text-[10px] text-muted-foreground">{evs.length}</span>}>
+          <Section
+            title={t("overview.sections.events")}
+            description={t("overview.sections.eventsDesc")}
+            collapsible
+            defaultOpen={false}
+            actions={
+              <span className="flex items-center gap-2">
+                <span className="tnum font-mono text-[10px] text-muted-foreground">{evs.length}</span>
+                <MicroLink to="/observability" className="text-[10px]">{t("overview.sections.seeAll")}</MicroLink>
+              </span>
+            }
+          >
             <Activity evs={evs} />
           </Section>
         </div>

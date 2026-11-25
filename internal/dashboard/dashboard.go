@@ -48,10 +48,13 @@ func NewHandler(fsys fs.FS) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		// frame-src abierto a http/https: la vista previa incrusta el dominio
+		// de cada app (otro host). frame-ancestors sigue en 'none': nadie
+		// puede incrustar el dashboard.
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "+
 				"script-src 'self'; connect-src 'self'; font-src 'self' data:; "+
-				"frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+				"frame-src 'self' http: https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		path := strings.TrimPrefix(r.URL.Path, "/")
 		if path == "" {
 			serveIndex(w, r)

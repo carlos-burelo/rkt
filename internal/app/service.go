@@ -303,7 +303,7 @@ func (p *Program) Run() {
 	// servicio con long-polls encadenados. Generoso para no estorbar
 	// a agentes legítimos (los polls largos ocupan, no golpean).
 	mcpH = ratelimit.New(8, 32).Middleware(mcpH, p.log)
-	gate := dashboardGate(live, apiH, dashH, mcpH, proxy.NewHandler(live, p.log))
+	gate := dashboardGate(live, apiH, dashH, mcpH, proxy.NewHandlerWithFailFast(live, p.log, p.failedTarget))
 	handler := http.Handler(gate)
 	var alog *accesslog.Logger
 	if l, err := accesslog.New(logx.AccessPath(p.cfgPath)); err != nil {
@@ -535,6 +535,26 @@ func (p *Program) Run() {
 	}
 }
 
+// failedTarget dice si un backend es de una app en failed terminal: el
+// supervisor ya no la reintenta, así que el proxy va directo a 502 sin
+// gastar restart_grace. Solo failed (definitivo); en arranque o crashloop
+// el grace sigue cubriendo los reintentos.
+func (p *Program) failedTarget(target string) bool {
+	if p.sup == nil {
+		return false
+	}
+	app := p.live.Get().AppForTarget(target)
+	if app == nil {
+		return false
+	}
+	for _, s := range p.sup.Snapshot() {
+		if s.Name == app.Name {
+			return s.Failed
+		}
+	}
+	return false
+}
+
 // appStatuses adapta supervisor a health (nil si no hay manager).
 func (p *Program) appStatuses() []health.AppStatus {
 	if p.sup == nil {
@@ -749,7 +769,24 @@ func migrateSlots(db *store.DB, cfg *config.Config) (*config.Config, error) {
 				strings.HasSuffix(a.Dir, ".a") || strings.HasSuffix(a.Dir, ".b") {
 				continue
 			}
-			a.Dir = a.Dir + ".a"
+			from, to := a.Dir, a.Dir+".a"
+			a.Dir = to
+			// El root estático y los args __static apuntaban al dir viejo:
+			// si no se reescriben, el supervisor sirve una ruta que ya no
+			// existe ("compila primero" eterno).
+			rebased := func(p string) string {
+				if p == from {
+					return to
+				}
+				if strings.HasPrefix(p, from+"\\") || strings.HasPrefix(p, from+"/") {
+					return to + p[len(from):]
+				}
+				return p
+			}
+			a.Static = rebased(a.Static)
+			for j, arg := range a.Args {
+				a.Args[j] = rebased(arg)
+			}
 		}
 		return nil
 	})
@@ -843,6 +880,40 @@ func isStandardPnpmStart(a *config.App) bool {
 	return base == "pnpm" && len(a.Args) == 2 && a.Args[0] == "run" && a.Args[1] == "start"
 }
 
+// buildHintForLog traduce firmas conocidas del log de build a pasos
+// accionables en español. Devuelve "" si no reconoce nada.
+func buildHintForLog(logPath string) string {
+	tail := readTail(logPath, 16<<10)
+	switch {
+	case strings.Contains(tail, "ERR_PNPM_IGNORED_BUILDS") || strings.Contains(tail, "approve-builds"):
+		return "pnpm bloqueó scripts de build por seguridad: en el proyecto corre `pnpm approve-builds` (elige los de confianza) y recompila."
+	case strings.Contains(tail, "EPERM") && strings.Contains(tail, "symlink"):
+		return "Windows bloqueó un symlink del build (Next standalone): activa el modo desarrollador (Ajustes > Para desarrolladores) o compila como admin."
+	default:
+		return ""
+	}
+}
+
+// readTail lee hasta n bytes finales del archivo ("" si no se puede).
+func readTail(path string, n int64) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return ""
+	}
+	off := st.Size() - n
+	if off < 0 {
+		off = 0
+	}
+	buf := make([]byte, st.Size()-off)
+	_, _ = f.ReadAt(buf, off)
+	return string(buf)
+}
+
 // normalizeNextStart migra apps Next creadas antes del arranque canónico:
 // `pnpm run start` puede fijar -p 3001 y desincronizar el proxy. Deja
 // `pnpm exec next start -H 127.0.0.1` para que use PORT.
@@ -911,6 +982,9 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 	}
 	steps := append(append([]string{}, plan.Install...), plan.Build...)
 	if len(steps) == 0 {
+		if plan.IsStatic() {
+			return 0, fmt.Errorf("la app ya sirve su carpeta estática (%s): edita los archivos y recarga; no hay nada que compilar", plan.Static(app.Dir))
+		}
 		return 0, fmt.Errorf("el plan %q no define pasos de build", plan.Kind)
 	}
 	logs := logx.DirFor(p.cfgPath)
@@ -956,6 +1030,12 @@ func (p *Program) buildLocal(name, actor string) (int64, error) {
 		if err != nil {
 			status = "failed"
 			fmt.Fprintf(out, "\n✗ build: %v\n", err)
+			// Firmas conocidas con arreglo documentado: el log crudo
+			// (pnpm en inglés, webpack en inglés) no le dice al operador
+			// qué hacer; esta línea sí.
+			if hint := buildHintForLog(out.Name()); hint != "" {
+				fmt.Fprintf(out, "\n! %s\n", hint)
+			}
 			p.log.Error("build local fallido", "app", target.Name, "err", err)
 		}
 		if p.db != nil && depID > 0 {

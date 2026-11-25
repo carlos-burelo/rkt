@@ -518,7 +518,14 @@ func appsAdd(args []string, cfgPath string) {
 	if len(domains) > 0 {
 		fmt.Printf(" route %s -> :%s (hot-reload).", domains, pt)
 	}
-	fmt.Print("\nPasos: sc.exe stop Rkt; sc.exe start Rkt; deploy " + nm + "\n")
+	// Estructural: exige reinicio. El siguiente paso depende del origen:
+	// con repo hay bloque deploy; sin repo se compila desde el dashboard
+	// (no hay `build` en CLI).
+	if rp != "" {
+		fmt.Print("\nPasos: reinicia rkt y corre: deploy " + nm + "\n")
+	} else {
+		fmt.Print("\nPasos: reinicia rkt y compila desde el dashboard (ficha de la app: Compilar)\n")
+	}
 }
 
 // promptBool pregunta s/n.

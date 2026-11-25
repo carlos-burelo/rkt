@@ -79,6 +79,7 @@ bloque naranja (el CTA debe seguir siendo el único bloque sólido).
 - Escala fija: 24px h1, 14px h2 de sección, 13px dato principal de fila,
   11–12px columnas y valores, 10px micro-etiqueta, 9px folio.
 - Cifras siempre `tabular-nums` (`.tnum`). Cabeceras con `text-wrap: balance`.
+- Botones en Title Case por CSS (`button { text-transform: capitalize }`); el copy se escribe en minúsculas y la excepción (código, micro) usa su clase. Datos crudos mono (slugs, tiempos) llevan `none` para no falsearlos.
 - Prosa de descripción limitada a ~78ch; tablas pueden ser densas.
 
 ## Layout

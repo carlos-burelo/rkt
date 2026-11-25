@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"errors"
+	"runtime"
 	"testing"
 )
 
@@ -133,5 +134,34 @@ func TestDirWritable(t *testing.T) {
 	e.WriteProbe = func(string) error { return errors.New("ro") }
 	if got := DirWritable(e, t.TempDir()); got.State != Fail {
 		t.Fatalf("ro = %+v", got)
+	}
+}
+
+func TestSymlinkDenegadoAvisa(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("chequeo solo Windows")
+	}
+	e := testEnv()
+	e.SymlinkProbe = func() error { return errors.New("privilege") }
+	got := find(Run(e), "symlink (modo desarrollador)")
+	if got.State != Warn || got.Hint == "" {
+		t.Fatalf("sin permiso debe avisar con hint: %+v", got)
+	}
+}
+
+func TestSymlinkPermitidoPasa(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("chequeo solo Windows")
+	}
+	e := testEnv()
+	e.SymlinkProbe = func() error { return nil }
+	if got := find(Run(e), "symlink (modo desarrollador)"); got.State != OK {
+		t.Fatalf("con permiso = %+v", got)
+	}
+}
+
+func TestSymlinkNilSeOmite(t *testing.T) {
+	if got := find(Run(testEnv()), "symlink (modo desarrollador)"); got != (Check{}) {
+		t.Fatalf("sin probe no debe chequear: %+v", got)
 	}
 }

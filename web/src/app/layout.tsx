@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { NavLink, Link, Outlet, useLocation, useNavigate } from "react-router";
+import type { ComponentType, ReactNode } from "react";
+import { Link, Outlet, useLocation, useMatch, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { LayoutGrid, Plus, Search, Command } from "lucide-react";
@@ -17,12 +18,45 @@ import { useAuth } from "../features/auth/store";
 import { useUI } from "./ui";
 import { useFleet } from "../features/overview/hooks";
 import { AppSidebar, APP_TABS } from "../features/apps/AppSidebar";
+import { DbSidebar } from "../features/databases/DbSidebar";
 import { UserMenu } from "../shared/components/UserMenu";
 import { useI18n } from "../shared/i18n";
 import { GROUPS, PAGE_LABEL } from "./nav";
 
-export function ShellLayout() {
+// Item de nav sin anidar: el botón se renderiza COMO enlace (render prop
+// de Base UI) en vez de <a><button>. Sin esto cada item anuncia link +
+// button duplicados al lector de pantalla.
+function SideNavItem({
+  to,
+  labelKey,
+  icon: Icon,
+  badge,
+}: {
+  to: string;
+  labelKey: string;
+  icon: ComponentType<{ className?: string }>;
+  badge?: ReactNode;
+}) {
+  const match = useMatch({ path: to, end: false });
   const { t } = useI18n();
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        render={<Link to={to} />}
+        isActive={!!match}
+        tooltip={t(labelKey)}
+        className="relative h-8 rounded-[1px] px-2 text-[12px] font-normal text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-px before:bg-signal before:opacity-0 data-active:before:opacity-100 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 [&>svg]:size-3.5 [&>svg]:text-muted-foreground/70 data-active:[&>svg]:text-signal"
+      >
+        <Icon />
+        <span className="flex-1 group-data-[collapsible=icon]:hidden">{t(labelKey)}</span>
+        {badge}
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
+export function ShellLayout() {
+  const { t, tn } = useI18n();
   const { isAdmin, canWrite, brand } = useAuth();
   const online = useUI((u) => u.online);
   const setOnline = useUI((u) => u.setOnline);
@@ -35,6 +69,7 @@ export function ShellLayout() {
   const navigate = useNavigate();
   const crumbs = location.pathname.split("/").filter(Boolean);
   const currentApp = location.pathname.startsWith("/app/") ? decodeURIComponent(crumbs[1] ?? "") : "";
+  const inDatabases = location.pathname === "/databases" || location.pathname.startsWith("/databases/");
   const title = currentApp
     ? t(APP_TABS.find((tb) => tb.id === crumbs[2])?.label ?? "nav.app")
     : t(PAGE_LABEL[crumbs[0] ?? "overview"] ?? "nav.overview");
@@ -106,11 +141,7 @@ export function ShellLayout() {
                     <span className="micro">{t("shell.terminal")}</span>
                   </span>
                   <span className="tnum truncate font-mono text-[10px] text-muted-foreground">
-                    {apps.length === 0
-                      ? t("shell.empty")
-                      : failed > 0
-                        ? t(failed > 1 ? "shell.runningFailedPlural" : "shell.runningFailed", { running, total: apps.length, failed })
-                        : t("shell.running", { running, total: apps.length })}
+                    {apps.length === 0 ? t("shell.empty") : tn("shell.units", apps.length)}
                   </span>
                 </div>
                 <span className="micro tnum hidden shrink-0 text-muted-foreground/60 group-data-[collapsible=icon]:hidden xl:inline">
@@ -135,6 +166,8 @@ export function ShellLayout() {
         <SidebarContent className="gap-0 px-2 pb-2">
           {currentApp ? (
             <AppSidebar name={currentApp} />
+          ) : inDatabases ? (
+            <DbSidebar />
           ) : (
           <>
           {GROUPS.map((g) => {
@@ -151,26 +184,22 @@ export function ShellLayout() {
                 <SidebarGroupContent>
                   <SidebarMenu className="gap-0.5">
                     {items.map((n) => (
-                      <SidebarMenuItem key={n.to}>
-                        <NavLink to={n.to} className="w-full">
-                          {({ isActive }) => (
-                            <SidebarMenuButton
-                              isActive={isActive}
-                              tooltip={t(n.labelKey)}
-                              className="relative h-8 rounded-[1px] px-2 text-[12px] font-normal text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-foreground before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-px before:bg-signal before:opacity-0 data-active:before:opacity-100 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 [&>svg]:size-3.5 [&>svg]:text-muted-foreground/70 data-active:[&>svg]:text-signal"
-                            >
-                              <n.icon />
-                              <span className="flex-1 group-data-[collapsible=icon]:hidden">{t(n.labelKey)}</span>
-                              {n.to === "/deployments" && runningDeps > 0 && (
-                                <span className="tnum font-mono text-[10px] text-signal">{runningDeps}</span>
-                              )}
-                              {n.to === "/alerts" && failed > 0 && (
-                                <span className="tnum font-mono text-[10px] text-bad">{failed}</span>
-                              )}
-                            </SidebarMenuButton>
-                          )}
-                        </NavLink>
-                      </SidebarMenuItem>
+                      <SideNavItem
+                        key={n.to}
+                        to={n.to}
+                        labelKey={n.labelKey}
+                        icon={n.icon}
+                        badge={
+                          <>
+                            {n.to === "/deployments" && runningDeps > 0 && (
+                              <span className="tnum font-mono text-[10px] text-signal">{runningDeps}</span>
+                            )}
+                            {n.to === "/alerts" && failed > 0 && (
+                              <span className="tnum font-mono text-[10px] text-bad">{failed}</span>
+                            )}
+                          </>
+                        }
+                      />
                     ))}
                   </SidebarMenu>
                 </SidebarGroupContent>
@@ -196,7 +225,6 @@ export function ShellLayout() {
                       <LayoutGrid className="h-3.5 w-3.5" />
                     </span>
                     <span className="flex-1 group-data-[collapsible=icon]:hidden">{t("shell.allPorts")}</span>
-                    <span className="tnum text-[10px] text-muted-foreground/60 group-data-[collapsible=icon]:hidden">{apps.length}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 {apps.map((a) => {
@@ -244,7 +272,7 @@ export function ShellLayout() {
       </Sidebar>
 
       <SidebarInset className="min-w-0 bg-transparent">
-        <header className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-border bg-background/92 px-3 backdrop-blur-md md:px-4">
+        <header className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur-md md:px-4">
           <SidebarTrigger className="h-7 w-7 text-muted-foreground hover:bg-accent hover:text-foreground" />
           <span aria-hidden className="hidden h-3 w-px bg-border sm:block" />
           <nav aria-label={t("shell.crumb")} className="flex min-w-0 items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
@@ -267,7 +295,7 @@ export function ShellLayout() {
           <span className="flex-1" />
           <span className="folio hidden items-center gap-1.5 lg:flex">
             <Command className="h-3 w-3" />
-            {new Date().toLocaleDateString("en-CA")}
+            {new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" })}
           </span>
           {!online && <span className="font-mono text-[10px] text-warn">{t("shell.offline")}</span>}
           <Link

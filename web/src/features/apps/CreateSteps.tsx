@@ -12,6 +12,7 @@ export interface StepErrors {
   repo: string;
   name: string;
   dir: string;
+  port: string;
   command: string;
   gitRepo: string;
 }
@@ -299,6 +300,30 @@ export function DetailsStep({
 
       <DomainSuggest name={name} onPick={setDomain} />
 
+      {origin === "external" && (
+        <Field label={t("create.port")} hint={t("create.portRequired")} error={tried ? errs.port : ""}>
+          <Input
+            value={port}
+            onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))}
+            inputMode="numeric"
+            placeholder={t("create.portPlaceholder")}
+            className="tnum font-mono text-[11px]"
+          />
+        </Field>
+      )}
+
+      {origin === "manual" && (
+        <Field label={t("create.dir")} hint={t("create.dirDefault")}>
+          <PathInput
+            value={dir}
+            onChange={setDir}
+            mode="dir"
+            placeholder={t("create.dirPlaceholder")}
+            ariaLabel={t("create.dir")}
+          />
+        </Field>
+      )}
+
       {origin === "manual" && (
         <Field label={t("create.command")} hint={t("create.commandHint")} error={tried ? errs.command : ""}>
           <PathInput
@@ -329,7 +354,7 @@ export function DetailsStep({
 
       {advanced && (
         <div className="grid grid-cols-1 gap-3 border border-border bg-card/40 p-3 sm:grid-cols-2 [&>label>span:first-child]:min-h-8">
-          {origin !== "external" && (
+          {(origin === "git" || origin === "local") && (
             <Field label={t("create.command")} hint={t("create.commandOverride")}>
               <PathInput
                 value={command}
@@ -340,18 +365,7 @@ export function DetailsStep({
               />
             </Field>
           )}
-          {origin === "manual" && (
-            <Field label={t("create.dir")} hint={t("create.dirDefault")}>
-              <PathInput
-                value={dir}
-                onChange={setDir}
-                mode="dir"
-                placeholder={t("create.dirPlaceholder")}
-                ariaLabel={t("create.dir")}
-              />
-            </Field>
-          )}
-          {(origin === "manual" || origin === "external") && (
+          {(origin === "manual") && (
             <Field label={t("create.port")} hint={t("common.optional")}>
               <Input
                 value={port}

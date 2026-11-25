@@ -29,6 +29,21 @@ func TestPgToolsSinPg(t *testing.T) {
 	if _, err := s.doPgRows(pgRowsArg{App: "x"}); err == nil || !strings.Contains(err.Error(), "requeridos") {
 		t.Fatalf("rows sin tabla: %v", err)
 	}
+	if _, err := s.doPgSchema(pgSchemaArg{}); err == nil || !strings.Contains(err.Error(), "requerida") {
+		t.Fatalf("schema sin app: %v", err)
+	}
+	if _, err := s.doPgInsert(pgInsertArg{}); err == nil || !strings.Contains(err.Error(), "requeridos") {
+		t.Fatalf("insert sin datos: %v", err)
+	}
+	if _, err := s.doPgInsert(pgInsertArg{App: "x", Table: "t", Data: map[string]any{"a": 1}}); err == nil || !strings.Contains(err.Error(), "confirm") {
+		t.Fatalf("insert sin confirm: %v", err)
+	}
+	if _, err := s.doPgUpdate(pgUpdateArg{}); err == nil || !strings.Contains(err.Error(), "requeridos") {
+		t.Fatalf("update sin datos: %v", err)
+	}
+	if _, err := s.doPgDelete(pgDeleteArg{}); err == nil || !strings.Contains(err.Error(), "requeridos") {
+		t.Fatalf("delete sin datos: %v", err)
+	}
 	if _, err := s.doPgQuery(pgQueryArg{App: "x", SQL: "SELECT 1"}); err == nil || !strings.Contains(err.Error(), "confirm") {
 		t.Fatalf("query sin confirm: %v", err)
 	}
