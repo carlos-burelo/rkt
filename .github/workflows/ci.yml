@@ -176,6 +176,13 @@ jobs:
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/strict.ps1
         shell: pwsh
 
+      - name: Subir strict.log si falla (diagnóstico de cobertura)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strict-log
+          path: strict.log
+
   linux:
     # TODO(linux-ci): omitido por ahora — bluegreen (ZeroDowntime, BuildLocalReal)
     # y DeployCancelMidBuild fallan sistemáticamente en runners ubuntu

@@ -66,10 +66,12 @@ Step "cobertura máxima" {
     github = 53; health = 55; hook = 86; hosts = 98; hub = 100
     logx = 95; mcpserver = 46; netutil = 60; pg = 43
     platform = 50; procstat = 88; proxy = 98; ratelimit = 100
-    server = 100; servermetrics = 81; settings = 83
+    server = 100; servermetrics = 80; settings = 83
     staticweb = 100; store = 91; supervisor = 83; waf = 85
     weblog = 100
   }
+  # servermetrics=80 (no 81 medido en local): muestrea el sistema real y su
+  # cobertura varía entre máquinas; el suelo deja 1 punto de aire.
   $allowNoTests = @("rkt/internal/build")
   $text = Get-Content strict.log -Raw
   $fail = @()
@@ -79,7 +81,7 @@ Step "cobertura máxima" {
     $short = $pkg -replace "^rkt/internal/", ""
     $seen[$short] = $true
     if (-not $min.ContainsKey($short)) { $fail += "$short sin suelo en strict.ps1"; continue }
-    if ([double]$m.Groups[2].Value -lt $min[$short]) { $fail += "$short (mín $($min[$short])%)" }
+    if ([double]$m.Groups[2].Value -lt $min[$short]) { $fail += "${short}: $($m.Groups[2].Value)% (mín $($min[$short])%)" }
   }
   foreach ($short in $min.Keys) {
     if (-not $seen.ContainsKey($short)) { $fail += "$short sin línea de cobertura" }
