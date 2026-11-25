@@ -267,8 +267,8 @@ func TestReadmeNukeEInstala(t *testing.T) {
 		t.Fatal(err)
 	}
 	md := string(raw)
-	nuke := "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/nuke.ps1)))"
-	fresh := "irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 | iex"
+	nuke := "irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/nuke.ps1 -OutFile $env:TEMP\\rkt-nuke.ps1; & $env:TEMP\\rkt-nuke.ps1"
+	fresh := "irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 -OutFile $env:TEMP\\rkt-install.ps1; & $env:TEMP\\rkt-install.ps1"
 	for _, want := range []string{nuke, fresh} {
 		found := 0
 		for _, ln := range strings.Split(md, "\n") {

@@ -88,17 +88,18 @@ bin\rkt.exe -config rkt.local.db dev
 Requisitos: registro DNS `A`, puertos `80/443` abiertos y PowerShell como
 administrador.
 
-Primera vez (un comando):
+Primera vez (un comando; se baja a fichero y se ejecuta: `irm|iex`
+falla en Windows PowerShell 5.1 si el texto llega con BOM):
 
 ```powershell
-irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/install.ps1 -OutFile $env:TEMP\rkt-install.ps1; & $env:TEMP\rkt-install.ps1
 ```
 
 Para borrar todo rastro antes de instalar (servicio, datos, firewall,
 variables; lo de usuario va a `apps.old`/`certs.old`), script dedicado:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/nuke.ps1)))
+irm https://raw.githubusercontent.com/carlos-burelo/rkt/main/scripts/nuke.ps1 -OutFile $env:TEMP\rkt-nuke.ps1; & $env:TEMP\rkt-nuke.ps1
 ```
 
 El instalador descarga el release, verifica checksum, publica el slot
