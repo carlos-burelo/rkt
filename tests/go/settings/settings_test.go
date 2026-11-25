@@ -111,7 +111,7 @@ func TestValidateSettings(t *testing.T) {
 
 func TestRequiresRestart(t *testing.T) {
 	for _, k := range Keys() {
-		want := k == KeyDashboardListen || k == KeyListenHTTP || k == KeyListenHTTPS
+		want := k == KeyDashboardListen || k == KeyDashboardTLS || k == KeyListenHTTP || k == KeyListenHTTPS
 		if RequiresRestart(k) != want {
 			t.Fatalf("%s RequiresRestart = %v, quiere %v", k, RequiresRestart(k), want)
 		}
