@@ -97,7 +97,7 @@ Step "cobertura máxima" {
 }
 Step "race total" {
   if (-not (Get-Command gcc -ErrorAction SilentlyContinue)) {
-    throw "race exige gcc: choco install mingw (CI lo instala en el job strict)"
+    throw "race exige gcc: winget install BrechtSanders.WinLibs.POSIX.UCRT (y reabre la terminal)"
   }
   go run ./tests/run.go test -race ./... -count=1 -p 1 -timeout 30m
   if ($LASTEXITCODE -ne 0) { throw "race" }

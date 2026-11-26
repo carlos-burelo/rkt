@@ -1,0 +1,23 @@
+#!/bin/sh
+# pre-push: verifica en local lo que CI ya no repite (ver scripts/prepush.ps1).
+# Activar una vez por clon:  git config core.hooksPath .githooks
+# Omitir a conciencia:       RKT_SKIP_PREPUSH=1 git push   |   git push --no-verify
+
+if [ "$RKT_SKIP_PREPUSH" = "1" ]; then
+  echo "pre-push omitido (RKT_SKIP_PREPUSH=1)"
+  exit 0
+fi
+
+release=""
+deleting=1
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$local_sha" in 0000000000000000000000000000000000000000) continue ;; esac
+  deleting=""
+  case "$remote_ref" in refs/tags/v*) release="-Release" ;; esac
+done
+
+# borrar una rama o un tag remoto no necesita verificación
+[ -n "$deleting" ] && exit 0
+
+root=$(git rev-parse --show-toplevel)
+exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$root/scripts/prepush.ps1" $release

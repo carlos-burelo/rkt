@@ -1,19 +1,14 @@
 name: ci
 
-# Política: lo que se puede comprobar en local NO corre aquí. El gate local
-# (scripts/gate.ps1 -Full [-E2E], scripts/strict.ps1) es la fuente de verdad
-# antes de cada push: gofmt, vet, tests con cobertura, web, e2e. CI solo
-# aporta lo que una máquina de desarrollo no puede garantizar:
-#   build    checkout limpio: lo comiteado compila y arranca (archivos sin
-#            añadir, lockfiles, go:embed), sin heredar nada del árbol local.
-#   race     detector de carrera en los paquetes concurrentes (exige gcc).
-#   strict   solo a mano (workflow_dispatch): pre-release completo, incluido
-#            race en TODOS los paquetes, cuando el gate local no pudo correrlo.
+# Política: NADA corre automáticamente aquí. Todo lo que se puede comprobar en
+# local se comprueba en local antes del push (hook .githooks/pre-push ->
+# scripts/prepush.ps1: gate -Full + cleanroom; al publicar un tag v*,
+# scripts/strict.ps1 completo con race, e2e y gates prod).
+#
+# Este workflow queda solo como segunda opinión a mano en una máquina limpia:
+# Actions -> ci -> Run workflow.
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -24,70 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: windows-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Instalar y compilar dashboard (go:embed antes de build)
-        run: pnpm install --frozen-lockfile; pnpm --dir web build
-        shell: pwsh
-
-      - name: Build desde checkout limpio
-        run: go build -trimpath -o bin/rkt.exe ./cmd/rkt
-        shell: pwsh
-
-      - name: Arranca (el binario reporta versión)
-        run: ./bin/rkt.exe version
-        shell: pwsh
-
-  race:
-    runs-on: windows-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Placeholder SPA (go:embed; el race no necesita el dashboard real)
-        run: |
-          New-Item -ItemType Directory -Force web/dist | Out-Null
-          Set-Content web/dist/index.html '<!doctype html><title>rkt</title>'
-        shell: pwsh
-
-      - name: gcc (race detector)
-        # La imagen puede traer mingw; solo se instala si falta.
-        run: |
-          if (-not (Get-Command gcc -ErrorAction SilentlyContinue)) {
-            choco install mingw --no-progress -y
-          }
-          gcc --version
-        shell: pwsh
-
-      - name: Race detector (paquetes concurrentes)
-        run: go run ./tests/run.go test -race rkt/internal/supervisor rkt/internal/proxy rkt/internal/store rkt/internal/hub rkt/internal/api -count=1 -p 1
-        shell: pwsh
-
   strict:
-    # Pre-release completo a mano: Actions -> ci -> Run workflow.
-    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -108,6 +40,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: gcc (race detector)
+        # La imagen puede traer mingw; solo se instala si falta.
         run: |
           if (-not (Get-Command gcc -ErrorAction SilentlyContinue)) {
             choco install mingw --no-progress -y
