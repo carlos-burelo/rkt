@@ -37,7 +37,7 @@ Step "web íntegra" {
   node scripts/i18n-check.mjs; if ($LASTEXITCODE -ne 0) { throw "i18n" }
   node scripts/fixtures-check.mjs; if ($LASTEXITCODE -ne 0) { throw "fixtures" }
 }
-Step "vet total" { go run ./tests/run.go vet ./...; if ($LASTEXITCODE -ne 0) { throw "vet" } }
+Step "vet total" { go run ./tests/run.go vet ./...; if ($LASTEXITCODE -ne 0) { throw "vet" }; go vet -tags=e2e ./tests/e2e; if ($LASTEXITCODE -ne 0) { throw "vet e2e" } }
 Step "build -trimpath" {
   go build -trimpath -o bin/rkt.exe ./cmd/rkt
   if ($LASTEXITCODE -ne 0) { throw "build" }

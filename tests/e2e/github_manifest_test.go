@@ -27,9 +27,10 @@ func TestGithubManifestRedirectURL(t *testing.T) {
 
 	// El setup_url lo arma la misma lógica pura de producción.
 	hostport := strings.TrimPrefix(a.url, "http://")
-	origin, domain, local, _ := github.SetupOrigin("", hostport, "")
-	if !local {
-		t.Fatal("sin base_domain debe ser flujo local")
+	plan := github.PlanSetup("", "", hostport, "", nil)
+	origin, domain := plan.Origin, plan.Domain
+	if !plan.Local || plan.Env.Blocked() {
+		t.Fatal("sin base_domain ni IP pública debe ser flujo local sin bloqueo")
 	}
 	setupURL := origin + "/_rkt/new-app?name=rkt-local-1&domain=" + url.QueryEscape(domain) +
 		"&local=1&tls=0&state=e2estate"

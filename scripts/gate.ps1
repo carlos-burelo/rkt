@@ -105,7 +105,7 @@ if ($m.web -or $Full) {
   }
 }
 if ($Full) {
-  Step "vet full" { go run ./tests/run.go vet ./... }
+  Step "vet full" { go run ./tests/run.go vet ./...; if ($LASTEXITCODE -ne 0) { return }; go vet -tags=e2e ./tests/e2e }
   Step "tests full -count=1" { go run ./tests/run.go test ./... -count=1 }
   if ($E2E) {
     Step "e2e browser" { go test -tags=e2e ./tests/e2e -count=1 }
