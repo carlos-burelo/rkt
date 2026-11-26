@@ -69,6 +69,7 @@ Step "cobertura máxima" {
     server = 100; servermetrics = 80; settings = 83
     staticweb = 100; store = 91; supervisor = 83; waf = 85
     weblog = 100
+    canary = 66; geoip = 70; gitcred = 69; mailer = 75; selfcert = 85
   }
   # servermetrics=80 (no 81 medido en local): muestrea el sistema real y su
   # cobertura varía entre máquinas; el suelo deja 1 punto de aire.
